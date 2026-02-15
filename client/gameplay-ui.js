@@ -41,14 +41,11 @@ if (sides === 20 && count === 1) {
   clearCritUI();
 }
 
-sendMessage({
-  type: 'log',
-  text: `Бросок d${sides} × ${count}: ${finals.join(' + ')} = ${sum}${critNote}`
-});
-
   sendMessage({
   type: "diceEvent",
   event: {
+    fromId: (typeof myId !== 'undefined') ? String(myId) : '',
+    fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
     kindText: `d${sides} × ${count}`,
     sides,
     count,

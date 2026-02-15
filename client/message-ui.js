@@ -36,16 +36,11 @@ function handleMessage(msg) {
     }
 
     // Non-GM:
-    // - In exploration phase we KEEP GM-created non-allies in state (for discovery mechanics),
-    //   but UI will hide them until they are discovered by vision.
-    // - Outside exploration: GM-created non-allies are hidden by default,
-    //   and become visible only if GM toggled "eye" (isPublic=true).
+    // GM-created non-allies are hidden unless GM explicitly made them public (eye).
+    // This must work consistently in ALL phases (including exploration).
     if (ownerRole === 'GM' && !p.isAlly) {
-      const phase = String(state?.phase || '').trim();
-      if (phase !== 'exploration') {
-        const pub = !!p.isPublic;
-        if (!pub) return false;
-      }
+      const pub = !!p.isPublic;
+      if (!pub) return false;
     }
 
     // Safety: if a GM-created map-local somehow leaked as visible, still gate by map.
@@ -171,12 +166,9 @@ loginDiv.style.display = 'none';
     }
 
     if (msg.type === "diceEvent" && msg.event) {
-      // показываем всем "Броски других", а себе — обновляем основную панель броска
-      if (msg.event.fromId && typeof myId !== "undefined" && msg.event.fromId === myId) {
-        applyDiceEventToMain(msg.event);
-      } else {
-        pushOtherDiceEvent(msg.event);
-      }
+      // NOTE(v4): dice are delivered to everyone via room_dice_events (diceRow).
+      // diceEvent is used ONLY for instant local feedback (main dice panel).
+      applyDiceEventToMain(msg.event);
     }
 
     // ===== Saved bases (персонажи, привязанные к userId) =====
@@ -196,14 +188,14 @@ loginDiv.style.display = 'none';
     // ================== v4: LOG (append-only) ==================
     if (msg.type === 'logInit' && Array.isArray(msg.rows)) {
       if (!lastState) lastState = createInitialGameState();
-      lastState.log = msg.rows.map(r => prettifyLogText(String(r?.text || ''))).filter(Boolean);
+      lastState.log = msg.rows.map(r => String(r?.text || '')).filter(Boolean);
       if (lastState.log.length > 200) lastState.log = lastState.log.slice(-200);
       renderLog(lastState.log);
     }
     if (msg.type === 'logRow' && msg.row) {
       if (!lastState) lastState = createInitialGameState();
       if (!Array.isArray(lastState.log)) lastState.log = [];
-      const text = prettifyLogText(String(msg.row.text || ''));
+      const text = String(msg.row.text || '').trim();
       if (text) {
         lastState.log.push(text);
         if (lastState.log.length > 200) lastState.log.splice(0, lastState.log.length - 200);
@@ -220,10 +212,6 @@ loginDiv.style.display = 'none';
       try {
         if (lastState) renderBoard(lastState);
       } catch {}
-
-      try {
-        if (window.FogWar && lastState) window.FogWar.onTokenPositionsChanged?.(lastState);
-      } catch {}
     }
     if (msg.type === 'tokenRow' && msg.row) {
       try { applyTokenRowToLocalState(msg.row); } catch {}
@@ -239,20 +227,20 @@ loginDiv.style.display = 'none';
           }
         }
       } catch {}
-
-      // Fog of war dynamic LOS depends on token positions; recompute+render on movement.
-      try {
-        if (window.FogWar && lastState) window.FogWar.onTokenPositionsChanged?.(lastState);
-      } catch {}
     }
 
     // ================== v4: DICE (append-only) ==================
     if (msg.type === 'diceInit' && Array.isArray(msg.rows)) {
+      window._seenDiceIds = window._seenDiceIds || new Set();
       // we show them in "Броски других" as history (newest last)
       try {
         const rows = [...msg.rows].reverse();
         rows.forEach(r => {
+          // skip own rolls in "Броски других" (main panel already shows them)
           if (typeof myId !== 'undefined' && String(r.from_id || '') === String(myId)) return;
+          const rid = String(r.id || '');
+          if (rid && window._seenDiceIds.has(rid)) return;
+          if (rid) window._seenDiceIds.add(rid);
           const ev = {
             fromId: r.from_id || '',
             fromName: r.from_name || '',
@@ -269,12 +257,14 @@ loginDiv.style.display = 'none';
       } catch {}
     }
     if (msg.type === 'diceRow' && msg.row) {
+      window._seenDiceIds = window._seenDiceIds || new Set();
       try {
         const r = msg.row;
-        if (typeof myId !== 'undefined' && String(r.from_id || '') === String(myId)) {
-          // author already sees it in the main roll panel; avoid duplicate UI
-          return;
-        }
+        // skip own rolls in "Броски других"
+        if (typeof myId !== 'undefined' && String(r.from_id || '') === String(myId)) return;
+        const rid = String(r.id || '');
+        if (rid && window._seenDiceIds.has(rid)) return;
+        if (rid) window._seenDiceIds.add(rid);
         const ev = {
           fromId: r.from_id || '',
           fromName: r.from_name || '',
@@ -478,7 +468,7 @@ function renderLog(logs) {
   logList.innerHTML = '';
   logs.slice(-50).forEach(line => {
     const li = document.createElement('li');
-    li.textContent = prettifyLogText(line);
+    li.textContent = line;
     logList.appendChild(li);
   });
 
@@ -691,31 +681,8 @@ function updatePlayerList() {
       ul.appendChild(emptyLi);
     }
 
-    // In exploration phase, hide GM-created non-allies from list until discovered by vision.
-    // (Discovery memory is stored in window._fogLastKnown and updated by board rendering.)
-    const st = lastState || {};
-    const fog = st.fog || {};
-    const phase = String(st.phase || '').trim();
-    const asPlayerView = (String(myRole || '') !== 'GM') || (String(myRole || '') === 'GM' && String(fog.gmViewMode || 'gm') === 'player');
-
-    const listPlayers = group.players.filter(p => {
-      const ownerRole = getOwnerRoleForPlayerUI(p);
-      if (!(asPlayerView && phase === 'exploration' && ownerRole === 'GM' && !p.isAlly)) return true;
-
-      // discovered if we have last known OR currently visible
-      const known = !!window._fogLastKnown?.get?.(String(p.id));
-      if (known) return true;
-      try {
-        if (p.x === null || p.y === null) return false;
-        const size = Number(p.size) || 1;
-        const cx = (Number(p.x) || 0) + Math.floor((size - 1) / 2);
-        const cy = (Number(p.y) || 0) + Math.floor((size - 1) / 2);
-        const visible = !!window.FogWar?.isCellVisible?.(cx, cy);
-        return visible;
-      } catch {
-        return false;
-      }
-    });
+    // Visibility is already applied at the state level (players array contains only visible tokens).
+    const listPlayers = group.players;
 
     listPlayers.forEach(p => {
       const li = document.createElement('li');
@@ -914,32 +881,6 @@ function updatePlayerList() {
     ownerLi.appendChild(ul);
     playerList.appendChild(ownerLi);
   });
-}
-
-// ================== LOG prettifier (v4) ==================
-function prettifyLogText(text) {
-  try {
-    const t = String(text || '').trim();
-    if (!t) return '';
-    if (!lastState || !Array.isArray(lastState.players)) return t;
-    const idToName = new Map();
-    lastState.players.forEach(p => {
-      const id = String(p?.id || '').trim();
-      const nm = String(p?.name || '').trim();
-      if (id && nm) idToName.set(id, nm);
-    });
-    if (!idToName.size) return t;
-
-    // Replace any known UUIDs (token ids) with player names.
-    // We do exact-match replacement to avoid accidental partial matches.
-    let out = t;
-    for (const [id, nm] of idToName.entries()) {
-      out = out.split(id).join(nm);
-    }
-    return out;
-  } catch {
-    return String(text || '').trim();
-  }
 }
 
 // ================== UI PERMISSIONS HELPERS ==================

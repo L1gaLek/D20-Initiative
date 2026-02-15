@@ -988,19 +988,16 @@ if (S === 20 && C === 1 && B === 0) {
   clearCritUI();
 }
 
-  // в лог — тоже отправим (если не silent)
+  // отправим событие (если не silent)
+  // Лог формируется на сервере (RPC add_dice_event) — чтобы не было дублей.
   if (!silent) {
     try {
       if (typeof sendMessage === "function") {
-        const bonusTxt = B ? ` ${B >= 0 ? "+" : "-"} ${Math.abs(B)}` : "";
-        sendMessage({
-          type: 'log',
-          text: `${kindText || `Бросок d${S} × ${C}`}: ${finals.join(' + ')} = ${sum}${bonusTxt} => ${total}${critNote}`
-        });
-
         sendMessage({
           type: "diceEvent",
           event: {
+            fromId: (typeof myId !== 'undefined') ? String(myId) : '',
+            fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
             kindText: kindText ? String(kindText) : `d${S} × ${C}`,
             sides: S,
             count: C,

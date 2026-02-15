@@ -382,9 +382,17 @@ async function subscribeRoomDb(roomId) {
     );
   await roomDbChannel.subscribe();
 
-  // v4 note:
-  // Dice + log are append-only tables (room_dice_events / room_log) with realtime.
-  // We intentionally DO NOT use broadcast diceEvent anymore to avoid duplicates.
+  // Optional: broadcast channel (dice events)
+  if (roomChannel) {
+    try { await roomChannel.unsubscribe(); } catch {}
+    roomChannel = null;
+  }
+  roomChannel = sbClient
+    .channel(`room:${roomId}`)
+    .on("broadcast", { event: "diceEvent" }, ({ payload }) => {
+      if (payload && payload.event) handleMessage({ type: "diceEvent", event: payload.event });
+    });
+  await roomChannel.subscribe();
 }
 
 // ================== v4: TOKENS / LOG / DICE (dedicated tables) ==================
@@ -539,7 +547,7 @@ async function insertDiceEvent(roomId, ev) {
       const { error } = await sbClient.rpc('add_dice_event', args);
       if (!error) return;
     } catch {}
-    // fallback
+    // fallback (no RPC): insert dice row + a matching log line
     await sbClient.from('room_dice_events').insert({
       room_id: roomId,
       from_id: args.p_from_id,
@@ -552,13 +560,23 @@ async function insertDiceEvent(roomId, ev) {
       total: args.p_total,
       crit: args.p_crit
     });
+
+    // log line (roughly same as RPC)
+    try {
+      const who = (args.p_from_name || '').trim() || 'Игрок';
+      const kind = (args.p_kind_text || '').trim() || (args.p_sides ? `d${args.p_sides}` : 'Бросок');
+      const rollsTxt = (Array.isArray(args.p_rolls) && args.p_rolls.length) ? args.p_rolls.join(',') : '';
+      const bonusTxt = (Number(args.p_bonus) === 0) ? '' : (Number(args.p_bonus) > 0 ? `+${Number(args.p_bonus)}` : String(Number(args.p_bonus)));
+      const totalTxt = (args.p_total === null || args.p_total === undefined) ? '' : ` = ${args.p_total}`;
+      const critTxt = (args.p_crit === 'crit-success') ? ' (КРИТ)' : (args.p_crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
+      const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(args.p_total ?? '');
+      const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
+      if (line) await insertRoomLog(roomId, line);
+    } catch {}
   } catch (e) {
     console.warn('dice insert failed', e);
   }
 }
-
-// Expose for UI helpers (dom-and-setup.js) to write dice events in v4.
-try { window.insertDiceEvent = insertDiceEvent; } catch {}
 
 
 let roomMembersDbChannel = null;
@@ -1188,7 +1206,8 @@ async function sendMessage(msg) {
             kindText = `Инициатива (в бою): d20${dexMod >= 0 ? "+" : ""}${dexMod}`;
             rolls = [roll];
             bonus = dexMod;
-            // v4: initiative roll will be logged via add_dice_event() into room_log
+            const sign = dexMod >= 0 ? "+" : "";
+            logEventToState(next, `${p.name} бросил инициативу (в бою): ${roll}${sign}${dexMod} = ${total}`);
           } else if (choice === "base") {
             const base = (next.players || []).find(pp => pp && pp.isBase && String(pp.ownerId) === String(p.ownerId));
             const baseInit = Number(base?.initiative);
@@ -1200,7 +1219,7 @@ async function sendMessage(msg) {
             kindText = "Инициатива основы";
             rolls = [];
             bonus = 0;
-            // v4: initiative choice will be logged via add_dice_event() into room_log
+            logEventToState(next, `${p.name} взял инициативу основы: ${total}`);
           } else {
             return;
           }
@@ -1210,8 +1229,7 @@ async function sendMessage(msg) {
           p.pendingInitiativeChoice = false;
           p.willJoinNextRound = true; // добавится в turnOrder в начале следующего раунда (уже реализовано в endTurn)
 
-          // v4: dice events are append-only in room_dice_events (and log in room_log)
-          await insertDiceEvent(currentRoomId, {
+          await broadcastDiceEventOnly({
             fromId: myUserId,
             fromName: p.name,
             kindText,
@@ -1258,10 +1276,12 @@ async function sendMessage(msg) {
           try {
             const mapId = String(next.currentMapId || '');
             // Prefer RPC (server-side collision checks + log insert)
-            const { data, error } = await sbClient.rpc('move_token', {
+            // v5: pass token name so room_log shows player name instead of UUID.
+            const { data, error } = await sbClient.rpc('move_token_v2', {
               p_room_id: currentRoomId,
               p_map_id: mapId,
               p_token_id: String(p.id),
+              p_token_name: String(p.name || ''),
               p_actor_user_id: String(myUserId || ''),
               p_x: nx,
               p_y: ny
@@ -1485,10 +1505,11 @@ else if (type === "addWall") {
             p.initiative = total;
             p.hasRolledInitiative = true;
 
-            // v4: initiative roll will be logged via add_dice_event() into room_log
+            const sign = dexMod >= 0 ? "+" : "";
+            logEventToState(next, `${p.name} бросил инициативу: ${roll}${sign}${dexMod} = ${total}`);
 
-            // v4: dice events are append-only in room_dice_events (and log in room_log)
-            await insertDiceEvent(currentRoomId, {
+            // live dice event (broadcast only)
+            await broadcastDiceEventOnly({
               fromId: myUserId,
               fromName: p.name,
               kindText: `Инициатива: d20${dexMod >= 0 ? "+" : ""}${dexMod}`,

@@ -113,7 +113,11 @@ async function broadcastDiceEventOnly(event) {
   // v4: dice events are stored in room_dice_events (+ log in room_log) and delivered via realtime.
   // We keep this helper name for backwards compatibility, but it now writes to DB.
   try {
-    if (event && currentRoomId && typeof window.insertDiceEvent === 'function') {
+    if (!event) return;
+    if (typeof myId !== 'undefined' && !event.fromId) event.fromId = String(myId);
+    if (myNameSpan?.textContent && !event.fromName) event.fromName = String(myNameSpan.textContent);
+
+    if (currentRoomId && typeof window.insertDiceEvent === 'function') {
       await window.insertDiceEvent(currentRoomId, event);
     }
   } catch {}
