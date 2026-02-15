@@ -179,14 +179,10 @@ function syncActiveToMap(state) {
   if (!m.fog || typeof m.fog !== 'object') m.fog = {};
   if (st.fog && typeof st.fog === 'object') m.fog = deepClone(st.fog);
 
-  // capture positions from root players into map snapshot
-  const pos = {};
-  (st.players || []).forEach((p) => {
-    if (!p || !p.id) return;
-    if (p.x === null || p.y === null || typeof p.x === "undefined" || typeof p.y === "undefined") return;
-    pos[p.id] = { x: p.x, y: p.y };
-  });
-  m.playersPos = pos;
+  // IMPORTANT (architecture v4): token positions are NOT stored in room_state anymore.
+  // They live in a dedicated table (room_tokens). Keeping them in room_state creates
+  // race conditions ("last write wins") and causes visual rollbacks when multiple
+  // users move simultaneously.
 
   return st;
 }
@@ -218,19 +214,8 @@ function loadMapToRoot(state, mapId) {
     explored: []
   };
 
-  // apply stored positions for this map
-  const pos = (m.playersPos && typeof m.playersPos === "object") ? m.playersPos : {};
-  (st.players || []).forEach((p) => {
-    if (!p || !p.id) return;
-    const pp = pos[p.id];
-    if (pp && Number.isFinite(Number(pp.x)) && Number.isFinite(Number(pp.y))) {
-      p.x = Number(pp.x);
-      p.y = Number(pp.y);
-    } else {
-      p.x = null;
-      p.y = null;
-    }
-  });
+  // IMPORTANT (architecture v4): do NOT apply token positions from map snapshot.
+  // Positions are authoritative in room_tokens and arrive via realtime.
 
   return st;
 }
@@ -316,11 +301,17 @@ async function ensureSupabaseReady() {
 
 async function upsertRoomState(roomId, nextState) {
   await ensureSupabaseReady();
+  // v4 architecture: room_state is NOT the source of truth for token positions or logs.
+  // Keeping those inside room_state causes race conditions ("last write wins").
+  // We persist only the low-frequency game state here.
+  const stSafe = deepClone(nextState || {});
+  // Do not persist logs inside room_state; logs are append-only in room_log.
+  stSafe.log = [];
   const payload = {
     room_id: roomId,
-    phase: String(nextState?.phase || "lobby"),
-    current_actor_id: nextState?.turnOrder?.[nextState?.currentTurnIndex] ?? null,
-    state: syncActiveToMap(nextState),
+    phase: String(stSafe?.phase || "lobby"),
+    current_actor_id: stSafe?.turnOrder?.[stSafe?.currentTurnIndex] ?? null,
+    state: syncActiveToMap(stSafe),
     updated_at: new Date().toISOString()
   };
   const { error } = await sbClient.from("room_state").upsert(payload);
@@ -402,6 +393,176 @@ async function subscribeRoomDb(roomId) {
       if (payload && payload.event) handleMessage({ type: "diceEvent", event: payload.event });
     });
   await roomChannel.subscribe();
+}
+
+// ================== v4: TOKENS / LOG / DICE (dedicated tables) ==================
+async function subscribeRoomTokensDb(roomId) {
+  await ensureSupabaseReady();
+  if (window.roomTokensDbChannel) {
+    try { await window.roomTokensDbChannel.unsubscribe(); } catch {}
+    window.roomTokensDbChannel = null;
+  }
+  window.roomTokensDbChannel = sbClient
+    .channel(`db-room_tokens-${roomId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'room_tokens', filter: `room_id=eq.${roomId}` },
+      (payload) => {
+        const row = payload.new;
+        if (row) handleMessage({ type: 'tokenRow', row });
+      }
+    );
+  await window.roomTokensDbChannel.subscribe();
+}
+
+async function loadRoomTokens(roomId, mapId) {
+  await ensureSupabaseReady();
+  if (!roomId) return [];
+  let q = sbClient.from('room_tokens').select('*').eq('room_id', roomId);
+  if (mapId) q = q.eq('map_id', mapId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+async function subscribeRoomLogDb(roomId) {
+  await ensureSupabaseReady();
+  if (window.roomLogDbChannel) {
+    try { await window.roomLogDbChannel.unsubscribe(); } catch {}
+    window.roomLogDbChannel = null;
+  }
+  window.roomLogDbChannel = sbClient
+    .channel(`db-room_log-${roomId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'room_log', filter: `room_id=eq.${roomId}` },
+      (payload) => {
+        const row = payload.new;
+        if (row) handleMessage({ type: 'logRow', row });
+      }
+    );
+  await window.roomLogDbChannel.subscribe();
+}
+
+async function loadRoomLog(roomId, limit = 200) {
+  await ensureSupabaseReady();
+  if (!roomId) return [];
+  const { data, error } = await sbClient
+    .from('room_log')
+    .select('id,text,created_at')
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: true })
+    .limit(Math.max(1, Math.min(500, Number(limit) || 200)));
+  if (error) throw error;
+  return data || [];
+}
+
+async function subscribeRoomDiceDb(roomId) {
+  await ensureSupabaseReady();
+  if (window.roomDiceDbChannel) {
+    try { await window.roomDiceDbChannel.unsubscribe(); } catch {}
+    window.roomDiceDbChannel = null;
+  }
+  window.roomDiceDbChannel = sbClient
+    .channel(`db-room_dice-${roomId}`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'room_dice_events', filter: `room_id=eq.${roomId}` },
+      (payload) => {
+        const row = payload.new;
+        if (row) handleMessage({ type: 'diceRow', row });
+      }
+    );
+  await window.roomDiceDbChannel.subscribe();
+}
+
+async function loadRoomDice(roomId, limit = 50) {
+  await ensureSupabaseReady();
+  if (!roomId) return [];
+  const { data, error } = await sbClient
+    .from('room_dice_events')
+    .select('*')
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: false })
+    .limit(Math.max(1, Math.min(200, Number(limit) || 50)));
+  if (error) throw error;
+  return data || [];
+}
+
+function applyTokenRowToLocalState(row) {
+  try {
+    if (!row) return;
+    const tokenId = String(row.token_id || '').trim();
+    if (!tokenId) return;
+    const x = (row.x === null || typeof row.x === 'undefined') ? null : Number(row.x);
+    const y = (row.y === null || typeof row.y === 'undefined') ? null : Number(row.y);
+    const size = (row.size === null || typeof row.size === 'undefined') ? null : Number(row.size);
+    const color = (typeof row.color === 'string') ? row.color : null;
+    const mapId = String(row.map_id || '').trim();
+
+    // Apply into lastState.players for current UI rendering.
+    if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
+      const p = lastState.players.find(pp => String(pp?.id) === tokenId);
+      if (p) {
+        if (x === null || Number.isFinite(x)) p.x = x;
+        if (y === null || Number.isFinite(y)) p.y = y;
+        if (Number.isFinite(size) && size > 0) p.size = size;
+        if (color) p.color = color;
+        // map-local safety
+        if (mapId) p.mapId = mapId;
+      }
+    }
+  } catch {}
+}
+
+async function insertRoomLog(roomId, text) {
+  try {
+    await ensureSupabaseReady();
+    const t = String(text || '').trim();
+    if (!roomId || !t) return;
+    await sbClient.from('room_log').insert({ room_id: roomId, text: t });
+  } catch (e) {
+    console.warn('room_log insert failed', e);
+  }
+}
+
+async function insertDiceEvent(roomId, ev) {
+  try {
+    await ensureSupabaseReady();
+    if (!roomId || !ev) return;
+    // Prefer RPC (transaction: dice + log)
+    const args = {
+      p_room_id: roomId,
+      p_from_id: String(ev.fromId || ''),
+      p_from_name: String(ev.fromName || ''),
+      p_kind_text: String(ev.kindText || ''),
+      p_sides: Number(ev.sides) || null,
+      p_count: Number(ev.count) || null,
+      p_bonus: Number(ev.bonus) || 0,
+      p_rolls: Array.isArray(ev.rolls) ? ev.rolls.map(n => Number(n) || 0) : [],
+      p_total: Number(ev.total) || null,
+      p_crit: String(ev.crit || '')
+    };
+    try {
+      const { error } = await sbClient.rpc('add_dice_event', args);
+      if (!error) return;
+    } catch {}
+    // fallback
+    await sbClient.from('room_dice_events').insert({
+      room_id: roomId,
+      from_id: args.p_from_id,
+      from_name: args.p_from_name,
+      kind_text: args.p_kind_text,
+      sides: args.p_sides,
+      count: args.p_count,
+      bonus: args.p_bonus,
+      rolls: args.p_rolls,
+      total: args.p_total,
+      crit: args.p_crit
+    });
+  } catch (e) {
+    console.warn('dice insert failed', e);
+  }
 }
 
 
@@ -552,47 +713,47 @@ async function sendMessage(msg) {
         }
 
         await subscribeRoomDb(roomId);
+        // v4: dedicated realtime tables
+        try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
+        try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
+        try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
         await refreshRoomMembers(roomId);
         await subscribeRoomMembersDb(roomId);
         handleMessage({ type: "state", state: rs.state });
+
+        // v4 init: load logs + tokens snapshot after state is applied
+        try {
+          const logRows = await loadRoomLog(roomId, 200);
+          handleMessage({ type: 'logInit', rows: logRows });
+        } catch (e) { console.warn('log init failed', e); }
+        try {
+          const mapId = String(rs?.state?.currentMapId || '');
+          const tokenRows = await loadRoomTokens(roomId, mapId);
+          handleMessage({ type: 'tokensInit', rows: tokenRows, mapId });
+        } catch (e) { console.warn('tokens init failed', e); }
+
+        try {
+          const diceRows = await loadRoomDice(roomId, 50);
+          handleMessage({ type: 'diceInit', rows: diceRows });
+        } catch (e) { console.warn('dice init failed', e); }
         break;
       }
 
       // ===== Dice live events =====
       case "diceEvent": {
-        if (!currentRoomId || !roomChannel) return;
+        if (!currentRoomId) return;
+        // v4: dice events are append-only in room_dice_events (and log is append-only in room_log)
+        const ev = msg.event || {};
+        await insertDiceEvent(currentRoomId, ev);
+        // apply to self instantly (others will receive via realtime INSERT)
+        if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
+        break;
+      }
 
-        // 1) Живое событие в "панели бросков" (видят все)
-        await roomChannel.send({
-          type: "broadcast",
-          event: "diceEvent",
-          payload: { event: msg.event }
-        });
-
-        // 2) Пишем в "Журнал действий" через room_state, чтобы это было видно всем
-        try {
-          const ev = msg.event || {};
-          const who = String(ev.fromName || safeGetUserName() || "Игрок").trim() || "Игрок";
-          const kind = String(ev.kindText || "").trim() || (ev.sides ? `d${ev.sides}` : "Бросок");
-          const rolls = Array.isArray(ev.rolls) ? ev.rolls.map(n => Number(n) || 0) : [];
-          const bonus = Number(ev.bonus) || 0;
-          const bonusTxt = bonus ? (bonus > 0 ? `+${bonus}` : `${bonus}`) : "";
-          const total = Number(ev.total);
-          const totalTxt = Number.isFinite(total) ? ` = ${total}` : "";
-          const critTxt = ev.crit === "crit-success" ? " (КРИТ)" : (ev.crit === "crit-fail" ? " (ПРОВАЛ)" : "");
-          const rollsTxt = rolls.length ? rolls.join(",") : "";
-          const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : (Number.isFinite(total) ? String(total) : "");
-          const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
-
-          if (line && lastState) {
-            const next = deepClone(lastState);
-            logEventToState(next, line);
-            await upsertRoomState(currentRoomId, next);
-          }
-        } catch {}
-
-        // also apply to self instantly
-        if (msg.event) handleMessage({ type: "diceEvent", event: msg.event });
+      // ===== v4: append-only log entry =====
+      case 'log': {
+        if (!currentRoomId) return;
+        await insertRoomLog(currentRoomId, msg.text);
         break;
       }
 
@@ -1078,14 +1239,47 @@ async function sendMessage(msg) {
           const nx = clamp(Number(msg.x) || 0, 0, maxX);
           const ny = clamp(Number(msg.y) || 0, 0, maxY);
 
-          if (!isAreaFree(next, p.id, nx, ny, size)) {
-            handleMessage({ type: "error", message: "Эта клетка занята другим персонажем" });
-            return;
+          // v4: movement is atomic via room_tokens (RPC), not via room_state.
+          // This removes race conditions when multiple users move simultaneously.
+          // Optimistic local update for smooth UX
+          try {
+            if (p) { p.x = nx; p.y = ny; }
+          } catch {}
+
+          try {
+            const mapId = String(next.currentMapId || '');
+            // Prefer RPC (server-side collision checks + log insert)
+            const { data, error } = await sbClient.rpc('move_token', {
+              p_room_id: currentRoomId,
+              p_map_id: mapId,
+              p_token_id: String(p.id),
+              p_actor_user_id: String(myUserId || ''),
+              p_x: nx,
+              p_y: ny
+            });
+            if (error) {
+              // fallback: client-side collision check + direct update
+              if (!isAreaFree(next, p.id, nx, ny, size)) {
+                handleMessage({ type: 'error', message: 'Эта клетка занята другим персонажем' });
+                return;
+              }
+              const { error: uErr } = await sbClient
+                .from('room_tokens')
+                .upsert({ room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() }, { onConflict: 'room_id,map_id,token_id' });
+              if (uErr) throw uErr;
+              await insertRoomLog(currentRoomId, `${p.name} перемещен в (${nx},${ny})`);
+            } else {
+              // Apply returned row instantly if provided
+              if (data) applyTokenRowToLocalState(data);
+            }
+          } catch (e) {
+            console.warn('move_token failed', e);
+            handleMessage({ type: 'error', message: 'Не удалось переместить персонажа' });
           }
 
-          p.x = nx;
-          p.y = ny;
-          logEventToState(next, `${p.name} перемещен в (${p.x},${p.y})`);
+          // IMPORTANT: movement is NOT persisted via room_state.
+          // We stop here to avoid overwriting fresh positions/logs with a full state upsert.
+          return;
         }
 
         else if (type === "updatePlayerSize") {
