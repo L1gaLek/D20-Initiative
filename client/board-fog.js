@@ -140,6 +140,16 @@
       this._toggleUiRows();
     },
 
+    // Called when only token positions changed (v4: positions come from room_tokens realtime).
+    // Avoid full board rerender; just recompute dynamic visibility and repaint.
+    onTokenPositionsChanged(state) {
+      try {
+        this._lastState = state;
+        this._maybeRecomputeDynamic();
+        this._render();
+      } catch {}
+    },
+
     _fogObj() {
       const st = this._lastState || {};
       if (!st.fog || typeof st.fog !== 'object') st.fog = {};
