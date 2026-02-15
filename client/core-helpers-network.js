@@ -499,6 +499,8 @@ function applyTokenRowToLocalState(row) {
     const size = (row.size === null || typeof row.size === 'undefined') ? null : Number(row.size);
     const color = (typeof row.color === 'string') ? row.color : null;
     const mapId = String(row.map_id || '').trim();
+    const hasPublic = (typeof row.is_public !== 'undefined');
+    const isPublic = hasPublic ? !!row.is_public : null;
 
     // Apply into lastState.players for current UI rendering.
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
@@ -510,9 +512,47 @@ function applyTokenRowToLocalState(row) {
         if (color) p.color = color;
         // map-local safety
         if (mapId) p.mapId = mapId;
+
+        // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates
+        if (isPublic !== null) p.isPublic = isPublic;
       }
     }
   } catch {}
+}
+
+async function upsertTokenVisibility(roomId, tokenId, isPublic) {
+  try {
+    await ensureSupabaseReady();
+    if (!roomId || !tokenId) return;
+    const pub = !!isPublic;
+
+    // Try update all rows of this token in this room (across maps).
+    const { data: upd, error: uErr } = await sbClient
+      .from('room_tokens')
+      .update({ is_public: pub })
+      .eq('room_id', roomId)
+      .eq('token_id', tokenId)
+      .select('room_id')
+      .limit(1);
+    if (!uErr && Array.isArray(upd) && upd.length) return;
+
+    // If there is no row yet (token not placed), create a stub on current map.
+    const mapId = String(lastState?.currentMapId || '') || null;
+    const p = (lastState?.players || []).find(pp => String(pp?.id) === String(tokenId));
+    const payload = {
+      room_id: roomId,
+      map_id: String(p?.mapId || mapId || '') || null,
+      token_id: tokenId,
+      x: (p?.x === null || typeof p?.x === 'undefined') ? null : Number(p.x),
+      y: (p?.y === null || typeof p?.y === 'undefined') ? null : Number(p.y),
+      size: Number(p?.size) || 1,
+      color: (typeof p?.color === 'string') ? p.color : null,
+      is_public: pub
+    };
+    await sbClient.from('room_tokens').upsert(payload);
+  } catch (e) {
+    console.warn('upsertTokenVisibility failed', e);
+  }
 }
 
 async function insertRoomLog(roomId, text) {
@@ -1595,6 +1635,14 @@ else if (type === "addWall") {
         }
 
         await upsertRoomState(currentRoomId, next);
+
+		// v4+: mirror GM "eye" visibility into room_tokens for reliable realtime visibility updates.
+		if (type === 'setPlayerPublic') {
+			try {
+				const pid = String(msg.id || '');
+				if (pid) await upsertTokenVisibility(currentRoomId, pid, !!msg.isPublic);
+			} catch {}
+		}
         break;
       }
     }
