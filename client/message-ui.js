@@ -278,10 +278,50 @@ loginDiv.style.display = 'none';
     }
 
     if (msg.type === "init" || msg.type === "state") {
+      // ===== Preserve volatile UI state across room_state snapshots (v4) =====
+      // room_state no longer contains authoritative token positions or logs.
+      // They arrive via dedicated tables (room_tokens / room_log).
+      // If we blindly replace lastState with the room_state snapshot, we would:
+      // - wipe the action log (state.log is intentionally empty)
+      // - temporarily reset token positions to null until room_tokens catches up
+      const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
+      const prevPos = new Map();
+      try {
+        (lastState?.players || []).forEach(p => {
+          if (!p || !p.id) return;
+          prevPos.set(String(p.id), {
+            x: (p.x === null || typeof p.x === 'undefined') ? null : Number(p.x),
+            y: (p.y === null || typeof p.y === 'undefined') ? null : Number(p.y),
+            size: Number(p.size) || 1,
+            color: p.color || null,
+            mapId: p.mapId || null
+          });
+        });
+      } catch {}
+
       // нормализация состояния + поддержка нескольких карт кампании
       const normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
 
       lastState = normalized;
+
+      // restore append-only log from memory (room_log drives it)
+      if (prevLog && (!Array.isArray(lastState.log) || lastState.log.length === 0)) {
+        lastState.log = prevLog;
+      }
+
+      // restore last-known token positions to avoid "jump to null" on state updates
+      try {
+        (lastState.players || []).forEach(p => {
+          if (!p || !p.id) return;
+          const snap = prevPos.get(String(p.id));
+          if (!snap) return;
+          if ((p.x === null || typeof p.x === 'undefined') && snap.x !== null && Number.isFinite(snap.x)) p.x = snap.x;
+          if ((p.y === null || typeof p.y === 'undefined') && snap.y !== null && Number.isFinite(snap.y)) p.y = snap.y;
+          if ((!p.size || !Number.isFinite(Number(p.size))) && snap.size) p.size = snap.size;
+          if ((!p.color || typeof p.color !== 'string') && snap.color) p.color = snap.color;
+          if ((!p.mapId || typeof p.mapId !== 'string') && snap.mapId) p.mapId = snap.mapId;
+        });
+      } catch {}
       boardWidth = normalized.boardWidth;
       boardHeight = normalized.boardHeight;
 
@@ -343,8 +383,12 @@ loginDiv.style.display = 'none';
       updatePlayerList();
       updateCurrentPlayer(normalized);
       renderTurnOrderBox(normalized);
-      // v4: log is append-only in room_log; state.log is intentionally empty.
-      renderLog((lastState && Array.isArray(lastState.log)) ? lastState.log : []);
+
+      // v4: log is append-only in room_log.
+      // Do NOT clear the UI log on every room_state snapshot update.
+      if (lastState && Array.isArray(lastState.log) && lastState.log.length) {
+        renderLog(lastState.log);
+      }
 
       // если "Инфа" открыта — обновляем ее по свежему state
       window.InfoModal?.refresh?.(players);
