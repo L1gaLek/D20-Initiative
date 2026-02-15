@@ -382,17 +382,9 @@ async function subscribeRoomDb(roomId) {
     );
   await roomDbChannel.subscribe();
 
-  // Optional: broadcast channel (dice events)
-  if (roomChannel) {
-    try { await roomChannel.unsubscribe(); } catch {}
-    roomChannel = null;
-  }
-  roomChannel = sbClient
-    .channel(`room:${roomId}`)
-    .on("broadcast", { event: "diceEvent" }, ({ payload }) => {
-      if (payload && payload.event) handleMessage({ type: "diceEvent", event: payload.event });
-    });
-  await roomChannel.subscribe();
+  // v4 note:
+  // Dice + log are append-only tables (room_dice_events / room_log) with realtime.
+  // We intentionally DO NOT use broadcast diceEvent anymore to avoid duplicates.
 }
 
 // ================== v4: TOKENS / LOG / DICE (dedicated tables) ==================
@@ -564,6 +556,9 @@ async function insertDiceEvent(roomId, ev) {
     console.warn('dice insert failed', e);
   }
 }
+
+// Expose for UI helpers (dom-and-setup.js) to write dice events in v4.
+try { window.insertDiceEvent = insertDiceEvent; } catch {}
 
 
 let roomMembersDbChannel = null;
@@ -1193,8 +1188,7 @@ async function sendMessage(msg) {
             kindText = `Инициатива (в бою): d20${dexMod >= 0 ? "+" : ""}${dexMod}`;
             rolls = [roll];
             bonus = dexMod;
-            const sign = dexMod >= 0 ? "+" : "";
-            logEventToState(next, `${p.name} бросил инициативу (в бою): ${roll}${sign}${dexMod} = ${total}`);
+            // v4: initiative roll will be logged via add_dice_event() into room_log
           } else if (choice === "base") {
             const base = (next.players || []).find(pp => pp && pp.isBase && String(pp.ownerId) === String(p.ownerId));
             const baseInit = Number(base?.initiative);
@@ -1206,7 +1200,7 @@ async function sendMessage(msg) {
             kindText = "Инициатива основы";
             rolls = [];
             bonus = 0;
-            logEventToState(next, `${p.name} взял инициативу основы: ${total}`);
+            // v4: initiative choice will be logged via add_dice_event() into room_log
           } else {
             return;
           }
@@ -1216,7 +1210,8 @@ async function sendMessage(msg) {
           p.pendingInitiativeChoice = false;
           p.willJoinNextRound = true; // добавится в turnOrder в начале следующего раунда (уже реализовано в endTurn)
 
-          await broadcastDiceEventOnly({
+          // v4: dice events are append-only in room_dice_events (and log in room_log)
+          await insertDiceEvent(currentRoomId, {
             fromId: myUserId,
             fromName: p.name,
             kindText,
@@ -1490,11 +1485,10 @@ else if (type === "addWall") {
             p.initiative = total;
             p.hasRolledInitiative = true;
 
-            const sign = dexMod >= 0 ? "+" : "";
-            logEventToState(next, `${p.name} бросил инициативу: ${roll}${sign}${dexMod} = ${total}`);
+            // v4: initiative roll will be logged via add_dice_event() into room_log
 
-            // live dice event (broadcast only)
-            await broadcastDiceEventOnly({
+            // v4: dice events are append-only in room_dice_events (and log in room_log)
+            await insertDiceEvent(currentRoomId, {
               fromId: myUserId,
               fromName: p.name,
               kindText: `Инициатива: d20${dexMod >= 0 ? "+" : ""}${dexMod}`,
