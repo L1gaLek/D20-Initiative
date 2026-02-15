@@ -932,16 +932,12 @@ function bindSlotEditors(root, player, canEdit) {
           if (typeof sendMessage === 'function' && rollRes) {
             const r = rollRes.rolls?.[0];
             const b = Number(rollRes.bonus) || 0;
-            const bonusTxt = b ? ` ${b >= 0 ? '+' : '-'} ${Math.abs(b)}` : '';
             const nameTxt = title ? ` (${title})` : '';
-            sendMessage({
-              type: 'log',
-              text: `Атака заклинанием${nameTxt}: d20(${r})${bonusTxt} => ${rollRes.total}`
-            });
-
             sendMessage({
               type: 'diceEvent',
               event: {
+                fromId: (typeof myId !== 'undefined') ? String(myId) : '',
+                fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
                 kindText: `Атака заклинанием${nameTxt}`,
                 sides: 20,
                 count: 1,
