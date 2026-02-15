@@ -212,9 +212,46 @@ loginDiv.style.display = 'none';
       try {
         if (lastState) renderBoard(lastState);
       } catch {}
+
+      // v4: positions come from room_tokens; fog must recompute when tokens snapshot is applied.
+      try {
+        window.FogWar?.onTokenPositionsChanged?.(lastState);
+      } catch {}
     }
     if (msg.type === 'tokenRow' && msg.row) {
       try { applyTokenRowToLocalState(msg.row); } catch {}
+
+      // If visibility changed (GM "eye" mirrored into room_tokens),
+      // we must recompute the visible players set immediately.
+      if (typeof msg.row.is_public !== 'undefined') {
+        try {
+          if (lastState && Array.isArray(lastState.players)) {
+            const allPlayers = lastState.players;
+            const visiblePlayers = allPlayers.filter(p => isPlayerVisibleToMe(p, lastState));
+            const existingIds = new Set(visiblePlayers.map(p => String(p?.id)));
+
+            // remove DOM for players that are no longer visible
+            playerElements.forEach((el, id) => {
+              if (!existingIds.has(String(id))) {
+                try { el.remove(); } catch {}
+                playerElements.delete(id);
+              }
+            });
+            hpBarElements.forEach((el, id) => {
+              if (!existingIds.has(String(id))) {
+                try { el.remove(); } catch {}
+                hpBarElements.delete(id);
+              }
+            });
+
+            players = visiblePlayers;
+            renderBoard(lastState);
+            updatePlayerList();
+            window.InfoModal?.refresh?.(players);
+          }
+        } catch {}
+      }
+
       // Lightweight DOM update (no full state overwrite)
       try {
         const pid = String(msg.row.token_id || '');
@@ -226,6 +263,11 @@ loginDiv.style.display = 'none';
             updateHpBar(p, el);
           }
         }
+      } catch {}
+
+      // v4: keep fog-of-war LOS synced to token movement.
+      try {
+        window.FogWar?.onTokenPositionsChanged?.(lastState);
       } catch {}
     }
 
