@@ -754,6 +754,13 @@ async function sendMessage(msg) {
       case 'log': {
         if (!currentRoomId) return;
         await insertRoomLog(currentRoomId, msg.text);
+        // Optimistic local append (realtime INSERT will also arrive if enabled)
+        try {
+          handleMessage({
+            type: 'logRow',
+            row: { text: String(msg.text || ''), created_at: new Date().toISOString() }
+          });
+        } catch {}
         break;
       }
 
@@ -1244,6 +1251,13 @@ async function sendMessage(msg) {
           // Optimistic local update for smooth UX
           try {
             if (p) { p.x = nx; p.y = ny; }
+            // Also move the DOM token immediately (we may not receive realtime
+            // events if the new tables are not enabled for Realtime yet).
+            try { setPlayerPosition?.(p); } catch {}
+            try {
+              const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;
+              if (el) updateHpBar?.(p, el);
+            } catch {}
           } catch {}
 
           try {
