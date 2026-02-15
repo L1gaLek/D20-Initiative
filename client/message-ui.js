@@ -196,14 +196,14 @@ loginDiv.style.display = 'none';
     // ================== v4: LOG (append-only) ==================
     if (msg.type === 'logInit' && Array.isArray(msg.rows)) {
       if (!lastState) lastState = createInitialGameState();
-      lastState.log = msg.rows.map(r => String(r?.text || '')).filter(Boolean);
+      lastState.log = msg.rows.map(r => prettifyLogText(String(r?.text || ''))).filter(Boolean);
       if (lastState.log.length > 200) lastState.log = lastState.log.slice(-200);
       renderLog(lastState.log);
     }
     if (msg.type === 'logRow' && msg.row) {
       if (!lastState) lastState = createInitialGameState();
       if (!Array.isArray(lastState.log)) lastState.log = [];
-      const text = String(msg.row.text || '').trim();
+      const text = prettifyLogText(String(msg.row.text || ''));
       if (text) {
         lastState.log.push(text);
         if (lastState.log.length > 200) lastState.log.splice(0, lastState.log.length - 200);
@@ -220,6 +220,10 @@ loginDiv.style.display = 'none';
       try {
         if (lastState) renderBoard(lastState);
       } catch {}
+
+      try {
+        if (window.FogWar && lastState) window.FogWar.onTokenPositionsChanged?.(lastState);
+      } catch {}
     }
     if (msg.type === 'tokenRow' && msg.row) {
       try { applyTokenRowToLocalState(msg.row); } catch {}
@@ -235,6 +239,11 @@ loginDiv.style.display = 'none';
           }
         }
       } catch {}
+
+      // Fog of war dynamic LOS depends on token positions; recompute+render on movement.
+      try {
+        if (window.FogWar && lastState) window.FogWar.onTokenPositionsChanged?.(lastState);
+      } catch {}
     }
 
     // ================== v4: DICE (append-only) ==================
@@ -243,6 +252,7 @@ loginDiv.style.display = 'none';
       try {
         const rows = [...msg.rows].reverse();
         rows.forEach(r => {
+          if (typeof myId !== 'undefined' && String(r.from_id || '') === String(myId)) return;
           const ev = {
             fromId: r.from_id || '',
             fromName: r.from_name || '',
@@ -261,6 +271,10 @@ loginDiv.style.display = 'none';
     if (msg.type === 'diceRow' && msg.row) {
       try {
         const r = msg.row;
+        if (typeof myId !== 'undefined' && String(r.from_id || '') === String(myId)) {
+          // author already sees it in the main roll panel; avoid duplicate UI
+          return;
+        }
         const ev = {
           fromId: r.from_id || '',
           fromName: r.from_name || '',
@@ -272,7 +286,6 @@ loginDiv.style.display = 'none';
           total: r.total || null,
           crit: r.crit || ''
         };
-        // Show to everyone (including the author) consistently
         pushOtherDiceEvent?.(ev);
       } catch {}
     }
@@ -465,7 +478,7 @@ function renderLog(logs) {
   logList.innerHTML = '';
   logs.slice(-50).forEach(line => {
     const li = document.createElement('li');
-    li.textContent = line;
+    li.textContent = prettifyLogText(line);
     logList.appendChild(li);
   });
 
@@ -901,6 +914,32 @@ function updatePlayerList() {
     ownerLi.appendChild(ul);
     playerList.appendChild(ownerLi);
   });
+}
+
+// ================== LOG prettifier (v4) ==================
+function prettifyLogText(text) {
+  try {
+    const t = String(text || '').trim();
+    if (!t) return '';
+    if (!lastState || !Array.isArray(lastState.players)) return t;
+    const idToName = new Map();
+    lastState.players.forEach(p => {
+      const id = String(p?.id || '').trim();
+      const nm = String(p?.name || '').trim();
+      if (id && nm) idToName.set(id, nm);
+    });
+    if (!idToName.size) return t;
+
+    // Replace any known UUIDs (token ids) with player names.
+    // We do exact-match replacement to avoid accidental partial matches.
+    let out = t;
+    for (const [id, nm] of idToName.entries()) {
+      out = out.split(id).join(nm);
+    }
+    return out;
+  } catch {
+    return String(text || '').trim();
+  }
 }
 
 // ================== UI PERMISSIONS HELPERS ==================
