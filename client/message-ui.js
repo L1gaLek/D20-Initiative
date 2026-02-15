@@ -193,6 +193,90 @@ loginDiv.style.display = 'none';
       window.InfoModal?.onSavedBaseDeleted?.(msg);
     }
 
+    // ================== v4: LOG (append-only) ==================
+    if (msg.type === 'logInit' && Array.isArray(msg.rows)) {
+      if (!lastState) lastState = createInitialGameState();
+      lastState.log = msg.rows.map(r => String(r?.text || '')).filter(Boolean);
+      if (lastState.log.length > 200) lastState.log = lastState.log.slice(-200);
+      renderLog(lastState.log);
+    }
+    if (msg.type === 'logRow' && msg.row) {
+      if (!lastState) lastState = createInitialGameState();
+      if (!Array.isArray(lastState.log)) lastState.log = [];
+      const text = String(msg.row.text || '').trim();
+      if (text) {
+        lastState.log.push(text);
+        if (lastState.log.length > 200) lastState.log.splice(0, lastState.log.length - 200);
+        renderLog(lastState.log);
+      }
+    }
+
+    // ================== v4: TOKENS (positions) ==================
+    if (msg.type === 'tokensInit' && Array.isArray(msg.rows)) {
+      try {
+        msg.rows.forEach(r => applyTokenRowToLocalState(r));
+      } catch {}
+      // Repaint positions (safe)
+      try {
+        if (lastState) renderBoard(lastState);
+      } catch {}
+    }
+    if (msg.type === 'tokenRow' && msg.row) {
+      try { applyTokenRowToLocalState(msg.row); } catch {}
+      // Lightweight DOM update (no full state overwrite)
+      try {
+        const pid = String(msg.row.token_id || '');
+        const p = (players || []).find(pp => String(pp?.id) === pid);
+        if (p) {
+          const el = playerElements.get(pid);
+          if (el) {
+            setPlayerPosition(p);
+            updateHpBar(p, el);
+          }
+        }
+      } catch {}
+    }
+
+    // ================== v4: DICE (append-only) ==================
+    if (msg.type === 'diceInit' && Array.isArray(msg.rows)) {
+      // we show them in "Броски других" as history (newest last)
+      try {
+        const rows = [...msg.rows].reverse();
+        rows.forEach(r => {
+          const ev = {
+            fromId: r.from_id || '',
+            fromName: r.from_name || '',
+            kindText: r.kind_text || '',
+            sides: r.sides || null,
+            count: r.count || null,
+            bonus: r.bonus || 0,
+            rolls: Array.isArray(r.rolls) ? r.rolls : [],
+            total: r.total || null,
+            crit: r.crit || ''
+          };
+          pushOtherDiceEvent?.(ev);
+        });
+      } catch {}
+    }
+    if (msg.type === 'diceRow' && msg.row) {
+      try {
+        const r = msg.row;
+        const ev = {
+          fromId: r.from_id || '',
+          fromName: r.from_name || '',
+          kindText: r.kind_text || '',
+          sides: r.sides || null,
+          count: r.count || null,
+          bonus: r.bonus || 0,
+          rolls: Array.isArray(r.rolls) ? r.rolls : [],
+          total: r.total || null,
+          crit: r.crit || ''
+        };
+        // Show to everyone (including the author) consistently
+        pushOtherDiceEvent?.(ev);
+      } catch {}
+    }
+
     if (msg.type === "init" || msg.type === "state") {
       // нормализация состояния + поддержка нескольких карт кампании
       const normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
@@ -259,7 +343,8 @@ loginDiv.style.display = 'none';
       updatePlayerList();
       updateCurrentPlayer(normalized);
       renderTurnOrderBox(normalized);
-      renderLog(normalized.log || []);
+      // v4: log is append-only in room_log; state.log is intentionally empty.
+      renderLog((lastState && Array.isArray(lastState.log)) ? lastState.log : []);
 
       // если "Инфа" открыта — обновляем ее по свежему state
       window.InfoModal?.refresh?.(players);
