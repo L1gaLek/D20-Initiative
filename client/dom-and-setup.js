@@ -110,17 +110,15 @@ let myRole;
 // IMPORTANT: do NOT call sendMessage({type:'diceEvent'}) from inside state mutations,
 // because diceEvent case writes logs using lastState and can overwrite newer state.
 async function broadcastDiceEventOnly(event) {
+  // v4: dice events are stored in room_dice_events (+ log in room_log) and delivered via realtime.
+  // We keep this helper name for backwards compatibility, but it now writes to DB.
   try {
-    if (roomChannel && currentRoomId && event) {
-      await roomChannel.send({
-        type: 'broadcast',
-        event: 'diceEvent',
-        payload: { event }
-      });
+    if (event && currentRoomId && typeof window.insertDiceEvent === 'function') {
+      await window.insertDiceEvent(currentRoomId, event);
     }
   } catch {}
 
-  // apply to self instantly (main panel)
+  // update self UI instantly (main roll panel)
   try {
     if (event) handleMessage({ type: 'diceEvent', event });
   } catch {}
