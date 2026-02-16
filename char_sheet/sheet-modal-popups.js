@@ -52,7 +52,7 @@
               </select>
 
               <button class="hp-hitdice-btn" type="button" data-hp-hitdice-roll title="Бросить кость здоровья">
-                <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
                   <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="rgb(138,0,0)" opacity="0.96"></path>
                   <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"></path>
                 </svg>
@@ -197,7 +197,7 @@
     return Math.floor((Math.trunc(s) - 10) / 2);
   }
 
-  function rollHitDieAndAddToMaxHp() {
+  async function rollHitDieAndAddToMaxHp() {
     if (!hpPopupEl) return;
     if (!lastCanEdit) return;
     const player = getOpenedPlayerSafe();
@@ -218,9 +218,22 @@
     const conScore = sheet?.stats?.con?.score;
     const conMod = getConModifierFromScore(conScore);
 
-    const die = Math.floor(Math.random() * sides) + 1;
-    const total = die + conMod;
-    const add = Math.max(0, total);
+    // Бросок через общую панель кубиков — чтобы результат попал в:
+    // 1) "Бросок" 2) "Броски других" 3) журнал действий
+    let rollTotal = null;
+    if (window.DicePanel?.roll) {
+      const kindText = `Кость здоровья: d${sides}${conMod ? formatMod(conMod) : ''}`;
+      const res = await window.DicePanel.roll({ sides, count: 1, bonus: conMod, kindText });
+      rollTotal = Number(res?.total);
+    }
+
+    // fallback (если DicePanel недоступен)
+    if (!Number.isFinite(rollTotal)) {
+      const die = Math.floor(Math.random() * sides) + 1;
+      rollTotal = die + conMod;
+    }
+
+    const add = Math.max(0, Math.trunc(rollTotal));
 
     const curMax = Number(sheet.vitality["hp-max"].value) || 0;
     const newMax = Math.max(0, Math.trunc(curMax + add));
