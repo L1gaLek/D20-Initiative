@@ -695,16 +695,25 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      sendMessage({ type: 'setCombatantsBulk', mode: 'all' });
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({ id: p.id, inCombat: true }))
+      });
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      sendMessage({ type: 'setCombatantsBulk', mode: 'none' });
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({ id: p.id, inCombat: false }))
+      });
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      const ids = stPlayers
-        .filter(p => p && p.x !== null && p.y !== null)
-        .map(p => p.id);
-      sendMessage({ type: 'setCombatantsBulk', mode: 'ids', ids });
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({
+          id: p.id,
+          inCombat: !!(p && p.x !== null && p.y !== null)
+        }))
+      });
     });
 
     controlsLi.appendChild(btnAll);
@@ -758,14 +767,10 @@ function roleToClass(role) {
 }
 
 function updatePlayerList() {
-  // Split UI: render into two lists if available
-  const hasSplit = (typeof playerListPersonal !== 'undefined' && playerListPersonal) && (typeof playerListOthers !== 'undefined' && playerListOthers);
-  const listPersonal = hasSplit ? playerListPersonal : playerList;
-  const listOthers = hasSplit ? playerListOthers : null;
-
-  if (!listPersonal) return;
-  listPersonal.innerHTML = '';
-  if (listOthers) listOthers.innerHTML = '';
+  // Два списка: "Личные" (мои) и "Другие" (остальные)
+  if (!playerListMine || !playerListOther) return;
+  playerListMine.innerHTML = '';
+  playerListOther.innerHTML = '';
 
   const currentTurnId = (lastState && lastState.phase === 'combat' && Array.isArray(lastState.turnOrder) && lastState.turnOrder.length)
     ? lastState.turnOrder[lastState.currentTurnIndex]
@@ -814,8 +819,7 @@ function updatePlayerList() {
     grouped.get(oid).players.push(p);
   });
 
-  const renderOwnerGroup = (containerUl, ownerId, group) => {
-    if (!containerUl) return;
+  const renderOwnerGroup = (ownerId, group, targetUl) => {
     const userInfo = ownerId ? usersById.get(ownerId) : null;
 
     const ownerLi = document.createElement('li');
@@ -1051,35 +1055,22 @@ function updatePlayerList() {
 
     ownerLi.appendChild(ownerHeader);
     ownerLi.appendChild(ul);
-    containerUl.appendChild(ownerLi);
+    targetUl.appendChild(ownerLi);
   };
 
-  // Personal = only my created characters
-  const myOwnerId = (typeof myId !== 'undefined' && myId !== null) ? String(myId) : '';
-  if (hasSplit) {
-    // Personal pane
-    if (myOwnerId && grouped.has(myOwnerId)) {
-      const g = grouped.get(myOwnerId);
-      renderOwnerGroup(listPersonal, myOwnerId, g);
-    } else {
-      // Empty placeholder
-      const emptyLi = document.createElement('li');
-      emptyLi.className = 'player-list-item';
-      emptyLi.textContent = 'Персонажей нет';
-      listPersonal.appendChild(emptyLi);
-    }
+  // Раскладываем группы по двум окнам
+  Array.from(grouped.entries()).forEach(([ownerId, group]) => {
+    // "Личные" = только мои токены (ownerId === myId)
+    // "Другие" = все остальные
+    const isMine = String(ownerId || '') && String(myId || '') && String(ownerId) === String(myId);
+    const target = isMine ? playerListMine : playerListOther;
 
-    // Others pane
-    Array.from(grouped.entries()).forEach(([ownerId, group]) => {
-      if (String(ownerId) === myOwnerId) return;
-      renderOwnerGroup(listOthers, ownerId, group);
-    });
-  } else {
-    // Legacy: single list
-    Array.from(grouped.entries()).forEach(([ownerId, group]) => {
-      renderOwnerGroup(listPersonal, ownerId, group);
-    });
-  }
+    // В "Личные" показываем только если есть хотя бы 1 персонаж
+    // (иначе будет пустой блок владельца)
+    if (isMine && !(group?.players || []).length) return;
+
+    renderOwnerGroup(ownerId, group, target);
+  });
 }
 
 // ================== UI PERMISSIONS HELPERS ==================

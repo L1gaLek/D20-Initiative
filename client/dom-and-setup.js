@@ -31,10 +31,9 @@ const diceViz = document.getElementById('dice-viz');
 
 const board = document.getElementById('game-board');
 const boardWrapper = document.getElementById('board-wrapper');
-// Players lists (split UI: Personal / Others)
-const playerList = document.getElementById('player-list'); // legacy hidden element
-const playerListPersonal = document.getElementById('player-list-personal');
-const playerListOthers = document.getElementById('player-list-others');
+// "Пользователи и персонажи" теперь разделены на два списка
+const playerListMine = document.getElementById('player-list-mine');
+const playerListOther = document.getElementById('player-list-other');
 const logList = document.getElementById('log-list');
 const currentPlayerSpan = document.getElementById('current-player');
 const nextTurnBtn = document.getElementById('next-turn');

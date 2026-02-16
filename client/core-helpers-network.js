@@ -1157,42 +1157,33 @@ async function sendMessage(msg) {
           logEventToState(next, `${p.name} ${inCombat ? 'вступает' : 'выходит'} из боя`);
         }
 
-        else if (type === 'setCombatantsBulk') {
-          // Bulk selection for combatants (GM UI buttons: All / None / On board)
+        else if (type === 'setPlayersInCombatBulk') {
+          // Bulk toggle to avoid race conditions (one room_state write instead of many)
           if (!isGM) return;
-          const mode = String(msg.mode || '').trim();
-          const ids = Array.isArray(msg.ids) ? msg.ids.map(x => String(x)).filter(Boolean) : [];
-          const idSet = new Set(ids);
+          const items = Array.isArray(msg.items) ? msg.items : [];
+          if (!items.length) return;
 
-          const phaseNow = String(next?.phase || '');
-
-          (next.players || []).forEach((p) => {
-            const pid = String(p?.id || '');
-            if (!pid) return;
-
-            let inCombat = !!p.inCombat;
-            if (mode === 'all') inCombat = true;
-            else if (mode === 'none') inCombat = false;
-            else if (mode === 'ids') inCombat = idSet.has(pid);
-
-            const was = !!p.inCombat;
+          let changed = 0;
+          for (const it of items) {
+            const pid = String(it?.id || '');
+            if (!pid) continue;
+            const p = (next.players || []).find(pp => String(pp?.id) === pid);
+            if (!p) continue;
+            const inCombat = !!it.inCombat;
+            if (!!p.inCombat === inCombat) continue;
             p.inCombat = inCombat;
 
-            // If enabling during initiative, reset initiative fields for that token.
-            if ((phaseNow === 'initiative') && inCombat && !was) {
-              p.initiative = null;
-              p.hasRolledInitiative = false;
-              p.pendingInitiativeChoice = true;
-            }
-
             // If combat is already running and a new combatant is added, queue for next round.
-            if (phaseNow === 'combat' && inCombat && !was) {
+            if (next.phase === 'combat' && inCombat) {
               if (!p.hasRolledInitiative) p.pendingInitiativeChoice = true;
               p.willJoinNextRound = true;
             }
-          });
+            changed++;
+          }
 
-          logEventToState(next, `GM обновил участников боя`);
+          if (changed) {
+            logEventToState(next, `GM изменил участников боя: ${changed}`);
+          }
         }
 
         else if (type === "startExploration") {
@@ -1503,25 +1494,26 @@ async function sendMessage(msg) {
           const p = (next.players || []).find(pp => pp.id === msg.id);
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
+
+          // Optimistic local update
           p.x = null;
           p.y = null;
+          try { setPlayerPosition?.(p); } catch {}
 
-          // v4: positions are authoritative in room_tokens.
-          // Ensure the token is removed from the board instantly for everyone.
+          // v4: token position is stored in room_tokens; clear it there too
           try {
             await ensureSupabaseReady();
-            if (currentRoomId) {
-              const mapId = String(next?.currentMapId || lastState?.currentMapId || '') || null;
-              let q = sbClient
+            const mapId = String(next.currentMapId || '');
+            if (currentRoomId && mapId) {
+              await sbClient
                 .from('room_tokens')
                 .update({ x: null, y: null })
                 .eq('room_id', currentRoomId)
+                .eq('map_id', mapId)
                 .eq('token_id', String(p.id));
-              if (mapId) q = q.eq('map_id', mapId);
-              await q;
             }
           } catch (e) {
-            console.warn('removePlayerFromBoard token update failed', e);
+            console.warn('removePlayerFromBoard: room_tokens update failed', e);
           }
 
           logEventToState(next, `${p.name} удален с поля`);
@@ -1531,6 +1523,21 @@ async function sendMessage(msg) {
           const p = (next.players || []).find(pp => pp.id === msg.id);
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
+
+          // v4: also remove any room_tokens rows for this token (all maps)
+          try {
+            await ensureSupabaseReady();
+            if (currentRoomId) {
+              await sbClient
+                .from('room_tokens')
+                .delete()
+                .eq('room_id', currentRoomId)
+                .eq('token_id', String(p.id));
+            }
+          } catch (e) {
+            console.warn('removePlayerCompletely: room_tokens delete failed', e);
+          }
+
           next.players = (next.players || []).filter(pl => pl.id !== msg.id);
           next.turnOrder = (next.turnOrder || []).filter(id => id !== msg.id);
           logEventToState(next, `Игрок ${p.name} полностью удален`);
