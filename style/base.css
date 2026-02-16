@@ -423,7 +423,8 @@ button:hover {
 
 .modal-body {
   padding: 12px 14px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .saved-bases-actions button {
@@ -556,7 +557,8 @@ button:hover {
 
 /* ===== MODAL (LSS-like: left tabs) ===== */
 .modal {
-  width: min(980px, 96vw);
+  /* шире: чтобы не появлялся горизонтальный скролл внутри "Лист персонажа" */
+  width: min(1120px, 96vw);
   max-height: min(86vh, 900px);
 }
 
@@ -944,6 +946,7 @@ button:hover {
 /* чтобы контент вкладки гарантированно скроллился до конца */
 .sheet-main{
   overflow:auto;
+  overflow-x:hidden;
   min-height:0;
 }
 
