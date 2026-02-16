@@ -602,7 +602,7 @@ function renderCombatTab(vm) {
             <div class="ex-cell">ПМ</div>
           </div>
           <div class="ex-row">
-            <div class="ex-cell">Медная (мм)</div>
+            <div class="ex-cell ex-coin ex-coin--cp">Медная (мм)</div>
             <div class="ex-cell">1</div>
             <div class="ex-cell">1/10</div>
             <div class="ex-cell">1/50</div>
@@ -610,7 +610,7 @@ function renderCombatTab(vm) {
             <div class="ex-cell">1/1,000</div>
           </div>
           <div class="ex-row">
-            <div class="ex-cell">Серебряная (см)</div>
+            <div class="ex-cell ex-coin ex-coin--sp">Серебряная (см)</div>
             <div class="ex-cell">10</div>
             <div class="ex-cell">1</div>
             <div class="ex-cell">1/5</div>
@@ -618,7 +618,7 @@ function renderCombatTab(vm) {
             <div class="ex-cell">1/100</div>
           </div>
           <div class="ex-row">
-            <div class="ex-cell">Электрумовая (эм)</div>
+            <div class="ex-cell ex-coin ex-coin--ep">Электрумовая (эм)</div>
             <div class="ex-cell">50</div>
             <div class="ex-cell">5</div>
             <div class="ex-cell">1</div>
@@ -626,7 +626,7 @@ function renderCombatTab(vm) {
             <div class="ex-cell">1/20</div>
           </div>
           <div class="ex-row">
-            <div class="ex-cell">Золотая (зм)</div>
+            <div class="ex-cell ex-coin ex-coin--gp">Золотая (зм)</div>
             <div class="ex-cell">100</div>
             <div class="ex-cell">10</div>
             <div class="ex-cell">2</div>
@@ -634,7 +634,7 @@ function renderCombatTab(vm) {
             <div class="ex-cell">1/10</div>
           </div>
           <div class="ex-row">
-            <div class="ex-cell">Платиновая (пм)</div>
+            <div class="ex-cell ex-coin ex-coin--pp">Платиновая (пм)</div>
             <div class="ex-cell">1,000</div>
             <div class="ex-cell">100</div>
             <div class="ex-cell">20</div>

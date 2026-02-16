@@ -40,6 +40,31 @@
             <input class="hp-input" type="number" min="0" max="999" step="1" data-hp-field="temp">
           </div>
 
+          <div class="hp-row hp-row--hitdice">
+            <div class="hp-label">Кость здоровья</div>
+            <div class="hp-hitdice">
+              <select class="hp-select" data-hp-field="hdSides" title="Тип кости здоровья">
+                <option value="4">к4</option>
+                <option value="6">к6</option>
+                <option value="8">к8</option>
+                <option value="10">к10</option>
+                <option value="12">к12</option>
+              </select>
+
+              <button class="hp-hitdice-btn" type="button" data-hp-hitdice-roll title="Бросить кость здоровья">
+                <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
+                  <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="rgb(138,0,0)" opacity="0.96"></path>
+                  <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"></path>
+                </svg>
+              </button>
+
+              <div class="hp-hitdice-total">
+                <div class="hp-hitdice-total__label">Всего костей здоровья</div>
+                <input class="hp-input hp-input--small" type="number" min="0" max="99" step="1" data-hp-field="hdTotal">
+              </div>
+            </div>
+          </div>
+
           <div class="hp-divider"></div>
 
           <div class="hp-row hp-row--delta">
@@ -71,12 +96,41 @@
       if (deltaBtn) {
         const sign = deltaBtn.getAttribute('data-hp-delta');
         applyHpDelta(sign === '+' ? +1 : -1);
+        return;
+      }
+
+      const rollBtn = t.closest('[data-hp-hitdice-roll]');
+      if (rollBtn) {
+        rollHitDieAndAddToMaxHp();
       }
     });
 
     // escape closes
     hpPopupEl.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') hideHpPopup();
+    });
+
+    // change/select updates
+    hpPopupEl.addEventListener('change', (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+
+      const f = el.getAttribute('data-hp-field');
+      if (!f) return;
+      if (!lastCanEdit) return;
+
+      if (f === 'hdSides') {
+        const player = getOpenedPlayerSafe();
+        if (!player) return;
+        const sheet = player.sheet?.parsed;
+        if (!sheet) return;
+        if (!sheet.vitality) sheet.vitality = {};
+        if (!sheet.vitality["hit-die-sides"]) sheet.vitality["hit-die-sides"] = { value: 8 };
+        const v = Math.max(4, Math.min(12, Math.trunc(Number((el instanceof HTMLSelectElement) ? el.value : 8) || 8)));
+        sheet.vitality["hit-die-sides"].value = v;
+        markModalInteracted(player.id);
+        scheduleSheetSave(player);
+      }
     });
 
     // inputs update sheet (always use current opened player from snapshot)
@@ -97,6 +151,19 @@
       if (!sheet.vitality["hp-max"]) sheet.vitality["hp-max"] = { value: 0 };
       if (!sheet.vitality["hp-current"]) sheet.vitality["hp-current"] = { value: 0 };
       if (!sheet.vitality["hp-temp"]) sheet.vitality["hp-temp"] = { value: 0 };
+      if (!sheet.vitality["hit-die-sides"]) sheet.vitality["hit-die-sides"] = { value: 8 };
+      if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: 0 };
+
+      if (f === 'hdTotal') {
+        const v = Math.max(0, Math.min(99, Math.trunc(Number(el.value) || 0)));
+        sheet.vitality["hit-dice-total"].value = v;
+        // синхронизируем вид
+        const hdTotalEl = hpPopupEl.querySelector('[data-hp-field="hdTotal"]');
+        if (hdTotalEl && hdTotalEl !== el) hdTotalEl.value = String(v);
+        markModalInteracted(player.id);
+        scheduleSheetSave(player);
+        return;
+      }
 
       const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
       const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
@@ -123,19 +190,74 @@
     return hpPopupEl;
   }
 
+  function getConModifierFromScore(score) {
+    const s = Number(score);
+    if (!Number.isFinite(s)) return 0;
+    // D&D: (score - 10) / 2 округление вниз
+    return Math.floor((Math.trunc(s) - 10) / 2);
+  }
+
+  function rollHitDieAndAddToMaxHp() {
+    if (!hpPopupEl) return;
+    if (!lastCanEdit) return;
+    const player = getOpenedPlayerSafe();
+    if (!player) return;
+    const sheet = player.sheet?.parsed;
+    if (!sheet) return;
+
+    if (!sheet.vitality) sheet.vitality = {};
+    if (!sheet.vitality["hp-max"]) sheet.vitality["hp-max"] = { value: 0 };
+    if (!sheet.vitality["hp-current"]) sheet.vitality["hp-current"] = { value: 0 };
+    if (!sheet.vitality["hp-temp"]) sheet.vitality["hp-temp"] = { value: 0 };
+    if (!sheet.vitality["hit-die-sides"]) sheet.vitality["hit-die-sides"] = { value: 8 };
+
+    const sel = hpPopupEl.querySelector('[data-hp-field="hdSides"]');
+    const sides = Math.max(4, Math.min(12, Math.trunc(Number((sel instanceof HTMLSelectElement) ? sel.value : sheet.vitality["hit-die-sides"].value) || 8)));
+    sheet.vitality["hit-die-sides"].value = sides;
+
+    const conScore = sheet?.stats?.con?.score;
+    const conMod = getConModifierFromScore(conScore);
+
+    const die = Math.floor(Math.random() * sides) + 1;
+    const total = die + conMod;
+    const add = Math.max(0, total);
+
+    const curMax = Number(sheet.vitality["hp-max"].value) || 0;
+    const newMax = Math.max(0, Math.trunc(curMax + add));
+    sheet.vitality["hp-max"].value = newMax;
+
+    // если текущее > нового максимума — прижимаем
+    const curCur = Number(sheet.vitality["hp-current"].value) || 0;
+    if (curCur > newMax) sheet.vitality["hp-current"].value = newMax;
+
+    syncHpPopupInputs(sheet);
+    markModalInteracted(player.id);
+    scheduleSheetSave(player);
+    if (sheetContent) updateHeroChips(sheetContent, sheet);
+  }
+
   function syncHpPopupInputs(sheet) {
     if (!hpPopupEl || !sheet) return;
     const max = Number(sheet?.vitality?.["hp-max"]?.value) || 0;
     const cur = Number(sheet?.vitality?.["hp-current"]?.value) || 0;
     const temp = Number(sheet?.vitality?.["hp-temp"]?.value) || 0;
+    const hdSides = Number(sheet?.vitality?.["hit-die-sides"]?.value) || 8;
+    const hdTotal = Number(sheet?.vitality?.["hit-dice-total"]?.value) || 0;
 
     const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
     const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
     const tempEl = hpPopupEl.querySelector('[data-hp-field="temp"]');
+    const hdSidesEl = hpPopupEl.querySelector('[data-hp-field="hdSides"]');
+    const hdTotalEl = hpPopupEl.querySelector('[data-hp-field="hdTotal"]');
 
     if (maxEl) maxEl.value = String(max);
     if (curEl) curEl.value = String(cur);
     if (tempEl) tempEl.value = String(temp);
+    if (hdSidesEl && hdSidesEl instanceof HTMLSelectElement) {
+      const v = String(Math.max(4, Math.min(12, Math.trunc(hdSides) || 8)));
+      hdSidesEl.value = v;
+    }
+    if (hdTotalEl && hdTotalEl instanceof HTMLInputElement) hdTotalEl.value = String(Math.max(0, Math.min(99, Math.trunc(hdTotal) || 0)));
   }
 
   function setHpPopupEditable(can) {
@@ -147,6 +269,18 @@
       if (!can && !isDelta) inp.setAttribute('disabled', 'disabled');
       else inp.removeAttribute('disabled');
     });
+
+    const selects = hpPopupEl.querySelectorAll('select.hp-select');
+    selects.forEach(sel => {
+      if (!can) sel.setAttribute('disabled', 'disabled');
+      else sel.removeAttribute('disabled');
+    });
+
+    const rollBtn = hpPopupEl.querySelector('.hp-hitdice-btn');
+    if (rollBtn) {
+      if (!can) rollBtn.setAttribute('disabled', 'disabled');
+      else rollBtn.removeAttribute('disabled');
+    }
 
     const btns = hpPopupEl.querySelectorAll('.hp-delta__btn');
     btns.forEach(b => {
@@ -166,6 +300,8 @@
     if (!sheet.vitality["hp-max"]) sheet.vitality["hp-max"] = { value: 0 };
     if (!sheet.vitality["hp-current"]) sheet.vitality["hp-current"] = { value: 0 };
     if (!sheet.vitality["hp-temp"]) sheet.vitality["hp-temp"] = { value: 0 };
+    if (!sheet.vitality["hit-die-sides"]) sheet.vitality["hit-die-sides"] = { value: 8 };
+    if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: 0 };
 
     syncHpPopupInputs(sheet);
     setHpPopupEditable(!!lastCanEdit);
