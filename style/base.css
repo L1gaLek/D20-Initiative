@@ -55,6 +55,14 @@ button:hover {
 
 .env-bg-url-row button {
   white-space: nowrap;
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.env-bg-url-row input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* ===== HP bar над токеном (всегда на переднем плане) ===== */
@@ -73,6 +81,18 @@ button:hover {
   height: 100%;
   width: 0%;
   background: rgba(44, 167, 78, 0.85);
+}
+
+/* временные ХП — полоска над основной */
+.token-hpbar.token-hpbar--temp{
+  height: 10px;
+  border-radius: 5px;
+}
+.token-hpbar.token-hpbar--temp .fill{
+  background: rgba(0, 74, 107, 0.90);
+}
+.token-hpbar.token-hpbar--temp .txt{
+  display: none;
 }
 
 /* ===== Мини-окно по двойному клику ===== */
