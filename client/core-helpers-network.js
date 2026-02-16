@@ -1125,11 +1125,36 @@ async function sendMessage(msg) {
           next.turnOrder = [];
           next.currentTurnIndex = 0;
           next.round = 1;
+          // Initiative is now per-combatant, not "everyone in the room".
+          // Default selection: those already placed on the board.
           (next.players || []).forEach(p => {
-            p.initiative = null;
-            p.hasRolledInitiative = false;
+            const placed = (p && p.x !== null && p.y !== null);
+            p.inCombat = !!placed;
+            if (p.inCombat) {
+              p.initiative = null;
+              p.hasRolledInitiative = false;
+            }
           });
-          logEventToState(next, "GM начал фазу инициативы");
+          logEventToState(next, "GM начал фазу инициативы (выбор участников)");
+        }
+
+        else if (type === 'setPlayerInCombat') {
+          // GM selects who participates in the fight (initiative + turn order scope)
+          if (!isGM) return;
+          const pid = String(msg.id || '');
+          if (!pid) return;
+          const p = (next.players || []).find(pp => String(pp?.id) === pid);
+          if (!p) return;
+          const inCombat = !!msg.inCombat;
+          p.inCombat = inCombat;
+
+          // If combat is already running and a new combatant is added, queue for next round.
+          if (next.phase === 'combat' && inCombat) {
+            if (!p.hasRolledInitiative) p.pendingInitiativeChoice = true;
+            p.willJoinNextRound = true;
+          }
+
+          logEventToState(next, `${p.name} ${inCombat ? 'вступает' : 'выходит'} из боя`);
         }
 
         else if (type === "startExploration") {
@@ -1189,8 +1214,11 @@ async function sendMessage(msg) {
             y: null,
             initiative: 0,
             hasRolledInitiative: false,
-            pendingInitiativeChoice: (next.phase === "combat"),
+            // If created during combat/initiative, do NOT auto-join.
+            // GM can add to combat via the Turn Order panel.
+            pendingInitiativeChoice: false,
             willJoinNextRound: false,
+            inCombat: false,
             isBase,
             isAlly: !!player.isAlly,
             isPublic,
@@ -1225,13 +1253,15 @@ async function sendMessage(msg) {
           // When a new character is created during combat, it must pick initiative:
           // - 'roll' : d20 + DEX mod of this character
           // - 'base' : copy initiative from owner's Base character
-          if (next.phase !== "combat") return;
+          if (next.phase !== "combat" && next.phase !== 'initiative') return;
           const pid = String(msg.id || "");
           const choice = String(msg.choice || "");
           if (!pid) return;
           const p = (next.players || []).find(pp => pp.id === pid);
           if (!p) return;
-          if (!p.pendingInitiativeChoice) return;
+          if (!p.inCombat) return;
+          // Allow both explicit pending flow and direct usage from UI.
+          if (!p.pendingInitiativeChoice && p.hasRolledInitiative) return;
           if (!isGM && !ownsPlayer(p)) return;
 
           let total = null;
@@ -1267,7 +1297,8 @@ async function sendMessage(msg) {
           p.initiative = total;
           p.hasRolledInitiative = true;
           p.pendingInitiativeChoice = false;
-          p.willJoinNextRound = true; // добавится в turnOrder в начале следующего раунда (уже реализовано в endTurn)
+          // If we're already in combat, join on next round to avoid breaking the current turn.
+          if (next.phase === 'combat') p.willJoinNextRound = true;
 
           await broadcastDiceEventOnly({
             fromId: myUserId,
@@ -1279,6 +1310,62 @@ async function sendMessage(msg) {
             rolls,
             total,
             crit: ""
+          });
+        }
+
+        else if (type === 'gmRollInitiativeFor') {
+          // Optional: GM can roll initiative for any combatant.
+          if (!isGM) return;
+          if (next.phase !== 'initiative' && next.phase !== 'combat') return;
+          const pid = String(msg.id || '');
+          const choice = String(msg.choice || 'roll');
+          if (!pid) return;
+          const p = (next.players || []).find(pp => String(pp?.id) === pid);
+          if (!p) return;
+          if (!p.inCombat) return;
+          if (p.hasRolledInitiative) return;
+
+          let total = null;
+          let kindText = '';
+          let rolls = [];
+          let bonus = 0;
+
+          if (choice === 'base') {
+            const base = (next.players || []).find(pp => pp && pp.isBase && String(pp.ownerId) === String(p.ownerId));
+            const baseInit = Number(base?.initiative);
+            if (!base || !Number.isFinite(baseInit)) {
+              handleMessage({ type: 'error', message: 'У основы нет инициативы (сначала бросьте инициативу для основы).' });
+              return;
+            }
+            total = baseInit;
+            kindText = 'Инициатива основы (GM)';
+            logEventToState(next, `GM назначил ${p.name} инициативу основы: ${total}`);
+          } else {
+            const roll = Math.floor(Math.random() * 20) + 1;
+            const dexMod = getDexMod(p);
+            total = roll + dexMod;
+            kindText = `Инициатива (GM): d20${dexMod >= 0 ? '+' : ''}${dexMod}`;
+            rolls = [roll];
+            bonus = dexMod;
+            const sign = dexMod >= 0 ? '+' : '';
+            logEventToState(next, `GM бросил инициативу за ${p.name}: ${roll}${sign}${dexMod} = ${total}`);
+          }
+
+          p.initiative = total;
+          p.hasRolledInitiative = true;
+          p.pendingInitiativeChoice = false;
+          if (next.phase === 'combat') p.willJoinNextRound = true;
+
+          await broadcastDiceEventOnly({
+            fromId: myUserId,
+            fromName: 'GM',
+            kindText,
+            sides: 20,
+            count: 1,
+            bonus,
+            rolls,
+            total,
+            crit: ''
           });
         }
 
@@ -1537,7 +1624,9 @@ else if (type === "addWall") {
           if (next.phase !== "initiative") return;
           // IMPORTANT: we must NOT call sendMessage({type:'diceEvent'}) here.
           // diceEvent case writes logs using lastState and can overwrite fresh initiative changes.
-          const toRoll = (next.players || []).filter(p => String(p.ownerId) === myUserId && !p.hasRolledInitiative);
+          const toRoll = (next.players || []).filter(p => (
+            String(p.ownerId) === myUserId && !!p.inCombat && !p.hasRolledInitiative
+          ));
           for (const p of toRoll) {
             const roll = Math.floor(Math.random() * 20) + 1;
             const dexMod = getDexMod(p);
@@ -1566,12 +1655,21 @@ else if (type === "addWall") {
         else if (type === "startCombat") {
           if (!isGM) return;
           if (next.phase !== "initiative" && next.phase !== "placement" && next.phase !== "exploration") return;
-          const allRolled = (next.players || []).length ? next.players.every(p => p.hasRolledInitiative) : false;
+          // In v6, combat includes only selected combatants.
+          // If starting combat directly from placement/exploration, default to "those placed on the board".
+          if (next.phase !== 'initiative') {
+            (next.players || []).forEach(p => {
+              const placed = (p && p.x !== null && p.y !== null);
+              if (typeof p.inCombat !== 'boolean') p.inCombat = !!placed;
+            });
+          }
+          const combatants = (next.players || []).filter(p => p && p.inCombat);
+          const allRolled = combatants.length ? combatants.every(p => p.hasRolledInitiative) : false;
           if (!allRolled) {
-            handleMessage({ type: "error", message: "Сначала бросьте инициативу за всех персонажей" });
+            handleMessage({ type: "error", message: "Сначала бросьте инициативу за всех участников боя" });
             return;
           }
-          next.turnOrder = [...(next.players || [])]
+          next.turnOrder = [...combatants]
             .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
             .map(p => p.id);
           autoPlacePlayers(next);
@@ -1601,7 +1699,7 @@ else if (type === "addWall") {
               toJoin.forEach(p => { p.willJoinNextRound = false; });
               next.turnOrder = [...new Set(
                 [...next.players]
-                  .filter(p => p && (p.initiative !== null && p.initiative !== undefined))
+                  .filter(p => p && p.inCombat && (p.initiative !== null && p.initiative !== undefined) && p.hasRolledInitiative)
                   .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
                   .map(p => p.id)
               )];
@@ -1654,8 +1752,9 @@ else if (type === "addWall") {
 }
 
 function updatePhaseUI(state) {
-  const allRolled = state.players?.length
-    ? state.players.every(p => p.hasRolledInitiative)
+  const combatants = (state?.players || []).filter(p => p && p.inCombat);
+  const allRolled = combatants.length
+    ? combatants.every(p => p.hasRolledInitiative)
     : false;
 
   // сбрасываем подсветки

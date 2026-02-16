@@ -564,29 +564,41 @@ function renderTurnOrderBox(state) {
   // Use already-filtered players[] so hidden GM NPCs do not appear for other users.
   const stPlayers = Array.isArray(players) ? players : (Array.isArray(state?.players) ? state.players : []);
 
-  let ordered = [];
+  const isGM = (String(myRole || '') === 'GM');
+
+  // Helper: stable sort by initiative (desc), then name
+  const sortByInit = (arr) => (arr || []).slice().sort((a, b) => {
+    const ai = Number(a?.initiative) || 0;
+    const bi = Number(b?.initiative) || 0;
+    if (bi !== ai) return bi - ai;
+    return String(a?.name || '').localeCompare(String(b?.name || ''));
+  });
+
+  const combatants = stPlayers.filter(p => p && p.inCombat);
+  const nonCombatants = stPlayers.filter(p => p && !p.inCombat);
+
+  let orderedCombatants = [];
   if (phase === "combat" && Array.isArray(state?.turnOrder) && state.turnOrder.length) {
-    ordered = state.turnOrder
-      .map(id => stPlayers.find(p => p && String(p.id) === String(id)))
+    orderedCombatants = state.turnOrder
+      .map(id => combatants.find(p => p && String(p.id) === String(id)))
       .filter(Boolean);
   } else {
-    // В фазе инициативы показываем порядок "на лету" по мере бросков
-    const rolled = stPlayers.filter(p => p && p.hasRolledInitiative);
-    const pending = stPlayers.filter(p => p && !p.hasRolledInitiative);
-    rolled.sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0));
-    ordered = [...rolled, ...pending];
+    // In initiative phase show "live" order for selected combatants
+    const rolled = combatants.filter(p => p && p.hasRolledInitiative);
+    const pending = combatants.filter(p => p && !p.hasRolledInitiative);
+    orderedCombatants = [...sortByInit(rolled), ...sortByInit(pending)];
   }
 
   const currentId = (phase === "combat" && Array.isArray(state?.turnOrder) && state.turnOrder.length)
     ? state.turnOrder[state.currentTurnIndex]
     : null;
 
-  turnOrderList.innerHTML = '';
-  ordered.forEach(p => {
+  const renderRow = (p, { isInCombatList }) => {
     const li = document.createElement('li');
     li.className = 'turn-order-item';
     if (currentId && String(p.id) === String(currentId)) li.classList.add('is-current');
-    if (!p.hasRolledInitiative) li.classList.add('is-pending');
+    if (isInCombatList && !p.hasRolledInitiative) li.classList.add('is-pending');
+    if (!isInCombatList) li.style.opacity = '0.55';
 
     const left = document.createElement('span');
     left.textContent = String(p.name || '-');
@@ -602,15 +614,123 @@ function renderTurnOrderBox(state) {
     dot.style.border = '1px solid rgba(255,255,255,0.25)';
     left.prepend(dot);
 
+    // GM: checkbox "В бою"
+    if (isGM) {
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!p.inCombat;
+      cb.title = 'Участник боя';
+      cb.style.marginRight = '6px';
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', (e) => {
+        e.stopPropagation();
+        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!cb.checked });
+      });
+      left.prepend(cb);
+    }
+
     const right = document.createElement('span');
     const iv = (p.initiative !== null && p.initiative !== undefined) ? p.initiative : null;
     right.textContent = (p.hasRolledInitiative && Number.isFinite(Number(iv))) ? String(iv) : '—';
     right.style.opacity = '0.9';
 
+    // GM: quick roll buttons for selected combatants that haven't rolled yet
+    if (isGM && p.inCombat && !p.hasRolledInitiative) {
+      const wrap = document.createElement('span');
+      wrap.style.display = 'inline-flex';
+      wrap.style.alignItems = 'center';
+      wrap.style.gap = '6px';
+
+      const btnRoll = document.createElement('button');
+      btnRoll.type = 'button';
+      btnRoll.className = 'mini-action-btn';
+      btnRoll.textContent = '🎲';
+      btnRoll.title = 'GM бросить инициативу за персонажа';
+      btnRoll.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sendMessage({ type: 'gmRollInitiativeFor', id: p.id, choice: 'roll' });
+      });
+
+      const btnBase = document.createElement('button');
+      btnBase.type = 'button';
+      btnBase.className = 'mini-action-btn';
+      btnBase.textContent = '👤';
+      btnBase.title = 'GM: инициатива основы';
+      btnBase.disabled = !!p.isBase;
+      btnBase.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sendMessage({ type: 'gmRollInitiativeFor', id: p.id, choice: 'base' });
+      });
+
+      wrap.appendChild(btnRoll);
+      wrap.appendChild(btnBase);
+      right.textContent = '';
+      right.appendChild(wrap);
+    }
+
     li.appendChild(left);
     li.appendChild(right);
-    turnOrderList.appendChild(li);
+    return li;
+  };
+
+  turnOrderList.innerHTML = '';
+
+  // Header controls (GM): select all / none / only on board
+  if (isGM) {
+    const controlsLi = document.createElement('li');
+    controlsLi.className = 'turn-order-item';
+    controlsLi.style.justifyContent = 'flex-start';
+    controlsLi.style.gap = '8px';
+    controlsLi.style.padding = '6px 8px';
+    controlsLi.style.opacity = '1';
+
+    const mkBtn = (txt, title, onClick) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mini-action-btn';
+      b.textContent = txt;
+      b.title = title;
+      b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+      return b;
+    };
+
+    const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
+      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: true }));
+    });
+    const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
+      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: false }));
+    });
+    const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
+      stPlayers.forEach(p => {
+        const placed = (p && p.x !== null && p.y !== null);
+        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!placed });
+      });
+    });
+
+    controlsLi.appendChild(btnAll);
+    controlsLi.appendChild(btnNone);
+    controlsLi.appendChild(btnOnBoard);
+    turnOrderList.appendChild(controlsLi);
+  }
+
+  // Combatants
+  orderedCombatants.forEach(p => {
+    turnOrderList.appendChild(renderRow(p, { isInCombatList: true }));
   });
+
+  // Non-combatants (collapsed style)
+  if (nonCombatants.length) {
+    const sep = document.createElement('li');
+    sep.className = 'turn-order-item';
+    sep.style.justifyContent = 'flex-start';
+    sep.style.opacity = '0.7';
+    sep.style.fontSize = '12px';
+    sep.textContent = 'Не в бою';
+    turnOrderList.appendChild(sep);
+    sortByInit(nonCombatants).forEach(p => {
+      turnOrderList.appendChild(renderRow(p, { isInCombatList: false }));
+    });
+  }
 }
 
 function highlightCurrentTurn(playerId) {
@@ -809,8 +929,10 @@ function updatePlayerList() {
       }
       actions.appendChild(topActions);
 
-      // ===== Новый игрок во время боя: выбор инициативы (только для него) =====
-      if (lastState && lastState.phase === 'combat' && p.pendingInitiativeChoice && (myRole === 'GM' || p.ownerId === myId)) {
+      // ===== Выбор инициативы для участника боя (в инициативе или позднее в бою) =====
+      const phaseNow = String(lastState?.phase || '');
+      const canPickInit = (phaseNow === 'initiative' || phaseNow === 'combat');
+      if (lastState && canPickInit && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
         const box = document.createElement('div');
         box.className = 'init-choice-box';
 
@@ -829,6 +951,7 @@ function updatePlayerList() {
         baseInitBtn.textContent = 'Инициатива основы';
         baseInitBtn.classList.add('mini-action-btn');
         baseInitBtn.title = 'Взять инициативу из персонажа "основа" владельца';
+        baseInitBtn.disabled = !!p.isBase;
         baseInitBtn.onclick = (e) => {
           e.stopPropagation();
           sendMessage({ type: 'combatInitChoice', id: p.id, choice: 'base' });
