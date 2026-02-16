@@ -1433,8 +1433,9 @@ textarea[data-sheet-path="text.profPlain.value"]{
 
 /* Второй элемент в summary — Урон */
 .weapon-summary .weapon-sum-item:last-child{
-  margin-left: 10px; /* ⬅️ двигаем весь блок "Урон" вправо */
-  gap: 4px;          /* ⬅️ кубик ближе к рамке значения */
+  /* Сдвигаем «Урон» + кубик левее, ближе к рамке «Атака» */
+  margin-left: -4px;
+  gap: 6px;
 }
 
 .weapon-summary .weapon-sum-item:last-child .weapon-sum-val{
@@ -1610,9 +1611,9 @@ textarea[data-sheet-path="text.profPlain.value"]{
 
 .coin-pill--gp{ background: rgb(255,215,0); border-color: rgba(0,0,0,0.22); color: #111; }
 
-.coin-pill--ep{ background: rgb(255,219,139); border-color: rgba(0,0,0,0.22); color: #111; }
+.coin-pill--ep{ background: rgb(0,180,189); border-color: rgba(0,0,0,0.22); color: #111; }
 
-.coin-pill--pp{ background: rgb(105,63,77); border-color: rgba(255,255,255,0.18); color: #fff; }
+.coin-pill--pp{ background: rgb(131,103,113); border-color: rgba(255,255,255,0.18); color: #fff; }
 
 .coin-pill--cp .coin-pill__abbr,
 .coin-pill--sp .coin-pill__abbr,
