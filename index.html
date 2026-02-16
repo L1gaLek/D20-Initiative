@@ -237,10 +237,8 @@
             <!-- Fog of war (GM) -->
             <div class="fog-controls" id="fog-controls">
               <div class="fog-title">Туман войны</div>
-              <div class="fog-row fog-row--top">
-                <label class="fog-inline"><input type="checkbox" id="fog-enabled"> Включить</label>
-                <label class="fog-inline"><input type="checkbox" id="fog-gm-open"> Открыть для ГМ</label>
-              </div>
+              <label class="fog-row"><input type="checkbox" id="fog-enabled"> Включить</label>
+              <label class="fog-row"><input type="checkbox" id="fog-open-for-gm" checked> Открыть для ГМ</label>
               <div class="fog-row">
                 <label>Режим:
                   <select id="fog-mode">
@@ -249,7 +247,8 @@
                   </select>
                 </label>
               </div>
-              <div class="fog-row">
+              <!-- Селект оставляем для совместимости, но прячем: используется синхронизация через чекбокс "Открыть для ГМ" -->
+              <div class="fog-row" style="display:none;">
                 <label>Просмотр ГМ:
                   <select id="fog-gm-view">
                     <option value="gm">Режим ГМ</option>
@@ -278,7 +277,7 @@
               </div>
               <div class="fog-row fog-row--dynamic">
                 <label class="fog-inline"><input type="checkbox" id="fog-explored" checked> Исследованное</label>
-                <label class="fog-inline"><input type="checkbox" id="fog-move-open" checked> Движение по открытому</label>
+                <label class="fog-inline"><input type="checkbox" id="fog-move-open-only"> Движение по открытому</label>
                 <button id="fog-clear-explored" type="button">Очистить исслед.</button>
               </div>
             </div>
