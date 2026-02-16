@@ -697,15 +697,21 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: true }));
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({ id: p.id, inCombat: true }))
+      });
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: false }));
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({ id: p.id, inCombat: false }))
+      });
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      stPlayers.forEach(p => {
-        const placed = (p && p.x !== null && p.y !== null);
-        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!placed });
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({ id: p.id, inCombat: (p && p.x !== null && p.y !== null) }))
       });
     });
 
@@ -977,8 +983,11 @@ function updatePlayerList() {
 
       // ===== Выбор инициативы для участника боя (в инициативе или позднее в бою) =====
       const phaseNow = String(lastState?.phase || '');
-      const canPickInit = (phaseNow === 'initiative' || phaseNow === 'combat');
-      if (lastState && canPickInit && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
+      // Эти кнопки нужны ТОЛЬКО когда бой уже идет и в него добавили нового участника.
+      // В фазе "Инициатива" участники выбираются через чекбоксы/очередность, а бросок — общей кнопкой.
+      const canPickInit = (phaseNow === 'combat');
+      const needsChoice = !!p.pendingInitiativeChoice || !!p.willJoinNextRound;
+      if (lastState && canPickInit && needsChoice && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
         const box = document.createElement('div');
         box.className = 'init-choice-box';
 
@@ -1071,11 +1080,6 @@ function updatePlayerList() {
 
       li.addEventListener('click', () => {
         selectedPlayer = p;
-        // Sync color picker to selected token so user can change it after creation.
-        try {
-          const inp = document.getElementById('player-color');
-          if (inp && p?.color) inp.value = String(p.color);
-        } catch {}
         if (p.x === null || p.y === null) {
           const size = Number(p.size) || 1;
           const spot = findFirstFreeSpotClient(size);

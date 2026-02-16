@@ -568,7 +568,26 @@ function rectsOverlap(ax, ay, as, bx, by, bs) {
   return ax < (bx + bs) && (ax + as) > bx && ay < (by + bs) && (ay + as) > by;
 }
 
-function isAreaFreeClient(ignoreId, x, y, size) {
+function isAreaBlockedByWallClient(x, y, size) {
+  try {
+    const st = (typeof lastState !== 'undefined') ? lastState : null;
+    const walls = Array.isArray(st?.walls) ? st.walls : [];
+    if (!walls.length) return false;
+    // Any overlap with a wall cell blocks (for non-GM).
+    for (const w of walls) {
+      const wx = Number(w?.x), wy = Number(w?.y);
+      if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+      if (wx >= x && wx < x + size && wy >= y && wy < y + size) return true;
+    }
+  } catch {}
+  return false;
+}
+
+function isAreaFreeClient(ignoreId, x, y, size, opts = {}) {
+  const allowWalls = !!opts.allowWalls;
+  if (!allowWalls) {
+    if (isAreaBlockedByWallClient(x, y, size)) return false;
+  }
   for (const other of players) {
     if (!other) continue;
     if (ignoreId && other.id === ignoreId) continue;
@@ -580,26 +599,12 @@ function isAreaFreeClient(ignoreId, x, y, size) {
 }
 
 function findFirstFreeSpotClient(size) {
+  const allowWalls = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
   const maxX = boardWidth - size;
   const maxY = boardHeight - size;
   for (let y = 0; y <= maxY; y++) {
     for (let x = 0; x <= maxX; x++) {
-      if (!isAreaFreeClient(null, x, y, size)) continue;
-      // Avoid walls for non-GM placements (GM can still place anywhere).
-      try {
-        if (typeof myRole !== 'undefined' && String(myRole) !== 'GM') {
-          let hitsWall = false;
-          for (let dy = 0; dy < size; dy++) {
-            for (let dx = 0; dx < size; dx++) {
-              const c = board.querySelector(`.cell[data-x="${x + dx}"][data-y="${y + dy}"]`);
-              if (c && c.classList.contains('wall')) { hitsWall = true; break; }
-            }
-            if (hitsWall) break;
-          }
-          if (hitsWall) continue;
-        }
-      } catch {}
-      return { x, y };
+      if (isAreaFreeClient(null, x, y, size, { allowWalls })) return { x, y };
     }
   }
   return null;
@@ -636,37 +641,19 @@ board.addEventListener('click', e => {
   if (x + selectedPlayer.size > boardWidth) x = boardWidth - selectedPlayer.size;
   if (y + selectedPlayer.size > boardHeight) y = boardHeight - selectedPlayer.size;
 
-  // Optional: in dynamic fog mode, restrict movement to cells that are visible OR explored.
+  // Туман войны: опционально может запрещать движение на неоткрытые клетки.
   try {
-    if (!window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
-      alert('Нельзя перемещаться в неоткрытую область');
+    if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
+      alert('Нельзя перемещаться в неоткрытую область (включено "Движение по открытому")');
       return;
-    }
-  } catch {}
-
-  // Players cannot place/move on walls (GM can; enforced also server-side).
-  try {
-    if (typeof myRole !== 'undefined' && String(myRole) !== 'GM') {
-      const size = Number(selectedPlayer.size) || 1;
-      let hitsWall = false;
-      for (let dy = 0; dy < size; dy++) {
-        for (let dx = 0; dx < size; dx++) {
-          const c = board.querySelector(`.cell[data-x="${x + dx}"][data-y="${y + dy}"]`);
-          if (c && c.classList.contains('wall')) { hitsWall = true; break; }
-        }
-        if (hitsWall) break;
-      }
-      if (hitsWall) {
-        alert('Нельзя размещаться на стены');
-        return;
-      }
     }
   } catch {}
 
   // быстрый локальный чек (сервер всё равно проверит)
   const size = Number(selectedPlayer.size) || 1;
-  if (!isAreaFreeClient(selectedPlayer.id, x, y, size)) {
-    alert("Эта клетка занята другим персонажем");
+  const allowWalls = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
+  if (!isAreaFreeClient(selectedPlayer.id, x, y, size, { allowWalls })) {
+    alert(allowWalls ? "Эта клетка занята другим персонажем" : "Нельзя поставить на стену или на занятую клетку");
     return;
   }
 

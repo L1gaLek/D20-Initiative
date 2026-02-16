@@ -22,9 +22,6 @@ function createInitialGameState() {
     fog: {
       enabled: false,
       mode: 'manual', // 'manual' | 'dynamic'
-      // When enabled in dynamic mode, players may move to cells that are either
-      // currently visible OR already explored (discovered earlier).
-      moveOnExplored: true,
       manualBase: 'hide', // 'hide' | 'reveal'
       // Manual stamps are stored as {x,y,r,mode} in cell coordinates (r in cells)
       manualStamps: [],
@@ -32,13 +29,6 @@ function createInitialGameState() {
       visionRadius: 8,
       useWalls: true,
       exploredEnabled: true,
-      // If true, GM sees the map fully open (fog overlay hidden) while other players
-      // still see fog normally.
-      gmOpen: false,
-      // GM view mode:
-      // - 'gm'     : GM sees full board (fog is just an overlay)
-      // - 'player' : GM sees like players
-      gmViewMode: 'gm',
       // Shared explored cells for the party ("x,y" strings)
       explored: []
     },
@@ -91,28 +81,26 @@ function ensureStateHasMaps(state) {
         m.fog = {
           enabled: false,
           mode: 'manual',
-          moveOnExplored: true,
           manualBase: 'hide',
           manualStamps: [],
           visionRadius: 8,
           useWalls: true,
           exploredEnabled: true,
-          gmOpen: false,
-          gmViewMode: 'gm',
-          explored: []
+          explored: [],
+          moveOnlyExplored: false,
+          gmViewMode: 'gm'
         };
       } else if (m && m.fog) {
         if (typeof m.fog.enabled !== 'boolean') m.fog.enabled = false;
         if (m.fog.mode !== 'manual' && m.fog.mode !== 'dynamic') m.fog.mode = 'manual';
-        if (typeof m.fog.moveOnExplored !== 'boolean') m.fog.moveOnExplored = true;
         if (m.fog.manualBase !== 'hide' && m.fog.manualBase !== 'reveal') m.fog.manualBase = 'hide';
         if (!Array.isArray(m.fog.manualStamps)) m.fog.manualStamps = [];
         if (!Number.isFinite(Number(m.fog.visionRadius))) m.fog.visionRadius = 8;
         if (typeof m.fog.useWalls !== 'boolean') m.fog.useWalls = true;
         if (typeof m.fog.exploredEnabled !== 'boolean') m.fog.exploredEnabled = true;
-        if (typeof m.fog.gmOpen !== 'boolean') m.fog.gmOpen = false;
-        if (m.fog.gmViewMode !== 'gm' && m.fog.gmViewMode !== 'player') m.fog.gmViewMode = 'gm';
         if (!Array.isArray(m.fog.explored)) m.fog.explored = [];
+        if (typeof m.fog.moveOnlyExplored !== 'boolean') m.fog.moveOnlyExplored = false;
+        if (m.fog.gmViewMode !== 'gm' && m.fog.gmViewMode !== 'player') m.fog.gmViewMode = 'gm';
       }
     });
     }
@@ -136,18 +124,24 @@ function ensureStateHasMaps(state) {
     fog: (state.fog && typeof state.fog === 'object') ? state.fog : {
       enabled: false,
       mode: 'manual',
-      moveOnExplored: true,
       manualBase: 'hide',
       manualStamps: [],
       visionRadius: 8,
       useWalls: true,
       exploredEnabled: true,
-      gmOpen: false,
-      gmViewMode: 'gm',
-      explored: []
+      explored: [],
+      moveOnlyExplored: false,
+      gmViewMode: 'gm'
     },
     playersPos: {}
   };
+
+  // normalize fog fields (old saves may miss newer options)
+  try {
+    const f = migratedMap.fog || (migratedMap.fog = {});
+    if (typeof f.moveOnlyExplored !== 'boolean') f.moveOnlyExplored = false;
+    if (f.gmViewMode !== 'gm' && f.gmViewMode !== 'player') f.gmViewMode = 'gm';
+  } catch {}
 
   (state.players || []).forEach((p) => {
     if (!p || !p.id) return;
@@ -225,15 +219,16 @@ function loadMapToRoot(state, mapId) {
   st.fog = (m.fog && typeof m.fog === 'object') ? deepClone(m.fog) : {
     enabled: false,
     mode: 'manual',
-    moveOnExplored: true,
     manualBase: 'hide',
     manualStamps: [],
     visionRadius: 8,
     useWalls: true,
     exploredEnabled: true,
-    gmOpen: false,
-    gmViewMode: 'gm',
-    explored: []
+    explored: [],
+    // When true, non-GM movement is allowed only to visible or already explored cells.
+    moveOnlyExplored: false,
+    // GM view mode: 'gm' (full) or 'player'
+    gmViewMode: 'gm'
   };
 
   // IMPORTANT (architecture v4): do NOT apply token positions from map snapshot.
@@ -246,10 +241,22 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-function isAreaFree(state, ignorePlayerId, x, y, size) {
-  const walls = Array.isArray(state.walls) ? state.walls : [];
-  // walls block only the top-left cell of a token (as in server)
-  if (walls.some(w => w && w.x === x && w.y === y)) return false;
+function isAreaBlockedByWall(state, x, y, size) {
+  const walls = Array.isArray(state?.walls) ? state.walls : [];
+  if (!walls.length) return false;
+  for (const w of walls) {
+    const wx = Number(w?.x), wy = Number(w?.y);
+    if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+    if (wx >= x && wx < x + size && wy >= y && wy < y + size) return true;
+  }
+  return false;
+}
+
+function isAreaFree(state, ignorePlayerId, x, y, size, opts = {}) {
+  const allowWalls = !!opts.allowWalls;
+  if (!allowWalls) {
+    if (isAreaBlockedByWall(state, x, y, size)) return false;
+  }
 
   const players = Array.isArray(state.players) ? state.players : [];
   for (const p of players) {
@@ -1229,31 +1236,20 @@ async function sendMessage(msg) {
           const c = String(msg.color || '').trim();
           if (!/^#[0-9a-fA-F]{6}$/.test(c)) return;
           p.color = c;
-          logEventToState(next, `${p.name} изменил цвет`);
 
-          // Persist token color immediately (v4+: token data lives in room_tokens).
-          // If the token is currently on the board, update its row for the active map.
+          // Keep room_tokens in sync so realtime token updates don't "revert" the color.
           try {
-            if (currentRoomId && p.x !== null && p.y !== null) {
-              const mapId = String(next.currentMapId || '');
-              await ensureSupabaseReady();
+            await ensureSupabaseReady();
+            if (currentRoomId) {
               await sbClient
                 .from('room_tokens')
-                .upsert({
-                  room_id: currentRoomId,
-                  map_id: mapId,
-                  token_id: String(p.id),
-                  x: Number(p.x),
-                  y: Number(p.y),
-                  size: Number(p.size) || 1,
-                  color: p.color || null,
-                  owner_id: p.ownerId || null,
-                  updated_at: new Date().toISOString()
-                }, { onConflict: 'room_id,map_id,token_id' });
+                .update({ color: c })
+                .eq('room_id', currentRoomId)
+                .eq('token_id', String(p.id));
             }
-          } catch (e) {
-            console.warn('updatePlayerColor: room_tokens upsert failed', e);
-          }
+          } catch {}
+
+          logEventToState(next, `${p.name} изменил цвет`);
         }
 
         else if (type === "addPlayer") {
@@ -1465,27 +1461,27 @@ async function sendMessage(msg) {
           const nx = clamp(Number(msg.x) || 0, 0, maxX);
           const ny = clamp(Number(msg.y) || 0, 0, maxY);
 
-          // Players cannot place/move onto wall cells (GM can).
+          // Fog of war: optional movement restriction (only visible or explored).
           if (!isGM) {
             try {
-              const walls = Array.isArray(next.walls) ? next.walls : [];
-              const wallSet = new Set();
-              for (const w of walls) {
-                const wx = Number(w?.x), wy = Number(w?.y);
-                if (Number.isFinite(wx) && Number.isFinite(wy)) wallSet.add(`${wx},${wy}`);
-              }
-              let hitsWall = false;
-              for (let dy = 0; dy < size; dy++) {
-                for (let dx = 0; dx < size; dx++) {
-                  if (wallSet.has(`${nx + dx},${ny + dy}`)) { hitsWall = true; break; }
+              const fog = next?.fog || {};
+              if (fog.enabled && fog.moveOnlyExplored) {
+                if (typeof window !== 'undefined' && window.FogWar?.canMoveToCell) {
+                  if (!window.FogWar.canMoveToCell(nx, ny, p)) {
+                    handleMessage({ type: 'error', message: 'Нельзя перемещаться в неоткрытую область (включено "Движение по открытому")' });
+                    return;
+                  }
                 }
-                if (hitsWall) break;
-              }
-              if (hitsWall) {
-                handleMessage({ type: 'error', message: 'Нельзя перемещаться на стены' });
-                return;
               }
             } catch {}
+          }
+
+          // Non-GM cannot place/move onto wall cells.
+          if (!isGM) {
+            if (isAreaBlockedByWall(next, nx, ny, size)) {
+              handleMessage({ type: 'error', message: 'Нельзя размещать персонажа на стене' });
+              return;
+            }
           }
 
           // v4: movement is atomic via room_tokens (RPC), not via room_state.
@@ -1517,8 +1513,8 @@ async function sendMessage(msg) {
             });
             if (error) {
               // fallback: client-side collision check + direct update
-              if (!isAreaFree(next, p.id, nx, ny, size)) {
-                handleMessage({ type: 'error', message: 'Эта клетка занята другим персонажем' });
+              if (!isAreaFree(next, p.id, nx, ny, size, { allowWalls: !!isGM })) {
+                handleMessage({ type: 'error', message: isGM ? 'Эта клетка занята другим персонажем' : 'Нельзя поставить на стену или на занятую клетку' });
                 return;
               }
               const { error: uErr } = await sbClient
@@ -1552,7 +1548,7 @@ async function sendMessage(msg) {
             const maxY = next.boardHeight - newSize;
             const nx = clamp(p.x, 0, maxX);
             const ny = clamp(p.y, 0, maxY);
-            if (!isAreaFree(next, p.id, nx, ny, newSize)) {
+            if (!isAreaFree(next, p.id, nx, ny, newSize, { allowWalls: !!isGM })) {
               handleMessage({ type: "error", message: "Нельзя увеличить размер: место занято" });
               return;
             }
@@ -1711,8 +1707,7 @@ else if (type === "addWall") {
           if (Number.isFinite(Number(msg.visionRadius))) f.visionRadius = clamp(Number(msg.visionRadius), 1, 60);
           if (typeof msg.useWalls === 'boolean') f.useWalls = msg.useWalls;
           if (typeof msg.exploredEnabled === 'boolean') f.exploredEnabled = msg.exploredEnabled;
-          if (typeof msg.moveOnExplored === 'boolean') f.moveOnExplored = msg.moveOnExplored;
-          if (typeof msg.gmOpen === 'boolean') f.gmOpen = msg.gmOpen;
+          if (typeof msg.moveOnlyExplored === 'boolean') f.moveOnlyExplored = msg.moveOnlyExplored;
           // GM view mode:
           // - 'gm'     : GM sees full board, fog is an overlay showing what is revealed
           // - 'player' : GM sees exactly what players see
