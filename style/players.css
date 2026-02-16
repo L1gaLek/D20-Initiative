@@ -23,36 +23,6 @@
   overflow-x: hidden;
 }
 
-/* ===== "Пользователи и персонажи": два окна (Личные / Другие) ===== */
-.player-lists{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.player-list-box{
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(0,0,0,0.12);
-  border-radius: 10px;
-  padding: 6px 6px;
-  min-width: 0;
-}
-
-.player-list-title{
-  font-size: 12px;
-  font-weight: 900;
-  color: rgba(255,255,255,0.9);
-  margin: 0 0 6px 2px;
-}
-
-.player-list-box ul{
-  list-style: none;
-  padding-left: 0;
-  margin: 0;
-  max-height: 290px;
-  overflow-y: auto;
-}
-
 /* Справа под журналом: список + очередь друг под другом */
 #player-side-stack{
   display: flex;
@@ -107,13 +77,42 @@
   font-size: 13px;
 }
 
-#action-log ul, #player-list-mine, #player-list-other {
+/* ===== Вкладки списка персонажей (Мои / Остальные) ===== */
+.player-list-tabs{
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+
+.player-tab{
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: #141414;
+  color: #ddd;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.player-tab:hover{
+  filter: brightness(1.08);
+}
+
+.player-tab.active{
+  border-color: #888;
+  background: #242424;
+  color: #fff;
+}
+
+#action-log ul, #player-list {
   list-style: none;
   padding-left: 10px;
   margin: 0;
 }
 
-#action-log li, #player-list-mine li, #player-list-other li {
+#action-log li, #player-list li {
   margin-bottom: 4px;
   font-weight: bold;
 }
