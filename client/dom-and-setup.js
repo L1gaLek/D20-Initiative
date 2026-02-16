@@ -31,9 +31,9 @@ const diceViz = document.getElementById('dice-viz');
 
 const board = document.getElementById('game-board');
 const boardWrapper = document.getElementById('board-wrapper');
-// "Пользователи и персонажи" теперь разделены на два списка
-const playerListMine = document.getElementById('player-list-mine');
-const playerListOther = document.getElementById('player-list-other');
+const playerList = document.getElementById('player-list');
+const playerTabMineBtn = document.getElementById('player-tab-mine');
+const playerTabOthersBtn = document.getElementById('player-tab-others');
 const logList = document.getElementById('log-list');
 const currentPlayerSpan = document.getElementById('current-player');
 const nextTurnBtn = document.getElementById('next-turn');
@@ -97,6 +97,42 @@ const wallOpacityVal = document.getElementById('wall-opacity-val');
 // ===== Карты кампании (ГМ) =====
 const campaignMapsSelect = document.getElementById('campaign-maps-select');
 const createCampaignMapBtn = document.getElementById('create-campaign-map');
+
+// ===== Tabs for "Пользователи и персонажи" =====
+// dom-and-setup.js загружается ДО message-ui.js, поэтому здесь делаем безопасную прокладку.
+function setPlayerListViewSafe(view) {
+  const v = (view === 'others') ? 'others' : 'mine';
+  window.PLAYER_LIST_VIEW = v;
+
+  // Если message-ui уже подгружен — используем его хелпер (обновит список и классы)
+  if (typeof window.setPlayerListView === 'function') {
+    window.setPlayerListView(v);
+    return;
+  }
+
+  // Иначе — просто подсветим вкладки (список обновится позже при первом updatePlayerList)
+  try {
+    if (playerTabMineBtn) {
+      playerTabMineBtn.classList.toggle('active', v === 'mine');
+      playerTabMineBtn.setAttribute('aria-selected', v === 'mine' ? 'true' : 'false');
+    }
+    if (playerTabOthersBtn) {
+      playerTabOthersBtn.classList.toggle('active', v === 'others');
+      playerTabOthersBtn.setAttribute('aria-selected', v === 'others' ? 'true' : 'false');
+    }
+  } catch {}
+}
+
+// default view
+if (!window.PLAYER_LIST_VIEW) window.PLAYER_LIST_VIEW = 'mine';
+setPlayerListViewSafe(window.PLAYER_LIST_VIEW);
+
+if (playerTabMineBtn) {
+  playerTabMineBtn.addEventListener('click', () => setPlayerListViewSafe('mine'));
+}
+if (playerTabOthersBtn) {
+  playerTabOthersBtn.addEventListener('click', () => setPlayerListViewSafe('others'));
+}
 
 // ================== VARIABLES ==================
 // Supabase replaces our old Node/WebSocket server.
