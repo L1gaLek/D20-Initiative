@@ -191,6 +191,7 @@
 function renderSpellCard({ level, name, href, desc }) {
     const safeHref = escapeHtml(href || "");
     const safeName = escapeHtml(name || href || "(без названия)");
+    const safeDataName = escapeHtml(String(name || "").trim());
     const text = cleanupSpellDesc(desc || "");
     const lvl = safeInt(level, 0);
 
@@ -207,7 +208,7 @@ function renderSpellCard({ level, name, href, desc }) {
     `;
 
     return `
-      <div class="spell-item" data-spell-url="${safeHref}" data-spell-level="${lvl}">
+      <div class="spell-item" data-spell-url="${safeHref}" data-spell-name="${safeDataName}" data-spell-level="${lvl}">
         <div class="spell-item-head">
           ${titleHtml}
           <button class="spell-dice-btn" type="button" data-spell-roll title="Бросок атаки">${diceSvg}</button>

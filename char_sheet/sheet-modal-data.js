@@ -387,11 +387,25 @@
     const conditions = (typeof get(sheet, 'conditions', "") === "string") ? get(sheet, 'conditions', "") : "";
 
     const statKeys = ["str","dex","con","int","wis","cha"];
+
+    // модификатор характеристики всегда считаем от значения (score),
+    // чтобы атаки/проверки не зависели от некорректных полей modifier в .json
+    const modFromScore = (score) => Math.floor((safeInt(score, 10) - 10) / 2);
+
     const stats = statKeys.map(k => {
       const s = sheet?.stats?.[k] || {};
       const label = s.label || ({ str:"Сила", dex:"Ловкость", con:"Телосложение", int:"Интеллект", wis:"Мудрость", cha:"Харизма" })[k];
       const score = safeInt(s.score, 10);
-      const mod = safeInt(s.modifier, 0);
+      const derived = modFromScore(score);
+      const mod = (typeof s.modifier === "number" && Number.isFinite(s.modifier)) ? safeInt(s.modifier, derived) : derived;
+
+      // (нормализация) если в листе лежит неправильный modifier — исправим,
+      // чтобы остальные расчёты (скиллы/сейвы/оружие) были согласованы.
+      if (!sheet.stats) sheet.stats = {};
+      if (!sheet.stats[k] || typeof sheet.stats[k] !== "object") sheet.stats[k] = {};
+      sheet.stats[k].score = score;
+      sheet.stats[k].modifier = derived;
+
       const saveProf = !!(sheet?.saves?.[k]?.isProf);
       return { k, label, score, mod, check: calcCheckBonus(sheet, k), save: calcSaveBonus(sheet, k), saveProf, skills: [] };
     });

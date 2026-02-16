@@ -932,12 +932,16 @@ function bindSlotEditors(root, player, canEdit) {
           if (typeof sendMessage === 'function' && rollRes) {
             const r = rollRes.rolls?.[0];
             const b = Number(rollRes.bonus) || 0;
+            const bonusTxt = b ? ` ${b >= 0 ? '+' : '-'} ${Math.abs(b)}` : '';
             const nameTxt = title ? ` (${title})` : '';
+            sendMessage({
+              type: 'log',
+              text: `Атака заклинанием${nameTxt}: d20(${r})${bonusTxt} => ${rollRes.total}`
+            });
+
             sendMessage({
               type: 'diceEvent',
               event: {
-                fromId: (typeof myId !== 'undefined') ? String(myId) : '',
-                fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
                 kindText: `Атака заклинанием${nameTxt}`,
                 sides: 20,
                 count: 1,
@@ -1183,24 +1187,89 @@ function ensureSpellSaved(sheet, level, name, href, desc) {
 
 
 
-function deleteSpellSaved(sheet, href) {
-  if (!sheet || !href) return;
+function deleteSpellSaved(sheet, href, opts = {}) {
+  if (!sheet) return;
+  const name = String(opts?.name || "").trim();
+  const level = safeInt(opts?.level, -1);
 
   if (!sheet.text || typeof sheet.text !== "object") sheet.text = {};
 
-  // remove meta
-  delete sheet.text[`spell-name:${href}`];
-  delete sheet.text[`spell-desc:${href}`];
+  // ===== Case A: we have href (URL / srd:// / manual:...) =====
+  if (href) {
+    // remove meta
+    delete sheet.text[`spell-name:${href}`];
+    delete sheet.text[`spell-desc:${href}`];
 
-  // remove from all plain lists
-  for (let lvl = 0; lvl <= 9; lvl++) {
+    // remove from all plain lists
+    for (let lvl = 0; lvl <= 9; lvl++) {
+      const plainKey = `spells-level-${lvl}-plain`;
+      const cur = String(sheet.text?.[plainKey]?.value ?? "");
+      if (!cur) continue;
+      const lines = cur.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const next = lines.filter(l => !l.includes(href));
+      if (next.length) sheet.text[plainKey] = { value: next.join("\n") };
+      else delete sheet.text[plainKey];
+    }
+    return;
+  }
+
+  // ===== Case B: legacy / imported spell without href (plain text only) =====
+  // We delete by exact text match from BOTH sources:
+  // - plain:  sheet.text[spells-level-N-plain].value
+  // - tiptap: sheet.text[spells-level-N].value.data
+  if (!name) return;
+  const levelsToTry = (level >= 0 && level <= 9) ? [level] : Array.from({ length: 10 }, (_, i) => i);
+
+  const normLine = (s) => String(s || "").replace(/\s+/g, " ").trim();
+  const target = normLine(name);
+
+  // remove from plain list(s)
+  for (const lvl of levelsToTry) {
     const plainKey = `spells-level-${lvl}-plain`;
     const cur = String(sheet.text?.[plainKey]?.value ?? "");
-    if (!cur) continue;
-    const lines = cur.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    const next = lines.filter(l => !l.includes(href));
-    if (next.length) sheet.text[plainKey] = { value: next.join("\n") };
-    else delete sheet.text[plainKey];
+    if (cur) {
+      const lines = cur.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const next = lines.filter(l => {
+        const line = l.includes("|") ? l.split("|")[0] : l;
+        return normLine(line) !== target;
+      });
+      if (next.length) sheet.text[plainKey] = { value: next.join("\n") };
+      else delete sheet.text[plainKey];
+    }
+
+    // remove from tiptap doc
+    const tipKey = `spells-level-${lvl}`;
+    const doc = sheet.text?.[tipKey]?.value?.data;
+    if (doc && typeof doc === "object" && Array.isArray(doc.content)) {
+      const keep = [];
+      for (const block of doc.content) {
+        if (!block || block.type !== "paragraph") { keep.push(block); continue; }
+
+        // collect visible text in paragraph
+        const acc = [];
+        const walk = (node) => {
+          if (!node || typeof node !== "object") return;
+          if (node.type === "text") {
+            const t = String(node.text || "");
+            if (t) acc.push(t);
+            return;
+          }
+          if (Array.isArray(node.content)) node.content.forEach(walk);
+        };
+        walk(block);
+        const line = normLine(acc.join(""));
+        if (line && line === target) {
+          // skip (delete)
+          continue;
+        }
+        keep.push(block);
+      }
+
+      // write back
+      sheet.text[tipKey] = sheet.text[tipKey] || { value: {} };
+      sheet.text[tipKey].value = sheet.text[tipKey].value || {};
+      sheet.text[tipKey].value.data = { ...doc, content: keep };
+    }
   }
 }
 
@@ -1762,10 +1831,14 @@ function bindSpellAddAndDesc(root, player, canEdit) {
 
       const item = delBtn.closest(".spell-item");
       const href = item?.getAttribute?.("data-spell-url") || "";
-      if (!href) return;
+      const lvl = safeInt(item?.getAttribute?.("data-spell-level"), -1);
+      const nmAttr = item?.getAttribute?.("data-spell-name") || "";
+      const nmDom = (item?.querySelector?.(".spell-item-link")?.textContent || item?.querySelector?.(".spell-item-title")?.textContent || "").trim();
+      const name = (nmAttr || nmDom || "").trim();
+      if (!href && !name) return;
       if (!confirm("Удалить это заклинание?")) return;
 
-      deleteSpellSaved(sheet, href);
+      deleteSpellSaved(sheet, href, { name, level: lvl });
       scheduleSheetSave(curPlayer);
       rerenderSpellsTabInPlace(root, curPlayer, sheet, curCanEdit);
       return;
