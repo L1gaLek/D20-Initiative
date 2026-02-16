@@ -237,7 +237,10 @@
             <!-- Fog of war (GM) -->
             <div class="fog-controls" id="fog-controls">
               <div class="fog-title">Туман войны</div>
-              <label class="fog-row"><input type="checkbox" id="fog-enabled"> Включить</label>
+              <div class="fog-row fog-row--top">
+                <label class="fog-inline"><input type="checkbox" id="fog-enabled"> Включить</label>
+                <label class="fog-inline"><input type="checkbox" id="fog-gm-open"> Открыть для ГМ</label>
+              </div>
               <div class="fog-row">
                 <label>Режим:
                   <select id="fog-mode">
@@ -275,6 +278,7 @@
               </div>
               <div class="fog-row fog-row--dynamic">
                 <label class="fog-inline"><input type="checkbox" id="fog-explored" checked> Исследованное</label>
+                <label class="fog-inline"><input type="checkbox" id="fog-move-open" checked> Движение по открытому</label>
                 <button id="fog-clear-explored" type="button">Очистить исслед.</button>
               </div>
             </div>
