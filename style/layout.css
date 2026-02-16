@@ -1400,3 +1400,28 @@
 }
 
 .cmp-move{ display:flex; gap:8px; align-items:center; }
+
+
+/* ===== Sheet modal: slightly wider to avoid horizontal scroll ===== */
+#sheet-modal .modal{
+  width: min(980px, 98vw);
+  overflow-x: hidden;
+}
+
+#sheet-modal .profile-col input[type="text"]{
+  width: 100% !important;
+  max-width: 260px;
+}
+
+/* ===== Combat weapons UI tweaks ===== */
+.weapon-sum-label{ font-size: 11px; }
+.weapon-sum-val{ font-size: 12px; }
+.weapon-fieldbox-inline .weapon-fieldlabel{ white-space: normal; }
+.weapon-fieldbox.weapon-ability{ grid-column: 1 / -1; }
+
+/* ===== Combat abilities (like Notes) ===== */
+.combat-abilities-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.combat-ability-item{ border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:10px; margin-top:10px; background: rgba(255,255,255,.04); }
+.combat-ability-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.combat-ability-title{ flex:1 1 auto; min-width: 0; }
+.combat-ability-body.collapsed{ display:none; }
