@@ -53,6 +53,7 @@ function getQuickSheetStats(player) {
   const s = player?.sheet?.parsed || {};
   const hpMax = safeNum(getFrom(s, 'vitality.hp-max.value', null), null);
   const hpCur = safeNum(getFrom(s, 'vitality.hp-current.value', null), null);
+  const hpTemp = safeNum(getFrom(s, 'vitality.hp-temp.value', null), null);
   const ac = safeNum(getFrom(s, 'vitality.ac.value', null), null);
   const speed = safeNum(getFrom(s, 'vitality.speed.value', null), null);
   const lvl = safeNum(getFrom(s, 'info.level.value', null), null);
@@ -64,7 +65,7 @@ function getQuickSheetStats(player) {
     wis: safeNum(getFrom(s, 'stats.wis.score', null), null),
     cha: safeNum(getFrom(s, 'stats.cha.score', null), null)
   };
-  return { hpMax, hpCur, ac, speed, lvl, stats };
+  return { hpMax, hpCur, hpTemp, ac, speed, lvl, stats };
 }
 
 function ensureSheetPath(sheetObj, path) {
@@ -84,6 +85,7 @@ function upsertSheetNumber(player, path, value) {
   if (!pid) return;
   const current = players.find(p => String(p?.id) === pid);
   if (!current) return;
+  const nowTs = Date.now();
   const nextSheet = deepClone(current.sheet || { parsed: {} });
   if (!nextSheet.parsed || typeof nextSheet.parsed !== 'object') nextSheet.parsed = {};
   const { parent, key } = ensureSheetPath(nextSheet.parsed, path);
@@ -92,7 +94,14 @@ function upsertSheetNumber(player, path, value) {
   parent[key].value = value;
   // оптимистично обновляем локально
   current.sheet = nextSheet;
-  sendMessage({ type: 'setPlayerSheet', id: pid, sheet: nextSheet });
+  current.sheetUpdatedAt = nowTs;
+  try {
+    if (typeof lastState !== 'undefined' && lastState?.players) {
+      const lp = lastState.players.find(pp => String(pp?.id) === pid);
+      if (lp) { lp.sheet = nextSheet; lp.sheetUpdatedAt = nowTs; }
+    }
+  } catch {}
+  sendMessage({ type: 'setPlayerSheet', id: pid, sheet: nextSheet, sheetUpdatedAt: nowTs });
 }
 
 // ================== HP BAR (always on top) ==================
@@ -100,15 +109,24 @@ function updateHpBar(player, tokenEl) {
   const pid = String(player?.id || '');
   if (!pid) return;
 
+  const tempMap = (typeof hpTempBarElements !== 'undefined' && hpTempBarElements)
+    ? hpTempBarElements
+    : (window.hpTempBarElements || null);
+
   // Hide HP bar if user has no access to sensitive info (GM-created public NPCs)
   try {
     if (typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(player)) {
       const existing = hpBarElements.get(pid);
       if (existing) existing.style.display = 'none';
+      try {
+        const tbar = tempMap?.get?.(pid);
+        if (tbar) tbar.style.display = 'none';
+      } catch {}
       return;
     }
   } catch {}
   let bar = hpBarElements.get(pid);
+  let tbar = tempMap?.get?.(pid) || null;
 
   const size = Number(player?.size) || 1;
 
@@ -120,15 +138,27 @@ function updateHpBar(player, tokenEl) {
     hpBarElements.set(pid, bar);
   }
 
+  // temp HP bar (only when > 0)
+  if (!tbar) {
+    tbar = document.createElement('div');
+    tbar.className = 'token-hpbar token-hpbar--temp';
+    tbar.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
+    board.appendChild(tbar);
+    try { tempMap?.set?.(pid, tbar); } catch {}
+  }
+
   if (!tokenEl || tokenEl.style.display === 'none' || player.x === null || player.y === null) {
     bar.style.display = 'none';
+    if (tbar) tbar.style.display = 'none';
     return;
   }
 
-  const { hpMax, hpCur } = getQuickSheetStats(player);
+  const { hpMax, hpCur, hpTemp } = getQuickSheetStats(player);
   const max = (hpMax !== null ? Math.max(0, hpMax) : 0);
   const cur = (hpCur !== null ? hpCur : max);
   const pct = max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0;
+  const tmp = (hpTemp !== null ? Math.max(0, hpTemp) : 0);
+  const tmpPct = max > 0 ? Math.max(0, Math.min(100, Math.round((tmp / max) * 100))) : 0;
 
   bar.style.display = 'block';
   bar.style.width = `${size * 50}px`;
@@ -139,6 +169,22 @@ function updateHpBar(player, tokenEl) {
   const txt = bar.querySelector('.txt');
   if (fill) fill.style.width = `${pct}%`;
   if (txt) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
+
+  // temp bar sits above the main bar and only shows when temp > 0
+  if (tbar) {
+    if (tmp > 0 && max > 0) {
+      tbar.style.display = 'block';
+      tbar.style.width = `${size * 50}px`;
+      tbar.style.left = `${tokenEl.offsetLeft}px`;
+      tbar.style.top = `${tokenEl.offsetTop - 28}px`;
+      const tf = tbar.querySelector('.fill');
+      const tt = tbar.querySelector('.txt');
+      if (tf) tf.style.width = `${tmpPct}%`;
+      if (tt) tt.textContent = String(tmp);
+    } else {
+      tbar.style.display = 'none';
+    }
+  }
 }
 
 // ================== MINI POPUP (dblclick on token) ==================

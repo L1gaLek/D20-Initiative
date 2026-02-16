@@ -41,9 +41,8 @@ if (sides === 20 && count === 1) {
   clearCritUI();
 }
 
-  sendMessage({
-  type: "diceEvent",
-  event: {
+  // Пишем бросок в БД/реалтайм, но НЕ дублируем локальную анимацию
+  const ev = {
     fromId: (typeof myId !== 'undefined') ? String(myId) : '',
     fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
     kindText: `d${sides} × ${count}`,
@@ -55,8 +54,14 @@ if (sides === 20 && count === 1) {
     crit: (sides === 20 && count === 1)
       ? (finals[0] === 1 ? "crit-fail" : finals[0] === 20 ? "crit-success" : "")
       : ""
+  };
+
+  if (typeof window.broadcastDiceEventOnly === 'function') {
+    window.broadcastDiceEventOnly(ev, { silentLocal: true });
+  } else {
+    // fallback (старый путь)
+    sendMessage({ type: "diceEvent", event: ev });
   }
-});
 
   diceAnimBusy = false;
   rollBtn.disabled = false;

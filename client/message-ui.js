@@ -331,6 +331,7 @@ loginDiv.style.display = 'none';
       // - temporarily reset token positions to null until room_tokens catches up
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
       const prevPos = new Map();
+      const prevSheets = new Map();
       try {
         (lastState?.players || []).forEach(p => {
           if (!p || !p.id) return;
@@ -341,6 +342,14 @@ loginDiv.style.display = 'none';
             color: p.color || null,
             mapId: p.mapId || null
           });
+
+          // Preserve freshest sheet to avoid UI rollbacks (mini HP edits, etc.)
+          try {
+            const ts = Number(p.sheetUpdatedAt) || 0;
+            if (p.sheet && typeof p.sheet === 'object') {
+              prevSheets.set(String(p.id), { sheet: p.sheet, sheetUpdatedAt: ts });
+            }
+          } catch {}
         });
       } catch {}
 
@@ -365,6 +374,21 @@ loginDiv.style.display = 'none';
           if ((!p.size || !Number.isFinite(Number(p.size))) && snap.size) p.size = snap.size;
           if ((!p.color || typeof p.color !== 'string') && snap.color) p.color = snap.color;
           if ((!p.mapId || typeof p.mapId !== 'string') && snap.mapId) p.mapId = snap.mapId;
+        });
+      } catch {}
+
+      // restore freshest sheets (prevents occasional "healed then snapped back" in mini popup)
+      try {
+        (lastState.players || []).forEach(p => {
+          if (!p || !p.id) return;
+          const prev = prevSheets.get(String(p.id));
+          if (!prev) return;
+          const incomingTs = Number(p.sheetUpdatedAt) || 0;
+          const prevTs = Number(prev.sheetUpdatedAt) || 0;
+          if (prevTs > incomingTs) {
+            p.sheet = prev.sheet;
+            p.sheetUpdatedAt = prevTs;
+          }
         });
       } catch {}
       boardWidth = normalized.boardWidth;
@@ -409,6 +433,18 @@ loginDiv.style.display = 'none';
           hpBarElements.delete(id);
         }
       });
+
+      try {
+        const tempMap = (typeof hpTempBarElements !== 'undefined' && hpTempBarElements)
+          ? hpTempBarElements
+          : (window.hpTempBarElements || null);
+        tempMap?.forEach?.((el, id) => {
+          if (!existingIds.has(id)) {
+            try { el.remove(); } catch {}
+            try { tempMap.delete(id); } catch {}
+          }
+        });
+      } catch {}
 
       players = visiblePlayers;
 
@@ -695,15 +731,24 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: true }));
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({ id: p.id, inCombat: true }))
+      });
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: false }));
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({ id: p.id, inCombat: false }))
+      });
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      stPlayers.forEach(p => {
-        const placed = (p && p.x !== null && p.y !== null);
-        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!placed });
+      sendMessage({
+        type: 'setPlayersInCombatBulk',
+        items: stPlayers.map(p => ({
+          id: p.id,
+          inCombat: !!(p && p.x !== null && p.y !== null)
+        }))
       });
     });
 
@@ -757,39 +802,11 @@ function roleToClass(role) {
   return "role-unknown";
 }
 
-// ===== Tabs state for "Пользователи и персонажи" =====
-let playerListView = (window.PLAYER_LIST_VIEW === 'others') ? 'others' : 'mine';
-window.PLAYER_LIST_VIEW = playerListView;
-
-function applyPlayerListTabUI() {
-  try {
-    const mineBtn = document.getElementById('player-tab-mine');
-    const othersBtn = document.getElementById('player-tab-others');
-    if (mineBtn) {
-      mineBtn.classList.toggle('active', playerListView === 'mine');
-      mineBtn.setAttribute('aria-selected', playerListView === 'mine' ? 'true' : 'false');
-    }
-    if (othersBtn) {
-      othersBtn.classList.toggle('active', playerListView === 'others');
-      othersBtn.setAttribute('aria-selected', playerListView === 'others' ? 'true' : 'false');
-    }
-  } catch {}
-}
-
-window.setPlayerListView = (view) => {
-  playerListView = (view === 'others') ? 'others' : 'mine';
-  window.PLAYER_LIST_VIEW = playerListView;
-  applyPlayerListTabUI();
-  updatePlayerList();
-};
-window.getPlayerListView = () => playerListView;
-
 function updatePlayerList() {
-  if (!playerList) return;
-  // sync from global (in case dom-and-setup changed it before this file loaded)
-  playerListView = (window.PLAYER_LIST_VIEW === 'others') ? 'others' : 'mine';
-  applyPlayerListTabUI();
-  playerList.innerHTML = '';
+  // Два списка: "Личные" (мои) и "Другие" (остальные)
+  if (!playerListMine || !playerListOther) return;
+  playerListMine.innerHTML = '';
+  playerListOther.innerHTML = '';
 
   const currentTurnId = (lastState && lastState.phase === 'combat' && Array.isArray(lastState.turnOrder) && lastState.turnOrder.length)
     ? lastState.turnOrder[lastState.currentTurnIndex]
@@ -814,15 +831,7 @@ function updatePlayerList() {
     else if (r === 'Spectator') spectrIds.push(String(ownerId));
     else otherIds.push(String(ownerId));
   });
-  let orderedOwnerIds = [...gmIds, ...playerIds, ...spectrIds, ...otherIds];
-
-  // ===== Filter: mine / others =====
-  const myIdStr = (typeof myId !== 'undefined' && myId !== null) ? String(myId) : '';
-  if (playerListView === 'mine') {
-    orderedOwnerIds = myIdStr ? [myIdStr] : [];
-  } else {
-    orderedOwnerIds = orderedOwnerIds.filter((oid) => String(oid) !== myIdStr);
-  }
+  const orderedOwnerIds = [...gmIds, ...playerIds, ...spectrIds, ...otherIds];
 
   // Группируем в Map, чтобы порядок не "прыгал"
   const grouped = new Map(); // ownerId -> { ownerName, players: [] }
@@ -838,12 +847,6 @@ function updatePlayerList() {
 
   // Добавляем персонажей в соответствующие группы
   players.forEach((p) => {
-    // if view is filtered, skip non-matching players
-    if (playerListView === 'mine') {
-      if (String(p.ownerId || '') !== myIdStr) return;
-    } else {
-      if (String(p.ownerId || '') === myIdStr) return;
-    }
     const oid = String(p.ownerId || '');
     if (!grouped.has(oid)) {
       // на случай старых данных/неизвестного владельца — добавляем в конец
@@ -852,7 +855,7 @@ function updatePlayerList() {
     grouped.get(oid).players.push(p);
   });
 
-  Array.from(grouped.entries()).forEach(([ownerId, group]) => {
+  const renderOwnerGroup = (ownerId, group, targetUl) => {
     const userInfo = ownerId ? usersById.get(ownerId) : null;
 
     const ownerLi = document.createElement('li');
@@ -1088,7 +1091,21 @@ function updatePlayerList() {
 
     ownerLi.appendChild(ownerHeader);
     ownerLi.appendChild(ul);
-    playerList.appendChild(ownerLi);
+    targetUl.appendChild(ownerLi);
+  };
+
+  // Раскладываем группы по двум окнам
+  Array.from(grouped.entries()).forEach(([ownerId, group]) => {
+    // "Личные" = только мои токены (ownerId === myId)
+    // "Другие" = все остальные
+    const isMine = String(ownerId || '') && String(myId || '') && String(ownerId) === String(myId);
+    const target = isMine ? playerListMine : playerListOther;
+
+    // В "Личные" показываем только если есть хотя бы 1 персонаж
+    // (иначе будет пустой блок владельца)
+    if (isMine && !(group?.players || []).length) return;
+
+    renderOwnerGroup(ownerId, group, target);
   });
 }
 

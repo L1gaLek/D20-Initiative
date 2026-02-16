@@ -904,6 +904,10 @@ async function sendMessage(msg) {
   if (!isGm && !owns(p)) return;
 
   p.sheet = deepClone(msg.sheet);
+  try {
+    const ts = Number(msg.sheetUpdatedAt) || Date.now();
+    p.sheetUpdatedAt = ts;
+  } catch {}
 
   // синхронизируем имя персонажа из sheet (если есть)
   try {
