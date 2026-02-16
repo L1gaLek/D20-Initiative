@@ -191,7 +191,6 @@
 function renderSpellCard({ level, name, href, desc }) {
     const safeHref = escapeHtml(href || "");
     const safeName = escapeHtml(name || href || "(без названия)");
-    const safeDataName = escapeHtml(String(name || "").trim());
     const text = cleanupSpellDesc(desc || "");
     const lvl = safeInt(level, 0);
 
@@ -208,7 +207,7 @@ function renderSpellCard({ level, name, href, desc }) {
     `;
 
     return `
-      <div class="spell-item" data-spell-url="${safeHref}" data-spell-name="${safeDataName}" data-spell-level="${lvl}">
+      <div class="spell-item" data-spell-url="${safeHref}" data-spell-level="${lvl}">
         <div class="spell-item-head">
           ${titleHtml}
           <button class="spell-dice-btn" type="button" data-spell-roll title="Бросок атаки">${diceSvg}</button>
@@ -490,7 +489,7 @@ function renderCombatTab(vm) {
             <!-- всё ниже скрывается кнопкой Скрыть -->
             <div class="weapon-details ${collapsed ? "collapsed" : ""}">
               <div class="weapon-details-grid">
-                <div class="weapon-fieldbox">
+                <div class="weapon-fieldbox weapon-ability">
                   <div class="weapon-fieldlabel">Характеристика</div>
                   <select class="weapon-select" data-weapon-field="ability">
                     ${abilityOptions.map(o => `<option value="${o.k}" ${o.k === w.ability ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
@@ -548,11 +547,40 @@ function renderCombatTab(vm) {
         ${listHtml}
       </div>
 
-      <div class="sheet-card combat-skills-card">
-        <h4>Умения и способности</h4>
-        <textarea class="sheet-textarea combat-skills-text" rows="6"
-                  data-sheet-path="combat.skillsAbilities.value"
-                  placeholder="Сюда можно вписать умения/способности, особенности боя, заметки..."></textarea>
+      <div class="sheet-card combat-abilities-card">
+        <div class="combat-abilities-head">
+          <h4 style="margin:0;">Умения и способности</h4>
+          <button class="weapon-add-btn" type="button" data-combat-ability-add>Добавить</button>
+        </div>
+
+        <div class="combat-abilities-list">
+          ${(() => {
+            const arr = Array.isArray(vm?.combatAbilitiesEntries) ? vm.combatAbilitiesEntries : [];
+            if (!arr.length) return `<div class="sheet-note">Пока пусто. Нажми «Добавить».</div>`;
+            return arr.map((e, idx) => {
+              const title = escapeHtml(String(e?.title || `Умение-${idx+1}`));
+              const text = escapeHtml(String(e?.text || ""));
+              const collapsed = !!e?.collapsed;
+              return `
+                <div class="combat-ability-item" data-combat-ability-idx="${idx}">
+                  <div class="combat-ability-head">
+                    <input class="weapon-title-input combat-ability-title" type="text"
+                           value="${title}" placeholder="Название" data-combat-ability-title>
+                    <div class="weapon-actions">
+                      <button class="weapon-btn" type="button" data-combat-ability-toggle>${collapsed ? "Показать" : "Скрыть"}</button>
+                      <button class="weapon-btn danger" type="button" data-combat-ability-del>Удалить</button>
+                    </div>
+                  </div>
+                  <div class="combat-ability-body ${collapsed ? "collapsed" : ""}">
+                    <textarea class="sheet-textarea combat-ability-text" rows="4"
+                              placeholder="Описание..."
+                              data-combat-ability-text>${text}</textarea>
+                  </div>
+                </div>
+              `;
+            }).join("");
+          })()}
+        </div>
       </div>
     </div>
   `;

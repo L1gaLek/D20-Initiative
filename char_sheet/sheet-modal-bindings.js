@@ -159,6 +159,19 @@ function bindCombatEditors(root, player, canEdit) {
   if (!root || !player?.sheet?.parsed) return;
   const sheet = player.sheet.parsed;
 
+  // ===== Умения и способности (новый формат: список карточек) =====
+  if (!sheet.combat || typeof sheet.combat !== "object") sheet.combat = {};
+  if (!Array.isArray(sheet.combat.abilitiesEntries)) sheet.combat.abilitiesEntries = [];
+
+  // миграция старого textarea (combat.skillsAbilities.value) -> первая карточка
+  const legacyTxt = String(getByPath(sheet, "combat.skillsAbilities.value") || "").trim();
+  if (legacyTxt && sheet.combat.abilitiesEntries.length === 0) {
+    sheet.combat.abilitiesEntries.push({ title: "Умение-1", text: legacyTxt, collapsed: false });
+    // очистим legacy, чтобы не дублировалось при будущих рендерах
+    setByPath(sheet, "combat.skillsAbilities.value", "");
+    scheduleSheetSave(player);
+  }
+
   // кнопка "Добавить оружие"
   const addBtn = root.querySelector('[data-weapon-add]');
   if (addBtn) {
@@ -303,6 +316,88 @@ function bindCombatEditors(root, player, canEdit) {
             kindText: `Урон: ${cnt}d${sides} ${formatMod(bonus)}`
           });
         }
+      });
+    }
+  });
+
+  // ===== Combat abilities UI =====
+  const abilAddBtn = root.querySelector('[data-combat-ability-add]');
+  if (abilAddBtn) {
+    if (!canEdit) abilAddBtn.disabled = true;
+    abilAddBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!canEdit) return;
+      if (!sheet.combat || typeof sheet.combat !== "object") sheet.combat = {};
+      if (!Array.isArray(sheet.combat.abilitiesEntries)) sheet.combat.abilitiesEntries = [];
+
+      // choose next Умение-N
+      const titles = sheet.combat.abilitiesEntries.map(x => String(x?.title || "")).filter(Boolean);
+      let maxN = 0;
+      for (const t of titles) {
+        const mm = /^Умение-(\d+)$/i.exec(t.trim());
+        if (mm) maxN = Math.max(maxN, parseInt(mm[1], 10) || 0);
+      }
+      const nextN = maxN + 1;
+
+      sheet.combat.abilitiesEntries.push({ title: `Умение-${nextN}`, text: "", collapsed: false });
+      scheduleSheetSave(player);
+      rerenderCombatTabInPlace(root, player, canEdit);
+    });
+  }
+
+  const abilItems = root.querySelectorAll('.combat-ability-item[data-combat-ability-idx]');
+  abilItems.forEach(item => {
+    const idx = safeInt(item.getAttribute('data-combat-ability-idx'), -1);
+    if (idx < 0) return;
+    const ent = sheet?.combat?.abilitiesEntries?.[idx];
+    if (!ent || typeof ent !== "object") return;
+
+    const titleInp = item.querySelector('[data-combat-ability-title]');
+    if (titleInp) {
+      if (!canEdit) titleInp.disabled = true;
+      const handler = () => {
+        if (!canEdit) return;
+        ent.title = String(titleInp.value || "");
+        scheduleSheetSave(player);
+      };
+      titleInp.addEventListener('input', handler);
+      titleInp.addEventListener('change', handler);
+    }
+
+    const textTa = item.querySelector('[data-combat-ability-text]');
+    if (textTa) {
+      if (!canEdit) textTa.disabled = true;
+      const handler = () => {
+        if (!canEdit) return;
+        ent.text = String(textTa.value || "");
+        scheduleSheetSave(player);
+      };
+      textTa.addEventListener('input', handler);
+      textTa.addEventListener('change', handler);
+    }
+
+    const toggleBtn = item.querySelector('[data-combat-ability-toggle]');
+    if (toggleBtn) {
+      if (!canEdit) toggleBtn.disabled = true;
+      toggleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!canEdit) return;
+        ent.collapsed = !ent.collapsed;
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+
+    const delBtn = item.querySelector('[data-combat-ability-del]');
+    if (delBtn) {
+      if (!canEdit) delBtn.disabled = true;
+      delBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!canEdit) return;
+        if (!confirm('Удалить запись?')) return;
+        sheet.combat.abilitiesEntries.splice(idx, 1);
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
       });
     }
   });
@@ -1187,88 +1282,59 @@ function ensureSpellSaved(sheet, level, name, href, desc) {
 
 
 
-function deleteSpellSaved(sheet, href, opts = {}) {
-  if (!sheet) return;
-  const name = String(opts?.name || "").trim();
-  const level = safeInt(opts?.level, -1);
+function deleteSpellSaved(sheet, href) {
+  if (!sheet || !href) return;
 
   if (!sheet.text || typeof sheet.text !== "object") sheet.text = {};
 
-  // ===== Case A: we have href (URL / srd:// / manual:...) =====
-  if (href) {
-    // remove meta
-    delete sheet.text[`spell-name:${href}`];
-    delete sheet.text[`spell-desc:${href}`];
+  // remove meta (manual name/desc)
+  delete sheet.text[`spell-name:${href}`];
+  delete sheet.text[`spell-desc:${href}`];
 
-    // remove from all plain lists
-    for (let lvl = 0; lvl <= 9; lvl++) {
-      const plainKey = `spells-level-${lvl}-plain`;
-      const cur = String(sheet.text?.[plainKey]?.value ?? "");
-      if (!cur) continue;
-      const lines = cur.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      const next = lines.filter(l => !l.includes(href));
-      if (next.length) sheet.text[plainKey] = { value: next.join("\n") };
-      else delete sheet.text[plainKey];
+  // remove from tiptap docs (imported from .json)
+  function docHasHref(node) {
+    if (!node || typeof node !== "object") return false;
+    if (node.type === "text" && Array.isArray(node.marks)) {
+      return node.marks.some(m => m?.type === "link" && String(m?.attrs?.href || "") === String(href));
     }
-    return;
+    if (Array.isArray(node.content)) return node.content.some(ch => docHasHref(ch));
+    return false;
   }
 
-  // ===== Case B: legacy / imported spell without href (plain text only) =====
-  // We delete by exact text match from BOTH sources:
-  // - plain:  sheet.text[spells-level-N-plain].value
-  // - tiptap: sheet.text[spells-level-N].value.data
-  if (!name) return;
-  const levelsToTry = (level >= 0 && level <= 9) ? [level] : Array.from({ length: 10 }, (_, i) => i);
+  function normalizeDoc(maybeDoc) {
+    if (!maybeDoc) return null;
+    if (typeof maybeDoc === "string") {
+      try { return JSON.parse(maybeDoc); } catch { return null; }
+    }
+    if (typeof maybeDoc === "object") return maybeDoc;
+    return null;
+  }
 
-  const normLine = (s) => String(s || "").replace(/\s+/g, " ").trim();
-  const target = normLine(name);
+  for (let lvl = 0; lvl <= 9; lvl++) {
+    // tiptap: sheet.text["spells-level-N"].value.data
+    const tipKey = `spells-level-${lvl}`;
+    const tip = sheet.text?.[tipKey];
+    const docRaw = tip?.value?.data;
+    const doc = normalizeDoc(docRaw);
+    if (doc && Array.isArray(doc.content)) {
+      const beforeLen = doc.content.length;
+      const nextContent = doc.content.filter(block => !docHasHref(block));
+      if (nextContent.length !== beforeLen) {
+        const nextDoc = { ...doc, content: nextContent };
+        if (!sheet.text[tipKey] || typeof sheet.text[tipKey] !== "object") sheet.text[tipKey] = {};
+        if (!sheet.text[tipKey].value || typeof sheet.text[tipKey].value !== "object") sheet.text[tipKey].value = {};
+        sheet.text[tipKey].value.data = nextDoc;
+      }
+    }
 
-  // remove from plain list(s)
-  for (const lvl of levelsToTry) {
+    // plain editable list
     const plainKey = `spells-level-${lvl}-plain`;
     const cur = String(sheet.text?.[plainKey]?.value ?? "");
     if (cur) {
       const lines = cur.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      const next = lines.filter(l => {
-        const line = l.includes("|") ? l.split("|")[0] : l;
-        return normLine(line) !== target;
-      });
+      const next = lines.filter(l => !l.includes(href));
       if (next.length) sheet.text[plainKey] = { value: next.join("\n") };
       else delete sheet.text[plainKey];
-    }
-
-    // remove from tiptap doc
-    const tipKey = `spells-level-${lvl}`;
-    const doc = sheet.text?.[tipKey]?.value?.data;
-    if (doc && typeof doc === "object" && Array.isArray(doc.content)) {
-      const keep = [];
-      for (const block of doc.content) {
-        if (!block || block.type !== "paragraph") { keep.push(block); continue; }
-
-        // collect visible text in paragraph
-        const acc = [];
-        const walk = (node) => {
-          if (!node || typeof node !== "object") return;
-          if (node.type === "text") {
-            const t = String(node.text || "");
-            if (t) acc.push(t);
-            return;
-          }
-          if (Array.isArray(node.content)) node.content.forEach(walk);
-        };
-        walk(block);
-        const line = normLine(acc.join(""));
-        if (line && line === target) {
-          // skip (delete)
-          continue;
-        }
-        keep.push(block);
-      }
-
-      // write back
-      sheet.text[tipKey] = sheet.text[tipKey] || { value: {} };
-      sheet.text[tipKey].value = sheet.text[tipKey].value || {};
-      sheet.text[tipKey].value.data = { ...doc, content: keep };
     }
   }
 }
@@ -1831,14 +1897,10 @@ function bindSpellAddAndDesc(root, player, canEdit) {
 
       const item = delBtn.closest(".spell-item");
       const href = item?.getAttribute?.("data-spell-url") || "";
-      const lvl = safeInt(item?.getAttribute?.("data-spell-level"), -1);
-      const nmAttr = item?.getAttribute?.("data-spell-name") || "";
-      const nmDom = (item?.querySelector?.(".spell-item-link")?.textContent || item?.querySelector?.(".spell-item-title")?.textContent || "").trim();
-      const name = (nmAttr || nmDom || "").trim();
-      if (!href && !name) return;
+      if (!href) return;
       if (!confirm("Удалить это заклинание?")) return;
 
-      deleteSpellSaved(sheet, href, { name, level: lvl });
+      deleteSpellSaved(sheet, href);
       scheduleSheetSave(curPlayer);
       rerenderSpellsTabInPlace(root, curPlayer, sheet, curCanEdit);
       return;
