@@ -1622,6 +1622,23 @@ textarea[data-sheet-path="text.profPlain.value"]{
 
 .coin-pill--pp .coin-pill__abbr{ opacity: 0.92; }
 
+/* Tooltip “Обменный курс” — подсветка названий монет */
+.exchange-table .ex-cell.ex-coin{
+  border-radius: 999px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0,0,0,0.22);
+  font-weight: 700;
+  line-height: 1.1;
+}
+.exchange-table .ex-cell.ex-coin--cp{ background: rgb(184,115,51); color:#111; border-color: rgba(0,0,0,0.25); }
+.exchange-table .ex-cell.ex-coin--sp{ background: rgb(192,192,192); color:#111; border-color: rgba(0,0,0,0.22); }
+.exchange-table .ex-cell.ex-coin--gp{ background: rgb(255,215,0); color:#111; border-color: rgba(0,0,0,0.22); }
+.exchange-table .ex-cell.ex-coin--ep{ background: rgb(0,180,189); color:#111; border-color: rgba(0,0,0,0.22); }
+.exchange-table .ex-cell.ex-coin--pp{ background: rgb(131,103,113); color:#fff; border-color: rgba(255,255,255,0.18); }
+
 .coin-delta{
   width: 54px;
   border-radius: 9px;
@@ -1786,6 +1803,60 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .hp-note{
   font-size: 11px;
   opacity: 0.7;
+}
+
+.hp-select{
+  width: 84px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  outline: none;
+}
+
+.hp-hitdice-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  cursor: pointer;
+  padding: 0;
+}
+
+.hp-hitdice-btn:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hp-label--mini{
+  font-size: 11px;
+  opacity: 0.75;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.hp-input--small{
+  width: 120px;
+}
+
+.hp-hitdice-total{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hp-hitdice-total__label{
+  font-size: 11px;
+  opacity: 0.75;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 /* editable values inside hero chips (AC / Speed) */

@@ -1135,6 +1135,18 @@
   gap: 8px;
 }
 
+.hp-row--hitdice{
+  /* оставляем подпись слева и контролы справа в одну строку */
+  grid-template-columns: 1fr auto;
+}
+
+.hp-hitdice{
+  display: grid;
+  grid-template-columns: 84px 44px auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .hp-delta{
   display: grid;
   grid-template-columns: 44px 1fr 44px;
