@@ -85,7 +85,6 @@ function upsertSheetNumber(player, path, value) {
   if (!pid) return;
   const current = players.find(p => String(p?.id) === pid);
   if (!current) return;
-  const nowTs = Date.now();
   const nextSheet = deepClone(current.sheet || { parsed: {} });
   if (!nextSheet.parsed || typeof nextSheet.parsed !== 'object') nextSheet.parsed = {};
   const { parent, key } = ensureSheetPath(nextSheet.parsed, path);
@@ -94,14 +93,27 @@ function upsertSheetNumber(player, path, value) {
   parent[key].value = value;
   // оптимистично обновляем локально
   current.sheet = nextSheet;
-  current.sheetUpdatedAt = nowTs;
+
+  // Debounce per-player sheet updates to avoid "revert" on late/out-of-order echoes.
+  window.__sheetSendTimers = window.__sheetSendTimers || new Map();
+  window.__sheetSendPending = window.__sheetSendPending || new Map();
+  try { window.__sheetSendPending.set(pid, nextSheet); } catch {}
+
   try {
-    if (typeof lastState !== 'undefined' && lastState?.players) {
-      const lp = lastState.players.find(pp => String(pp?.id) === pid);
-      if (lp) { lp.sheet = nextSheet; lp.sheetUpdatedAt = nowTs; }
-    }
-  } catch {}
-  sendMessage({ type: 'setPlayerSheet', id: pid, sheet: nextSheet, sheetUpdatedAt: nowTs });
+    const timers = window.__sheetSendTimers;
+    const prev = timers.get(pid);
+    if (prev) clearTimeout(prev);
+    const t = setTimeout(() => {
+      const pending = window.__sheetSendPending?.get?.(pid) || nextSheet;
+      try { sendMessage({ type: 'setPlayerSheet', id: pid, sheet: pending }); } catch {}
+      try { window.__sheetSendPending?.delete?.(pid); } catch {}
+      try { window.__sheetSendTimers?.delete?.(pid); } catch {}
+    }, 140);
+    timers.set(pid, t);
+  } catch {
+    // fallback
+    try { sendMessage({ type: 'setPlayerSheet', id: pid, sheet: nextSheet }); } catch {}
+  }
 }
 
 // ================== HP BAR (always on top) ==================
@@ -109,47 +121,40 @@ function updateHpBar(player, tokenEl) {
   const pid = String(player?.id || '');
   if (!pid) return;
 
-  const tempMap = (typeof hpTempBarElements !== 'undefined' && hpTempBarElements)
-    ? hpTempBarElements
-    : (window.hpTempBarElements || null);
-
   // Hide HP bar if user has no access to sensitive info (GM-created public NPCs)
   try {
     if (typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(player)) {
       const existing = hpBarElements.get(pid);
-      if (existing) existing.style.display = 'none';
-      try {
-        const tbar = tempMap?.get?.(pid);
-        if (tbar) tbar.style.display = 'none';
-      } catch {}
+      if (existing?.main) existing.main.style.display = 'none';
+      if (existing?.temp) existing.temp.style.display = 'none';
       return;
     }
   } catch {}
-  let bar = hpBarElements.get(pid);
-  let tbar = tempMap?.get?.(pid) || null;
+  let bars = hpBarElements.get(pid);
 
   const size = Number(player?.size) || 1;
 
-  if (!bar) {
-    bar = document.createElement('div');
-    bar.className = 'token-hpbar';
-    bar.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
-    board.appendChild(bar);
-    hpBarElements.set(pid, bar);
+  if (!bars) {
+    const main = document.createElement('div');
+    main.className = 'token-hpbar';
+    main.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
+    board.appendChild(main);
+
+    const temp = document.createElement('div');
+    temp.className = 'token-hpbar token-hpbar--temp';
+    temp.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
+    board.appendChild(temp);
+
+    bars = { main, temp };
+    hpBarElements.set(pid, bars);
   }
 
-  // temp HP bar (only when > 0)
-  if (!tbar) {
-    tbar = document.createElement('div');
-    tbar.className = 'token-hpbar token-hpbar--temp';
-    tbar.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
-    board.appendChild(tbar);
-    try { tempMap?.set?.(pid, tbar); } catch {}
-  }
+  const bar = bars.main;
+  const tempBar = bars.temp;
 
   if (!tokenEl || tokenEl.style.display === 'none' || player.x === null || player.y === null) {
     bar.style.display = 'none';
-    if (tbar) tbar.style.display = 'none';
+    if (tempBar) tempBar.style.display = 'none';
     return;
   }
 
@@ -157,8 +162,6 @@ function updateHpBar(player, tokenEl) {
   const max = (hpMax !== null ? Math.max(0, hpMax) : 0);
   const cur = (hpCur !== null ? hpCur : max);
   const pct = max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0;
-  const tmp = (hpTemp !== null ? Math.max(0, hpTemp) : 0);
-  const tmpPct = max > 0 ? Math.max(0, Math.min(100, Math.round((tmp / max) * 100))) : 0;
 
   bar.style.display = 'block';
   bar.style.width = `${size * 50}px`;
@@ -170,19 +173,20 @@ function updateHpBar(player, tokenEl) {
   if (fill) fill.style.width = `${pct}%`;
   if (txt) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
 
-  // temp bar sits above the main bar and only shows when temp > 0
-  if (tbar) {
-    if (tmp > 0 && max > 0) {
-      tbar.style.display = 'block';
-      tbar.style.width = `${size * 50}px`;
-      tbar.style.left = `${tokenEl.offsetLeft}px`;
-      tbar.style.top = `${tokenEl.offsetTop - 28}px`;
-      const tf = tbar.querySelector('.fill');
-      const tt = tbar.querySelector('.txt');
-      if (tf) tf.style.width = `${tmpPct}%`;
-      if (tt) tt.textContent = String(tmp);
+  // Temp HP bar (appears only if hp-temp > 0)
+  const tempVal = (hpTemp !== null ? Math.max(0, hpTemp) : 0);
+  if (tempBar) {
+    if (tempVal > 0) {
+      tempBar.style.display = 'block';
+      tempBar.style.width = `${size * 50}px`;
+      tempBar.style.left = `${tokenEl.offsetLeft}px`;
+      tempBar.style.top = `${tokenEl.offsetTop - 28}px`;
+      const tFill = tempBar.querySelector('.fill');
+      const tTxt = tempBar.querySelector('.txt');
+      if (tFill) tFill.style.width = `100%`;
+      if (tTxt) tTxt.textContent = `${tempVal}`;
     } else {
-      tbar.style.display = 'none';
+      tempBar.style.display = 'none';
     }
   }
 }
@@ -314,6 +318,9 @@ function openTokenMini(playerId) {
     updateHpBar(p, tokenEl);
   };
 
+  // Instant feedback while typing; network update is debounced in upsertSheetNumber.
+  hpCurInput?.addEventListener('input', applyHp);
+  hpMaxInput?.addEventListener('input', applyHp);
   hpCurInput?.addEventListener('change', applyHp);
   hpMaxInput?.addEventListener('change', applyHp);
 

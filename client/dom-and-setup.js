@@ -31,9 +31,9 @@ const diceViz = document.getElementById('dice-viz');
 
 const board = document.getElementById('game-board');
 const boardWrapper = document.getElementById('board-wrapper');
-// "Пользователи и персонажи" теперь разделены на два списка
-const playerListMine = document.getElementById('player-list-mine');
-const playerListOther = document.getElementById('player-list-other');
+const playerList = document.getElementById('player-list');
+const playerTabMineBtn = document.getElementById('player-tab-mine');
+const playerTabOthersBtn = document.getElementById('player-tab-others');
 const logList = document.getElementById('log-list');
 const currentPlayerSpan = document.getElementById('current-player');
 const nextTurnBtn = document.getElementById('next-turn');
@@ -98,6 +98,42 @@ const wallOpacityVal = document.getElementById('wall-opacity-val');
 const campaignMapsSelect = document.getElementById('campaign-maps-select');
 const createCampaignMapBtn = document.getElementById('create-campaign-map');
 
+// ===== Tabs for "Пользователи и персонажи" =====
+// dom-and-setup.js загружается ДО message-ui.js, поэтому здесь делаем безопасную прокладку.
+function setPlayerListViewSafe(view) {
+  const v = (view === 'others') ? 'others' : 'mine';
+  window.PLAYER_LIST_VIEW = v;
+
+  // Если message-ui уже подгружен — используем его хелпер (обновит список и классы)
+  if (typeof window.setPlayerListView === 'function') {
+    window.setPlayerListView(v);
+    return;
+  }
+
+  // Иначе — просто подсветим вкладки (список обновится позже при первом updatePlayerList)
+  try {
+    if (playerTabMineBtn) {
+      playerTabMineBtn.classList.toggle('active', v === 'mine');
+      playerTabMineBtn.setAttribute('aria-selected', v === 'mine' ? 'true' : 'false');
+    }
+    if (playerTabOthersBtn) {
+      playerTabOthersBtn.classList.toggle('active', v === 'others');
+      playerTabOthersBtn.setAttribute('aria-selected', v === 'others' ? 'true' : 'false');
+    }
+  } catch {}
+}
+
+// default view
+if (!window.PLAYER_LIST_VIEW) window.PLAYER_LIST_VIEW = 'mine';
+setPlayerListViewSafe(window.PLAYER_LIST_VIEW);
+
+if (playerTabMineBtn) {
+  playerTabMineBtn.addEventListener('click', () => setPlayerListViewSafe('mine'));
+}
+if (playerTabOthersBtn) {
+  playerTabOthersBtn.addEventListener('click', () => setPlayerListViewSafe('others'));
+}
+
 // ================== VARIABLES ==================
 // Supabase replaces our old Node/WebSocket server.
 // GitHub Pages hosts only static files; realtime + DB are handled by Supabase.
@@ -111,8 +147,7 @@ let myRole;
 // Broadcast dice event without touching room_state.
 // IMPORTANT: do NOT call sendMessage({type:'diceEvent'}) from inside state mutations,
 // because diceEvent case writes logs using lastState and can overwrite newer state.
-// optional opts: { silentLocal: true } to avoid double-animating when UI already updated locally
-async function broadcastDiceEventOnly(event, opts = {}) {
+async function broadcastDiceEventOnly(event) {
   // v4: dice events are stored in room_dice_events (+ log in room_log) and delivered via realtime.
   // We keep this helper name for backwards compatibility, but it now writes to DB.
   try {
@@ -126,15 +161,10 @@ async function broadcastDiceEventOnly(event, opts = {}) {
   } catch {}
 
   // update self UI instantly (main roll panel)
-  if (!opts?.silentLocal) {
-    try {
-      if (event) handleMessage({ type: 'diceEvent', event });
-    } catch {}
-  }
+  try {
+    if (event) handleMessage({ type: 'diceEvent', event });
+  } catch {}
 }
-
-// make available globally (gameplay-ui.js uses it)
-window.broadcastDiceEventOnly = broadcastDiceEventOnly;
 
 // ===== Role helpers (MVP) =====
 function normalizeRoleForDb(role) {
@@ -546,11 +576,6 @@ let mouseDown = false;
 
 const playerElements = new Map();
 const hpBarElements = new Map(); // playerId -> hp bar element (absolute on board)
-// отдельная полоска временных ХП (если есть)
-const hpTempBarElements = new Map(); // playerId -> temp hp bar element (absolute on board)
-
-// expose for other modules
-window.hpTempBarElements = hpTempBarElements;
 let finishInitiativeSent = false;
 
 // users map (ownerId -> {name, role}) — только подключённые сейчас
