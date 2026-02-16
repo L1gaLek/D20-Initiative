@@ -134,7 +134,16 @@
       <!-- ПОЛЬЗОВАТЕЛИ И ПЕРСОНАЖИ -->
       <div id="player-list-container">
         <h3>Пользователи и персонажи:</h3>
-        <ul id="player-list"></ul>
+        <div class="player-lists">
+          <div class="player-list-box" aria-label="Личные персонажи">
+            <div class="player-list-title">Личные</div>
+            <ul id="player-list-mine"></ul>
+          </div>
+          <div class="player-list-box" aria-label="Другие персонажи">
+            <div class="player-list-title">Другие</div>
+            <ul id="player-list-other"></ul>
+          </div>
+        </div>
       </div>
 
       <!-- Очередность хода (видно в фазе инициативы и боя) -->
