@@ -73,6 +73,14 @@
   min-width: 0;
 }
 
+/* компактная кнопка "Загрузить" + максимальная ширина поля ссылки */
+.env-bg-url-row button{
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.1;
+  width: auto;
+}
+
 .token-hpbar .txt{
   position: absolute;
   inset: 0;
@@ -233,6 +241,13 @@
 .env-bg-url-row input{
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.env-bg-url-row button{
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.1;
+  width: auto;
 }
 
 .env-range-title{
