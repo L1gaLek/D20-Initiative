@@ -355,17 +355,18 @@ loginDiv.style.display = 'none';
         lastState.log = prevLog;
       }
 
-      // restore last-known token positions to avoid "jump to null" on state updates
+      // restore last-known token positions to avoid "jump" on state updates.
+      // room_tokens is authoritative for positions; room_state polling can be stale.
       try {
         (lastState.players || []).forEach(p => {
           if (!p || !p.id) return;
           const snap = prevPos.get(String(p.id));
           if (!snap) return;
-          if ((p.x === null || typeof p.x === 'undefined') && snap.x !== null && Number.isFinite(snap.x)) p.x = snap.x;
-          if ((p.y === null || typeof p.y === 'undefined') && snap.y !== null && Number.isFinite(snap.y)) p.y = snap.y;
-          if ((!p.size || !Number.isFinite(Number(p.size))) && snap.size) p.size = snap.size;
-          if ((!p.color || typeof p.color !== 'string') && snap.color) p.color = snap.color;
-          if ((!p.mapId || typeof p.mapId !== 'string') && snap.mapId) p.mapId = snap.mapId;
+          if (snap.x === null || Number.isFinite(snap.x)) p.x = snap.x;
+          if (snap.y === null || Number.isFinite(snap.y)) p.y = snap.y;
+          if (snap.size && Number.isFinite(Number(snap.size))) p.size = snap.size;
+          if (snap.color) p.color = snap.color;
+          if (snap.mapId) p.mapId = snap.mapId;
         });
       } catch {}
       boardWidth = normalized.boardWidth;
@@ -788,6 +789,24 @@ window.getPlayerListView = () => playerListView;
 
 function updatePlayerList() {
   if (!playerList) return;
+
+  // Ensure the current user is shown immediately after joining a room,
+  // even before the first users polling snapshot arrives.
+  try {
+    const myIdStr = (typeof myId !== 'undefined' && myId !== null) ? String(myId) : '';
+    if (myIdStr) {
+      if (!usersById.has(myIdStr)) {
+        const name = (typeof safeGetUserName === 'function')
+          ? safeGetUserName()
+          : (String(myNameSpan?.textContent || '').replace(/^\s*Вы:\s*/i, '').trim() || 'Player');
+        const role = (typeof safeGetUserRoleDb === 'function') ? safeGetUserRoleDb() : (String(myRole || 'Player'));
+        usersById.set(myIdStr, { name, role });
+      }
+      if (!Array.isArray(usersOrder)) usersOrder = [];
+      if (!usersOrder.includes(myIdStr)) usersOrder.push(myIdStr);
+    }
+  } catch {}
+
   // sync from global (in case dom-and-setup changed it before this file loaded)
   playerListView = (window.PLAYER_LIST_VIEW === 'others') ? 'others' : 'mine';
   applyPlayerListTabUI();

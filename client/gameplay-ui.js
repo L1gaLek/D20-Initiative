@@ -4,6 +4,11 @@ rollBtn?.addEventListener('click', async () => {
   diceAnimBusy = true;
   rollBtn.disabled = true;
 
+  // Used to prevent double animation when the server echoes back our own diceEvent.
+  // (We already animate locally in this handler.)
+  const localNonce = `n_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  try { window._lastSentDiceNonce = localNonce; } catch {}
+
   const sides = clampInt(dice?.value, 2, 100, 20);
   const count = clampInt(diceCountInput?.value, 1, 20, 1);
 
@@ -44,6 +49,7 @@ if (sides === 20 && count === 1) {
   sendMessage({
   type: "diceEvent",
   event: {
+    localNonce,
     fromId: (typeof myId !== 'undefined') ? String(myId) : '',
     fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
     kindText: `d${sides} × ${count}`,
