@@ -497,7 +497,160 @@ if (path === "proficiency" || path === "proficiencyCustom") {
       inp.addEventListener("input", handler);
       inp.addEventListener("change", handler);
     });
+
+    // ===== Persist manual textarea resize (height) =====
+    // Пользователь просил: если растянул textarea по высоте — высота должна сохраняться
+    // при переключении вкладок и повторном открытии «Листа персонажа».
+    try {
+      bindTextareaHeightPersistence(root, player);
+    } catch (e) {
+      console.warn('bindTextareaHeightPersistence failed', e);
+    }
   }
+
+// ===================== Textarea height persistence =====================
+const TA_HEIGHT_LS_KEY = 'dnd_sheet_ta_heights_v1';
+
+function loadTextareaHeights() {
+  try {
+    const raw = localStorage.getItem(TA_HEIGHT_LS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return (obj && typeof obj === 'object') ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveTextareaHeights(obj) {
+  try {
+    localStorage.setItem(TA_HEIGHT_LS_KEY, JSON.stringify(obj || {}));
+  } catch {}
+}
+
+function textareaPersistKey(player, ta, fallbackIndex) {
+  const pid = String(player?.id || player?.name || 'unknown');
+  const prefix = `p:${pid}|`;
+
+  const sp = ta?.getAttribute?.('data-sheet-path');
+  if (sp) return prefix + `path:${sp}`;
+
+  // оружие
+  const wf = ta?.getAttribute?.('data-weapon-field');
+  if (wf) {
+    const card = ta.closest?.('.weapon-card[data-weapon-idx]');
+    const idx = card?.getAttribute?.('data-weapon-idx') ?? '';
+    return prefix + `weapon:${idx}:${wf}`;
+  }
+
+  // умения/способности (карточки)
+  if (ta?.hasAttribute?.('data-combat-ability-text')) {
+    const item = ta.closest?.('.combat-ability-item[data-combat-ability-idx]');
+    const idx = item?.getAttribute?.('data-combat-ability-idx') ?? '';
+    return prefix + `combatAbility:${idx}:text`;
+  }
+
+  // описание заклинания (редактор)
+  if (ta?.hasAttribute?.('data-spell-desc-editor')) {
+    const item = ta.closest?.('.spell-item[data-spell-url]');
+    const href = item?.getAttribute?.('data-spell-url') || '';
+    return prefix + `spellDesc:${href}`;
+  }
+
+  // id/name
+  if (ta?.id) return prefix + `id:${ta.id}`;
+  if (ta?.name) return prefix + `name:${ta.name}`;
+
+  // fallback: позиция в DOM (достаточно стабильна в рамках текущей верстки)
+  return prefix + `idx:${fallbackIndex}`;
+}
+
+function bindTextareaHeightPersistence(root, player) {
+  if (!root || !player) return;
+
+  const store = loadTextareaHeights();
+
+  // Если вкладка перерисована (innerHTML заменён) — старые textarea исчезли.
+  // Поэтому пересоздаем observer каждый раз.
+  try {
+    if (root.__taResizeObserver && typeof root.__taResizeObserver.disconnect === 'function') {
+      root.__taResizeObserver.disconnect();
+    }
+  } catch {}
+  root.__taResizeObserver = null;
+
+  // применяем сохраненные высоты
+  const allTextareas = Array.from(root.querySelectorAll('textarea'));
+  allTextareas.forEach((ta, i) => {
+    try {
+      const cs = window.getComputedStyle ? getComputedStyle(ta) : null;
+      if (cs && cs.resize === 'none') return; // сохраняем только те, которые можно тянуть
+
+      const key = textareaPersistKey(player, ta, i);
+      const h = store[key];
+      if (Number.isFinite(h) && h >= 40) {
+        ta.style.height = `${Math.round(h)}px`;
+      }
+    } catch {}
+  });
+
+  let saveTimer = null;
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveTextareaHeights(store), 120);
+  };
+
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const ta = entry?.target;
+        if (!ta || ta.tagName !== 'TEXTAREA') continue;
+
+        // записываем реальную высоту textarea
+        const i = allTextareas.indexOf(ta);
+        const key = textareaPersistKey(player, ta, i >= 0 ? i : 0);
+        const h = Math.round(ta.getBoundingClientRect().height);
+        if (h >= 40) {
+          store[key] = h;
+          scheduleSave();
+        }
+      }
+    });
+
+    // наблюдаем только за теми, которые реально можно тянуть
+    allTextareas.forEach((ta) => {
+      try {
+        const cs = window.getComputedStyle ? getComputedStyle(ta) : null;
+        if (cs && cs.resize === 'none') return;
+        ro.observe(ta);
+      } catch {}
+    });
+
+    root.__taResizeObserver = ro;
+  } else {
+    // Fallback (без ResizeObserver): сохраняем высоту по mouseup/touchend
+    const handler = (e) => {
+      const ta = e.target?.closest?.('textarea');
+      if (!ta) return;
+      try {
+        const cs = window.getComputedStyle ? getComputedStyle(ta) : null;
+        if (cs && cs.resize === 'none') return;
+        const i = allTextareas.indexOf(ta);
+        const key = textareaPersistKey(player, ta, i >= 0 ? i : 0);
+        const h = Math.round(ta.getBoundingClientRect().height);
+        if (h >= 40) {
+          store[key] = h;
+          scheduleSave();
+        }
+      } catch {}
+    };
+    root.addEventListener('mouseup', handler);
+    root.addEventListener('touchend', handler, { passive: true });
+    root.__taResizeObserver = { disconnect: () => {
+      try { root.removeEventListener('mouseup', handler); } catch {}
+      try { root.removeEventListener('touchend', handler); } catch {}
+    }};
+  }
+}
   // ===== clickable dots binding (skills boost) =====
   function bindSkillBoostDots(root, player, canEdit) {
     if (!root || !player?.sheet?.parsed) return;
