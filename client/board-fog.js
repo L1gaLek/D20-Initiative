@@ -38,9 +38,29 @@
         if (typeof myRole !== 'undefined' && String(myRole) === 'GM') return true;
       } catch {}
       if (!this.isEnabled()) return true;
-      // Require destination to be visible.
-      // For multi-size tokens, require top-left visible (simple + consistent with movement model)
-      return this.isCellVisible(Number(x) || 0, Number(y) || 0);
+      const st = this._lastState;
+      const mode = String(st?.fog?.mode || 'manual');
+      if (mode !== 'dynamic') {
+        // Manual fog doesn't restrict movement.
+        return true;
+      }
+
+      // Dynamic mode: optional restriction.
+      // If enabled, destination must be either currently visible OR already explored.
+      const moveOnExplored = (st?.fog && typeof st.fog.moveOnExplored === 'boolean') ? st.fog.moveOnExplored : true;
+      if (!moveOnExplored) return true;
+
+      const cx = Number(x) || 0;
+      const cy = Number(y) || 0;
+      return this.isCellVisibleDynamicOnly(cx, cy) || this.isCellExplored(cx, cy);
+    },
+
+    isCellExplored(x, y) {
+      try {
+        return this._exploredSet && this._exploredSet.has(`${Number(x) || 0},${Number(y) || 0}`);
+      } catch {
+        return false;
+      }
     },
 
     isCellVisible(x, y) {
@@ -134,6 +154,13 @@
       this._syncExploredFromState();
       this._maybeRecomputeDynamic();
       this._render();
+
+      // If GM chose to fully open the map for themselves, hide overlay canvas.
+      try {
+        const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
+        const gmOpen = !!state?.fog?.gmOpen;
+        if (this._canvas) this._canvas.style.display = (isGm && gmOpen) ? 'none' : '';
+      } catch {}
 
       // UI sync
       this._syncUiFromState();
@@ -546,14 +573,18 @@
           const enabled = !!document.getElementById('fog-enabled')?.checked;
           const mode = String(document.getElementById('fog-mode')?.value || 'manual');
           const gmViewMode = String(document.getElementById('fog-gm-view')?.value || 'gm');
+          const gmOpen = !!document.getElementById('fog-gm-open')?.checked;
           const visionRadius = clampInt(Number(document.getElementById('fog-vision')?.value) || 8, 1, 60);
           const useWalls = !!document.getElementById('fog-use-walls')?.checked;
           const exploredEnabled = !!document.getElementById('fog-explored')?.checked;
-          sendMessage?.({ type: 'setFogSettings', enabled, mode, gmViewMode, visionRadius, useWalls, exploredEnabled });
+          const moveOnExplored = !!document.getElementById('fog-move-open')?.checked;
+          // If GM opens fog for themselves, force gmViewMode='gm' (omniscient).
+          const effectiveGmView = gmOpen ? 'gm' : gmViewMode;
+          sendMessage?.({ type: 'setFogSettings', enabled, mode, gmViewMode: effectiveGmView, gmOpen, moveOnExplored, visionRadius, useWalls, exploredEnabled });
         } catch {}
       };
 
-      ['fog-enabled','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored'].forEach(id => {
+      ['fog-enabled','fog-gm-open','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-open'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', onSettingsChange);
@@ -585,11 +616,13 @@
       };
 
       setChecked('fog-enabled', !!fog.enabled);
+      setChecked('fog-gm-open', !!fog.gmOpen);
       setValue('fog-mode', (fog.mode === 'dynamic' ? 'dynamic' : 'manual'));
       setValue('fog-gm-view', (String(fog.gmViewMode || 'gm') === 'player' ? 'player' : 'gm'));
       setValue('fog-vision', Number(fog.visionRadius) || 8);
       setChecked('fog-use-walls', fog.useWalls !== false);
       setChecked('fog-explored', fog.exploredEnabled !== false);
+      setChecked('fog-move-open', (typeof fog.moveOnExplored === 'boolean') ? fog.moveOnExplored : true);
 
       // Pointer events update for painting
       try { this._togglePointerEvents?.(); } catch {}

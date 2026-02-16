@@ -58,6 +58,18 @@ const playerSizeInput = document.getElementById('player-size');
 const isBaseCheckbox = document.getElementById('is-base');
 const isAllyCheckbox = document.getElementById('is-ally');
 
+// Allow changing token color after creation:
+// select a player in the list, then use the color picker.
+try {
+  playerColorInput?.addEventListener('input', () => {
+    const p = selectedPlayer;
+    if (!p) return;
+    const c = String(playerColorInput.value || '').trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(c)) return;
+    sendMessage?.({ type: 'updatePlayerColor', id: p.id, color: c });
+  });
+} catch {}
+
 const dice = document.getElementById('dice');
 const diceCountInput = document.getElementById('dice-count');
 const diceRolls = document.getElementById('dice-rolls');

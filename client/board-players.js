@@ -140,9 +140,12 @@ function updateHpBar(player, tokenEl) {
     main.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
     board.appendChild(main);
 
-    // v6: temp HP is displayed INSIDE the main bar (by recoloring it),
-    // so we no longer create a second bar. Keep the field for safe cleanup.
-    bars = { main, temp: null };
+    const temp = document.createElement('div');
+    temp.className = 'token-hpbar token-hpbar--temp';
+    temp.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
+    board.appendChild(temp);
+
+    bars = { main, temp };
     hpBarElements.set(pid, bars);
   }
 
@@ -158,14 +161,7 @@ function updateHpBar(player, tokenEl) {
   const { hpMax, hpCur, hpTemp } = getQuickSheetStats(player);
   const max = (hpMax !== null ? Math.max(0, hpMax) : 0);
   const cur = (hpCur !== null ? hpCur : max);
-  const tempVal = (hpTemp !== null ? Math.max(0, hpTemp) : 0);
-
-  // If there is temp HP, we show ONLY temp HP in the bar (full width),
-  // and recolor the bar to rgb(0,74,107). When temp is 0, show normal HP.
-  const showTemp = tempVal > 0;
-  const pct = showTemp
-    ? 100
-    : (max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0);
+  const pct = max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0;
 
   bar.style.display = 'block';
   bar.style.width = `${size * 50}px`;
@@ -174,17 +170,25 @@ function updateHpBar(player, tokenEl) {
 
   const fill = bar.querySelector('.fill');
   const txt = bar.querySelector('.txt');
-  if (fill) {
-    fill.style.width = `${pct}%`;
-    // reset to CSS default when no temp
-    fill.style.background = showTemp ? `rgb(0, 74, 107)` : '';
-  }
-  if (txt) {
-    txt.textContent = showTemp ? `${tempVal}` : `${cur ?? 0}/${max ?? 0}`;
-  }
+  if (fill) fill.style.width = `${pct}%`;
+  if (txt) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
 
-  // If older DOM still has a temp bar (from previous builds), hide it.
-  if (tempBar) tempBar.style.display = 'none';
+  // Temp HP bar (appears only if hp-temp > 0)
+  const tempVal = (hpTemp !== null ? Math.max(0, hpTemp) : 0);
+  if (tempBar) {
+    if (tempVal > 0) {
+      tempBar.style.display = 'block';
+      tempBar.style.width = `${size * 50}px`;
+      tempBar.style.left = `${tokenEl.offsetLeft}px`;
+      tempBar.style.top = `${tokenEl.offsetTop - 28}px`;
+      const tFill = tempBar.querySelector('.fill');
+      const tTxt = tempBar.querySelector('.txt');
+      if (tFill) tFill.style.width = `100%`;
+      if (tTxt) tTxt.textContent = `${tempVal}`;
+    } else {
+      tempBar.style.display = 'none';
+    }
+  }
 }
 
 // ================== MINI POPUP (dblclick on token) ==================
@@ -323,34 +327,9 @@ function openTokenMini(playerId) {
   const applyDelta = (sign) => {
     const delta = safeNum(hpDeltaInput?.value, 0) ?? 0;
     if (!delta) return;
-
     const cur = safeNum(hpCurInput?.value, 0) ?? 0;
     const max = safeNum(hpMaxInput?.value, 0) ?? 0;
-
-    // Damage should consume Temp HP first, then regular HP.
-    if (sign < 0) {
-      const qNow = getQuickSheetStats(p);
-      let tempNow = (qNow.hpTemp !== null ? Math.max(0, Number(qNow.hpTemp) || 0) : 0);
-      let remaining = Math.max(0, delta);
-
-      if (tempNow > 0 && remaining > 0) {
-        const used = Math.min(tempNow, remaining);
-        tempNow = Math.max(0, tempNow - used);
-        remaining = Math.max(0, remaining - used);
-        upsertSheetNumber(p, 'vitality.hp-temp', tempNow);
-      }
-
-      const nextCur = cur - remaining;
-      const clamped = Math.max(0, Math.min(Math.max(0, max), nextCur));
-      if (hpCurInput) hpCurInput.value = String(clamped);
-      upsertSheetNumber(p, 'vitality.hp-max', Math.max(0, max));
-      upsertSheetNumber(p, 'vitality.hp-current', clamped);
-      updateHpBar(p, tokenEl);
-      return;
-    }
-
-    // Healing affects regular HP only.
-    const next = cur + delta;
+    const next = (sign < 0) ? (cur - delta) : (cur + delta);
     const clamped = Math.max(0, Math.min(Math.max(0, max), next));
     if (hpCurInput) hpCurInput.value = String(clamped);
     applyHp();
@@ -605,7 +584,22 @@ function findFirstFreeSpotClient(size) {
   const maxY = boardHeight - size;
   for (let y = 0; y <= maxY; y++) {
     for (let x = 0; x <= maxX; x++) {
-      if (isAreaFreeClient(null, x, y, size)) return { x, y };
+      if (!isAreaFreeClient(null, x, y, size)) continue;
+      // Avoid walls for non-GM placements (GM can still place anywhere).
+      try {
+        if (typeof myRole !== 'undefined' && String(myRole) !== 'GM') {
+          let hitsWall = false;
+          for (let dy = 0; dy < size; dy++) {
+            for (let dx = 0; dx < size; dx++) {
+              const c = board.querySelector(`.cell[data-x="${x + dx}"][data-y="${y + dy}"]`);
+              if (c && c.classList.contains('wall')) { hitsWall = true; break; }
+            }
+            if (hitsWall) break;
+          }
+          if (hitsWall) continue;
+        }
+      } catch {}
+      return { x, y };
     }
   }
   return null;
@@ -642,8 +636,32 @@ board.addEventListener('click', e => {
   if (x + selectedPlayer.size > boardWidth) x = boardWidth - selectedPlayer.size;
   if (y + selectedPlayer.size > boardHeight) y = boardHeight - selectedPlayer.size;
 
-  // Важно: движение НЕ должно блокироваться туманом войны.
-  // Туман влияет на видимость/обнаружение, но не должен запрещать шаги.
+  // Optional: in dynamic fog mode, restrict movement to cells that are visible OR explored.
+  try {
+    if (!window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
+      alert('Нельзя перемещаться в неоткрытую область');
+      return;
+    }
+  } catch {}
+
+  // Players cannot place/move on walls (GM can; enforced also server-side).
+  try {
+    if (typeof myRole !== 'undefined' && String(myRole) !== 'GM') {
+      const size = Number(selectedPlayer.size) || 1;
+      let hitsWall = false;
+      for (let dy = 0; dy < size; dy++) {
+        for (let dx = 0; dx < size; dx++) {
+          const c = board.querySelector(`.cell[data-x="${x + dx}"][data-y="${y + dy}"]`);
+          if (c && c.classList.contains('wall')) { hitsWall = true; break; }
+        }
+        if (hitsWall) break;
+      }
+      if (hitsWall) {
+        alert('Нельзя размещаться на стены');
+        return;
+      }
+    }
+  } catch {}
 
   // быстрый локальный чек (сервер всё равно проверит)
   const size = Number(selectedPlayer.size) || 1;
@@ -726,20 +744,8 @@ async function applyDiceEventToMain(ev) {
   const rolls = Array.isArray(ev.rolls) ? ev.rolls.map(n => Number(n) || 0) : [];
   renderRollChips(rolls.length ? rolls : [Number(ev.total) || 0], -1, sides);
 
-  // Prevent double animation for our own local roll button:
-  // gameplay-ui already animated once, then the server echoes diceEvent back.
-  const isMyEcho = (() => {
-    try {
-      if (typeof myId === 'undefined') return false;
-      if (!ev.fromId || String(ev.fromId) !== String(myId)) return false;
-      const nonce = String(ev.localNonce || '');
-      const last = String(window._lastSentDiceNonce || '');
-      return !!nonce && !!last && nonce === last;
-    } catch { return false; }
-  })();
-
   // анимация кубика (как при обычном "Бросить")
-  if (!isMyEcho && !diceAnimBusy && diceCtx && diceCanvas && sides && rolls.length) {
+  if (!diceAnimBusy && diceCtx && diceCanvas && sides && rolls.length) {
     diceAnimBusy = true;
     try {
       for (const r of rolls) {

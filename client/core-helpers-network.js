@@ -22,6 +22,9 @@ function createInitialGameState() {
     fog: {
       enabled: false,
       mode: 'manual', // 'manual' | 'dynamic'
+      // When enabled in dynamic mode, players may move to cells that are either
+      // currently visible OR already explored (discovered earlier).
+      moveOnExplored: true,
       manualBase: 'hide', // 'hide' | 'reveal'
       // Manual stamps are stored as {x,y,r,mode} in cell coordinates (r in cells)
       manualStamps: [],
@@ -29,6 +32,13 @@ function createInitialGameState() {
       visionRadius: 8,
       useWalls: true,
       exploredEnabled: true,
+      // If true, GM sees the map fully open (fog overlay hidden) while other players
+      // still see fog normally.
+      gmOpen: false,
+      // GM view mode:
+      // - 'gm'     : GM sees full board (fog is just an overlay)
+      // - 'player' : GM sees like players
+      gmViewMode: 'gm',
       // Shared explored cells for the party ("x,y" strings)
       explored: []
     },
@@ -81,21 +91,27 @@ function ensureStateHasMaps(state) {
         m.fog = {
           enabled: false,
           mode: 'manual',
+          moveOnExplored: true,
           manualBase: 'hide',
           manualStamps: [],
           visionRadius: 8,
           useWalls: true,
           exploredEnabled: true,
+          gmOpen: false,
+          gmViewMode: 'gm',
           explored: []
         };
       } else if (m && m.fog) {
         if (typeof m.fog.enabled !== 'boolean') m.fog.enabled = false;
         if (m.fog.mode !== 'manual' && m.fog.mode !== 'dynamic') m.fog.mode = 'manual';
+        if (typeof m.fog.moveOnExplored !== 'boolean') m.fog.moveOnExplored = true;
         if (m.fog.manualBase !== 'hide' && m.fog.manualBase !== 'reveal') m.fog.manualBase = 'hide';
         if (!Array.isArray(m.fog.manualStamps)) m.fog.manualStamps = [];
         if (!Number.isFinite(Number(m.fog.visionRadius))) m.fog.visionRadius = 8;
         if (typeof m.fog.useWalls !== 'boolean') m.fog.useWalls = true;
         if (typeof m.fog.exploredEnabled !== 'boolean') m.fog.exploredEnabled = true;
+        if (typeof m.fog.gmOpen !== 'boolean') m.fog.gmOpen = false;
+        if (m.fog.gmViewMode !== 'gm' && m.fog.gmViewMode !== 'player') m.fog.gmViewMode = 'gm';
         if (!Array.isArray(m.fog.explored)) m.fog.explored = [];
       }
     });
@@ -120,11 +136,14 @@ function ensureStateHasMaps(state) {
     fog: (state.fog && typeof state.fog === 'object') ? state.fog : {
       enabled: false,
       mode: 'manual',
+      moveOnExplored: true,
       manualBase: 'hide',
       manualStamps: [],
       visionRadius: 8,
       useWalls: true,
       exploredEnabled: true,
+      gmOpen: false,
+      gmViewMode: 'gm',
       explored: []
     },
     playersPos: {}
@@ -206,11 +225,14 @@ function loadMapToRoot(state, mapId) {
   st.fog = (m.fog && typeof m.fog === 'object') ? deepClone(m.fog) : {
     enabled: false,
     mode: 'manual',
+    moveOnExplored: true,
     manualBase: 'hide',
     manualStamps: [],
     visionRadius: 8,
     useWalls: true,
     exploredEnabled: true,
+    gmOpen: false,
+    gmViewMode: 'gm',
     explored: []
   };
 
@@ -1208,6 +1230,30 @@ async function sendMessage(msg) {
           if (!/^#[0-9a-fA-F]{6}$/.test(c)) return;
           p.color = c;
           logEventToState(next, `${p.name} изменил цвет`);
+
+          // Persist token color immediately (v4+: token data lives in room_tokens).
+          // If the token is currently on the board, update its row for the active map.
+          try {
+            if (currentRoomId && p.x !== null && p.y !== null) {
+              const mapId = String(next.currentMapId || '');
+              await ensureSupabaseReady();
+              await sbClient
+                .from('room_tokens')
+                .upsert({
+                  room_id: currentRoomId,
+                  map_id: mapId,
+                  token_id: String(p.id),
+                  x: Number(p.x),
+                  y: Number(p.y),
+                  size: Number(p.size) || 1,
+                  color: p.color || null,
+                  owner_id: p.ownerId || null,
+                  updated_at: new Date().toISOString()
+                }, { onConflict: 'room_id,map_id,token_id' });
+            }
+          } catch (e) {
+            console.warn('updatePlayerColor: room_tokens upsert failed', e);
+          }
         }
 
         else if (type === "addPlayer") {
@@ -1418,6 +1464,29 @@ async function sendMessage(msg) {
           const maxY = next.boardHeight - size;
           const nx = clamp(Number(msg.x) || 0, 0, maxX);
           const ny = clamp(Number(msg.y) || 0, 0, maxY);
+
+          // Players cannot place/move onto wall cells (GM can).
+          if (!isGM) {
+            try {
+              const walls = Array.isArray(next.walls) ? next.walls : [];
+              const wallSet = new Set();
+              for (const w of walls) {
+                const wx = Number(w?.x), wy = Number(w?.y);
+                if (Number.isFinite(wx) && Number.isFinite(wy)) wallSet.add(`${wx},${wy}`);
+              }
+              let hitsWall = false;
+              for (let dy = 0; dy < size; dy++) {
+                for (let dx = 0; dx < size; dx++) {
+                  if (wallSet.has(`${nx + dx},${ny + dy}`)) { hitsWall = true; break; }
+                }
+                if (hitsWall) break;
+              }
+              if (hitsWall) {
+                handleMessage({ type: 'error', message: 'Нельзя перемещаться на стены' });
+                return;
+              }
+            } catch {}
+          }
 
           // v4: movement is atomic via room_tokens (RPC), not via room_state.
           // This removes race conditions when multiple users move simultaneously.
@@ -1642,6 +1711,8 @@ else if (type === "addWall") {
           if (Number.isFinite(Number(msg.visionRadius))) f.visionRadius = clamp(Number(msg.visionRadius), 1, 60);
           if (typeof msg.useWalls === 'boolean') f.useWalls = msg.useWalls;
           if (typeof msg.exploredEnabled === 'boolean') f.exploredEnabled = msg.exploredEnabled;
+          if (typeof msg.moveOnExplored === 'boolean') f.moveOnExplored = msg.moveOnExplored;
+          if (typeof msg.gmOpen === 'boolean') f.gmOpen = msg.gmOpen;
           // GM view mode:
           // - 'gm'     : GM sees full board, fog is an overlay showing what is revealed
           // - 'player' : GM sees exactly what players see
