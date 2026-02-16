@@ -31,7 +31,10 @@ const diceViz = document.getElementById('dice-viz');
 
 const board = document.getElementById('game-board');
 const boardWrapper = document.getElementById('board-wrapper');
-const playerList = document.getElementById('player-list');
+// Players lists (split UI: Personal / Others)
+const playerList = document.getElementById('player-list'); // legacy hidden element
+const playerListPersonal = document.getElementById('player-list-personal');
+const playerListOthers = document.getElementById('player-list-others');
 const logList = document.getElementById('log-list');
 const currentPlayerSpan = document.getElementById('current-player');
 const nextTurnBtn = document.getElementById('next-turn');

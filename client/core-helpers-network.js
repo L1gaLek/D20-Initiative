@@ -1157,6 +1157,44 @@ async function sendMessage(msg) {
           logEventToState(next, `${p.name} ${inCombat ? 'вступает' : 'выходит'} из боя`);
         }
 
+        else if (type === 'setCombatantsBulk') {
+          // Bulk selection for combatants (GM UI buttons: All / None / On board)
+          if (!isGM) return;
+          const mode = String(msg.mode || '').trim();
+          const ids = Array.isArray(msg.ids) ? msg.ids.map(x => String(x)).filter(Boolean) : [];
+          const idSet = new Set(ids);
+
+          const phaseNow = String(next?.phase || '');
+
+          (next.players || []).forEach((p) => {
+            const pid = String(p?.id || '');
+            if (!pid) return;
+
+            let inCombat = !!p.inCombat;
+            if (mode === 'all') inCombat = true;
+            else if (mode === 'none') inCombat = false;
+            else if (mode === 'ids') inCombat = idSet.has(pid);
+
+            const was = !!p.inCombat;
+            p.inCombat = inCombat;
+
+            // If enabling during initiative, reset initiative fields for that token.
+            if ((phaseNow === 'initiative') && inCombat && !was) {
+              p.initiative = null;
+              p.hasRolledInitiative = false;
+              p.pendingInitiativeChoice = true;
+            }
+
+            // If combat is already running and a new combatant is added, queue for next round.
+            if (phaseNow === 'combat' && inCombat && !was) {
+              if (!p.hasRolledInitiative) p.pendingInitiativeChoice = true;
+              p.willJoinNextRound = true;
+            }
+          });
+
+          logEventToState(next, `GM обновил участников боя`);
+        }
+
         else if (type === "startExploration") {
           if (!isGM) return;
           next.phase = "exploration";
@@ -1467,6 +1505,25 @@ async function sendMessage(msg) {
           if (!isGM && !ownsPlayer(p)) return;
           p.x = null;
           p.y = null;
+
+          // v4: positions are authoritative in room_tokens.
+          // Ensure the token is removed from the board instantly for everyone.
+          try {
+            await ensureSupabaseReady();
+            if (currentRoomId) {
+              const mapId = String(next?.currentMapId || lastState?.currentMapId || '') || null;
+              let q = sbClient
+                .from('room_tokens')
+                .update({ x: null, y: null })
+                .eq('room_id', currentRoomId)
+                .eq('token_id', String(p.id));
+              if (mapId) q = q.eq('map_id', mapId);
+              await q;
+            }
+          } catch (e) {
+            console.warn('removePlayerFromBoard token update failed', e);
+          }
+
           logEventToState(next, `${p.name} удален с поля`);
         }
 

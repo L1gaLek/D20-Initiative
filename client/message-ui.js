@@ -695,16 +695,16 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: true }));
+      sendMessage({ type: 'setCombatantsBulk', mode: 'all' });
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: false }));
+      sendMessage({ type: 'setCombatantsBulk', mode: 'none' });
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      stPlayers.forEach(p => {
-        const placed = (p && p.x !== null && p.y !== null);
-        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!placed });
-      });
+      const ids = stPlayers
+        .filter(p => p && p.x !== null && p.y !== null)
+        .map(p => p.id);
+      sendMessage({ type: 'setCombatantsBulk', mode: 'ids', ids });
     });
 
     controlsLi.appendChild(btnAll);
@@ -758,8 +758,14 @@ function roleToClass(role) {
 }
 
 function updatePlayerList() {
-  if (!playerList) return;
-  playerList.innerHTML = '';
+  // Split UI: render into two lists if available
+  const hasSplit = (typeof playerListPersonal !== 'undefined' && playerListPersonal) && (typeof playerListOthers !== 'undefined' && playerListOthers);
+  const listPersonal = hasSplit ? playerListPersonal : playerList;
+  const listOthers = hasSplit ? playerListOthers : null;
+
+  if (!listPersonal) return;
+  listPersonal.innerHTML = '';
+  if (listOthers) listOthers.innerHTML = '';
 
   const currentTurnId = (lastState && lastState.phase === 'combat' && Array.isArray(lastState.turnOrder) && lastState.turnOrder.length)
     ? lastState.turnOrder[lastState.currentTurnIndex]
@@ -808,7 +814,8 @@ function updatePlayerList() {
     grouped.get(oid).players.push(p);
   });
 
-  Array.from(grouped.entries()).forEach(([ownerId, group]) => {
+  const renderOwnerGroup = (containerUl, ownerId, group) => {
+    if (!containerUl) return;
     const userInfo = ownerId ? usersById.get(ownerId) : null;
 
     const ownerLi = document.createElement('li');
@@ -1044,8 +1051,35 @@ function updatePlayerList() {
 
     ownerLi.appendChild(ownerHeader);
     ownerLi.appendChild(ul);
-    playerList.appendChild(ownerLi);
-  });
+    containerUl.appendChild(ownerLi);
+  };
+
+  // Personal = only my created characters
+  const myOwnerId = (typeof myId !== 'undefined' && myId !== null) ? String(myId) : '';
+  if (hasSplit) {
+    // Personal pane
+    if (myOwnerId && grouped.has(myOwnerId)) {
+      const g = grouped.get(myOwnerId);
+      renderOwnerGroup(listPersonal, myOwnerId, g);
+    } else {
+      // Empty placeholder
+      const emptyLi = document.createElement('li');
+      emptyLi.className = 'player-list-item';
+      emptyLi.textContent = 'Персонажей нет';
+      listPersonal.appendChild(emptyLi);
+    }
+
+    // Others pane
+    Array.from(grouped.entries()).forEach(([ownerId, group]) => {
+      if (String(ownerId) === myOwnerId) return;
+      renderOwnerGroup(listOthers, ownerId, group);
+    });
+  } else {
+    // Legacy: single list
+    Array.from(grouped.entries()).forEach(([ownerId, group]) => {
+      renderOwnerGroup(listPersonal, ownerId, group);
+    });
+  }
 }
 
 // ================== UI PERMISSIONS HELPERS ==================
