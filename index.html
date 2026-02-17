@@ -255,11 +255,10 @@
             <div class="env-wall-tools">
               <div class="env-wall-row">
                 <button id="add-wall" disabled>Рисуем стены</button>
-                <button id="remove-wall" disabled>Ластик</button>
-              </div>
-
-              <div class="env-wall-row">
-                <button id="clear-board">Очистить поле</button>
+                <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
+                  <button id="remove-wall" disabled>Ластик</button>
+                  <button id="clear-board">Очистить поле</button>
+                </div>
               </div>
 
               <div class="env-wall-row">
@@ -290,9 +289,9 @@
                   <select id="wall-thickness">
                     <option value="2">2px</option>
                     <option value="3">3px</option>
-                    <option value="4" selected>4px</option>
+                    <option value="4">4px</option>
                     <option value="6">6px</option>
-                    <option value="8">8px</option>
+                    <option value="8" selected>8px</option>
                   </select>
                 </label>
               </div>
@@ -387,6 +386,7 @@
 
             <button id="save-campaign" type="button">Сохранить кампанию</button>
             <button id="load-campaign" type="button">Загрузить кампанию</button>
+
             <button id="reset-game">Сбросить игру полностью</button>
           </div>
 
