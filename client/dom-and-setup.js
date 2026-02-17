@@ -242,6 +242,11 @@ function applyRoleToUI() {
   const pm = document.getElementById('player-management');
   if (pm) pm.style.display = spectator ? 'none' : '';
 
+  // Туман войны (панель управления) виден только для ГМ.
+  // Важно: роль может приходить ПОСЛЕ первого состояния, поэтому не полагаемся только на board-fog.js.
+  const fogBox = document.getElementById('fog-controls');
+  if (fogBox) fogBox.style.display = gm ? '' : 'none';
+
   // Галочка "Союзник" видна только для ГМ
   try {
     if (typeof isAllyCheckbox !== 'undefined' && isAllyCheckbox) {
