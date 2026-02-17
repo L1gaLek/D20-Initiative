@@ -1231,11 +1231,11 @@ function renderShopTab(vm, canEdit) {
     bindInventoryEditors(sheetContent, player, canEdit);
     bindEquipmentUi(sheetContent, player, canEdit);
     updateCoinsTotal(sheetContent, player.sheet?.parsed);
-
-          // Авто-открытие магазина поверх листа при выборе вкладки
-          if (tabId === "shop") {
-            try { window.__equipUi?.open?.("buy"); } catch {}
-          }
+    // Авто-открытие магазина поверх листа при выборе вкладки
+    // (раньше тут по ошибке использовался tabId вне области видимости)
+    if (activeTab === "shop") {
+      try { window.__equipUi?.open?.("buy"); } catch {}
+    }
 
     // важное: быстрые клики "Вдохновение" / "Истощение" / "Состояние"
     // (на некоторых браузерах клики по input могут не доходить, если он disabled)
@@ -1274,11 +1274,11 @@ function renderShopTab(vm, canEdit) {
           bindEquipmentUi(sheetContent, player, canEdit);
           bindLanguagesUi(sheetContent, player, canEdit);
           updateCoinsTotal(sheetContent, player.sheet?.parsed);
-
-          // Авто-открытие магазина поверх листа при выборе вкладки
-          if (tabId === "shop") {
-            try { window.__equipUi?.open?.("buy"); } catch {}
-          }
+    // Авто-открытие магазина поверх листа при выборе вкладки
+    // (раньше тут по ошибке использовался tabId вне области видимости)
+    if (activeTab === "shop") {
+      try { window.__equipUi?.open?.("buy"); } catch {}
+    }
         }
       });
     });
