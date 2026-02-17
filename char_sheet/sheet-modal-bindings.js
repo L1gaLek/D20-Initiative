@@ -1393,7 +1393,8 @@ function bindTextareaHeightPersistence(root, player) {
         const filtered = q ? items.filter(it => {
           const n = String(it?.name_ru || it?.name_en || '').toLowerCase();
           const d = String(it?.description_ru || '').toLowerCase();
-          return n.includes(q) || d.includes(q);
+          const dd = String(it?.details_ru || it?.long_description_ru || it?.long_desc_ru || '').toLowerCase();
+          return n.includes(q) || d.includes(q) || dd.includes(q);
         }) : items;
 
         if (!filtered.length) {
@@ -1406,6 +1407,7 @@ function bindTextareaHeightPersistence(root, player) {
           const cost = (it.cost && typeof it.cost === 'object') ? `${escapeHtml(String(it.cost.amount ?? ''))} ${escapeHtml(String(it.cost.coin_ru || it.cost.coin || ''))}` : '—';
           const w = (it.weight && typeof it.weight === 'object') ? (it.weight.text || (it.weight.lb != null ? `${it.weight.lb} lb.` : '')) : '';
           const desc = escapeHtml(String(it.description_ru || '').trim());
+          const details = escapeHtml(String(it.details_ru || it.long_description_ru || it.long_desc_ru || '').trim());
           const meta = (() => {
             if (it.type === 'weapon' && it.weapon) {
               const dmg = it.weapon.damage ? `Урон: ${escapeHtml(String(it.weapon.damage))} (${escapeHtml(String(it.weapon.damage_type || ''))})` : '';
@@ -1426,8 +1428,10 @@ function bindTextareaHeightPersistence(root, player) {
                 <div class="equip-row__name">${name}</div>
                 <div class="equip-row__meta">Цена: ${cost}${w ? ` • Вес: ${escapeHtml(String(w))}` : ''}${meta ? ` • ${meta}` : ''}</div>
                 ${desc ? `<div class="equip-row__desc">${desc}</div>` : ''}
+                ${details ? `<div class="equip-row__details collapsed" data-equip-details>${details}</div>` : ''}
               </div>
               <div class="equip-row__right">
+                ${details ? `<button class="weapon-btn" type="button" data-equip-toggle-details data-item-id="${escapeHtml(String(it.id || ''))}">Описание</button>` : ''}
                 <button class="weapon-btn" type="button" data-equip-action data-item-id="${escapeHtml(String(it.id || ''))}">${mode === 'buy' ? 'Купить' : 'Добавить'}</button>
               </div>
             </div>

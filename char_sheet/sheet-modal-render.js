@@ -685,7 +685,8 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   const descBlock = canEdit
     ? `<textarea class="sheet-textarea equip-descedit ${descCollapsed ? "collapsed" : ""}" rows="3" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.description_ru"
          placeholder="Описание...">${escapeHtml(desc)}</textarea>`
-    : (desc ? `<div class="equip-desc ${descCollapsed ? "collapsed" : ""}">${escapeHtml(desc)}</div>` : "");
+    : `<div class="equip-desc ${descCollapsed ? "collapsed" : ""}">${desc ? escapeHtml(desc) : `<span class="equip-desc--empty">—</span>`}</div>`;
+
 
   const detailsBlock = details
     ? `<div class="equip-details ${detailsOpen ? "" : "collapsed"}">${escapeHtml(details)}</div>`
@@ -707,7 +708,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
           </div>
           <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-sell data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Продать</button>
           <button class="weapon-btn danger" type="button" ${canEdit ? "" : "disabled"} data-inv-del data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Удалить</button>
-          ${desc ? descToggleBtn : ""}
+          ${descToggleBtn}
           ${detailsToggleBtn}
         </div>
       </div>
