@@ -1,4 +1,26 @@
 // ================== BOARD ==================
+function __wallsSig(list) {
+  // Fast-ish stable signature for walls (order-independent enough for our use)
+  // Avoids expensive full rerenders on every token update.
+  let h = 2166136261; // FNV-1a base
+  const arr = Array.isArray(list) ? list : [];
+  for (let i = 0; i < arr.length; i++) {
+    const w = arr[i] || {};
+    const x = Number(w.x) || 0;
+    const y = Number(w.y) || 0;
+    const dir = String(w.dir || '').toUpperCase();
+    const t = String(w.type || 'stone');
+    const th = Number(w.thickness) || 0;
+    const str = `${x},${y},${dir},${t},${th}`;
+    for (let j = 0; j < str.length; j++) {
+      h ^= str.charCodeAt(j);
+      // 32-bit FNV prime multiply
+      h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
+    }
+  }
+  return `${arr.length}:${h}`;
+}
+
 function renderBoard(state) {
   const CELL = 50;
   const bw = Number(state?.boardWidth) || boardWidth || 10;
@@ -53,7 +75,17 @@ function renderBoard(state) {
   } catch {}
 
   // Render wall segments (edges) on top of the grid (below tokens).
-  try { renderWallEdges(state, wallsLayer); } catch {}
+  // IMPORTANT: do NOT rerender walls on every tiny state update (like token movement),
+  // otherwise walls "blink" and GM-drawn optimistic walls can disappear until server echo arrives.
+  try {
+    const walls = Array.isArray(state?.walls) ? state.walls : [];
+    const sig = __wallsSig(walls) + `|${bw}x${bh}`;
+    const need = (window.__wallsSigLast !== sig) || !wallsLayer.querySelector?.('.wall-edge');
+    if (need) {
+      window.__wallsSigLast = sig;
+      renderWallEdges(state, wallsLayer);
+    }
+  } catch {}
 
   players.forEach(p => setPlayerPosition(p));
 
@@ -68,32 +100,34 @@ function renderWallEdges(state, layerEl) {
   const CELL = 50;
   const stWalls = Array.isArray(state?.walls) ? state.walls : [];
 
-  // Remove previous nodes
-  layerEl.innerHTML = '';
-  // Reset incremental DOM cache for optimistic updates
-  try { window.__wallEdgeDomMap = new Map(); } catch {}
-
   const bw = Number(state?.boardWidth) || boardWidth || 10;
   const bh = Number(state?.boardHeight) || boardHeight || 10;
   layerEl.style.width = `${bw * CELL}px`;
   layerEl.style.height = `${bh * CELL}px`;
 
-  for (const w of stWalls) {
-    if (!w || typeof w !== 'object') continue;
-    const x = Number(w.x);
-    const y = Number(w.y);
-    const dir = String(w.dir || '').toUpperCase();
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+  // DOM cache (used by optimistic updates too)
+  if (!window.__wallEdgeDomMap) window.__wallEdgeDomMap = new Map();
+    if (!window.__wallOptimistic) window.__wallOptimistic = new Map();
+  if (!window.__wallOptimistic) window.__wallOptimistic = new Map(); // key -> {ts, op}
 
-    const type = String(w.type || 'stone').toLowerCase();
-    const thickness = Math.max(1, Math.min(12, Number(w.thickness) || 4));
+  const now = Date.now();
+  const GRACE_MS = 1200; // keep optimistic ops visible for a short while to avoid flicker
+
+  function makeEdgeEl(w) {
+    const x = Number(w?.x);
+    const y = Number(w?.y);
+    const dir = String(w?.dir || '').toUpperCase();
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return null;
+
+    const type = String(w?.type || 'stone').toLowerCase();
+    const thickness = Math.max(1, Math.min(12, Number(w?.thickness) || 4));
 
     const el = document.createElement('div');
     el.className = `wall-edge wall-type-${type}`;
     el.style.setProperty('--t', `${thickness}px`);
+    el.dataset.wallKey = `${x},${y},${dir}`;
 
-    // Position
     const left = x * CELL;
     const top = y * CELL;
 
@@ -118,13 +152,68 @@ function renderWallEdges(state, layerEl) {
       el.style.width = `${thickness}px`;
       el.style.height = `${CELL}px`;
     }
+    return el;
+  }
 
-    layerEl.appendChild(el);
-    try { window.__wallEdgeDomMap?.set?.(`${x},${y},${dir}`, el); } catch {}
+  // Desired walls from authoritative state
+  const desired = new Map(); // key -> wall
+  for (const w of stWalls) {
+    if (!w || typeof w !== 'object') continue;
+    const x = Number(w.x);
+    const y = Number(w.y);
+    const dir = String(w.dir || '').toUpperCase();
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+    desired.set(`${x},${y},${dir}`, w);
+  }
+
+  // Clear/age optimistic markers
+  try {
+    for (const [k, info] of window.__wallOptimistic.entries()) {
+      if (!info) { window.__wallOptimistic.delete(k); continue; }
+      if (info.op === 'add' && desired.has(k)) window.__wallOptimistic.delete(k);
+      if (info.op === 'remove' && !desired.has(k)) window.__wallOptimistic.delete(k);
+      if (info.ts && (now - Number(info.ts) > 6000)) window.__wallOptimistic.delete(k);
+    }
+  } catch {}
+
+  // Add/update desired elements (respect recent optimistic "remove")
+  for (const [k, w] of desired.entries()) {
+    const opt = window.__wallOptimistic.get(k);
+    const recentlyRemoved = opt && opt.op === 'remove' && (now - Number(opt.ts || 0) <= GRACE_MS);
+    if (recentlyRemoved) continue;
+
+    let el = window.__wallEdgeDomMap.get(k) || layerEl.querySelector?.(`[data-wall-key="${k}"]`);
+    if (!el) {
+      el = makeEdgeEl(w);
+      if (!el) continue;
+      layerEl.appendChild(el);
+      window.__wallEdgeDomMap.set(k, el);
+        try { window.__wallOptimistic.set(k, { ts: Date.now(), op: 'add' }); } catch {}
+    } else {
+      const type = String(w?.type || 'stone').toLowerCase();
+      const thickness = Math.max(1, Math.min(12, Number(w?.thickness) || 4));
+      const wantClass = `wall-edge wall-type-${type}`;
+      if (el.className !== wantClass) el.className = wantClass;
+      el.style.setProperty('--t', `${thickness}px`);
+    }
+  }
+
+  // Remove elements not in desired (respect recent optimistic "add")
+  for (const [k, el] of Array.from(window.__wallEdgeDomMap.entries())) {
+    if (desired.has(k)) continue;
+
+    const opt = window.__wallOptimistic.get(k);
+    const recentlyAdded = opt && opt.op === 'add' && (now - Number(opt.ts || 0) <= GRACE_MS);
+    if (recentlyAdded) continue;
+
+    try { el?.remove?.(); } catch {}
+    window.__wallEdgeDomMap.delete(k);
   }
 }
 
 // ================== OPTIMISTIC WALL UPDATES (GM drawing feels instant) ==================
+ (GM drawing feels instant) ==================
 // controlbox.js dispatches CustomEvent('dnd_local_wall_edges', { detail:{ mode, edges } })
 // We update the walls layer immediately, without waiting for server/state echo.
 (function wireLocalWallEdges() {
@@ -205,6 +294,7 @@ function renderWallEdges(state, layerEl) {
         if (el) {
           try { el.remove(); } catch {}
         }
+        try { window.__wallOptimistic.set(k, { ts: Date.now(), op: 'remove' }); } catch {}
         try { window.__wallEdgeDomMap.delete(k); } catch {}
       }
     }
