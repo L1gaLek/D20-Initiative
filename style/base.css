@@ -2348,4 +2348,5 @@ textarea[data-sheet-path="text.profPlain.value"]{
 
 /* Equipment DB: expandable details */
 .equip-row__details{margin-top:6px; opacity:.92; line-height:1.25;}
+.equip-row__desc.collapsed{display:none;}
 .equip-row__details.collapsed{display:none;}
