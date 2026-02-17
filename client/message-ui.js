@@ -357,17 +357,21 @@ loginDiv.style.display = 'none';
         lastState.log = prevLog;
       }
 
-      // restore last-known token positions to avoid "jump to null" on state updates
+      // restore last-known token positions from local cache.
+      // room_state snapshots may still contain stale x/y (legacy clients or older saves).
+      // Token positions are authoritative in room_tokens, so we ALWAYS prefer the cached
+      // positions we already have (they are updated by realtime tokenRow events).
       try {
         (lastState.players || []).forEach(p => {
           if (!p || !p.id) return;
           const snap = prevPos.get(String(p.id));
           if (!snap) return;
-          if ((p.x === null || typeof p.x === 'undefined') && snap.x !== null && Number.isFinite(snap.x)) p.x = snap.x;
-          if ((p.y === null || typeof p.y === 'undefined') && snap.y !== null && Number.isFinite(snap.y)) p.y = snap.y;
-          if ((!p.size || !Number.isFinite(Number(p.size))) && snap.size) p.size = snap.size;
-          if ((!p.color || typeof p.color !== 'string') && snap.color) p.color = snap.color;
-          if ((!p.mapId || typeof p.mapId !== 'string') && snap.mapId) p.mapId = snap.mapId;
+          // overwrite x/y even if the snapshot has numbers (they can be stale)
+          if (snap.x === null || Number.isFinite(snap.x)) p.x = snap.x;
+          if (snap.y === null || Number.isFinite(snap.y)) p.y = snap.y;
+          if (Number.isFinite(snap.size) && snap.size > 0) p.size = snap.size;
+          if (snap.color && typeof snap.color === 'string') p.color = snap.color;
+          if (snap.mapId && typeof snap.mapId === 'string') p.mapId = snap.mapId;
         });
       } catch {}
       boardWidth = normalized.boardWidth;
@@ -699,19 +703,16 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      const items = stPlayers.map(p => ({ id: p.id, inCombat: true }));
-      sendMessage({ type: 'setPlayersInCombatBulk', items });
+      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: true }));
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      const items = stPlayers.map(p => ({ id: p.id, inCombat: false }));
-      sendMessage({ type: 'setPlayersInCombatBulk', items });
+      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: false }));
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      const items = stPlayers.map(p => {
+      stPlayers.forEach(p => {
         const placed = (p && p.x !== null && p.y !== null);
-        return { id: p.id, inCombat: !!placed };
+        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!placed });
       });
-      sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
 
     controlsLi.appendChild(btnAll);
@@ -982,9 +983,7 @@ function updatePlayerList() {
 
       // ===== Выбор инициативы для участника боя (в инициативе или позднее в бою) =====
       const phaseNow = String(lastState?.phase || '');
-      // По запросу: эти кнопки должны появляться ТОЛЬКО когда во время боя создают нового участника
-      // (а не в фазе инициативы). Поэтому показываем только в 'combat'.
-      const canPickInit = (phaseNow === 'combat');
+      const canPickInit = (phaseNow === 'initiative' || phaseNow === 'combat');
       if (lastState && canPickInit && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
         const box = document.createElement('div');
         box.className = 'init-choice-box';

@@ -321,6 +321,28 @@ async function upsertRoomState(roomId, nextState) {
   const stSafe = deepClone(nextState || {});
   // Do not persist logs inside room_state; logs are append-only in room_log.
   stSafe.log = [];
+
+  // Do not persist token positions inside room_state.
+  // Positions are authoritative in public.room_tokens (realtime). If we keep x/y here,
+  // any unrelated room_state upsert (walls/fog/etc.) can overwrite fresh positions
+  // and cause visible "rollback" when multiple users act concurrently.
+  try {
+    const pls = Array.isArray(stSafe.players) ? stSafe.players : [];
+    pls.forEach((p) => {
+      if (!p || typeof p !== 'object') return;
+      p.x = null;
+      p.y = null;
+    });
+  } catch {}
+
+  // Also clear legacy per-map mirrors if present.
+  try {
+    const maps = Array.isArray(stSafe.maps) ? stSafe.maps : [];
+    maps.forEach((m) => {
+      if (!m || typeof m !== 'object') return;
+      if (m.playersPos && typeof m.playersPos === 'object') m.playersPos = {};
+    });
+  } catch {}
   const payload = {
     room_id: roomId,
     phase: String(stSafe?.phase || "lobby"),
