@@ -265,6 +265,10 @@ function applyRoleToUI() {
     const el = document.getElementById(id);
     if (el) el.disabled = !gm;
   });
+
+  // По запросу: кнопка "Монстры SRD" должна быть видима только для ГМ.
+  const monstersBtn = document.getElementById('open-monsters');
+  if (monstersBtn) monstersBtn.style.display = gm ? '' : 'none';
 }
 
 // ================== SRD MONSTERS LIBRARY (GM) ==================

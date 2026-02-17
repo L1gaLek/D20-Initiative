@@ -794,8 +794,8 @@ function isAreaFreeClient(ignoreId, x, y, size, opts = {}) {
 }
 
 function findFirstFreeSpotClient(size) {
+  // По запросу: ограничения на постановку на стены убраны — теперь можно всем.
   const allowWalls = true;
-  // По запросу: токены можно ставить на стены всем.
   const maxX = boardWidth - size;
   const maxY = boardHeight - size;
   for (let y = 0; y <= maxY; y++) {
@@ -847,8 +847,8 @@ board.addEventListener('click', e => {
 
   // быстрый локальный чек (сервер всё равно проверит)
   const size = Number(selectedPlayer.size) || 1;
+  // По запросу: ограничения на постановку на стены убраны — теперь можно всем.
   const allowWalls = true;
-  // По запросу: токены можно ставить на стены всем.
   if (!isAreaFreeClient(selectedPlayer.id, x, y, size, { allowWalls })) {
     alert("Эта клетка занята другим персонажем");
     return;
