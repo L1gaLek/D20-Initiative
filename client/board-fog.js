@@ -703,20 +703,30 @@
       // 1) Basic block: crossing an edge between prev and next
       if (edgeSet.has(keyBetween(prevX, prevY, x, y))) return false;
 
-      // 2) Anti corner-leak (convex corners):
-      // If we did a diagonal step, and BOTH orthogonal edges around the corner are blocked,
-      // then LOS should NOT "cut" through the corner.
+      // 2) Anti corner-leak (corner cutting):
+      // Diagonal steps can "slip" through a vertex when walls form an L / T / closed corner.
+      // Model the diagonal as two possible L-shaped routes:
+      //   Route 1: prev -> (prevX+stepX, prevY) -> next
+      //   Route 2: prev -> (prevX, prevY+stepY) -> next
+      // If BOTH routes are blocked by at least one wall edge, block LOS.
       if (stepX !== 0 && stepY !== 0) {
-        const hx = prevX + stepX;
-        const hy = prevY;
-        const vx = prevX;
-        const vy = prevY + stepY;
+        const bx = prevX + stepX; // horizontal intermediate
+        const by = prevY;
+        const cx = prevX;         // vertical intermediate
+        const cy = prevY + stepY;
+        const dx2 = x;            // next
+        const dy2 = y;
 
-        const hBlocked = edgeSet.has(keyBetween(prevX, prevY, hx, hy));
-        const vBlocked = edgeSet.has(keyBetween(prevX, prevY, vx, vy));
+        const blockedAB = edgeSet.has(keyBetween(prevX, prevY, bx, by));
+        const blockedAC = edgeSet.has(keyBetween(prevX, prevY, cx, cy));
+        const blockedBD = edgeSet.has(keyBetween(bx, by, dx2, dy2));
+        const blockedCD = edgeSet.has(keyBetween(cx, cy, dx2, dy2));
 
-        // Strict corner rule: block only when BOTH meet (typical VTT expectation).
-        if (hBlocked && vBlocked) return false;
+        const route1Blocked = blockedAB || blockedBD;
+        const route2Blocked = blockedAC || blockedCD;
+
+        // Corner is sealed if both routes are blocked.
+        if (route1Blocked && route2Blocked) return false;
       }
     }
 
