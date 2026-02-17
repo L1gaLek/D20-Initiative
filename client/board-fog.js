@@ -666,14 +666,11 @@
   // Bresenham LOS across grid cells.
   // Walls are segments between adjacent cells.
   function hasLineOfSightCells(x0, y0, x1, y1, edgeSet) {
-    let dx = Math.abs(x1 - x0);
-    let dy = Math.abs(y1 - y0);
-    let sx = (x0 < x1) ? 1 : -1;
-    let sy = (y0 < y1) ? 1 : -1;
-    let err = dx - dy;
-
-    let x = x0;
-    let y = y0;
+    // Robust LOS with wall-edges (no diagonal "leaks").
+    // Use 2D DDA (Amanatides & Woo). When ray hits a grid corner we test BOTH incident edges
+    // and block if ANY is walled: strict "no peeking" through corner/tee connections.
+    if (!edgeSet) return true;
+    if (x0 === x1 && y0 === y1) return true;
 
     const keyBetween = (ax, ay, bx, by) => {
       if (ax > bx || (ax === bx && ay > by)) {
@@ -683,50 +680,53 @@
       }
       return `${ax},${ay}|${bx},${by}`;
     };
+    const blocked = (ax, ay, bx, by) => edgeSet.has(keyBetween(ax, ay, bx, by));
 
-    // Step until reaching target
-    while (!(x === x1 && y === y1)) {
-      const prevX = x;
-      const prevY = y;
-      const e2 = 2 * err;
+    // center-to-center ray in cell coordinates
+    const ox = x0 + 0.5;
+    const oy = y0 + 0.5;
+    const tx = x1 + 0.5;
+    const ty = y1 + 0.5;
+    const dx = tx - ox;
+    const dy = ty - oy;
 
-      // Compute next step (may be diagonal)
-      let stepX = 0;
-      let stepY = 0;
-      if (e2 > -dy) { err -= dy; stepX = sx; }
-      if (e2 < dx) { err += dx; stepY = sy; }
-      x += stepX;
-      y += stepY;
+    const stepX = dx >= 0 ? 1 : -1;
+    const stepY = dy >= 0 ? 1 : -1;
 
-      if (!edgeSet) continue;
+    const tDeltaX = (dx === 0) ? Infinity : Math.abs(1 / dx);
+    const tDeltaY = (dy === 0) ? Infinity : Math.abs(1 / dy);
 
-      // 1) Basic block: crossing an edge between prev and next
-      if (edgeSet.has(keyBetween(prevX, prevY, x, y))) return false;
+    let cx = x0;
+    let cy = y0;
 
-      // 2) Anti corner-leak (corner cutting):
-      // Diagonal steps can "slip" through a vertex when walls form an L / T / closed corner.
-      // Model the diagonal as two possible L-shaped routes:
-      //   Route 1: prev -> (prevX+stepX, prevY) -> next
-      //   Route 2: prev -> (prevX, prevY+stepY) -> next
-      // If BOTH routes are blocked by at least one wall edge, block LOS.
-      if (stepX !== 0 && stepY !== 0) {
-        const bx = prevX + stepX; // horizontal intermediate
-        const by = prevY;
-        const cx = prevX;         // vertical intermediate
-        const cy = prevY + stepY;
-        const dx2 = x;            // next
-        const dy2 = y;
+    const nextV = (stepX > 0) ? (Math.floor(ox) + 1) : Math.floor(ox);
+    const nextH = (stepY > 0) ? (Math.floor(oy) + 1) : Math.floor(oy);
+    let tMaxX = (dx === 0) ? Infinity : Math.abs((nextV - ox) / dx);
+    let tMaxY = (dy === 0) ? Infinity : Math.abs((nextH - oy) / dy);
 
-        const blockedAB = edgeSet.has(keyBetween(prevX, prevY, bx, by));
-        const blockedAC = edgeSet.has(keyBetween(prevX, prevY, cx, cy));
-        const blockedBD = edgeSet.has(keyBetween(bx, by, dx2, dy2));
-        const blockedCD = edgeSet.has(keyBetween(cx, cy, dx2, dy2));
+    const EPS = 1e-9;
 
-        const route1Blocked = blockedAB || blockedBD;
-        const route2Blocked = blockedAC || blockedCD;
-
-        // Corner is sealed if both routes are blocked.
-        if (route1Blocked && route2Blocked) return false;
+    while (!(cx === x1 && cy === y1)) {
+      if (Math.abs(tMaxX - tMaxY) < EPS) {
+        // corner: crossing vertical + horizontal boundaries
+        const nx = cx + stepX;
+        const ny = cy + stepY;
+        if (blocked(cx, cy, nx, cy)) return false;
+        if (blocked(cx, cy, cx, ny)) return false;
+        cx = nx;
+        cy = ny;
+        tMaxX += tDeltaX;
+        tMaxY += tDeltaY;
+      } else if (tMaxX < tMaxY) {
+        const nx = cx + stepX;
+        if (blocked(cx, cy, nx, cy)) return false;
+        cx = nx;
+        tMaxX += tDeltaX;
+      } else {
+        const ny = cy + stepY;
+        if (blocked(cx, cy, cx, ny)) return false;
+        cy = ny;
+        tMaxY += tDeltaY;
       }
     }
 
