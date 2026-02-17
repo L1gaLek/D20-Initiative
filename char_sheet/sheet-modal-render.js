@@ -695,42 +695,6 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   `;
 }
 
-      if (it.type === "armor" && it.armor) {
-        const ac = it.armor.ac ? `КД: ${escapeHtml(String(it.armor.ac))}` : "";
-        const st = (it.armor.str_req != null && String(it.armor.str_req).trim() !== "") ? `Сила: ${escapeHtml(String(it.armor.str_req))}` : "";
-        const dis = it.armor.stealth_disadv ? `Помеха скрытности` : "";
-        return [ac, st, dis].filter(Boolean).map(t => `<div class="equip-meta">${t}</div>`).join("");
-      }
-      return "";
-    })();
-
-    return `
-      <div class="equip-card" data-inv-item data-inv-tabid="${escapeHtml(tabId)}" data-inv-idx="${idx}">
-        <div class="equip-head">
-          <div class="equip-title">
-            ${canEdit ? `<input class="equip-name" type="text" value="${escapeHtml(String(name))}" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.name_ru">`
-                     : `<div class="equip-name ro">${escapeHtml(String(name))}</div>`}
-            <div class="equip-sub">
-              <span class="equip-pill">Цена: ${cost}</span>
-              <span class="equip-pill">Вес: ${escapeHtml(String(w || "—"))}</span>
-            </div>
-          </div>
-
-          <div class="equip-actions">
-            <div class="equip-qty">
-              <span class="equip-qty-lbl">x</span>
-              <input class="equip-qty-in" type="number" min="1" max="999" value="${escapeHtml(String(qty))}" ${canEdit ? "" : "disabled"} data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.qty">
-            </div>
-            <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-sell data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Продать</button>
-            <button class="weapon-btn danger" type="button" ${canEdit ? "" : "disabled"} data-inv-del data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Удалить</button>
-          </div>
-        </div>
-
-        ${extra ? `<div class="equip-extra">${extra}</div>` : ""}
-        ${desc ? `<div class="equip-desc">${escapeHtml(desc)}</div>` : ""}
-      </div>
-    `;
-  }
 
   function renderInventoryTab(vm, canEdit) {
     const denom = String(vm?.coinsViewDenom || "gp").toLowerCase();
