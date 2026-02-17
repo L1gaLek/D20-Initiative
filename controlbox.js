@@ -42,9 +42,6 @@
     const editEnvBtn = document.getElementById('edit-environment');
     const addWallBtn = document.getElementById('add-wall');
     const removeWallBtn = document.getElementById('remove-wall');
-    const wallToolSel = document.getElementById('wall-tool');
-    const wallTypeSel = document.getElementById('wall-type');
-    const wallThicknessSel = document.getElementById('wall-thickness');
     const clearBoardBtn = document.getElementById('clear-board');
     const resetGameBtn = document.getElementById('reset-game');
 
@@ -140,19 +137,26 @@
     });
 
     // ===== Environment editor (GM only) =====
+    // Wall model (v2): edges on cell borders.
+    // edge = {x,y,dir:"N|E|S|W", type:"stone|wood|magic", thickness:number}
     let editEnvironment = false;
     let wallMode = null; // 'add' | 'remove'
     let mouseDown = false;
 
+    // UI (may be absent in older index.html)
+    const wallToolSel = document.getElementById('wall-tool');
+    const wallTypeSel = document.getElementById('wall-type');
+    const wallThicknessSel = document.getElementById('wall-thickness');
+
     // tool: brush | line | rect
     let wallTool = String(wallToolSel?.value || 'brush');
     let wallType = String(wallTypeSel?.value || 'stone');
-    let wallThickness = Number(wallThicknessSel?.value || 4);
+    let wallThickness = Math.max(1, Math.min(12, Number(wallThicknessSel?.value || 4)));
 
     const readWallUi = () => {
-      wallTool = String(wallToolSel?.value || 'brush');
-      wallType = String(wallTypeSel?.value || 'stone');
-      wallThickness = Math.max(1, Math.min(12, Number(wallThicknessSel?.value || 4)));
+      wallTool = String(wallToolSel?.value || wallTool || 'brush');
+      wallType = String(wallTypeSel?.value || wallType || 'stone');
+      wallThickness = Math.max(1, Math.min(12, Number(wallThicknessSel?.value || wallThickness || 4)));
     };
     wallToolSel?.addEventListener('change', readWallUi);
     wallTypeSel?.addEventListener('change', readWallUi);
@@ -161,8 +165,6 @@
     // batch changes for one gesture
     let dragTouched = new Set(); // "x,y,dir"
     function keyEdge(x, y, dir) { return `${x},${y},${dir}`; }
-
-    // For line/rect tools
     let dragStart = null; // {x,y,dir}
 
     function setEnvButtons() {
@@ -184,7 +186,6 @@
       editEnvironment = !editEnvironment;
       wallMode = null;
       dragTouched = new Set();
-      dragStart = null;
       if (editEnvBtn) {
         editEnvBtn.textContent = editEnvironment ? "Редактирование окружения: ВКЛ" : "Редактирование окружения: ВЫКЛ";
       }
@@ -213,163 +214,115 @@
     });
 
     function edgeFromPointer(cell, e) {
-      try {
-        if (!cell || !e) return null;
-        const x = Number(cell?.dataset?.x);
-        const y = Number(cell?.dataset?.y);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-        const rect = cell.getBoundingClientRect();
-        const px = (e.clientX - rect.left) / rect.width;
-        const py = (e.clientY - rect.top) / rect.height;
-        // choose nearest edge
-        const dN = py;
-        const dS = 1 - py;
-        const dW = px;
-        const dE = 1 - px;
-        const m = Math.min(dN, dS, dW, dE);
-        let dir = 'N';
-        if (m === dE) dir = 'E';
-        else if (m === dS) dir = 'S';
-        else if (m === dW) dir = 'W';
-        else dir = 'N';
-        return { x, y, dir };
-      } catch {
-        return null;
-      }
+      if (!cell || !e) return null;
+      const x = Number(cell?.dataset?.x);
+      const y = Number(cell?.dataset?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      const rect = cell.getBoundingClientRect();
+      const cx = (e.clientX - rect.left);
+      const cy = (e.clientY - rect.top);
+      const left = cx;
+      const right = rect.width - cx;
+      const top = cy;
+      const bottom = rect.height - cy;
+      const m = Math.min(left, right, top, bottom);
+      let dir = 'N';
+      if (m === top) dir = 'N';
+      else if (m === right) dir = 'E';
+      else if (m === bottom) dir = 'S';
+      else dir = 'W';
+      return { x, y, dir };
     }
 
     function touchEdge(edge) {
       if (!edge) return;
-      const x = Number(edge.x), y = Number(edge.y);
-      const dir = String(edge.dir || '').toUpperCase();
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return;
-      const k = keyEdge(x, y, dir);
+      const k = keyEdge(edge.x, edge.y, edge.dir);
       if (dragTouched.has(k)) return;
       dragTouched.add(k);
     }
 
-    function edgesForRect(a, b) {
-      // rectangle perimeter in cell coordinates (inclusive)
+    function buildLineEdges(a, b) {
+      if (!a || !b) return [];
+      const dir = String(a.dir || 'N');
+      const out = [];
+      if (dir === 'N' || dir === 'S') {
+        const yy = a.y;
+        const x1 = Math.min(a.x, b.x);
+        const x2 = Math.max(a.x, b.x);
+        for (let x = x1; x <= x2; x++) out.push({ x, y: yy, dir });
+      } else {
+        const xx = a.x;
+        const y1 = Math.min(a.y, b.y);
+        const y2 = Math.max(a.y, b.y);
+        for (let y = y1; y <= y2; y++) out.push({ x: xx, y, dir });
+      }
+      return out;
+    }
+
+    function buildRectEdges(a, b) {
+      if (!a || !b) return [];
       const x1 = Math.min(a.x, b.x);
       const x2 = Math.max(a.x, b.x);
       const y1 = Math.min(a.y, b.y);
       const y2 = Math.max(a.y, b.y);
       const out = [];
-
-      for (let x = x1; x <= x2; x++) {
-        out.push({ x, y: y1, dir: 'N' });
-        out.push({ x, y: y2, dir: 'S' });
-      }
-      for (let y = y1; y <= y2; y++) {
-        out.push({ x: x1, y, dir: 'W' });
-        out.push({ x: x2, y, dir: 'E' });
-      }
-      return out;
-    }
-
-    function edgesForLine(a, b) {
-      // simple L-shaped orthogonal line between two edges using cell coords
-      const out = [];
-      const ax = a.x, ay = a.y;
-      const bx = b.x, by = b.y;
-      // choose pivot: go horizontal then vertical
-      const mid1 = { x: bx, y: ay, dir: b.dir };
-      // build along x
-      const stepX = (bx >= ax) ? 1 : -1;
-      for (let x = ax; x !== bx; x += stepX) {
-        out.push({ x, y: ay, dir: (stepX === 1 ? 'E' : 'W') });
-      }
-      // build along y
-      const stepY = (by >= ay) ? 1 : -1;
-      for (let y = ay; y !== by; y += stepY) {
-        out.push({ x: bx, y, dir: (stepY === 1 ? 'S' : 'N') });
-      }
-      // include final edge itself (closest dir from pointer)
-      out.push({ x: bx, y: by, dir: String(b.dir || 'N').toUpperCase() });
+      for (let x = x1; x <= x2; x++) out.push({ x, y: y1, dir: 'N' });
+      for (let x = x1; x <= x2; x++) out.push({ x, y: y2, dir: 'S' });
+      for (let y = y1; y <= y2; y++) out.push({ x: x1, y, dir: 'W' });
+      for (let y = y1; y <= y2; y++) out.push({ x: x2, y, dir: 'E' });
       return out;
     }
 
     board?.addEventListener('mousedown', (e) => {
       if (!ctx.isGM?.() || !editEnvironment || !wallMode) return;
+      readWallUi();
       const cell = e.target.closest('.cell');
       if (!cell) return;
       mouseDown = true;
       dragTouched = new Set();
-
-      readWallUi();
-      const edge = edgeFromPointer(cell, e);
-      dragStart = edge;
-
-      if (wallTool === 'brush') {
-        touchEdge(edge);
-      }
+      dragStart = edgeFromPointer(cell, e);
+      if (wallTool === 'brush') touchEdge(dragStart);
+      try { e.preventDefault(); } catch {}
     });
 
-    board?.addEventListener('mouseover', (e) => {
+    board?.addEventListener('mousemove', (e) => {
       if (!mouseDown || !ctx.isGM?.() || !editEnvironment || !wallMode) return;
+      if (wallTool !== 'brush') return;
       const cell = e.target.closest('.cell');
       if (!cell) return;
-
-      readWallUi();
       const edge = edgeFromPointer(cell, e);
-      if (wallTool === 'brush') {
-        touchEdge(edge);
-      }
+      touchEdge(edge);
     });
 
-    window.addEventListener('mouseup', () => {
+    window.addEventListener('mouseup', (e) => {
       if (!mouseDown) return;
       mouseDown = false;
 
-      // одним сообщением отправляем все изменения
       if (!ctx.isGM?.() || !editEnvironment || !wallMode) return;
-
       readWallUi();
 
-      const changed = [];
-      // For line/rect tools we generate edges from dragStart to current hover cell
-      // If we didn't collect anything (line/rect), create it now.
-      if ((wallTool === 'line' || wallTool === 'rect') && dragStart) {
-        // Find current cell under mouse
-        let cell = null;
-        try {
-          const el = document.elementFromPoint(window.__lastMouseX || 0, window.__lastMouseY || 0);
-          cell = el?.closest?.('.cell') || null;
-        } catch {}
-        // If not found, just send nothing.
-        if (cell) {
-          const end = edgeFromPointer(cell, { clientX: window.__lastMouseX, clientY: window.__lastMouseY });
-          if (end) {
-            const edges = (wallTool === 'rect') ? edgesForRect(dragStart, end) : edgesForLine(dragStart, end);
-            for (const ed of edges) touchEdge(ed);
-          }
-        }
+      if (wallTool === 'line' || wallTool === 'rect') {
+        const cell = (e && e.target) ? e.target.closest?.('.cell') : null;
+        const endEdge = cell ? edgeFromPointer(cell, e) : dragStart;
+        const edges = (wallTool === 'line') ? buildLineEdges(dragStart, endEdge) : buildRectEdges(dragStart, endEdge);
+        edges.forEach(touchEdge);
       }
 
+      const edges = [];
       dragTouched.forEach((k) => {
         const [xs, ys, dir] = String(k).split(',');
         const x = Number(xs), y = Number(ys);
-        const d = String(dir || '').toUpperCase();
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-        if (d !== 'N' && d !== 'E' && d !== 'S' && d !== 'W') return;
-        if (wallMode === 'add') changed.push({ x, y, dir: d, type: wallType, thickness: wallThickness });
-        else changed.push({ x, y, dir: d });
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !dir) return;
+        edges.push({ x, y, dir, type: wallType, thickness: wallThickness });
       });
 
-      if (changed.length) {
-        ctx.sendMessage?.({ type: 'bulkWalls', mode: wallMode, edges: changed });
+      if (edges.length) {
+        ctx.sendMessage?.({ type: 'bulkWallEdges', mode: wallMode, edges });
       }
 
       dragTouched = new Set();
       dragStart = null;
     });
-
-    // Track last mouse for line/rect end point
-    window.addEventListener('mousemove', (e) => {
-      window.__lastMouseX = e.clientX;
-      window.__lastMouseY = e.clientY;
-    }, { passive: true });
 
     // ===== Campaign maps / sections (GM): Parameters modal =====
     const campaignParamsBtn = document.getElementById('campaign-params');
