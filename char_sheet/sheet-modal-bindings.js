@@ -191,8 +191,13 @@ function bindCombatEditors(root, player, canEdit) {
         dmgDice: "к6",
         dmgType: "",
         desc: "",
-        collapsed: false
+        collapsed: false,
+        invId: ""
       });
+
+      // синхронизация: оружие из "Бой" -> "Инвентарь"
+      const w = sheet.weaponsList[sheet.weaponsList.length - 1];
+      try { window.__equipSync?.syncWeaponCombatToInv?.(sheet, w); } catch {}
 
       scheduleSheetSave(player);
       rerenderCombatTabInPlace(root, player, canEdit);
@@ -233,6 +238,9 @@ function bindCombatEditors(root, player, canEdit) {
 
         w[field] = val;
 
+        // синхронизация: правки оружия -> инвентарь
+        try { window.__equipSync?.syncWeaponCombatToInv?.(sheet, w); } catch {}
+
         updateWeaponsBonuses(root, sheet);
         // Авто-пересчёт метрик заклинаний при изменении бонуса мастерства
         if (player?._activeSheetTab === "spells" && (path === "proficiency" || path === "proficiencyCustom")) {
@@ -256,6 +264,7 @@ function bindCombatEditors(root, player, canEdit) {
         if (!canEdit) return;
         w.prof = !w.prof;
         updateWeaponsBonuses(root, sheet);
+        try { window.__equipSync?.syncWeaponCombatToInv?.(sheet, w); } catch {}
         scheduleSheetSave(player);
       });
     }
@@ -269,6 +278,8 @@ function bindCombatEditors(root, player, canEdit) {
         if (!canEdit) return;
         w.collapsed = !w.collapsed;
         updateWeaponsBonuses(root, sheet);
+        // collapsed не пишем в инвентарь (это UI боя), но пусть синк обновит описание/название если нужно
+        try { window.__equipSync?.syncWeaponCombatToInv?.(sheet, w); } catch {}
         scheduleSheetSave(player);
       });
     }
@@ -282,6 +293,14 @@ function bindCombatEditors(root, player, canEdit) {
         if (!canEdit) return;
 
         sheet.weaponsList.splice(idx, 1);
+
+        // синхронизация: удаление оружия -> удалить из инвентаря
+        try {
+          const invId = String(w?.invId || '').trim();
+          if (invId && sheet?.inventory && Array.isArray(sheet.inventory.weapons)) {
+            sheet.inventory.weapons = sheet.inventory.weapons.filter(x => String(x?.id || '') !== invId);
+          }
+        } catch {}
         scheduleSheetSave(player);
         rerenderCombatTabInPlace(root, player, canEdit);
       });
@@ -1111,13 +1130,132 @@ function bindTextareaHeightPersistence(root, player) {
       const found = id ? arr.find(x => x && typeof x === 'object' && String(x.id || '') === id) : null;
       if (found) {
         found.qty = Math.max(1, safeInt(found.qty, 1)) + q;
+        if (tabId === 'weapons') {
+          try { syncWeaponInvToCombat(sheet, found); } catch {}
+        }
         return;
       }
       const payload = JSON.parse(JSON.stringify(item || {}));
       payload.qty = q;
       payload._tab = tabId;
       arr.push(payload);
+
+      // Если добавили оружие — синхронизируем его в "Бой"
+      if (tabId === 'weapons') {
+        try { syncWeaponInvToCombat(sheet, payload); } catch {}
+      }
     }
+
+    // ===== СИНХРОНИЗАЦИЯ ОРУЖИЯ (Инвентарь <-> Бой) =====
+    function parseDamageParts(dmg) {
+      const t = String(dmg || '').trim();
+      // поддерживаем: "1d6", "1к6", "2 d 8" и т.п.
+      const m = t.match(/(\d+)\s*[dк]\s*(\d+)/i);
+      if (!m) return { n: 1, dice: 'к6' };
+      const n = Math.max(1, safeInt(m[1], 1));
+      const sides = Math.max(2, safeInt(m[2], 6));
+      return { n, dice: `к${sides}` };
+    }
+
+    function invWeaponToCombatWeapon(invItem) {
+      const name = String(invItem?.name_ru || invItem?.name || invItem?.name_en || 'Оружие').trim() || 'Оружие';
+      const dmg = invItem?.weapon?.damage;
+      const parts = parseDamageParts(dmg);
+      const dmgType = String(invItem?.weapon?.damage_type || '').trim();
+      const props = String(invItem?.weapon?.properties_ru || '').trim();
+      const descBase = String(invItem?.description_ru || invItem?.desc_ru || invItem?.desc || '').trim();
+      const desc = [props ? `Свойства: ${props}` : '', descBase].filter(Boolean).join('\n');
+      return {
+        name,
+        ability: 'str',
+        prof: false,
+        extraAtk: 0,
+        dmgNum: parts.n,
+        dmgDice: parts.dice,
+        dmgType,
+        desc,
+        collapsed: false,
+        invId: String(invItem?.id || '')
+      };
+    }
+
+    function syncWeaponInvToCombat(sheet, invItem) {
+      if (!sheet) return;
+      if (!Array.isArray(sheet.weaponsList)) sheet.weaponsList = [];
+      const invId = String(invItem?.id || '').trim();
+      if (!invId) return;
+      const exists = sheet.weaponsList.find(w => w && typeof w === 'object' && String(w.invId || '') === invId);
+      if (exists) {
+        // если название/урон изменились в инвентаре — обновим минимум
+        const mapped = invWeaponToCombatWeapon(invItem);
+        exists.name = mapped.name;
+        exists.dmgNum = mapped.dmgNum;
+        exists.dmgDice = mapped.dmgDice;
+        exists.dmgType = mapped.dmgType;
+        // описание дополняем только если пустое (чтобы не затирать ручные правки в бою)
+        if (!String(exists.desc || '').trim()) exists.desc = mapped.desc;
+        return;
+      }
+      sheet.weaponsList.push(invWeaponToCombatWeapon(invItem));
+    }
+
+    function combatWeaponToInvItem(w) {
+      const id = String(w?.invId || '').trim() || `combat_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const dmgSides = String(w?.dmgDice || 'к6').replace(/\s+/g, '').toLowerCase();
+      const dmg = `${Math.max(1, safeInt(w?.dmgNum, 1))}${dmgSides}`;
+      return {
+        id,
+        type: 'weapon',
+        name_ru: String(w?.name || 'Оружие'),
+        qty: 1,
+        cost: { amount: 0, coin: 'gp', coin_ru: 'зм' },
+        weight: { lb: 0, text: '' },
+        weapon: {
+          damage: dmg,
+          damage_type: String(w?.dmgType || '').trim(),
+          properties_ru: ''
+        },
+        description_ru: String(w?.desc || '').trim(),
+        _tab: 'weapons',
+        _fromCombat: true
+      };
+    }
+
+    function syncWeaponCombatToInv(sheet, combatWeapon) {
+      if (!sheet) return;
+      if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: 'weapons' };
+      if (!Array.isArray(sheet.inventory.weapons)) sheet.inventory.weapons = [];
+      if (!Array.isArray(sheet.weaponsList)) sheet.weaponsList = [];
+
+      if (!combatWeapon.invId) {
+        // создадим invId и предмет в инвентаре
+        const inv = combatWeaponToInvItem(combatWeapon);
+        combatWeapon.invId = inv.id;
+        sheet.inventory.weapons.push(inv);
+        return;
+      }
+
+      const invId = String(combatWeapon.invId);
+      const idx = sheet.inventory.weapons.findIndex(x => x && typeof x === 'object' && String(x.id || '') === invId);
+      const invPayload = combatWeaponToInvItem(combatWeapon);
+      invPayload.id = invId;
+      if (idx >= 0) {
+        // обновим ключевое, но не трогаем цену/вес (если кто-то их выставил)
+        const cur = sheet.inventory.weapons[idx];
+        cur.name_ru = invPayload.name_ru;
+        cur.type = 'weapon';
+        cur.weapon = invPayload.weapon;
+        cur.description_ru = invPayload.description_ru;
+        cur._tab = 'weapons';
+      } else {
+        sheet.inventory.weapons.push(invPayload);
+      }
+    }
+
+    // экспортируем хелперы наружу (для вкладки "Бой")
+    if (!window.__equipSync) window.__equipSync = {};
+    window.__equipSync.syncWeaponCombatToInv = syncWeaponCombatToInv;
+    window.__equipSync.syncWeaponInvToCombat = syncWeaponInvToCombat;
 
     function spendCoins(sheet, costCp) {
       const total = coinsTotalCpLocal(sheet);
@@ -1180,9 +1318,8 @@ function bindTextareaHeightPersistence(root, player) {
       const sheet = curPlayer?.sheet?.parsed;
       if (!sheet) return;
 
-      const tabId = mode === 'buy'
-        ? String(sheet?.shop?.activeTab || 'weapons')
-        : String(sheet?.inventory?.activeTab || 'weapons');
+      // По умолчанию открываем "Всё" (удобнее искать), но сохраняем выбор пользователя в sheet.shop/ sheet.inventory
+      const tabId = 'all';
 
       const wrap = document.createElement('div');
       wrap.className = 'equip-overlay';
@@ -1196,7 +1333,10 @@ function bindTextareaHeightPersistence(root, player) {
           <div class="equip-overlay__controls">
             <select class="equip-ctl" data-equip-tab></select>
             <input class="equip-ctl" type="text" placeholder="Поиск..." data-equip-q>
-            <input class="equip-ctl equip-qty" type="number" min="1" max="999" value="1" data-equip-qty title="Количество">
+            <div class="equip-qtywrap" title="Количество">
+              <span class="equip-qtywrap__lbl">Количество</span>
+              <input class="equip-ctl equip-qty" type="number" min="1" max="999" value="1" data-equip-qty>
+            </div>
           </div>
           <div class="equip-overlay__list" data-equip-list>Загрузка базы...</div>
         </div>
@@ -1217,6 +1357,7 @@ function bindTextareaHeightPersistence(root, player) {
       const listEl = wrap.querySelector('[data-equip-list]');
 
       const TAB_DEFS = [
+        { id: 'all', label: 'Всё' },
         { id: 'weapons', label: 'Оружие' },
         { id: 'armor', label: 'Доспехи' },
         { id: 'adventuring_gear', label: 'Снаряжение' },
@@ -1233,9 +1374,21 @@ function bindTextareaHeightPersistence(root, player) {
       let db = null;
       const renderList = () => {
         if (!db || !db.tabs) return;
-        const curTab = String(tabSel.value || 'weapons');
+        const curTab = String(tabSel.value || 'all');
         const q = String(qInp.value || '').trim().toLowerCase();
-        const items = Array.isArray(db.tabs[curTab]) ? db.tabs[curTab] : [];
+        const items = (() => {
+          if (curTab === 'all') {
+            const out = [];
+            TAB_DEFS.forEach(t => {
+              if (t.id === 'all') return;
+              const arr = Array.isArray(db.tabs?.[t.id]) ? db.tabs[t.id] : [];
+              // помечаем исходную вкладку, чтобы добавление попадало "куда покупал"
+              arr.forEach(it => out.push({ ...it, _tab: t.id }));
+            });
+            return out;
+          }
+          return Array.isArray(db.tabs[curTab]) ? db.tabs[curTab] : [];
+        })();
         const filtered = q ? items.filter(it => {
           const n = String(it?.name_ru || it?.name_en || '').toLowerCase();
           const d = String(it?.description_ru || '').toLowerCase();
@@ -1304,10 +1457,23 @@ function bindTextareaHeightPersistence(root, player) {
         const btn = e.target?.closest?.('[data-equip-action][data-item-id]');
         if (!btn) return;
         const id = btn.getAttribute('data-item-id') || '';
-        const curTab = String(tabSel.value || 'weapons');
-        const items = Array.isArray(db?.tabs?.[curTab]) ? db.tabs[curTab] : [];
+        const curTab = String(tabSel.value || 'all');
+        const items = (() => {
+          if (curTab === 'all') {
+            const out = [];
+            TAB_DEFS.forEach(t => {
+              if (t.id === 'all') return;
+              const arr = Array.isArray(db?.tabs?.[t.id]) ? db.tabs[t.id] : [];
+              arr.forEach(it => out.push({ ...it, _tab: t.id }));
+            });
+            return out;
+          }
+          return Array.isArray(db?.tabs?.[curTab]) ? db.tabs[curTab] : [];
+        })();
         const found = items.find(x => String(x?.id || '') === String(id));
         if (!found) return;
+
+        const targetTab = found?._tab ? String(found._tab) : curTab;
 
         const qty = Math.max(1, safeInt(qtyInp?.value, 1));
 
@@ -1317,14 +1483,14 @@ function bindTextareaHeightPersistence(root, player) {
             alert('Недостаточно монет.');
             return;
           }
-          addToInventory(sheet, curTab, found, qty);
+          addToInventory(sheet, targetTab, found, qty);
         } else {
-          addToInventory(sheet, curTab, found, qty);
+          addToInventory(sheet, targetTab, found, qty);
         }
 
         // выставим активную вкладку инвентаря = вкладка добавления
-        if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: curTab };
-        sheet.inventory.activeTab = curTab;
+        if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: targetTab };
+        sheet.inventory.activeTab = targetTab;
 
         scheduleSheetSave(curPlayer);
         rerenderActiveTab(curPlayer);
@@ -1380,6 +1546,95 @@ function bindTextareaHeightPersistence(root, player) {
         const sheet = curPlayer?.sheet?.parsed;
         if (!sheet) return;
         const tabId = String(sheet?.inventory?.activeTab || 'weapons');
+
+        // Для вкладки "Оружие" — даём выбрать кубики урона как в меню "Бой"
+        if (tabId === 'weapons') {
+          const wrap = document.createElement('div');
+          wrap.className = 'equip-overlay';
+          const diceOptions = ['к4','к6','к8','к10','к12','к20'];
+          wrap.innerHTML = `
+            <div class="equip-overlay__backdrop" data-wm-close></div>
+            <div class="equip-overlay__panel" role="dialog" aria-modal="true" style="width:min(760px,92vw)">
+              <div class="equip-overlay__head">
+                <div class="equip-overlay__title">Добавить оружие</div>
+                <button class="equip-overlay__x" type="button" data-wm-close>✕</button>
+              </div>
+
+              <div class="equip-overlay__controls" style="gap:12px">
+                <input class="equip-ctl" style="flex:1; min-width:200px" type="text" placeholder="Название" data-wm-name>
+                <div class="equip-qtywrap"><span class="equip-qtywrap__lbl">Количество</span><input class="equip-ctl equip-qty" type="number" min="1" max="999" value="1" data-wm-qty></div>
+              </div>
+
+              <div class="equip-overlay__list" style="padding-top:0">
+                <div class="sheet-card" style="margin-top:10px">
+                  <div class="weapon-details-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+                    <div class="weapon-fieldbox">
+                      <div class="weapon-fieldlabel">Урон (кол-во)</div>
+                      <input class="weapon-num" type="number" min="1" step="1" value="1" data-wm-dmgnum>
+                    </div>
+                    <div class="weapon-fieldbox">
+                      <div class="weapon-fieldlabel">Кость</div>
+                      <select class="weapon-select" data-wm-dmgdice>
+                        ${diceOptions.map(d=>`<option value="${d}">${d}</option>`).join('')}
+                      </select>
+                    </div>
+                    <div class="weapon-fieldbox">
+                      <div class="weapon-fieldlabel">Тип урона</div>
+                      <input class="weapon-text" type="text" placeholder="колющий/рубящий/..." data-wm-dmgtype>
+                    </div>
+                  </div>
+
+                  <div class="weapon-desc" style="margin-top:10px">
+                    <textarea class="sheet-textarea" rows="4" placeholder="Описание / свойства оружия..." data-wm-desc></textarea>
+                  </div>
+
+                  <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:10px">
+                    <button class="weapon-btn" type="button" data-wm-cancel>Отмена</button>
+                    <button class="weapon-btn" type="button" data-wm-add>Добавить</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          document.body.appendChild(wrap);
+          const close = () => wrap.remove();
+          wrap.addEventListener('click', (ev) => {
+            if (ev.target?.closest?.('[data-wm-close],[data-wm-cancel]')) close();
+          });
+          wrap.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+
+          const add = () => {
+            const name = (wrap.querySelector('[data-wm-name]')?.value || '').trim() || 'Оружие';
+            const qty = Math.max(1, safeInt(wrap.querySelector('[data-wm-qty]')?.value, 1));
+            const dmgNum = Math.max(1, safeInt(wrap.querySelector('[data-wm-dmgnum]')?.value, 1));
+            const dmgDice = String(wrap.querySelector('[data-wm-dmgdice]')?.value || 'к6');
+            const dmgType = (wrap.querySelector('[data-wm-dmgtype]')?.value || '').trim();
+            const desc = (wrap.querySelector('[data-wm-desc]')?.value || '').trim();
+
+            if (!Array.isArray(sheet.weaponsList)) sheet.weaponsList = [];
+            const invId = `manual_weapon_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+            const w = { name, ability: 'str', prof: false, extraAtk: 0, dmgNum, dmgDice, dmgType, desc, collapsed: false, invId };
+            sheet.weaponsList.push(w);
+            try { window.__equipSync?.syncWeaponCombatToInv?.(sheet, w); } catch {}
+
+            // количество — это количество предметов в инвентаре
+            if (sheet?.inventory && Array.isArray(sheet.inventory.weapons)) {
+              const invIt = sheet.inventory.weapons.find(x => String(x?.id || '') === invId);
+              if (invIt) invIt.qty = qty;
+            }
+
+            scheduleSheetSave(curPlayer);
+            rerenderActiveTab(curPlayer);
+            close();
+          };
+
+          const addBtn = wrap.querySelector('[data-wm-add]');
+          if (addBtn) addBtn.addEventListener('click', add);
+          return;
+        }
+
         if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: tabId };
         if (!Array.isArray(sheet.inventory[tabId])) sheet.inventory[tabId] = [];
         sheet.inventory[tabId].push({
@@ -1408,6 +1663,16 @@ function bindTextareaHeightPersistence(root, player) {
         const qty = Math.max(1, safeInt(it?.qty, 1));
         const addCp = costToCp(it?.cost) * qty;
         addCoins(sheet, addCp);
+        // если продаём оружие — убираем его и из вкладки "Бой"
+        try {
+          if (tabId === 'weapons') {
+            const invId = String(it?.id || '').trim();
+            if (invId && Array.isArray(sheet.weaponsList)) {
+              sheet.weaponsList = sheet.weaponsList.filter(w => String(w?.invId || '') !== invId);
+            }
+          }
+        } catch {}
+
         sheet.inventory[tabId].splice(idx, 1);
         scheduleSheetSave(curPlayer);
         rerenderActiveTab(curPlayer);
@@ -1420,6 +1685,16 @@ function bindTextareaHeightPersistence(root, player) {
         const idx = safeInt(delBtn.getAttribute('data-idx'), -1);
         const sheet = curPlayer?.sheet?.parsed;
         if (!sheet?.inventory || !Array.isArray(sheet.inventory[tabId]) || idx < 0 || idx >= sheet.inventory[tabId].length) return;
+        // если удаляем оружие — убираем его и из вкладки "Бой"
+        try {
+          if (tabId === 'weapons') {
+            const invId = String(sheet.inventory?.[tabId]?.[idx]?.id || '').trim();
+            if (invId && Array.isArray(sheet.weaponsList)) {
+              sheet.weaponsList = sheet.weaponsList.filter(w => String(w?.invId || '') !== invId);
+            }
+          }
+        } catch {}
+
         sheet.inventory[tabId].splice(idx, 1);
         scheduleSheetSave(curPlayer);
         rerenderActiveTab(curPlayer);
