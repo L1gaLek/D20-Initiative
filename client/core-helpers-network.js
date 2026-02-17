@@ -68,6 +68,61 @@ function createInitialGameState() {
 function ensureStateHasMaps(state) {
   if (!state || typeof state !== "object") return createInitialGameState();
 
+  function normalizeWallsToEdgesOnMap(m) {
+    if (!m || typeof m !== 'object') return;
+    const bw = Number(m.boardWidth) || Number(state.boardWidth) || 10;
+    const bh = Number(m.boardHeight) || Number(state.boardHeight) || 10;
+    const list = Array.isArray(m.walls) ? m.walls : [];
+    if (!list.length) { m.walls = []; return; }
+
+    // If already edge-based (has dir), just ensure defaults.
+    const looksEdge = list.some(w => w && typeof w === 'object' && (w.dir || w.direction));
+    if (looksEdge) {
+      const out = [];
+      const seen = new Set();
+      for (const w of list) {
+        if (!w || typeof w !== 'object') continue;
+        const x = Number(w.x);
+        const y = Number(w.y);
+        const dir = String(w.dir || w.direction || '').toUpperCase();
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+        const k = `${x},${y},${dir}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const type = String(w.type || 'stone').toLowerCase();
+        const thickness = Math.max(1, Math.min(12, Number(w.thickness) || 4));
+        out.push({ x, y, dir, type, thickness });
+      }
+      m.walls = out;
+      return;
+    }
+
+    // Old schema: walls are opaque cells {x,y}. Convert each cell to a closed perimeter.
+    // This is the most predictable migration and avoids "leaking" vision through old walls.
+    const seen = new Set();
+    const out = [];
+    for (const w of list) {
+      const x = Number(w?.x);
+      const y = Number(w?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (x < 0 || y < 0 || x >= bw || y >= bh) continue;
+      const edges = [
+        { x, y, dir: 'N' },
+        { x, y, dir: 'E' },
+        { x, y, dir: 'S' },
+        { x, y, dir: 'W' }
+      ];
+      for (const ed of edges) {
+        const k = `${ed.x},${ed.y},${ed.dir}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push({ x: ed.x, y: ed.y, dir: ed.dir, type: 'stone', thickness: 4 });
+      }
+    }
+    m.walls = out;
+  }
+
   // already new schema
   if (Array.isArray(state.maps) && state.maps.length) {
     if (!state.currentMapId) state.currentMapId = String(state.maps[0].id || "map-1");
@@ -110,6 +165,9 @@ function ensureStateHasMaps(state) {
         if (!Array.isArray(m.fog.explored)) m.fog.explored = [];
       }
     });
+
+    // Normalize walls to edge-segments for every map.
+    try { state.maps.forEach(mm => normalizeWallsToEdgesOnMap(mm)); } catch {}
     }
     state.schemaVersion = Math.max(Number(state.schemaVersion) || 0, 3);
     return state;
@@ -140,6 +198,9 @@ function ensureStateHasMaps(state) {
     },
     playersPos: {}
   };
+
+  // Convert old cell-walls to edge-walls for the migrated map.
+  try { normalizeWallsToEdgesOnMap(migratedMap); } catch {}
 
   (state.players || []).forEach((p) => {
     if (!p || !p.id) return;
@@ -239,9 +300,8 @@ function clamp(v, min, max) {
 }
 
 function isAreaFree(state, ignorePlayerId, x, y, size) {
-  const walls = Array.isArray(state.walls) ? state.walls : [];
-  // walls block only the top-left cell of a token (as in server)
-  if (walls.some(w => w && w.x === x && w.y === y)) return false;
+  // NOTE: walls are edge-segments and do not occupy cells.
+  // (Collision/pathfinding is handled elsewhere / manually by GM.)
 
   const players = Array.isArray(state.players) ? state.players : [];
   for (const p of players) {
@@ -1595,39 +1655,48 @@ async function sendMessage(msg) {
         else if (type === "bulkWalls") {
           if (!isGM) return;
           const mode = String(msg.mode || "");
-          const cells = Array.isArray(msg.cells) ? msg.cells : [];
+          const edges = Array.isArray(msg.edges) ? msg.edges : [];
           if (!Array.isArray(next.walls)) next.walls = [];
-          // Используем Set для ускорения
-          const wallSet = new Set(next.walls.map(w => `${w.x},${w.y}`));
+          // Normalize existing to edge-format and index.
+          const wallSet = new Set(next.walls
+            .filter(w => w && typeof w === 'object')
+            .map(w => `${w.x},${w.y},${String(w.dir || w.direction || '').toUpperCase()}`));
           let changed = 0;
 
           if (mode === "add") {
-            for (const c of cells) {
-              const x = Number(c?.x), y = Number(c?.y);
+            for (const ed of edges) {
+              const x = Number(ed?.x), y = Number(ed?.y);
+              const dir = String(ed?.dir || ed?.direction || '').toUpperCase();
               if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-              const k = `${x},${y}`;
+              if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+              const k = `${x},${y},${dir}`;
               if (wallSet.has(k)) continue;
               wallSet.add(k);
-              next.walls.push({ x, y });
+              const type = String(ed?.type || 'stone').toLowerCase();
+              const thickness = Math.max(1, Math.min(12, Number(ed?.thickness) || 4));
+              next.walls.push({ x, y, dir, type, thickness });
               changed++;
             }
           } else if (mode === "remove") {
             const removeSet = new Set();
-            for (const c of cells) {
-              const x = Number(c?.x), y = Number(c?.y);
+            for (const ed of edges) {
+              const x = Number(ed?.x), y = Number(ed?.y);
+              const dir = String(ed?.dir || ed?.direction || '').toUpperCase();
               if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-              removeSet.add(`${x},${y}`);
+              if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+              removeSet.add(`${x},${y},${dir}`);
             }
             if (removeSet.size) {
-              next.walls = next.walls.filter(w => !removeSet.has(`${w.x},${w.y}`));
-              changed = removeSet.size;
+              const before = next.walls.length;
+              next.walls = next.walls.filter(w => !removeSet.has(`${w.x},${w.y},${String(w.dir || w.direction || '').toUpperCase()}`));
+              changed = Math.max(0, before - next.walls.length);
             }
           } else {
             return;
           }
 
           if (changed) {
-            logEventToState(next, `Окружение: ${mode === "add" ? "добавлено" : "удалено"} ${changed} стен`);
+            logEventToState(next, `Окружение: ${mode === "add" ? "добавлено" : "удалено"} ${changed} сегм.`);
           }
         }
 
@@ -1635,9 +1704,16 @@ else if (type === "addWall") {
           if (!isGM) return;
           const w = msg.wall;
           if (!w) return;
-          if (!(next.walls || []).find(x => x.x === w.x && x.y === w.y)) {
-            next.walls.push({ x: w.x, y: w.y });
-            logEventToState(next, `Стена добавлена (${w.x},${w.y})`);
+          const x = Number(w?.x), y = Number(w?.y);
+          const dir = String(w?.dir || w?.direction || '').toUpperCase();
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+          if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return;
+          if (!Array.isArray(next.walls)) next.walls = [];
+          if (!(next.walls || []).find(e => Number(e?.x) === x && Number(e?.y) === y && String(e?.dir || e?.direction || '').toUpperCase() === dir)) {
+            const type = String(w?.type || 'stone').toLowerCase();
+            const thickness = Math.max(1, Math.min(12, Number(w?.thickness) || 4));
+            next.walls.push({ x, y, dir, type, thickness });
+            logEventToState(next, `Сегмент стены добавлен (${x},${y},${dir})`);
           }
         }
 
@@ -1645,8 +1721,12 @@ else if (type === "addWall") {
           if (!isGM) return;
           const w = msg.wall;
           if (!w) return;
-          next.walls = (next.walls || []).filter(x => !(x.x === w.x && x.y === w.y));
-          logEventToState(next, `Стена удалена (${w.x},${w.y})`);
+          const x = Number(w?.x), y = Number(w?.y);
+          const dir = String(w?.dir || w?.direction || '').toUpperCase();
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+          if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return;
+          next.walls = (next.walls || []).filter(e => !(Number(e?.x) === x && Number(e?.y) === y && String(e?.dir || e?.direction || '').toUpperCase() === dir));
+          logEventToState(next, `Сегмент стены удалён (${x},${y},${dir})`);
         }
 
         else if (type === "setBoardBg") {

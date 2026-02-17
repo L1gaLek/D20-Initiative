@@ -1,6 +1,17 @@
 // ================== BOARD ==================
 function renderBoard(state) {
+  // Clear old grid cells and rebuild.
   board.querySelectorAll('.cell').forEach(c => c.remove());
+
+  // Clear + (re)create walls layer
+  try {
+    const old = board.querySelector('#walls-layer');
+    if (old) old.remove();
+  } catch {}
+
+  const wallsLayer = document.createElement('div');
+  wallsLayer.id = 'walls-layer';
+  board.appendChild(wallsLayer);
   board.style.position = 'relative';
   board.style.width = `${boardWidth * 50}px`;
   board.style.height = `${boardHeight * 50}px`;
@@ -18,15 +29,77 @@ function renderBoard(state) {
       cell.classList.add('cell');
       cell.dataset.x = x;
       cell.dataset.y = y;
-      if (state.walls?.find(w => w.x === x && w.y === y)) cell.classList.add('wall');
       board.appendChild(cell);
     }
   }
+
+  // Render wall segments (edges) on top of the grid (below tokens).
+  try { renderWallEdges(state, wallsLayer); } catch {}
 
   players.forEach(p => setPlayerPosition(p));
 
   // Fog of war overlay needs to match board size and state.
   try { window.FogWar?.onBoardRendered?.(state); } catch {}
+}
+
+// ================== WALL EDGES RENDER ==================
+function renderWallEdges(state, layerEl) {
+  if (!layerEl) return;
+
+  const CELL = 50;
+  const stWalls = Array.isArray(state?.walls) ? state.walls : [];
+
+  // Remove previous nodes
+  layerEl.innerHTML = '';
+
+  const bw = Number(state?.boardWidth) || boardWidth || 10;
+  const bh = Number(state?.boardHeight) || boardHeight || 10;
+  layerEl.style.width = `${bw * CELL}px`;
+  layerEl.style.height = `${bh * CELL}px`;
+
+  for (const w of stWalls) {
+    if (!w || typeof w !== 'object') continue;
+    const x = Number(w.x);
+    const y = Number(w.y);
+    const dir = String(w.dir || '').toUpperCase();
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+
+    const type = String(w.type || 'stone').toLowerCase();
+    const thickness = Math.max(1, Math.min(12, Number(w.thickness) || 4));
+
+    const el = document.createElement('div');
+    el.className = `wall-edge wall-type-${type}`;
+    el.style.setProperty('--t', `${thickness}px`);
+
+    // Position
+    const left = x * CELL;
+    const top = y * CELL;
+
+    if (dir === 'N') {
+      el.style.left = `${left}px`;
+      el.style.top = `${top - Math.floor(thickness / 2)}px`;
+      el.style.width = `${CELL}px`;
+      el.style.height = `${thickness}px`;
+    } else if (dir === 'S') {
+      el.style.left = `${left}px`;
+      el.style.top = `${top + CELL - Math.floor(thickness / 2)}px`;
+      el.style.width = `${CELL}px`;
+      el.style.height = `${thickness}px`;
+    } else if (dir === 'W') {
+      el.style.left = `${left - Math.floor(thickness / 2)}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${thickness}px`;
+      el.style.height = `${CELL}px`;
+    } else if (dir === 'E') {
+      el.style.left = `${left + CELL - Math.floor(thickness / 2)}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${thickness}px`;
+      el.style.height = `${CELL}px`;
+    }
+
+    layerEl.appendChild(el);
+  }
 }
 
 // ================== SHEET HELPERS (for HP bar + mini popup) ==================
