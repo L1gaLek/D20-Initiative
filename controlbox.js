@@ -365,7 +365,12 @@
             detail: { mode: wallMode, edges: changed }
           }));
         } catch {}
-        ctx.sendMessage?.({ type: 'bulkWalls', mode: wallMode, edges: changed });
+        // IMPORTANT:
+        // The project uses *edge walls* (v2) on cell borders. The room state handler
+        // expects message type `bulkWallEdges` with field `edges`.
+        // Sending legacy `bulkWalls` (which expects `cells`) causes walls to appear
+        // optimistically for a moment and then disappear (state never updates).
+        ctx.sendMessage?.({ type: 'bulkWallEdges', mode: wallMode, edges: changed });
       }
 
       dragTouched = new Set();
