@@ -1057,6 +1057,377 @@ function bindTextareaHeightPersistence(root, player) {
     });
   }
 
+  // ===== Equipment DB / Shop / Inventory (structured) =====
+  function bindEquipmentUi(root, player, canEdit) {
+    if (!root) return;
+    root.__equipState = { player, canEdit };
+    const getState = () => root.__equipState || { player, canEdit };
+
+    if (root.__equipBound) return;
+    root.__equipBound = true;
+
+    async function ensureEquipDb() {
+      if (window.__srdEquipDb && window.__srdEquipDb.tabs) return window.__srdEquipDb;
+      const res = await fetch('equipment_srd5_ru.json', { cache: 'no-store' }).catch(() => null);
+      if (!res || !res.ok) throw new Error('Не удалось загрузить equipment_srd5_ru.json');
+      const json = await res.json();
+      window.__srdEquipDb = json;
+      return json;
+    }
+
+    function coinToCp(coin) {
+      const c = String(coin || '').toLowerCase();
+      if (c === 'cp') return 1;
+      if (c === 'sp') return 10;
+      if (c === 'ep') return 50;
+      if (c === 'gp') return 100;
+      if (c === 'pp') return 1000;
+      return 0;
+    }
+
+    function costToCp(cost) {
+      if (!cost || typeof cost !== 'object') return 0;
+      const a = Number(cost.amount ?? cost.value ?? 0);
+      if (!Number.isFinite(a)) return 0;
+      return Math.round(a * coinToCp(cost.coin));
+    }
+
+    function coinsTotalCpLocal(sheet) {
+      return (safeInt(sheet?.coins?.cp?.value, 0) * 1)
+        + (safeInt(sheet?.coins?.sp?.value, 0) * 10)
+        + (safeInt(sheet?.coins?.ep?.value, 0) * 50)
+        + (safeInt(sheet?.coins?.gp?.value, 0) * 100)
+        + (safeInt(sheet?.coins?.pp?.value, 0) * 1000);
+    }
+
+    function addToInventory(sheet, tabId, item, qty) {
+      if (!sheet) return;
+      if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: tabId };
+      if (!Array.isArray(sheet.inventory[tabId])) sheet.inventory[tabId] = [];
+      const q = Math.max(1, safeInt(qty, 1));
+      // если такой id уже есть — увеличим qty
+      const id = item?.id ? String(item.id) : '';
+      const arr = sheet.inventory[tabId];
+      const found = id ? arr.find(x => x && typeof x === 'object' && String(x.id || '') === id) : null;
+      if (found) {
+        found.qty = Math.max(1, safeInt(found.qty, 1)) + q;
+        return;
+      }
+      const payload = JSON.parse(JSON.stringify(item || {}));
+      payload.qty = q;
+      payload._tab = tabId;
+      arr.push(payload);
+    }
+
+    function spendCoins(sheet, costCp) {
+      const total = coinsTotalCpLocal(sheet);
+      if (total < costCp) return false;
+      const left = total - costCp;
+      // setCoinsFromTotalCp defined in sheet-modal-data.js
+      if (typeof setCoinsFromTotalCp === 'function') {
+        setCoinsFromTotalCp(sheet, left);
+      } else {
+        // fallback: store all in gp
+        if (!sheet.coins) sheet.coins = { cp: { value: 0 }, sp: { value: 0 }, ep: { value: 0 }, gp: { value: 0 }, pp: { value: 0 } };
+        sheet.coins.cp.value = 0; sheet.coins.sp.value = 0; sheet.coins.ep.value = 0; sheet.coins.pp.value = 0;
+        sheet.coins.gp.value = Math.floor(left / 100);
+        sheet.coins.cp.value = left % 100;
+      }
+      return true;
+    }
+
+    function addCoins(sheet, addCp) {
+      const total = coinsTotalCpLocal(sheet);
+      const next = Math.max(0, total + Math.max(0, safeInt(addCp, 0)));
+      if (typeof setCoinsFromTotalCp === 'function') setCoinsFromTotalCp(sheet, next);
+      else {
+        // minimal fallback
+        if (!sheet.coins) sheet.coins = { cp: { value: 0 }, sp: { value: 0 }, ep: { value: 0 }, gp: { value: 0 }, pp: { value: 0 } };
+        sheet.coins.gp.value = Math.floor(next / 100);
+        sheet.coins.cp.value = next % 100;
+        sheet.coins.sp.value = 0; sheet.coins.ep.value = 0; sheet.coins.pp.value = 0;
+      }
+    }
+
+    function rerenderActiveTab(curPlayer) {
+      // перерисуем только main текущей вкладки, как это делает обработчик табов
+      const main = root.querySelector('#sheet-main');
+      const sheet = curPlayer?.sheet?.parsed || createEmptySheet(curPlayer?.name);
+      const vm = toViewModel(sheet, curPlayer?.name);
+      const tabId = curPlayer?._activeSheetTab || (getUiState(curPlayer.id)?.activeTab) || 'basic';
+      const { canEdit: curCanEdit } = getState();
+      if (main) {
+        main.innerHTML = renderActiveTab(tabId, vm, curCanEdit);
+        bindEditableInputs(root, curPlayer, curCanEdit);
+        bindSkillBoostDots(root, curPlayer, curCanEdit);
+        bindSaveProfDots(root, curPlayer, curCanEdit);
+        bindStatRollButtons(root, curPlayer);
+        bindAbilityAndSkillEditors(root, curPlayer, curCanEdit);
+        bindNotesEditors(root, curPlayer, curCanEdit);
+        bindSlotEditors(root, curPlayer, curCanEdit);
+        bindSpellAddAndDesc(root, curPlayer, curCanEdit);
+        bindCombatEditors(root, curPlayer, curCanEdit);
+        bindInventoryEditors(root, curPlayer, curCanEdit);
+        bindEquipmentUi(root, curPlayer, curCanEdit);
+        bindLanguagesUi(root, curPlayer, curCanEdit);
+        updateCoinsTotal(root, curPlayer.sheet?.parsed);
+      }
+    }
+
+    function openEquipOverlay(mode) {
+      const { player: curPlayer, canEdit: curCanEdit } = getState();
+      if (!curCanEdit) return;
+      const sheet = curPlayer?.sheet?.parsed;
+      if (!sheet) return;
+
+      const tabId = mode === 'buy'
+        ? String(sheet?.shop?.activeTab || 'weapons')
+        : String(sheet?.inventory?.activeTab || 'weapons');
+
+      const wrap = document.createElement('div');
+      wrap.className = 'equip-overlay';
+      wrap.innerHTML = `
+        <div class="equip-overlay__backdrop" data-equip-close></div>
+        <div class="equip-overlay__panel" role="dialog" aria-modal="true">
+          <div class="equip-overlay__head">
+            <div class="equip-overlay__title">${mode === 'buy' ? 'Магазин' : 'База предметов'}</div>
+            <button class="equip-overlay__x" type="button" data-equip-close>✕</button>
+          </div>
+          <div class="equip-overlay__controls">
+            <select class="equip-ctl" data-equip-tab></select>
+            <input class="equip-ctl" type="text" placeholder="Поиск..." data-equip-q>
+            <input class="equip-ctl equip-qty" type="number" min="1" max="999" value="1" data-equip-qty title="Количество">
+          </div>
+          <div class="equip-overlay__list" data-equip-list>Загрузка базы...</div>
+        </div>
+      `;
+      document.body.appendChild(wrap);
+
+      const close = () => {
+        wrap.remove();
+      };
+
+      wrap.addEventListener('click', (e) => {
+        if (e.target?.closest?.('[data-equip-close]')) close();
+      });
+
+      const tabSel = wrap.querySelector('[data-equip-tab]');
+      const qInp = wrap.querySelector('[data-equip-q]');
+      const qtyInp = wrap.querySelector('[data-equip-qty]');
+      const listEl = wrap.querySelector('[data-equip-list]');
+
+      const TAB_DEFS = [
+        { id: 'weapons', label: 'Оружие' },
+        { id: 'armor', label: 'Доспехи' },
+        { id: 'adventuring_gear', label: 'Снаряжение' },
+        { id: 'tools', label: 'Инструменты' },
+        { id: 'mounts_animals', label: 'Животные' },
+        { id: 'tack_vehicles', label: 'Упряжь/Повозки' },
+        { id: 'water_vehicles', label: 'Водный транспорт' },
+        { id: 'trade_goods', label: 'Товары' },
+        { id: 'lifestyle_expenses', label: 'Образ жизни' }
+      ];
+
+      tabSel.innerHTML = TAB_DEFS.map(t => `<option value="${escapeHtml(t.id)}" ${t.id === tabId ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('');
+
+      let db = null;
+      const renderList = () => {
+        if (!db || !db.tabs) return;
+        const curTab = String(tabSel.value || 'weapons');
+        const q = String(qInp.value || '').trim().toLowerCase();
+        const items = Array.isArray(db.tabs[curTab]) ? db.tabs[curTab] : [];
+        const filtered = q ? items.filter(it => {
+          const n = String(it?.name_ru || it?.name_en || '').toLowerCase();
+          const d = String(it?.description_ru || '').toLowerCase();
+          return n.includes(q) || d.includes(q);
+        }) : items;
+
+        if (!filtered.length) {
+          listEl.innerHTML = `<div class="sheet-note">Ничего не найдено</div>`;
+          return;
+        }
+
+        listEl.innerHTML = filtered.map(it => {
+          const name = escapeHtml(it.name_ru || it.name_en || '(без названия)');
+          const cost = (it.cost && typeof it.cost === 'object') ? `${escapeHtml(String(it.cost.amount ?? ''))} ${escapeHtml(String(it.cost.coin_ru || it.cost.coin || ''))}` : '—';
+          const w = (it.weight && typeof it.weight === 'object') ? (it.weight.text || (it.weight.lb != null ? `${it.weight.lb} lb.` : '')) : '';
+          const desc = escapeHtml(String(it.description_ru || '').trim());
+          const meta = (() => {
+            if (it.type === 'weapon' && it.weapon) {
+              const dmg = it.weapon.damage ? `Урон: ${escapeHtml(String(it.weapon.damage))} (${escapeHtml(String(it.weapon.damage_type || ''))})` : '';
+              const props = it.weapon.properties_ru ? `Свойства: ${escapeHtml(String(it.weapon.properties_ru))}` : '';
+              return [dmg, props].filter(Boolean).join(' • ');
+            }
+            if (it.type === 'armor' && it.armor) {
+              const ac = it.armor.ac ? `КД: ${escapeHtml(String(it.armor.ac))}` : '';
+              const dis = it.armor.stealth_disadv ? 'Помеха скрытности' : '';
+              return [ac, dis].filter(Boolean).join(' • ');
+            }
+            return '';
+          })();
+
+          return `
+            <div class="equip-row" data-equip-row="${escapeHtml(String(it.id || ''))}">
+              <div class="equip-row__left">
+                <div class="equip-row__name">${name}</div>
+                <div class="equip-row__meta">Цена: ${cost}${w ? ` • Вес: ${escapeHtml(String(w))}` : ''}${meta ? ` • ${meta}` : ''}</div>
+                ${desc ? `<div class="equip-row__desc">${desc}</div>` : ''}
+              </div>
+              <div class="equip-row__right">
+                <button class="weapon-btn" type="button" data-equip-action data-item-id="${escapeHtml(String(it.id || ''))}">${mode === 'buy' ? 'Купить' : 'Добавить'}</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      };
+
+      ensureEquipDb()
+        .then(j => { db = j; renderList(); })
+        .catch(err => { listEl.textContent = String(err?.message || err || 'Ошибка загрузки базы'); });
+
+      tabSel.addEventListener('change', () => {
+        const curTab = String(tabSel.value || 'weapons');
+        if (mode === 'buy') {
+          if (!sheet.shop || typeof sheet.shop !== 'object') sheet.shop = {};
+          sheet.shop.activeTab = curTab;
+        } else {
+          if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = {};
+          sheet.inventory.activeTab = curTab;
+        }
+        scheduleSheetSave(curPlayer);
+        renderList();
+        rerenderActiveTab(curPlayer);
+      });
+      qInp.addEventListener('input', renderList);
+
+      listEl.addEventListener('click', (e) => {
+        const btn = e.target?.closest?.('[data-equip-action][data-item-id]');
+        if (!btn) return;
+        const id = btn.getAttribute('data-item-id') || '';
+        const curTab = String(tabSel.value || 'weapons');
+        const items = Array.isArray(db?.tabs?.[curTab]) ? db.tabs[curTab] : [];
+        const found = items.find(x => String(x?.id || '') === String(id));
+        if (!found) return;
+
+        const qty = Math.max(1, safeInt(qtyInp?.value, 1));
+
+        if (mode === 'buy') {
+          const cp = costToCp(found.cost) * qty;
+          if (!spendCoins(sheet, cp)) {
+            alert('Недостаточно монет.');
+            return;
+          }
+          addToInventory(sheet, curTab, found, qty);
+        } else {
+          addToInventory(sheet, curTab, found, qty);
+        }
+
+        // выставим активную вкладку инвентаря = вкладка добавления
+        if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: curTab };
+        sheet.inventory.activeTab = curTab;
+
+        scheduleSheetSave(curPlayer);
+        rerenderActiveTab(curPlayer);
+      });
+    }
+
+    root.addEventListener('click', (e) => {
+      const { player: curPlayer, canEdit: curCanEdit } = getState();
+      if (!curPlayer) return;
+
+      // Inventory subtabs
+      const invTabBtn = e.target?.closest?.('[data-inv-subtab]');
+      if (invTabBtn) {
+        if (!curCanEdit) return;
+        const tabId = String(invTabBtn.getAttribute('data-inv-subtab') || 'weapons');
+        const sheet = curPlayer?.sheet?.parsed;
+        if (!sheet) return;
+        if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = {};
+        sheet.inventory.activeTab = tabId;
+        scheduleSheetSave(curPlayer);
+        rerenderActiveTab(curPlayer);
+        return;
+      }
+
+      // Shop subtabs
+      const shopTabBtn = e.target?.closest?.('[data-shop-subtab]');
+      if (shopTabBtn) {
+        if (!curCanEdit) return;
+        const tabId = String(shopTabBtn.getAttribute('data-shop-subtab') || 'weapons');
+        const sheet = curPlayer?.sheet?.parsed;
+        if (!sheet) return;
+        if (!sheet.shop || typeof sheet.shop !== 'object') sheet.shop = {};
+        sheet.shop.activeTab = tabId;
+        scheduleSheetSave(curPlayer);
+        rerenderActiveTab(curPlayer);
+        return;
+      }
+
+      // Open DB from inventory
+      if (e.target?.closest?.('[data-inv-open-db]')) {
+        openEquipOverlay('add');
+        return;
+      }
+      // Open DB from shop
+      if (e.target?.closest?.('[data-shop-open-db]')) {
+        openEquipOverlay('buy');
+        return;
+      }
+
+      // manual add in inventory
+      if (e.target?.closest?.('[data-inv-add-manual]')) {
+        if (!curCanEdit) return;
+        const sheet = curPlayer?.sheet?.parsed;
+        if (!sheet) return;
+        const tabId = String(sheet?.inventory?.activeTab || 'weapons');
+        if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: tabId };
+        if (!Array.isArray(sheet.inventory[tabId])) sheet.inventory[tabId] = [];
+        sheet.inventory[tabId].push({
+          id: `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          name_ru: "Новый предмет",
+          qty: 1,
+          cost: { amount: 0, coin: 'gp', coin_ru: 'зм' },
+          weight: { lb: 0, text: '' },
+          description_ru: "",
+          type: 'manual'
+        });
+        scheduleSheetSave(curPlayer);
+        rerenderActiveTab(curPlayer);
+        return;
+      }
+
+      // sell/delete inventory item
+      const sellBtn = e.target?.closest?.('[data-inv-sell][data-tab][data-idx]');
+      if (sellBtn) {
+        if (!curCanEdit) return;
+        const tabId = String(sellBtn.getAttribute('data-tab') || 'weapons');
+        const idx = safeInt(sellBtn.getAttribute('data-idx'), -1);
+        const sheet = curPlayer?.sheet?.parsed;
+        if (!sheet?.inventory || !Array.isArray(sheet.inventory[tabId]) || idx < 0 || idx >= sheet.inventory[tabId].length) return;
+        const it = sheet.inventory[tabId][idx];
+        const qty = Math.max(1, safeInt(it?.qty, 1));
+        const addCp = costToCp(it?.cost) * qty;
+        addCoins(sheet, addCp);
+        sheet.inventory[tabId].splice(idx, 1);
+        scheduleSheetSave(curPlayer);
+        rerenderActiveTab(curPlayer);
+        return;
+      }
+      const delBtn = e.target?.closest?.('[data-inv-del][data-tab][data-idx]');
+      if (delBtn) {
+        if (!curCanEdit) return;
+        const tabId = String(delBtn.getAttribute('data-tab') || 'weapons');
+        const idx = safeInt(delBtn.getAttribute('data-idx'), -1);
+        const sheet = curPlayer?.sheet?.parsed;
+        if (!sheet?.inventory || !Array.isArray(sheet.inventory[tabId]) || idx < 0 || idx >= sheet.inventory[tabId].length) return;
+        sheet.inventory[tabId].splice(idx, 1);
+        scheduleSheetSave(curPlayer);
+        rerenderActiveTab(curPlayer);
+        return;
+      }
+    });
+  }
+
   // ===== Slots (spell slots) editors =====
 function bindSlotEditors(root, player, canEdit) {
   if (!root || !player?.sheet) return;

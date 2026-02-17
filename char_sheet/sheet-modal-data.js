@@ -275,7 +275,27 @@
       weaponsList: [],
       coins: { cp: { value: 0 }, sp: { value: 0 }, ep: { value: 0 }, gp: { value: 0 }, pp: { value: 0 } },
       // в какую монету пересчитывать общий итог (по умолчанию ЗМ)
-      coinsView: { denom: "gp" }
+      coinsView: { denom: "gp" },
+
+      // ===== Инвентарь (структурированный, с вкладками как в базе) =====
+      inventory: {
+        activeTab: "weapons",
+        weapons: [],
+        armor: [],
+        adventuring_gear: [],
+        tools: [],
+        mounts_animals: [],
+        tack_vehicles: [],
+        water_vehicles: [],
+        trade_goods: [],
+        lifestyle_expenses: [],
+        other: []
+      },
+
+      // ===== Магазин (только UI-состояние) =====
+      shop: {
+        activeTab: "weapons"
+      }
     };
   }
 
@@ -628,7 +648,23 @@ const weapons = weaponsRaw
       : [];
 
 
-    return { name, cls, lvl, race, hp, hpCur, hpTemp, ac, spd, inspiration, exhaustion, conditions, stats, passive, profLines, profText, languagesHint, languagesLearned, personality, notesDetails, notesEntries, spellsInfo, slots, spellsByLevel, spellsPlainByLevel, spellNameByHref, spellDescByHref, profBonus: getProfBonus(sheet), weapons, combatAbilitiesEntries, coins, coinsViewDenom };
+    const inv = (sheet?.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
+    const shop = (sheet?.shop && typeof sheet.shop === "object") ? sheet.shop : null;
+
+    return {
+      name, cls, lvl, race,
+      hp, hpCur, hpTemp, ac, spd,
+      inspiration, exhaustion, conditions,
+      stats, passive,
+      profLines, profText, languagesHint, languagesLearned,
+      personality, notesDetails, notesEntries,
+      spellsInfo, slots, spellsByLevel, spellsPlainByLevel, spellNameByHref, spellDescByHref,
+      profBonus: getProfBonus(sheet),
+      weapons, combatAbilitiesEntries,
+      coins, coinsViewDenom,
+      inventory: inv,
+      shop
+    };
   }
 
   // ================== SHEET UPDATE HELPERS ==================
@@ -665,6 +701,30 @@ const weapons = weaponsRaw
 
   // ===== Coins helpers =====
   const COIN_TO_CP = { cp: 1, sp: 10, ep: 50, gp: 100, pp: 1000 };
+
+  function setCoinsFromTotalCp(sheet, totalCp) {
+    if (!sheet) return;
+    const t = Math.max(0, safeInt(totalCp, 0));
+    if (!sheet.coins || typeof sheet.coins !== "object") sheet.coins = {};
+    if (!sheet.coins.cp) sheet.coins.cp = { value: 0 };
+    if (!sheet.coins.sp) sheet.coins.sp = { value: 0 };
+    if (!sheet.coins.ep) sheet.coins.ep = { value: 0 };
+    if (!sheet.coins.gp) sheet.coins.gp = { value: 0 };
+    if (!sheet.coins.pp) sheet.coins.pp = { value: 0 };
+
+    let left = t;
+    const pp = Math.floor(left / COIN_TO_CP.pp); left -= pp * COIN_TO_CP.pp;
+    const gp = Math.floor(left / COIN_TO_CP.gp); left -= gp * COIN_TO_CP.gp;
+    const ep = Math.floor(left / COIN_TO_CP.ep); left -= ep * COIN_TO_CP.ep;
+    const sp = Math.floor(left / COIN_TO_CP.sp); left -= sp * COIN_TO_CP.sp;
+    const cp = left;
+
+    sheet.coins.pp.value = pp;
+    sheet.coins.gp.value = gp;
+    sheet.coins.ep.value = ep;
+    sheet.coins.sp.value = sp;
+    sheet.coins.cp.value = cp;
+  }
 
   function coinsTotalCp(sheet) {
     const cp = safeInt(sheet?.coins?.cp?.value, 0);
