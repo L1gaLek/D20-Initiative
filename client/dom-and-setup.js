@@ -242,11 +242,6 @@ function applyRoleToUI() {
   const pm = document.getElementById('player-management');
   if (pm) pm.style.display = spectator ? 'none' : '';
 
-  // Туман войны (панель управления) виден только для ГМ.
-  // Важно: роль может приходить ПОСЛЕ первого состояния, поэтому не полагаемся только на board-fog.js.
-  const fogBox = document.getElementById('fog-controls');
-  if (fogBox) fogBox.style.display = gm ? '' : 'none';
-
   // Галочка "Союзник" видна только для ГМ
   try {
     if (typeof isAllyCheckbox !== 'undefined' && isAllyCheckbox) {
@@ -599,7 +594,7 @@ if (diceViz) diceViz.style.display = 'none';
 // ================== JOIN GAME ==================
 joinBtn.addEventListener('click', () => {
   const name = usernameInput.value.trim();
-  const role = roleSelect.value;
+  const role = '';
 
   if (!name) {
     loginError.textContent = "Введите имя";
@@ -626,10 +621,11 @@ window.SUPABASE_FETCH_FN = "fetch";
 
   localStorage.setItem("dnd_user_id", String(userId));
   localStorage.setItem("dnd_user_name", String(name));
-  localStorage.setItem("dnd_user_role", String(role || ""));
+  // Роль выбирается при входе в комнату
+  localStorage.setItem("dnd_user_role", "");
 
   // In Supabase-MVP our "myId" is stable localStorage userId
-  handleMessage({ type: "registered", id: userId, name, role });
+  handleMessage({ type: "registered", id: userId, name, role: '' });
 
   // list rooms from DB
   sendMessage({ type: 'listRooms' });

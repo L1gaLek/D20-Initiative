@@ -38,9 +38,24 @@
         if (typeof myRole !== 'undefined' && String(myRole) === 'GM') return true;
       } catch {}
       if (!this.isEnabled()) return true;
-      // Require destination to be visible.
+      const st = this._lastState;
+      const moveOnlyOpen = !!(st?.fog?.moveOnlyExplored);
+      const cx = Number(x) || 0;
+      const cy = Number(y) || 0;
+
+      // If restriction enabled: allow move only to currently visible OR explored.
+      if (moveOnlyOpen) {
+        const visible = this.isCellVisible(cx, cy);
+        if (visible) return true;
+        // explored counts only in dynamic mode (as requested)
+        const exploredOn = !!(st?.fog?.exploredEnabled);
+        if (String(st?.fog?.mode || '') === 'dynamic' && exploredOn && this._exploredSet?.has(`${cx},${cy}`)) return true;
+        return false;
+      }
+
+      // Default: allow move to visible cells (old behavior)
       // For multi-size tokens, require top-left visible (simple + consistent with movement model)
-      return this.isCellVisible(Number(x) || 0, Number(y) || 0);
+      return this.isCellVisible(cx, cy);
     },
 
     isCellVisible(x, y) {
@@ -395,14 +410,22 @@
 
       ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
 
+      const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
+      const gmView = String(fog?.gmViewMode || 'gm');
+      const gmOpen = !!fog.gmOpen;
+
+      // If GM requested "Open for GM" and GM is in GM view, do not draw dark fog overlay.
+      const skipDarkOverlay = (isGm && gmView !== 'player' && gmOpen);
+
       // Draw per-cell rectangles: hidden alpha, explored alpha, visible clear
       const exploredOn = !!fog.exploredEnabled;
       const explored = this._exploredSet;
       const baseReveal = (fog.manualBase === 'reveal');
 
-      for (let y = 0; y < hCells; y++) {
-        for (let x = 0; x < wCells; x++) {
-          let alpha = 0.92;
+      if (!skipDarkOverlay) {
+        for (let y = 0; y < hCells; y++) {
+          for (let x = 0; x < wCells; x++) {
+            let alpha = 0.92;
 
           // manual visibility
           let revealed = baseReveal;
@@ -428,15 +451,14 @@
             alpha = 0.55;
           }
 
-          ctx.fillStyle = `rgba(0,0,0,${alpha})`;
-          ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+            ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+            ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+          }
         }
       }
 
       // GM-only overlay: show FOV for GM-created non-allies in red tint (dynamic mode only).
       try {
-        const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
-        const gmView = String(fog?.gmViewMode || 'gm');
         if (isGm && gmView !== 'player' && String(fog.mode || '') === 'dynamic' && this._dynNpcVisible && this._dynNpcVisible.length === wCells * hCells) {
           // Прозрачно-красный обзор для игроков ГМ (NPC, не союзники)
           ctx.fillStyle = 'rgba(255,0,0,0.16)';
@@ -544,16 +566,18 @@
         try {
           if (typeof myRole === 'undefined' || String(myRole) !== 'GM') return;
           const enabled = !!document.getElementById('fog-enabled')?.checked;
+          const gmOpen = !!document.getElementById('fog-open-for-gm')?.checked;
           const mode = String(document.getElementById('fog-mode')?.value || 'manual');
           const gmViewMode = String(document.getElementById('fog-gm-view')?.value || 'gm');
           const visionRadius = clampInt(Number(document.getElementById('fog-vision')?.value) || 8, 1, 60);
           const useWalls = !!document.getElementById('fog-use-walls')?.checked;
           const exploredEnabled = !!document.getElementById('fog-explored')?.checked;
-          sendMessage?.({ type: 'setFogSettings', enabled, mode, gmViewMode, visionRadius, useWalls, exploredEnabled });
+          const moveOnlyExplored = !!document.getElementById('fog-move-only-open')?.checked;
+          sendMessage?.({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
         } catch {}
       };
 
-      ['fog-enabled','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored'].forEach(id => {
+      ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', onSettingsChange);
@@ -585,11 +609,13 @@
       };
 
       setChecked('fog-enabled', !!fog.enabled);
+      setChecked('fog-open-for-gm', !!fog.gmOpen);
       setValue('fog-mode', (fog.mode === 'dynamic' ? 'dynamic' : 'manual'));
       setValue('fog-gm-view', (String(fog.gmViewMode || 'gm') === 'player' ? 'player' : 'gm'));
       setValue('fog-vision', Number(fog.visionRadius) || 8);
       setChecked('fog-use-walls', fog.useWalls !== false);
       setChecked('fog-explored', fog.exploredEnabled !== false);
+      setChecked('fog-move-only-open', !!fog.moveOnlyExplored);
 
       // Pointer events update for painting
       try { this._togglePointerEvents?.(); } catch {}

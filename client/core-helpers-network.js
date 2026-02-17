@@ -23,15 +23,16 @@ function createInitialGameState() {
       enabled: false,
       mode: 'manual', // 'manual' | 'dynamic'
       manualBase: 'hide', // 'hide' | 'reveal'
-      // GM view mode: 'gm' (see whole map) or 'player' (see like a player)
-      gmViewMode: 'gm',
       // Manual stamps are stored as {x,y,r,mode} in cell coordinates (r in cells)
       manualStamps: [],
       // Dynamic settings
       visionRadius: 8,
       useWalls: true,
       exploredEnabled: true,
-      // If true, non-GM players can move only within visible or explored cells (dynamic fog)
+      // GM viewing options
+      gmViewMode: 'gm',
+      gmOpen: false,
+      // Player movement restriction (dynamic): only to visible/explored
       moveOnlyExplored: false,
       // Shared explored cells for the party ("x,y" strings)
       explored: []
@@ -86,11 +87,12 @@ function ensureStateHasMaps(state) {
           enabled: false,
           mode: 'manual',
           manualBase: 'hide',
-          gmViewMode: 'gm',
           manualStamps: [],
           visionRadius: 8,
           useWalls: true,
           exploredEnabled: true,
+          gmViewMode: 'gm',
+          gmOpen: false,
           moveOnlyExplored: false,
           explored: []
         };
@@ -98,11 +100,12 @@ function ensureStateHasMaps(state) {
         if (typeof m.fog.enabled !== 'boolean') m.fog.enabled = false;
         if (m.fog.mode !== 'manual' && m.fog.mode !== 'dynamic') m.fog.mode = 'manual';
         if (m.fog.manualBase !== 'hide' && m.fog.manualBase !== 'reveal') m.fog.manualBase = 'hide';
-        if (m.fog.gmViewMode !== 'gm' && m.fog.gmViewMode !== 'player') m.fog.gmViewMode = 'gm';
         if (!Array.isArray(m.fog.manualStamps)) m.fog.manualStamps = [];
         if (!Number.isFinite(Number(m.fog.visionRadius))) m.fog.visionRadius = 8;
         if (typeof m.fog.useWalls !== 'boolean') m.fog.useWalls = true;
         if (typeof m.fog.exploredEnabled !== 'boolean') m.fog.exploredEnabled = true;
+        if (m.fog.gmViewMode !== 'gm' && m.fog.gmViewMode !== 'player') m.fog.gmViewMode = 'gm';
+        if (typeof m.fog.gmOpen !== 'boolean') m.fog.gmOpen = false;
         if (typeof m.fog.moveOnlyExplored !== 'boolean') m.fog.moveOnlyExplored = false;
         if (!Array.isArray(m.fog.explored)) m.fog.explored = [];
       }
@@ -129,12 +132,10 @@ function ensureStateHasMaps(state) {
       enabled: false,
       mode: 'manual',
       manualBase: 'hide',
-      gmViewMode: 'gm',
       manualStamps: [],
       visionRadius: 8,
       useWalls: true,
       exploredEnabled: true,
-      moveOnlyExplored: false,
       explored: []
     },
     playersPos: {}
@@ -221,6 +222,9 @@ function loadMapToRoot(state, mapId) {
     visionRadius: 8,
     useWalls: true,
     exploredEnabled: true,
+    gmViewMode: 'gm',
+    gmOpen: false,
+    moveOnlyExplored: false,
     explored: []
   };
 
@@ -688,7 +692,38 @@ async function sendMessage(msg) {
           .select("id,name,scenario,created_at")
           .order("created_at", { ascending: false });
         if (error) throw error;
-        handleMessage({ type: "rooms", rooms: data || [] });
+
+        // Unique users per room + total unique users on server (across all rooms)
+        let members = [];
+        try {
+          const { data: m, error: me } = await sbClient
+            .from("room_members")
+            .select("room_id,user_id");
+          if (!me) members = m || [];
+        } catch {}
+
+        const perRoom = new Map(); // roomId -> Set(userId)
+        const allUsers = new Set();
+        for (const row of (members || [])) {
+          const rid = String(row?.room_id || '');
+          const uid = String(row?.user_id || '');
+          if (!rid || !uid) continue;
+          allUsers.add(uid);
+          if (!perRoom.has(rid)) perRoom.set(rid, new Set());
+          perRoom.get(rid).add(uid);
+        }
+
+        const rooms = (data || []).map(r => {
+          const rid = String(r.id);
+          const s = perRoom.get(rid);
+          return {
+            ...r,
+            uniqueUsers: s ? s.size : 0,
+            hasPassword: false
+          };
+        });
+
+        handleMessage({ type: "rooms", rooms, totalUsers: allUsers.size });
         break;
       }
 
@@ -1652,6 +1687,8 @@ else if (type === "addWall") {
           if (Number.isFinite(Number(msg.visionRadius))) f.visionRadius = clamp(Number(msg.visionRadius), 1, 60);
           if (typeof msg.useWalls === 'boolean') f.useWalls = msg.useWalls;
           if (typeof msg.exploredEnabled === 'boolean') f.exploredEnabled = msg.exploredEnabled;
+          if (typeof msg.gmOpen === 'boolean') f.gmOpen = msg.gmOpen;
+          if (typeof msg.moveOnlyExplored === 'boolean') f.moveOnlyExplored = msg.moveOnlyExplored;
           // GM view mode:
           // - 'gm'     : GM sees full board, fog is an overlay showing what is revealed
           // - 'player' : GM sees exactly what players see

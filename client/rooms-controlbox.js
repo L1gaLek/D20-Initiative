@@ -4,6 +4,15 @@ function renderRooms(rooms) {
   roomsError.textContent = '';
   roomsList.innerHTML = '';
 
+  // total unique users on server (optional field from listRooms)
+  try {
+    const totalEl = document.getElementById('server-users-total');
+    if (totalEl) {
+      const n = Number(window.SERVER_TOTAL_USERS || 0);
+      totalEl.textContent = n ? `Онлайн на сервере: ${n}` : '';
+    }
+  } catch {}
+
   if (!rooms.length) {
     roomsList.textContent = 'Комнат пока нет.';
     return;
@@ -42,8 +51,12 @@ function renderRooms(rooms) {
     const joinBtn2 = document.createElement('button');
     joinBtn2.textContent = 'Войти';
     joinBtn2.onclick = () => {
-      const pw = r.hasPassword ? prompt('Пароль комнаты:') : '';
-      sendMessage({ type: 'joinRoom', roomId: r.id, password: pw || '' });
+      try {
+        openRoleModalForRoom(r);
+      } catch {
+        // fallback
+        sendMessage({ type: 'joinRoom', roomId: r.id, password: '' });
+      }
     };
 
     right.appendChild(joinBtn2);
@@ -53,6 +66,58 @@ function renderRooms(rooms) {
     roomsList.appendChild(card);
   });
 }
+
+// ================== ROLE PICK MODAL ==================
+let pendingJoinRoomId = null;
+function openRoleModalForRoom(room) {
+  pendingJoinRoomId = String(room?.id || '');
+  const modal = document.getElementById('roleModal');
+  const err = document.getElementById('roleModalError');
+  const rn = document.getElementById('roleModalRoomName');
+  if (err) err.textContent = '';
+  if (rn) rn.textContent = String(room?.name || 'Комната');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeRoleModal() {
+  const modal = document.getElementById('roleModal');
+  const err = document.getElementById('roleModalError');
+  if (err) err.textContent = '';
+  if (modal) modal.classList.add('hidden');
+  pendingJoinRoomId = null;
+}
+
+function pickRoleAndJoin(roleDb) {
+  const rid = String(pendingJoinRoomId || '');
+  if (!rid) return;
+  try {
+    // store role for this session
+    localStorage.setItem('dnd_user_role', String(roleDb));
+    // update globals/UI
+    try { window.myRole = normalizeRoleForUi(roleDb); } catch {}
+    try {
+      if (typeof myRole !== 'undefined') myRole = normalizeRoleForUi(roleDb);
+      if (typeof myRoleSpan !== 'undefined' && myRoleSpan) myRoleSpan.textContent = normalizeRoleForUi(roleDb);
+    } catch {}
+  } catch {}
+
+  closeRoleModal();
+  sendMessage({ type: 'joinRoom', roomId: rid, password: '' });
+}
+
+// wire modal buttons
+try {
+  const closeBtn = document.getElementById('roleModalClose');
+  const cancelBtn = document.getElementById('roleModalCancel');
+  const pickGm = document.getElementById('rolePickGM');
+  const pickPl = document.getElementById('rolePickPlayer');
+  const pickSp = document.getElementById('rolePickSpectator');
+  if (closeBtn) closeBtn.addEventListener('click', closeRoleModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeRoleModal);
+  if (pickGm) pickGm.addEventListener('click', () => pickRoleAndJoin('GM'));
+  if (pickPl) pickPl.addEventListener('click', () => pickRoleAndJoin('Player'));
+  if (pickSp) pickSp.addEventListener('click', () => pickRoleAndJoin('Spectator'));
+} catch {}
 
 function openCreateRoomModal() {
   roomNameInput.value = '';

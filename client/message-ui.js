@@ -51,6 +51,7 @@ function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
 if (msg.type === 'rooms' && Array.isArray(msg.rooms)) {
+  try { window.SERVER_TOTAL_USERS = Number(msg.totalUsers || 0) || 0; } catch {}
   renderRooms(msg.rooms);
   if (!currentRoomId && diceViz) diceViz.style.display = 'none';
 }
@@ -70,11 +71,12 @@ if (msg.type === 'joinedRoom' && msg.room) {
 if (msg.type === "registered") {
       myId = msg.id;
       localStorage.setItem("dnd_user_id", String(msg.id));
+      // Роль выбирается при входе в комнату
       localStorage.setItem("dnd_user_role", String(msg.role || ""));
       localStorage.setItem("dnd_user_name", String(msg.name || ""));
 myRole = msg.role;
       myNameSpan.textContent = msg.name;
-      myRoleSpan.textContent = msg.role;
+      myRoleSpan.textContent = msg.role ? msg.role : '-';
       myRole = String(msg.role || "");
 
       
@@ -697,21 +699,15 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      sendMessage({
-        type: 'setPlayersInCombatBulk',
-        items: stPlayers.map(p => ({ id: p.id, inCombat: true }))
-      });
+      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: true }));
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      sendMessage({
-        type: 'setPlayersInCombatBulk',
-        items: stPlayers.map(p => ({ id: p.id, inCombat: false }))
-      });
+      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: false }));
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      sendMessage({
-        type: 'setPlayersInCombatBulk',
-        items: stPlayers.map(p => ({ id: p.id, inCombat: (p && p.x !== null && p.y !== null) }))
+      stPlayers.forEach(p => {
+        const placed = (p && p.x !== null && p.y !== null);
+        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!placed });
       });
     });
 
@@ -983,11 +979,8 @@ function updatePlayerList() {
 
       // ===== Выбор инициативы для участника боя (в инициативе или позднее в бою) =====
       const phaseNow = String(lastState?.phase || '');
-      // Эти кнопки нужны ТОЛЬКО когда бой уже идет и в него добавили нового участника.
-      // В фазе "Инициатива" участники выбираются через чекбоксы/очередность, а бросок — общей кнопкой.
-      const canPickInit = (phaseNow === 'combat');
-      const needsChoice = !!p.pendingInitiativeChoice || !!p.willJoinNextRound;
-      if (lastState && canPickInit && needsChoice && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
+      const canPickInit = (phaseNow === 'initiative' || phaseNow === 'combat');
+      if (lastState && canPickInit && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
         const box = document.createElement('div');
         box.className = 'init-choice-box';
 
