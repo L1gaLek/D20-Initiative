@@ -222,23 +222,37 @@
     },
 
     _wallEdgesSet() {
-      // v2 walls: edges; legacy walls: blocked cells (converted to perimeter edges)
       const st = this._lastState || {};
+      const bw = Number(st.boardWidth) || 10;
+      const bh = Number(st.boardHeight) || 10;
       const walls = Array.isArray(st.walls) ? st.walls : [];
       const set = new Set();
-      for (const w of walls) {
-        const x = Number(w?.x), y = Number(w?.y);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-        const dir = String(w?.dir || '').toUpperCase();
-        if (dir === 'N' || dir === 'E' || dir === 'S' || dir === 'W') {
-          set.add(`${x},${y},${dir}`);
-        } else {
-          // legacy cell-wall -> perimeter edges
-          set.add(`${x},${y},N`);
-          set.add(`${x},${y},E`);
-          set.add(`${x},${y},S`);
-          set.add(`${x},${y},W`);
+
+      const keyBetween = (ax, ay, bx, by) => {
+        if (ax > bx || (ax === bx && ay > by)) {
+          const tx = ax, ty = ay;
+          ax = bx; ay = by;
+          bx = tx; by = ty;
         }
+        return `${ax},${ay}|${bx},${by}`;
+      };
+
+      for (const ed of walls) {
+        const x = Number(ed?.x);
+        const y = Number(ed?.y);
+        const dir = String(ed?.dir || ed?.direction || '').toUpperCase();
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+        if (x < 0 || y < 0 || x >= bw || y >= bh) continue;
+
+        let nx = x, ny = y;
+        if (dir === 'N') ny = y - 1;
+        if (dir === 'S') ny = y + 1;
+        if (dir === 'W') nx = x - 1;
+        if (dir === 'E') nx = x + 1;
+        if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
+
+        set.add(keyBetween(x, y, nx, ny));
       }
       return set;
     },
@@ -303,12 +317,19 @@
       const sources = this._visionSources();
       const npcSources = this._gmHiddenSources();
       const walls = Array.isArray(st.walls) ? st.walls : [];
-      const key = `${w}x${h}|r${Number(fog.visionRadius) || 8}|walls${walls.length}|src${sources.map(p => `${p.id}:${p.x},${p.y},${p.size||1}`).join(';')}|npc${npcSources.map(p => `${p.id}:${p.x},${p.y},${p.size||1}`).join(';')}`;
+      const wallSig = walls.map(ed => {
+        const x = Number(ed?.x), y = Number(ed?.y);
+        const dir = String(ed?.dir || ed?.direction || '').toUpperCase();
+        const type = String(ed?.type || 'stone');
+        const th = Number(ed?.thickness) || 4;
+        return `${x},${y},${dir},${type},${th}`;
+      }).join(';');
+      const key = `${w}x${h}|r${Number(fog.visionRadius) || 8}|walls${walls.length}:${wallSig}|src${sources.map(p => `${p.id}:${p.x},${p.y},${p.size||1}`).join(';')}|npc${npcSources.map(p => `${p.id}:${p.x},${p.y},${p.size||1}`).join(';')}`;
       if (key === this._dynKey && this._dynVisible) return;
 
       const visible = new Uint8Array(w * h);
       const npcVisible = new Uint8Array(w * h);
-      const wallSet = this._wallEdgesSet();
+      const edgeSet = this._wallEdgesSet();
       const radius = clampInt(Number(fog.visionRadius) || 8, 1, 60);
       const useWalls = (fog.useWalls !== false);
 
@@ -329,7 +350,7 @@
             if (dx * dx + dy * dy > radius * radius) continue;
 
             if (useWalls) {
-              if (!hasLineOfSightCells(ox, oy, x, y, wallSet)) continue;
+              if (!hasLineOfSightCells(ox, oy, x, y, edgeSet)) continue;
             }
 
             visible[y * w + x] = 1;
@@ -354,7 +375,7 @@
             const dy = y - oy;
             if (dx * dx + dy * dy > radius * radius) continue;
             if (useWalls) {
-              if (!hasLineOfSightCells(ox, oy, x, y, wallSet)) continue;
+              if (!hasLineOfSightCells(ox, oy, x, y, edgeSet)) continue;
             }
             npcVisible[y * w + x] = 1;
           }
@@ -642,26 +663,8 @@
     return Math.min(Math.max(v, a), b);
   }
 
-  // Bresenham LOS across grid cells. Walls are opaque cells.
-  // We allow seeing the target wall cell, but block beyond.
-  function hasWallBetween(x, y, nx, ny, edgeSet) {
-    if (!edgeSet) return false;
-    if (nx === x + 1 && ny === y) {
-      return edgeSet.has(`${x},${y},E`) || edgeSet.has(`${nx},${ny},W`);
-    }
-    if (nx === x - 1 && ny === y) {
-      return edgeSet.has(`${x},${y},W`) || edgeSet.has(`${nx},${ny},E`);
-    }
-    if (nx === x && ny === y + 1) {
-      return edgeSet.has(`${x},${y},S`) || edgeSet.has(`${nx},${ny},N`);
-    }
-    if (nx === x && ny === y - 1) {
-      return edgeSet.has(`${x},${y},N`) || edgeSet.has(`${nx},${ny},S`);
-    }
-    return false;
-  }
-
-  // Line-of-sight using grid traversal; blocks when an edge wall is crossed.
+  // Bresenham LOS across grid cells.
+  // Walls are segments between adjacent cells.
   function hasLineOfSightCells(x0, y0, x1, y1, edgeSet) {
     let dx = Math.abs(x1 - x0);
     let dy = Math.abs(y1 - y0);
@@ -672,6 +675,16 @@
     let x = x0;
     let y = y0;
 
+    const keyBetween = (ax, ay, bx, by) => {
+      if (ax > bx || (ax === bx && ay > by)) {
+        const tx = ax, ty = ay;
+        ax = bx; ay = by;
+        bx = tx; by = ty;
+      }
+      return `${ax},${ay}|${bx},${by}`;
+    };
+
+    // Step until reaching target
     while (!(x === x1 && y === y1)) {
       const prevX = x;
       const prevY = y;
@@ -679,9 +692,25 @@
       if (e2 > -dy) { err -= dy; x += sx; }
       if (e2 < dx) { err += dx; y += sy; }
 
-      // crossed an edge between prev and current
-      if (hasWallBetween(prevX, prevY, x, y, edgeSet)) return false;
+      if (edgeSet) {
+        // If we cross a wall segment between prev and next cells, block LOS.
+        // IMPORTANT: Bresenham can step diagonally (x and y change in one iteration).
+        // Walls exist only between orthogonally-adjacent cells, so diagonal steps must
+        // be treated as crossing TWO orthogonal borders ("supercover"), otherwise LOS
+        // leaks through corners.
+        const movedX = (x !== prevX);
+        const movedY = (y !== prevY);
+        if (movedX && movedY) {
+          // Check both orthogonal borders out of the previous cell.
+          // If either border is blocked, LOS should not pass through the corner.
+          if (edgeSet.has(keyBetween(prevX, prevY, x, prevY))) return false;
+          if (edgeSet.has(keyBetween(prevX, prevY, prevX, y))) return false;
+        } else {
+          if (edgeSet.has(keyBetween(prevX, prevY, x, y))) return false;
+        }
+      }
     }
+
     return true;
   }
 

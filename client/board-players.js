@@ -1,93 +1,222 @@
 // ================== BOARD ==================
 function renderBoard(state) {
-  board.querySelectorAll('.cell').forEach(c => c.remove());
-  board.querySelectorAll('#walls-layer').forEach(c => c.remove());
+  const CELL = 50;
+  const bw = Number(state?.boardWidth) || boardWidth || 10;
+  const bh = Number(state?.boardHeight) || boardHeight || 10;
+  const key = `${bw}x${bh}`;
+
+  // If board size didn't change, avoid rebuilding the whole grid (this removes UI lag
+  // when editing many wall segments).
+  const canReuse = (window.__boardGridKey === key) && board.querySelector('.cell');
+
+  if (!canReuse) {
+    // Clear old grid cells and rebuild.
+    board.querySelectorAll('.cell').forEach(c => c.remove());
+  }
+
+  // Ensure walls layer exists (do not recreate if we can reuse).
+  let wallsLayer = board.querySelector('#walls-layer');
+  if (!wallsLayer) {
+    wallsLayer = document.createElement('div');
+    wallsLayer.id = 'walls-layer';
+    board.appendChild(wallsLayer);
+  }
+
   board.style.position = 'relative';
-  board.style.width = `${boardWidth * 50}px`;
-  board.style.height = `${boardHeight * 50}px`;
+  board.style.width = `${bw * CELL}px`;
+  board.style.height = `${bh * CELL}px`;
   board.style.display = 'grid';
-  board.style.gridTemplateColumns = `repeat(${boardWidth}, 50px)`;
-  board.style.gridTemplateRows = `repeat(${boardHeight}, 50px)`;
+  board.style.gridTemplateColumns = `repeat(${bw}, ${CELL}px)`;
+  board.style.gridTemplateRows = `repeat(${bh}, ${CELL}px)`;
 
   // Подложка должна растягиваться на весь размер поля (а не на 1 клетку)
   applyBoardBackgroundToDom(state);
   applyOpacityToDom(state);
 
-  for (let y = 0; y < boardHeight; y++) {
-    for (let x = 0; x < boardWidth; x++) {
-      const cell = document.createElement('div');
-      cell.classList.add('cell');
-      cell.dataset.x = x;
-      cell.dataset.y = y;
-      board.appendChild(cell);
+  if (!canReuse) {
+    for (let y = 0; y < bh; y++) {
+      for (let x = 0; x < bw; x++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+        board.appendChild(cell);
+      }
     }
+    window.__boardGridKey = key;
   }
 
-  // ===== Walls layer (edge segments) =====
-  try {
-    const layer = document.createElement('div');
-    layer.id = 'walls-layer';
-    board.appendChild(layer);
-
-    const CELL = 50;
-    const walls = Array.isArray(state?.walls) ? state.walls : [];
-    const seen = new Set();
-
-    function addEdge(x, y, dir, type = 'stone', thickness = 4) {
-      const k = `${x},${y},${dir}`;
-      if (seen.has(k)) return;
-      seen.add(k);
-      const el = document.createElement('div');
-      el.className = `wall-edge type-${String(type || 'stone')}`;
-      const t = Math.max(1, Math.min(12, Number(thickness) || 4));
-      // position segment on the correct border
-      const left = x * CELL;
-      const top = y * CELL;
-      if (dir === 'N') {
-        el.style.left = `${left}px`;
-        el.style.top = `${top - (t / 2)}px`;
-        el.style.width = `${CELL}px`;
-        el.style.height = `${t}px`;
-      } else if (dir === 'S') {
-        el.style.left = `${left}px`;
-        el.style.top = `${top + CELL - (t / 2)}px`;
-        el.style.width = `${CELL}px`;
-        el.style.height = `${t}px`;
-      } else if (dir === 'W') {
-        el.style.left = `${left - (t / 2)}px`;
-        el.style.top = `${top}px`;
-        el.style.width = `${t}px`;
-        el.style.height = `${CELL}px`;
-      } else { // E
-        el.style.left = `${left + CELL - (t / 2)}px`;
-        el.style.top = `${top}px`;
-        el.style.width = `${t}px`;
-        el.style.height = `${CELL}px`;
-      }
-      layer.appendChild(el);
-    }
-
-    for (const w of walls) {
-      const x = Number(w?.x), y = Number(w?.y);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      const dir = String(w?.dir || '').toUpperCase();
-      if (dir === 'N' || dir === 'E' || dir === 'S' || dir === 'W') {
-        addEdge(x, y, dir, w?.type || 'stone', w?.thickness ?? 4);
-      } else {
-        // legacy cell-wall -> perimeter
-        addEdge(x, y, 'N', 'stone', 4);
-        addEdge(x, y, 'E', 'stone', 4);
-        addEdge(x, y, 'S', 'stone', 4);
-        addEdge(x, y, 'W', 'stone', 4);
-      }
-    }
-  } catch {}
+  // Render wall segments (edges) on top of the grid (below tokens).
+  try { renderWallEdges(state, wallsLayer); } catch {}
 
   players.forEach(p => setPlayerPosition(p));
 
   // Fog of war overlay needs to match board size and state.
   try { window.FogWar?.onBoardRendered?.(state); } catch {}
 }
+
+// ================== WALL EDGES RENDER ==================
+function renderWallEdges(state, layerEl) {
+  if (!layerEl) return;
+
+  const CELL = 50;
+  const stWalls = Array.isArray(state?.walls) ? state.walls : [];
+
+  // Remove previous nodes
+  layerEl.innerHTML = '';
+  // Reset incremental DOM cache for optimistic updates
+  try { window.__wallEdgeDomMap = new Map(); } catch {}
+
+  const bw = Number(state?.boardWidth) || boardWidth || 10;
+  const bh = Number(state?.boardHeight) || boardHeight || 10;
+  layerEl.style.width = `${bw * CELL}px`;
+  layerEl.style.height = `${bh * CELL}px`;
+
+  for (const w of stWalls) {
+    if (!w || typeof w !== 'object') continue;
+    const x = Number(w.x);
+    const y = Number(w.y);
+    const dir = String(w.dir || '').toUpperCase();
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+
+    const type = String(w.type || 'stone').toLowerCase();
+    const thickness = Math.max(1, Math.min(12, Number(w.thickness) || 4));
+
+    const el = document.createElement('div');
+    el.className = `wall-edge wall-type-${type}`;
+    el.style.setProperty('--t', `${thickness}px`);
+
+    // Position
+    const left = x * CELL;
+    const top = y * CELL;
+
+    if (dir === 'N') {
+      el.style.left = `${left}px`;
+      el.style.top = `${top - Math.floor(thickness / 2)}px`;
+      el.style.width = `${CELL}px`;
+      el.style.height = `${thickness}px`;
+    } else if (dir === 'S') {
+      el.style.left = `${left}px`;
+      el.style.top = `${top + CELL - Math.floor(thickness / 2)}px`;
+      el.style.width = `${CELL}px`;
+      el.style.height = `${thickness}px`;
+    } else if (dir === 'W') {
+      el.style.left = `${left - Math.floor(thickness / 2)}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${thickness}px`;
+      el.style.height = `${CELL}px`;
+    } else if (dir === 'E') {
+      el.style.left = `${left + CELL - Math.floor(thickness / 2)}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${thickness}px`;
+      el.style.height = `${CELL}px`;
+    }
+
+    layerEl.appendChild(el);
+    try { window.__wallEdgeDomMap?.set?.(`${x},${y},${dir}`, el); } catch {}
+  }
+}
+
+// ================== OPTIMISTIC WALL UPDATES (GM drawing feels instant) ==================
+// controlbox.js dispatches CustomEvent('dnd_local_wall_edges', { detail:{ mode, edges } })
+// We update the walls layer immediately, without waiting for server/state echo.
+(function wireLocalWallEdges() {
+  function ensureLayer() {
+    return board?.querySelector?.('#walls-layer') || document.getElementById('walls-layer');
+  }
+
+  function makeEdgeEl(w) {
+    const CELL = 50;
+    const x = Number(w?.x);
+    const y = Number(w?.y);
+    const dir = String(w?.dir || '').toUpperCase();
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return null;
+
+    const type = String(w?.type || 'stone').toLowerCase();
+    const thickness = Math.max(1, Math.min(12, Number(w?.thickness) || 4));
+
+    const el = document.createElement('div');
+    el.className = `wall-edge wall-type-${type}`;
+    el.style.setProperty('--t', `${thickness}px`);
+    el.dataset.wallKey = `${x},${y},${dir}`;
+
+    const left = x * CELL;
+    const top = y * CELL;
+
+    if (dir === 'N') {
+      el.style.left = `${left}px`;
+      el.style.top = `${top - Math.floor(thickness / 2)}px`;
+      el.style.width = `${CELL}px`;
+      el.style.height = `${thickness}px`;
+    } else if (dir === 'S') {
+      el.style.left = `${left}px`;
+      el.style.top = `${top + CELL - Math.floor(thickness / 2)}px`;
+      el.style.width = `${CELL}px`;
+      el.style.height = `${thickness}px`;
+    } else if (dir === 'W') {
+      el.style.left = `${left - Math.floor(thickness / 2)}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${thickness}px`;
+      el.style.height = `${CELL}px`;
+    } else if (dir === 'E') {
+      el.style.left = `${left + CELL - Math.floor(thickness / 2)}px`;
+      el.style.top = `${top}px`;
+      el.style.width = `${thickness}px`;
+      el.style.height = `${CELL}px`;
+    }
+    return el;
+  }
+
+  function applyLocalEdges(mode, edges) {
+    const layer = ensureLayer();
+    if (!layer) return;
+    if (!window.__wallEdgeDomMap) window.__wallEdgeDomMap = new Map();
+
+    const list = Array.isArray(edges) ? edges : [];
+    if (!list.length) return;
+
+    if (mode === 'add') {
+      for (const w of list) {
+        const x = Number(w?.x);
+        const y = Number(w?.y);
+        const dir = String(w?.dir || '').toUpperCase();
+        const k = `${x},${y},${dir}`;
+        if (window.__wallEdgeDomMap.has(k)) continue;
+        const el = makeEdgeEl(w);
+        if (!el) continue;
+        layer.appendChild(el);
+        window.__wallEdgeDomMap.set(k, el);
+      }
+    } else if (mode === 'remove') {
+      for (const w of list) {
+        const x = Number(w?.x);
+        const y = Number(w?.y);
+        const dir = String(w?.dir || '').toUpperCase();
+        const k = `${x},${y},${dir}`;
+        const el = window.__wallEdgeDomMap.get(k) || layer.querySelector?.(`[data-wall-key="${k}"]`);
+        if (el) {
+          try { el.remove(); } catch {}
+        }
+        try { window.__wallEdgeDomMap.delete(k); } catch {}
+      }
+    }
+  }
+
+  // Expose for direct calls too
+  window.applyLocalWallEdges = function (mode, edges) {
+    try { applyLocalEdges(String(mode || ''), edges); } catch {}
+  };
+
+  // CustomEvent from controlbox
+  window.addEventListener('dnd_local_wall_edges', (ev) => {
+    try {
+      const d = ev?.detail || {};
+      applyLocalEdges(String(d.mode || ''), d.edges);
+    } catch {}
+  });
+})();
 
 // ================== SHEET HELPERS (for HP bar + mini popup) ==================
 function getFrom(obj, path, fallback) {
