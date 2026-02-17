@@ -598,6 +598,7 @@ const weapons = weaponsRaw
     if (isNew) {
       // FIX: приводим строковые поля к строкам (в т.ч. dmgType)
       const normalized = {
+        ...w,
         name: normText(w?.name, "-"),
         ability: normText(w?.ability, "str"),
         prof: !!w?.prof,
@@ -606,7 +607,8 @@ const weapons = weaponsRaw
         dmgDice: normText(w?.dmgDice, "к6"),
         dmgType: normText(w?.dmgType, ""),
         desc: normText(w?.desc, ""),
-        collapsed: !!w?.collapsed
+        collapsed: !!w?.collapsed,
+        invId: normText(w?.invId, "")
       };
       // (необязательно, но полезно) — подправим исходник, чтобы дальше не всплывал [object Object]
       weaponsRaw[idx] = normalized;

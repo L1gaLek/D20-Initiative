@@ -1313,6 +1313,7 @@ function bindTextareaHeightPersistence(root, player) {
     }
 
     function openEquipOverlay(mode) {
+      try { document.querySelectorAll('.equip-overlay').forEach(x => x.remove()); } catch {}
       const { player: curPlayer, canEdit: curCanEdit } = getState();
       if (!curCanEdit) return;
       const sheet = curPlayer?.sheet?.parsed;
@@ -1496,6 +1497,13 @@ function bindTextareaHeightPersistence(root, player) {
         rerenderActiveTab(curPlayer);
       });
     }
+
+
+    // expose UI opener for sidebar auto-open (Shop tab)
+    try {
+      if (!window.__equipUi) window.__equipUi = {};
+      window.__equipUi.open = openEquipOverlay;
+    } catch {}
 
     root.addEventListener('click', (e) => {
       const { player: curPlayer, canEdit: curCanEdit } = getState();
