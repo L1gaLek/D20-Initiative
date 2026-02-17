@@ -1,26 +1,4 @@
 // ================== BOARD ==================
-function __wallsSig(list) {
-  // Fast-ish stable signature for walls (order-independent enough for our use)
-  // Avoids expensive full rerenders on every token update.
-  let h = 2166136261; // FNV-1a base
-  const arr = Array.isArray(list) ? list : [];
-  for (let i = 0; i < arr.length; i++) {
-    const w = arr[i] || {};
-    const x = Number(w.x) || 0;
-    const y = Number(w.y) || 0;
-    const dir = String(w.dir || '').toUpperCase();
-    const t = String(w.type || 'stone');
-    const th = Number(w.thickness) || 0;
-    const str = `${x},${y},${dir},${t},${th}`;
-    for (let j = 0; j < str.length; j++) {
-      h ^= str.charCodeAt(j);
-      // 32-bit FNV prime multiply
-      h = (h + (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24)) >>> 0;
-    }
-  }
-  return `${arr.length}:${h}`;
-}
-
 function renderBoard(state) {
   const CELL = 50;
   const bw = Number(state?.boardWidth) || boardWidth || 10;
@@ -75,17 +53,7 @@ function renderBoard(state) {
   } catch {}
 
   // Render wall segments (edges) on top of the grid (below tokens).
-  // IMPORTANT: do NOT rerender walls on every tiny state update (like token movement),
-  // otherwise walls "blink" and GM-drawn optimistic walls can disappear until server echo arrives.
-  try {
-    const walls = Array.isArray(state?.walls) ? state.walls : [];
-    const sig = __wallsSig(walls) + `|${bw}x${bh}`;
-    const need = (window.__wallsSigLast !== sig) || !wallsLayer.querySelector?.('.wall-edge');
-    if (need) {
-      window.__wallsSigLast = sig;
-      renderWallEdges(state, wallsLayer);
-    }
-  } catch {}
+  try { renderWallEdges(state, wallsLayer); } catch {}
 
   players.forEach(p => setPlayerPosition(p));
 
@@ -100,46 +68,32 @@ function renderWallEdges(state, layerEl) {
   const CELL = 50;
   const stWalls = Array.isArray(state?.walls) ? state.walls : [];
 
+  // Remove previous nodes
+  layerEl.innerHTML = '';
+  // Reset incremental DOM cache for optimistic updates
+  try { window.__wallEdgeDomMap = new Map(); } catch {}
+
   const bw = Number(state?.boardWidth) || boardWidth || 10;
   const bh = Number(state?.boardHeight) || boardHeight || 10;
   layerEl.style.width = `${bw * CELL}px`;
   layerEl.style.height = `${bh * CELL}px`;
 
-  // DOM cache (used by optimistic updates too)
-if (!window.__wallEdgeDomMap) window.__wallEdgeDomMap = new Map();
-if (!window.__wallOptimistic) window.__wallOptimistic = new Map(); // key -> {ts, op}
-if (!window.__pendingWallAdds) window.__pendingWallAdds = new Map(); // key -> { wall, ts }
-if (!window.__pendingWallRemoves) window.__pendingWallRemoves = new Map(); // key -> ts
+  for (const w of stWalls) {
+    if (!w || typeof w !== 'object') continue;
+    const x = Number(w.x);
+    const y = Number(w.y);
+    const dir = String(w.dir || '').toUpperCase();
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
 
-const now = Date.now();
-// If the GM draws many walls quickly, the server echo can lag behind.
-// Keep local adds/removes for a while so segments don't "disappear" mid-drawing.
-const ADD_TTL_MS = 60000;
-const REMOVE_TTL_MS = 60000;
-
-// Purge stale optimistic markers (cosmetic only)
-try {
-  for (const [k, info] of window.__wallOptimistic.entries()) {
-    if (!info || !info.ts) { window.__wallOptimistic.delete(k); continue; }
-    if (now - Number(info.ts) > 120000) window.__wallOptimistic.delete(k);
-  }
-} catch {}
-
-  function makeEdgeEl(w) {
-    const x = Number(w?.x);
-    const y = Number(w?.y);
-    const dir = String(w?.dir || '').toUpperCase();
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return null;
-
-    const type = String(w?.type || 'stone').toLowerCase();
-    const thickness = Math.max(1, Math.min(12, Number(w?.thickness) || 4));
+    const type = String(w.type || 'stone').toLowerCase();
+    const thickness = Math.max(1, Math.min(12, Number(w.thickness) || 4));
 
     const el = document.createElement('div');
     el.className = `wall-edge wall-type-${type}`;
     el.style.setProperty('--t', `${thickness}px`);
-    el.dataset.wallKey = `${x},${y},${dir}`;
 
+    // Position
     const left = x * CELL;
     const top = y * CELL;
 
@@ -164,74 +118,9 @@ try {
       el.style.width = `${thickness}px`;
       el.style.height = `${CELL}px`;
     }
-    return el;
-  }
 
-  // Desired walls from authoritative state (server)
-const desired = new Map(); // key -> wall
-for (const w of stWalls) {
-  if (!w || typeof w !== 'object') continue;
-  const x = Number(w.x);
-  const y = Number(w.y);
-  const dir = String(w.dir || '').toUpperCase();
-  if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-  if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
-  desired.set(`${x},${y},${dir}`, w);
-}
-
-// Merge local pending ops so walls don't vanish while you continue drawing.
-// - pending adds stay visible until the server state includes them (or TTL)
-// - pending removes stay hidden until server confirms removal (or TTL)
-const pendingAdds = window.__pendingWallAdds;
-const pendingRemoves = window.__pendingWallRemoves;
-
-// Drop confirmed/stale pending removes
-try {
-  for (const [k, ts] of Array.from(pendingRemoves.entries())) {
-    if (!desired.has(k)) { pendingRemoves.delete(k); continue; } // confirmed
-    if (now - Number(ts || 0) > REMOVE_TTL_MS) pendingRemoves.delete(k); // give up
-  }
-} catch {}
-
-// Drop confirmed/stale pending adds and include still-pending adds in desired
-try {
-  for (const [k, rec] of Array.from(pendingAdds.entries())) {
-    if (desired.has(k)) { pendingAdds.delete(k); continue; } // confirmed
-    if (!rec || (now - Number(rec.ts || 0) > ADD_TTL_MS)) { pendingAdds.delete(k); continue; }
-    if (pendingRemoves.has(k)) continue; // removed after adding
-    if (rec.wall) desired.set(k, rec.wall);
-  }
-} catch {}
-
-// Hide walls that are pending remove (even if server still has them)
-try {
-  for (const k of pendingRemoves.keys()) {
-    desired.delete(k);
-  }
-} catch {}
-// Add/update desired elements (respect recent optimistic "remove")
-  for (const [k, w] of desired.entries()) {
-    let el = window.__wallEdgeDomMap.get(k) || layerEl.querySelector?.(`[data-wall-key="${k}"]`);
-    if (!el) {
-      el = makeEdgeEl(w);
-      if (!el) continue;
-      layerEl.appendChild(el);
-      window.__wallEdgeDomMap.set(k, el);
-        try { window.__wallOptimistic.set(k, { ts: Date.now(), op: 'add' }); } catch {}
-    } else {
-      const type = String(w?.type || 'stone').toLowerCase();
-      const thickness = Math.max(1, Math.min(12, Number(w?.thickness) || 4));
-      const wantClass = `wall-edge wall-type-${type}`;
-      if (el.className !== wantClass) el.className = wantClass;
-      el.style.setProperty('--t', `${thickness}px`);
-    }
-  }
-
-  // Remove elements not in desired (respect recent optimistic "add")
-  for (const [k, el] of Array.from(window.__wallEdgeDomMap.entries())) {
-    if (desired.has(k)) continue;
-    try { el?.remove?.(); } catch {}
-    window.__wallEdgeDomMap.delete(k);
+    layerEl.appendChild(el);
+    try { window.__wallEdgeDomMap?.set?.(`${x},${y},${dir}`, el); } catch {}
   }
 }
 
@@ -300,22 +189,7 @@ try {
         const y = Number(w?.y);
         const dir = String(w?.dir || '').toUpperCase();
         const k = `${x},${y},${dir}`;
-        // Track as pending until server echoes it back
-        try { window.__pendingWallRemoves?.delete?.(k); } catch {}
-        try { window.__pendingWallAdds?.set?.(k, { wall: { x, y, dir, type: String(w?.type || 'stone'), thickness: Number(w?.thickness) || 4 }, ts: Date.now() }); } catch {}
-        try { window.__wallOptimistic?.set?.(k, { ts: Date.now(), op: 'add' }); } catch {}
-
-        // If already on board, just update style
-        const existing = window.__wallEdgeDomMap.get(k) || layer.querySelector?.(`[data-wall-key="${k}"]`);
-        if (existing) {
-          const type = String(w?.type || 'stone').toLowerCase();
-          const thickness = Math.max(1, Math.min(12, Number(w?.thickness) || 4));
-          existing.className = `wall-edge wall-type-${type}`;
-          existing.style.setProperty('--t', `${thickness}px`);
-          window.__wallEdgeDomMap.set(k, existing);
-          continue;
-        }
-
+        if (window.__wallEdgeDomMap.has(k)) continue;
         const el = makeEdgeEl(w);
         if (!el) continue;
         layer.appendChild(el);
@@ -327,13 +201,10 @@ try {
         const y = Number(w?.y);
         const dir = String(w?.dir || '').toUpperCase();
         const k = `${x},${y},${dir}`;
-        try { window.__pendingWallAdds?.delete?.(k); } catch {}
-        try { window.__pendingWallRemoves?.set?.(k, Date.now()); } catch {}
         const el = window.__wallEdgeDomMap.get(k) || layer.querySelector?.(`[data-wall-key="${k}"]`);
         if (el) {
           try { el.remove(); } catch {}
         }
-        try { window.__wallOptimistic.set(k, { ts: Date.now(), op: 'remove' }); } catch {}
         try { window.__wallEdgeDomMap.delete(k); } catch {}
       }
     }
@@ -923,7 +794,8 @@ function isAreaFreeClient(ignoreId, x, y, size, opts = {}) {
 }
 
 function findFirstFreeSpotClient(size) {
-  const allowWalls = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
+  const allowWalls = true;
+  // По запросу: токены можно ставить на стены всем.
   const maxX = boardWidth - size;
   const maxY = boardHeight - size;
   for (let y = 0; y <= maxY; y++) {
@@ -975,9 +847,10 @@ board.addEventListener('click', e => {
 
   // быстрый локальный чек (сервер всё равно проверит)
   const size = Number(selectedPlayer.size) || 1;
-  const allowWalls = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
+  const allowWalls = true;
+  // По запросу: токены можно ставить на стены всем.
   if (!isAreaFreeClient(selectedPlayer.id, x, y, size, { allowWalls })) {
-    alert(allowWalls ? "Эта клетка занята другим персонажем" : "Нельзя поставить на стену или на занятую клетку");
+    alert("Эта клетка занята другим персонажем");
     return;
   }
 
