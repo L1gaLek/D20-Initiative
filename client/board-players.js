@@ -213,7 +213,6 @@ function renderWallEdges(state, layerEl) {
 }
 
 // ================== OPTIMISTIC WALL UPDATES (GM drawing feels instant) ==================
- (GM drawing feels instant) ==================
 // controlbox.js dispatches CustomEvent('dnd_local_wall_edges', { detail:{ mode, edges } })
 // We update the walls layer immediately, without waiting for server/state echo.
 (function wireLocalWallEdges() {
