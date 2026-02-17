@@ -689,25 +689,34 @@
       const prevX = x;
       const prevY = y;
       const e2 = 2 * err;
-      if (e2 > -dy) { err -= dy; x += sx; }
-      if (e2 < dx) { err += dx; y += sy; }
 
-      if (edgeSet) {
-        // If we cross a wall segment between prev and next cells, block LOS.
-        // IMPORTANT: Bresenham can step diagonally (x and y change in one iteration).
-        // Walls exist only between orthogonally-adjacent cells, so diagonal steps must
-        // be treated as crossing TWO orthogonal borders ("supercover"), otherwise LOS
-        // leaks through corners.
-        const movedX = (x !== prevX);
-        const movedY = (y !== prevY);
-        if (movedX && movedY) {
-          // Check both orthogonal borders out of the previous cell.
-          // If either border is blocked, LOS should not pass through the corner.
-          if (edgeSet.has(keyBetween(prevX, prevY, x, prevY))) return false;
-          if (edgeSet.has(keyBetween(prevX, prevY, prevX, y))) return false;
-        } else {
-          if (edgeSet.has(keyBetween(prevX, prevY, x, y))) return false;
-        }
+      // Compute next step (may be diagonal)
+      let stepX = 0;
+      let stepY = 0;
+      if (e2 > -dy) { err -= dy; stepX = sx; }
+      if (e2 < dx) { err += dx; stepY = sy; }
+      x += stepX;
+      y += stepY;
+
+      if (!edgeSet) continue;
+
+      // 1) Basic block: crossing an edge between prev and next
+      if (edgeSet.has(keyBetween(prevX, prevY, x, y))) return false;
+
+      // 2) Anti corner-leak (convex corners):
+      // If we did a diagonal step, and BOTH orthogonal edges around the corner are blocked,
+      // then LOS should NOT "cut" through the corner.
+      if (stepX !== 0 && stepY !== 0) {
+        const hx = prevX + stepX;
+        const hy = prevY;
+        const vx = prevX;
+        const vy = prevY + stepY;
+
+        const hBlocked = edgeSet.has(keyBetween(prevX, prevY, hx, hy));
+        const vBlocked = edgeSet.has(keyBetween(prevX, prevY, vx, vy));
+
+        // Strict corner rule: block only when BOTH meet (typical VTT expectation).
+        if (hBlocked && vBlocked) return false;
       }
     }
 
