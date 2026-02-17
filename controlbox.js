@@ -42,6 +42,9 @@
     const editEnvBtn = document.getElementById('edit-environment');
     const addWallBtn = document.getElementById('add-wall');
     const removeWallBtn = document.getElementById('remove-wall');
+    const wallToolSel = document.getElementById('wall-tool');
+    const wallTypeSel = document.getElementById('wall-type');
+    const wallThicknessSel = document.getElementById('wall-thickness');
     const clearBoardBtn = document.getElementById('clear-board');
     const resetGameBtn = document.getElementById('reset-game');
 
@@ -138,12 +141,29 @@
 
     // ===== Environment editor (GM only) =====
     let editEnvironment = false;
-    let wallMode = null;
+    let wallMode = null; // 'add' | 'remove'
     let mouseDown = false;
 
-    // батч изменений за один drag
-    let dragTouched = new Set(); // "x,y"
-    function keyXY(x, y) { return `${x},${y}`; }
+    // tool: brush | line | rect
+    let wallTool = String(wallToolSel?.value || 'brush');
+    let wallType = String(wallTypeSel?.value || 'stone');
+    let wallThickness = Number(wallThicknessSel?.value || 4);
+
+    const readWallUi = () => {
+      wallTool = String(wallToolSel?.value || 'brush');
+      wallType = String(wallTypeSel?.value || 'stone');
+      wallThickness = Math.max(1, Math.min(12, Number(wallThicknessSel?.value || 4)));
+    };
+    wallToolSel?.addEventListener('change', readWallUi);
+    wallTypeSel?.addEventListener('change', readWallUi);
+    wallThicknessSel?.addEventListener('change', readWallUi);
+
+    // batch changes for one gesture
+    let dragTouched = new Set(); // "x,y,dir"
+    function keyEdge(x, y, dir) { return `${x},${y},${dir}`; }
+
+    // For line/rect tools
+    let dragStart = null; // {x,y,dir}
 
     function setEnvButtons() {
       const gm = !!ctx.isGM?.();
@@ -164,6 +184,7 @@
       editEnvironment = !editEnvironment;
       wallMode = null;
       dragTouched = new Set();
+      dragStart = null;
       if (editEnvBtn) {
         editEnvBtn.textContent = editEnvironment ? "Редактирование окружения: ВКЛ" : "Редактирование окружения: ВЫКЛ";
       }
@@ -191,20 +212,82 @@
       ctx.sendMessage?.({ type: 'resetGame' });
     });
 
-    function applyWallLocal(cell, mode) {
-      if (!cell) return;
-      if (mode === 'add') cell.classList.add('wall');
-      if (mode === 'remove') cell.classList.remove('wall');
+    function edgeFromPointer(cell, e) {
+      try {
+        if (!cell || !e) return null;
+        const x = Number(cell?.dataset?.x);
+        const y = Number(cell?.dataset?.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+        const rect = cell.getBoundingClientRect();
+        const px = (e.clientX - rect.left) / rect.width;
+        const py = (e.clientY - rect.top) / rect.height;
+        // choose nearest edge
+        const dN = py;
+        const dS = 1 - py;
+        const dW = px;
+        const dE = 1 - px;
+        const m = Math.min(dN, dS, dW, dE);
+        let dir = 'N';
+        if (m === dE) dir = 'E';
+        else if (m === dS) dir = 'S';
+        else if (m === dW) dir = 'W';
+        else dir = 'N';
+        return { x, y, dir };
+      } catch {
+        return null;
+      }
     }
 
-    function touchCell(cell) {
-      const x = Number(cell?.dataset?.x);
-      const y = Number(cell?.dataset?.y);
+    function touchEdge(edge) {
+      if (!edge) return;
+      const x = Number(edge.x), y = Number(edge.y);
+      const dir = String(edge.dir || '').toUpperCase();
       if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      const k = keyXY(x, y);
-      if (dragTouched.has(k)) return; // уже трогали в этом drag
+      if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return;
+      const k = keyEdge(x, y, dir);
+      if (dragTouched.has(k)) return;
       dragTouched.add(k);
-      applyWallLocal(cell, wallMode);
+    }
+
+    function edgesForRect(a, b) {
+      // rectangle perimeter in cell coordinates (inclusive)
+      const x1 = Math.min(a.x, b.x);
+      const x2 = Math.max(a.x, b.x);
+      const y1 = Math.min(a.y, b.y);
+      const y2 = Math.max(a.y, b.y);
+      const out = [];
+
+      for (let x = x1; x <= x2; x++) {
+        out.push({ x, y: y1, dir: 'N' });
+        out.push({ x, y: y2, dir: 'S' });
+      }
+      for (let y = y1; y <= y2; y++) {
+        out.push({ x: x1, y, dir: 'W' });
+        out.push({ x: x2, y, dir: 'E' });
+      }
+      return out;
+    }
+
+    function edgesForLine(a, b) {
+      // simple L-shaped orthogonal line between two edges using cell coords
+      const out = [];
+      const ax = a.x, ay = a.y;
+      const bx = b.x, by = b.y;
+      // choose pivot: go horizontal then vertical
+      const mid1 = { x: bx, y: ay, dir: b.dir };
+      // build along x
+      const stepX = (bx >= ax) ? 1 : -1;
+      for (let x = ax; x !== bx; x += stepX) {
+        out.push({ x, y: ay, dir: (stepX === 1 ? 'E' : 'W') });
+      }
+      // build along y
+      const stepY = (by >= ay) ? 1 : -1;
+      for (let y = ay; y !== by; y += stepY) {
+        out.push({ x: bx, y, dir: (stepY === 1 ? 'S' : 'N') });
+      }
+      // include final edge itself (closest dir from pointer)
+      out.push({ x: bx, y: by, dir: String(b.dir || 'N').toUpperCase() });
+      return out;
     }
 
     board?.addEventListener('mousedown', (e) => {
@@ -213,14 +296,26 @@
       if (!cell) return;
       mouseDown = true;
       dragTouched = new Set();
-      touchCell(cell);
+
+      readWallUi();
+      const edge = edgeFromPointer(cell, e);
+      dragStart = edge;
+
+      if (wallTool === 'brush') {
+        touchEdge(edge);
+      }
     });
 
     board?.addEventListener('mouseover', (e) => {
       if (!mouseDown || !ctx.isGM?.() || !editEnvironment || !wallMode) return;
       const cell = e.target.closest('.cell');
       if (!cell) return;
-      touchCell(cell);
+
+      readWallUi();
+      const edge = edgeFromPointer(cell, e);
+      if (wallTool === 'brush') {
+        touchEdge(edge);
+      }
     });
 
     window.addEventListener('mouseup', () => {
@@ -230,19 +325,51 @@
       // одним сообщением отправляем все изменения
       if (!ctx.isGM?.() || !editEnvironment || !wallMode) return;
 
+      readWallUi();
+
       const changed = [];
+      // For line/rect tools we generate edges from dragStart to current hover cell
+      // If we didn't collect anything (line/rect), create it now.
+      if ((wallTool === 'line' || wallTool === 'rect') && dragStart) {
+        // Find current cell under mouse
+        let cell = null;
+        try {
+          const el = document.elementFromPoint(window.__lastMouseX || 0, window.__lastMouseY || 0);
+          cell = el?.closest?.('.cell') || null;
+        } catch {}
+        // If not found, just send nothing.
+        if (cell) {
+          const end = edgeFromPointer(cell, { clientX: window.__lastMouseX, clientY: window.__lastMouseY });
+          if (end) {
+            const edges = (wallTool === 'rect') ? edgesForRect(dragStart, end) : edgesForLine(dragStart, end);
+            for (const ed of edges) touchEdge(ed);
+          }
+        }
+      }
+
       dragTouched.forEach((k) => {
-        const [xs, ys] = String(k).split(',');
+        const [xs, ys, dir] = String(k).split(',');
         const x = Number(xs), y = Number(ys);
-        if (Number.isFinite(x) && Number.isFinite(y)) changed.push({ x, y });
+        const d = String(dir || '').toUpperCase();
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        if (d !== 'N' && d !== 'E' && d !== 'S' && d !== 'W') return;
+        if (wallMode === 'add') changed.push({ x, y, dir: d, type: wallType, thickness: wallThickness });
+        else changed.push({ x, y, dir: d });
       });
 
       if (changed.length) {
-        ctx.sendMessage?.({ type: 'bulkWalls', mode: wallMode, cells: changed });
+        ctx.sendMessage?.({ type: 'bulkWalls', mode: wallMode, edges: changed });
       }
 
       dragTouched = new Set();
+      dragStart = null;
     });
+
+    // Track last mouse for line/rect end point
+    window.addEventListener('mousemove', (e) => {
+      window.__lastMouseX = e.clientX;
+      window.__lastMouseY = e.clientY;
+    }, { passive: true });
 
     // ===== Campaign maps / sections (GM): Parameters modal =====
     const campaignParamsBtn = document.getElementById('campaign-params');
