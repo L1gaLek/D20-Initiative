@@ -1,0 +1,3661 @@
+{
+  "meta": {
+    "source": "SRD 5.1 (CC BY 4.0) PDF",
+    "language": "ru-RU",
+    "currency": {
+      "cp": "мм",
+      "sp": "см",
+      "gp": "зм",
+      "pp": "пм"
+    },
+    "weight_unit": "lb"
+  },
+  "tabs": {
+    "weapons": [
+      {
+        "id": "weapon_club",
+        "name_en": "Club",
+        "name_ru": "Дубинка",
+        "cost": {
+          "amount": 1,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к4",
+          "damage_type": "дробящий",
+          "properties_ru": "Лёгкое",
+          "properties_en": "Light"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_dagger",
+        "name_en": "Dagger",
+        "name_ru": "Кинжал",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "weapon": {
+          "damage": "1к4",
+          "damage_type": "колющий",
+          "properties_ru": "Фехтовальное, лёгкое, метательное (дистанция 20/60)",
+          "properties_en": "Finesse, light, thrown (range 20/60)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_greatclub",
+        "name_en": "Greatclub",
+        "name_ru": "Палица",
+        "cost": {
+          "amount": 2,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "дробящий",
+          "properties_ru": "Two-‐handed",
+          "properties_en": "Two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_handaxe",
+        "name_en": "Handaxe",
+        "name_ru": "Ручной топор",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "рубящий",
+          "properties_ru": "Лёгкое, метательное (дистанция 20/60)",
+          "properties_en": "Light, thrown (range 20/60)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_javelin",
+        "name_en": "Javelin",
+        "name_ru": "Метательное копьё",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "колющий",
+          "properties_ru": "Метательное (дистанция 30/120)",
+          "properties_en": "Thrown (range 30/120)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_light-hammer",
+        "name_en": "Light hammer",
+        "name_ru": "Лёгкий молот",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к4",
+          "damage_type": "дробящий",
+          "properties_ru": "Лёгкое, метательное (дистанция 20/60)",
+          "properties_en": "Light, thrown (range 20/60)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_mace",
+        "name_en": "Mace",
+        "name_ru": "Булава",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "дробящий",
+          "properties_ru": "",
+          "properties_en": ""
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_quarterstaff",
+        "name_en": "Quarterstaff",
+        "name_ru": "Боевой посох",
+        "cost": {
+          "amount": 2,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "дробящий",
+          "properties_ru": "Универсальное (1d8)",
+          "properties_en": "Versatile (1d8)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_sickle",
+        "name_en": "Sickle",
+        "name_ru": "Серп",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к4",
+          "damage_type": "рубящий",
+          "properties_ru": "Лёгкое",
+          "properties_en": "Light"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_spear",
+        "name_en": "Spear",
+        "name_ru": "Копьё",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "колющий",
+          "properties_ru": "Метательное (дистанция 20/60), versatile (1d8)",
+          "properties_en": "Thrown (range 20/60), versatile (1d8)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_crossbow-light",
+        "name_en": "Crossbow, light",
+        "name_ru": "Арбалет, лёгкий",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "колющий",
+          "properties_ru": "Боеприпасы (дистанция 80/320), перезарядка, Двуручное",
+          "properties_en": "Ammunition (range 80/320), loading, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_dart",
+        "name_en": "Dart",
+        "name_ru": "Дротик",
+        "cost": {
+          "amount": 5,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 0.25,
+          "text": "1/4 lb.."
+        },
+        "weapon": {
+          "damage": "1к4",
+          "damage_type": "колющий",
+          "properties_ru": "Фехтовальное, метательное (дистанция 20/60)",
+          "properties_en": "Finesse, thrown (range 20/60)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_shortbow",
+        "name_en": "Shortbow",
+        "name_ru": "Короткий лук",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "колющий",
+          "properties_ru": "Боеприпасы (дистанция 80/320), Двуручное",
+          "properties_en": "Ammunition (range 80/320), two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_battleaxe",
+        "name_en": "Battleaxe",
+        "name_ru": "Боевой топор",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "рубящий",
+          "properties_ru": "Универсальное (1d10)",
+          "properties_en": "Versatile (1d10)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_flail",
+        "name_en": "Flail",
+        "name_ru": "Цеп",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "дробящий",
+          "properties_ru": "",
+          "properties_en": ""
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_glaive",
+        "name_en": "Glaive",
+        "name_ru": "Глефа",
+        "cost": {
+          "amount": 20,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "weapon": {
+          "damage": "1к10",
+          "damage_type": "рубящий",
+          "properties_ru": "Тяжёлое, досягаемость, Двуручное",
+          "properties_en": "Heavy, reach, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_greataxe",
+        "name_en": "Greataxe",
+        "name_ru": "Секира",
+        "cost": {
+          "amount": 30,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 7.0,
+          "text": "7 lb.."
+        },
+        "weapon": {
+          "damage": "1к12",
+          "damage_type": "рубящий",
+          "properties_ru": "Тяжёлое, Двуручное",
+          "properties_en": "Heavy, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_greatsword",
+        "name_en": "Greatsword",
+        "name_ru": "Двуручный меч",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "weapon": {
+          "damage": "2к6",
+          "damage_type": "рубящий",
+          "properties_ru": "Тяжёлое, Двуручное",
+          "properties_en": "Heavy, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_halberd",
+        "name_en": "Halberd",
+        "name_ru": "Алебарда",
+        "cost": {
+          "amount": 20,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "weapon": {
+          "damage": "1к10",
+          "damage_type": "рубящий",
+          "properties_ru": "Тяжёлое, досягаемость, Двуручное",
+          "properties_en": "Heavy, reach, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_lance",
+        "name_en": "Lance",
+        "name_ru": "Длинное копьё",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "weapon": {
+          "damage": "1к12",
+          "damage_type": "колющий",
+          "properties_ru": "Досягаемость, special",
+          "properties_en": "Reach, special"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_longsword",
+        "name_en": "Longsword",
+        "name_ru": "Длинный меч",
+        "cost": {
+          "amount": 15,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "рубящий",
+          "properties_ru": "Универсальное (1d10)",
+          "properties_en": "Versatile (1d10)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_maul",
+        "name_en": "Maul",
+        "name_ru": "Кувалда",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "weapon": {
+          "damage": "2к6",
+          "damage_type": "дробящий",
+          "properties_ru": "Тяжёлое, Двуручное",
+          "properties_en": "Heavy, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_morningstar",
+        "name_en": "Morningstar",
+        "name_ru": "Моргенштерн",
+        "cost": {
+          "amount": 15,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "колющий",
+          "properties_ru": "",
+          "properties_en": ""
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_pike",
+        "name_en": "Pike",
+        "name_ru": "Пика",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 18.0,
+          "text": "18 lb.."
+        },
+        "weapon": {
+          "damage": "1к10",
+          "damage_type": "колющий",
+          "properties_ru": "Тяжёлое, досягаемость, Двуручное",
+          "properties_en": "Heavy, reach, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_rapier",
+        "name_en": "Rapier",
+        "name_ru": "Рапира",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "колющий",
+          "properties_ru": "Фехтовальное",
+          "properties_en": "Finesse"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_scimitar",
+        "name_en": "Scimitar",
+        "name_ru": "Ятаган",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "рубящий",
+          "properties_ru": "Фехтовальное, лёгкое",
+          "properties_en": "Finesse, light"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_shortsword",
+        "name_en": "Shortsword",
+        "name_ru": "Короткий меч",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "колющий",
+          "properties_ru": "Фехтовальное, лёгкое",
+          "properties_en": "Finesse, light"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_trident",
+        "name_en": "Trident",
+        "name_ru": "Трезубец",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "колющий",
+          "properties_ru": "Метательное (дистанция 20/60), versatile (1d8)",
+          "properties_en": "Thrown (range 20/60), versatile (1d8)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_war-pick",
+        "name_en": "War pick",
+        "name_ru": "Боевой клевец",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "колющий",
+          "properties_ru": "",
+          "properties_en": ""
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_warhammer",
+        "name_en": "Warhammer",
+        "name_ru": "Боевой молот",
+        "cost": {
+          "amount": 15,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "дробящий",
+          "properties_ru": "Универсальное (1d10)",
+          "properties_en": "Versatile (1d10)"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_whip",
+        "name_en": "Whip",
+        "name_ru": "Кнут",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "weapon": {
+          "damage": "1к4",
+          "damage_type": "рубящий",
+          "properties_ru": "Фехтовальное, досягаемость",
+          "properties_en": "Finesse, reach"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_blowgun",
+        "name_en": "Blowgun",
+        "name_ru": "Духовая трубка",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "weapon": {
+          "damage": "1",
+          "damage_type": "колющий",
+          "properties_ru": "Боеприпасы (дистанция 25/100), перезарядка",
+          "properties_en": "Ammunition (range 25/100), loading"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_crossbow-hand",
+        "name_en": "Crossbow, hand",
+        "name_ru": "Арбалет, ручной",
+        "cost": {
+          "amount": 75,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "weapon": {
+          "damage": "1к6",
+          "damage_type": "колющий",
+          "properties_ru": "Боеприпасы (дистанция 30/120), лёгкое, перезарядка",
+          "properties_en": "Ammunition (range 30/120), light, loading"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_crossbow-heavy",
+        "name_en": "Crossbow, heavy",
+        "name_ru": "Арбалет, тяжёлый",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 18.0,
+          "text": "18 lb.."
+        },
+        "weapon": {
+          "damage": "1к10",
+          "damage_type": "колющий",
+          "properties_ru": "Боеприпасы (дистанция 100/400), тяжёлое, перезарядка, Двуручное",
+          "properties_en": "Ammunition (range 100/400), heavy, loading, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_longbow",
+        "name_en": "Longbow",
+        "name_ru": "Длинный лук",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "weapon": {
+          "damage": "1к8",
+          "damage_type": "колющий",
+          "properties_ru": "Боеприпасы (дистанция 150/600), тяжёлое, Двуручное",
+          "properties_en": "Ammunition (range 150/600), heavy, two-‐handed"
+        },
+        "type": "weapon"
+      },
+      {
+        "id": "weapon_net",
+        "name_en": "Net",
+        "name_ru": "Сеть",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb."
+        },
+        "weapon": {
+          "damage": "—",
+          "damage_type": "—",
+          "properties_ru": "Особое, метательное (дистанция 5/15)",
+          "properties_en": "Special, thrown (range 5/15)"
+        },
+        "type": "weapon"
+      }
+    ],
+    "armor": [
+      {
+        "id": "armor_leather",
+        "name_en": "Leather",
+        "name_ru": "Кожаный",
+        "category": "armor",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb."
+        },
+        "armor": {
+          "ac": "11 + мод. Ловк",
+          "type": "light",
+          "str_req": null,
+          "stealth_disadv": false
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_studded-leather",
+        "name_en": "Studded leather",
+        "name_ru": "Проклёпанная кожа",
+        "category": "armor",
+        "cost": {
+          "amount": 45,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 13.0,
+          "text": "13 lb."
+        },
+        "armor": {
+          "ac": "12 + мод. Ловк",
+          "type": "light",
+          "str_req": null,
+          "stealth_disadv": false
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_hide",
+        "name_en": "Hide",
+        "name_ru": "Сыромятный",
+        "category": "armor",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 12.0,
+          "text": "12 lb."
+        },
+        "armor": {
+          "ac": "12 + мод. Ловк (макс. 2)",
+          "type": "medium",
+          "str_req": null,
+          "stealth_disadv": false
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_chain-shirt",
+        "name_en": "Chain shirt",
+        "name_ru": "Кольчужная рубаха",
+        "category": "armor",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 20.0,
+          "text": "20 lb."
+        },
+        "armor": {
+          "ac": "13 + мод. Ловк (макс. 2)",
+          "type": "medium",
+          "str_req": null,
+          "stealth_disadv": false
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_scale-mail",
+        "name_en": "Scale mail",
+        "name_ru": "Чешуйчатый",
+        "category": "armor",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 45.0,
+          "text": "45 lb."
+        },
+        "armor": {
+          "ac": "14 + мод. Ловк (макс. 2)",
+          "type": "medium",
+          "str_req": null,
+          "stealth_disadv": true
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_breastplate",
+        "name_en": "Breastplate",
+        "name_ru": "Кираса",
+        "category": "armor",
+        "cost": {
+          "amount": 400,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 20.0,
+          "text": "20 lb."
+        },
+        "armor": {
+          "ac": "14 + мод. Ловк (макс. 2)",
+          "type": "medium",
+          "str_req": null,
+          "stealth_disadv": false
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_half-plate",
+        "name_en": "Half plate",
+        "name_ru": "Полулаты",
+        "category": "armor",
+        "cost": {
+          "amount": 750,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 40.0,
+          "text": "40 lb."
+        },
+        "armor": {
+          "ac": "15 + мод. Ловк (макс. 2)",
+          "type": "medium",
+          "str_req": null,
+          "stealth_disadv": true
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_ring-mail",
+        "name_en": "Ring mail",
+        "name_ru": "Колечный",
+        "category": "armor",
+        "cost": {
+          "amount": 30,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 40.0,
+          "text": "40 lb."
+        },
+        "armor": {
+          "ac": "14",
+          "type": "heavy",
+          "str_req": null,
+          "stealth_disadv": true
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_chain-mail",
+        "name_en": "Chain mail",
+        "name_ru": "Кольчуга",
+        "category": "armor",
+        "cost": {
+          "amount": 75,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 55.0,
+          "text": "55 lb."
+        },
+        "armor": {
+          "ac": "16",
+          "type": "heavy",
+          "str_req": 13,
+          "stealth_disadv": true
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_splint",
+        "name_en": "Splint",
+        "name_ru": "Наборной",
+        "category": "armor",
+        "cost": {
+          "amount": 200,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 60.0,
+          "text": "60 lb."
+        },
+        "armor": {
+          "ac": "17",
+          "type": "heavy",
+          "str_req": 15,
+          "stealth_disadv": true
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_plate",
+        "name_en": "Plate",
+        "name_ru": "Латы",
+        "category": "armor",
+        "cost": {
+          "amount": 1500,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 65.0,
+          "text": "65 lb."
+        },
+        "armor": {
+          "ac": "18",
+          "type": "heavy",
+          "str_req": 15,
+          "stealth_disadv": true
+        },
+        "type": "armor"
+      },
+      {
+        "id": "armor_shield",
+        "name_en": "Shield",
+        "name_ru": "Щит",
+        "category": "armor",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb."
+        },
+        "armor": {
+          "ac": "+2",
+          "type": "shield",
+          "str_req": null,
+          "stealth_disadv": false
+        },
+        "type": "armor"
+      }
+    ],
+    "adventuring_gear": [
+      {
+        "id": "gear_hourglass",
+        "name_en": "Hourglass",
+        "name_ru": "Песочные часы",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_abacus",
+        "name_en": "Abacus",
+        "name_ru": "Счёты",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_hunting-trap",
+        "name_en": "Hunting trap",
+        "name_ru": "Охотничий капкан",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 25.0,
+          "text": "25 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_acid-vial",
+        "name_en": "Acid (vial)",
+        "name_ru": "Кислота (флакон)",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_ink-1-ounce-bottle",
+        "name_en": "Ink (1 ounce bottle)",
+        "name_ru": "Чернила (бутылочка 30 г)",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_alchemist-s-fire-flask",
+        "name_en": "Alchemist’s fire (flask)",
+        "name_ru": "Алхимический огонь (фляга)",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_ink-pen",
+        "name_en": "Ink pen",
+        "name_ru": "Перо для письма",
+        "cost": {
+          "amount": 2,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_jug-or-pitcher",
+        "name_en": "Jug or pitcher",
+        "name_ru": "Кувшин или графин",
+        "cost": {
+          "amount": 2,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_arrows-20",
+        "name_en": "Arrows (20)",
+        "name_ru": "Стрелы (20)",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_ladder-10-foot",
+        "name_en": "Ladder (10-‐foot)",
+        "name_ru": "Лестница (10 футов)",
+        "cost": {
+          "amount": 1,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 25.0,
+          "text": "25 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_blowgun-needles-50",
+        "name_en": "Blowgun needles (50)",
+        "name_ru": "Иглы для духовой трубки (50)",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_lamp",
+        "name_en": "Lamp",
+        "name_ru": "Лампа",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_crossbow-bolts-20",
+        "name_en": "Crossbow bolts (20)",
+        "name_ru": "Болты для арбалета (20)",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.5,
+          "text": "1½ lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_lantern-bullseye",
+        "name_en": "Lantern, bullseye",
+        "name_ru": "Фонарь, направленный",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_sling-bullets-20",
+        "name_en": "Sling bullets (20)",
+        "name_ru": "Пули для пращи (20)",
+        "cost": {
+          "amount": 4,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 1.5,
+          "text": "1½ lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_lantern-hooded",
+        "name_en": "Lantern, hooded",
+        "name_ru": "Фонарь, закрытый",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_antitoxin-vial",
+        "name_en": "Antitoxin (vial)",
+        "name_ru": "Противоядие (флакон)",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_lock",
+        "name_en": "Lock",
+        "name_ru": "Замок",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_magnifying-glass",
+        "name_en": "Magnifying glass",
+        "name_ru": "Увеличительное стекло",
+        "cost": {
+          "amount": 100,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_crystal",
+        "name_en": "Crystal",
+        "name_ru": "Кристалл (фокус)",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_manacles",
+        "name_en": "Manacles",
+        "name_ru": "Кандалы",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_orb",
+        "name_en": "Orb",
+        "name_ru": "Сфера (фокус)",
+        "cost": {
+          "amount": 20,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_mess-kit",
+        "name_en": "Mess kit",
+        "name_ru": "Походный набор посуды",
+        "cost": {
+          "amount": 2,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_rod",
+        "name_en": "Rod",
+        "name_ru": "Жезл (фокус)",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_mirror-steel",
+        "name_en": "Mirror, steel",
+        "name_ru": "Зеркальце (стальное)",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 0.5,
+          "text": "1/2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_staff",
+        "name_en": "Staff",
+        "name_ru": "Посох (фокус)",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_oil-flask",
+        "name_en": "Oil (flask)",
+        "name_ru": "Масло (фляга)",
+        "cost": {
+          "amount": 1,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_wand",
+        "name_en": "Wand",
+        "name_ru": "Палочка (фокус)",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_paper-one-sheet",
+        "name_en": "Paper (one sheet)",
+        "name_ru": "Бумага (лист)",
+        "cost": {
+          "amount": 2,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_backpack",
+        "name_en": "Backpack",
+        "name_ru": "Рюкзак",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_parchment-one-sheet",
+        "name_en": "Parchment (one sheet)",
+        "name_ru": "Пергамент (лист)",
+        "cost": {
+          "amount": 1,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_ball-bearings-bag-of-1-000",
+        "name_en": "Ball bearings (bag of 1,000)",
+        "name_ru": "Шарики (мешочек 1000)",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_perfume-vial",
+        "name_en": "Perfume (vial)",
+        "name_ru": "Духи (флакон)",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_barrel",
+        "name_en": "Barrel",
+        "name_ru": "Бочка",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 70.0,
+          "text": "70 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_pick-miner-s",
+        "name_en": "Pick, miner’s",
+        "name_ru": "Кирка",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_basket",
+        "name_en": "Basket",
+        "name_ru": "Корзина",
+        "cost": {
+          "amount": 4,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_piton",
+        "name_en": "Piton",
+        "name_ru": "Крюк/клин (питон)",
+        "cost": {
+          "amount": 5,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 0.25,
+          "text": "1/4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_bedroll",
+        "name_en": "Bedroll",
+        "name_ru": "Спальный мешок",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 7.0,
+          "text": "7 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_poison-basic-vial",
+        "name_en": "Poison, basic (vial)",
+        "name_ru": "Яд, обычный (флакон)",
+        "cost": {
+          "amount": 100,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_bell",
+        "name_en": "Bell",
+        "name_ru": "Колокольчик",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_pole-10-foot",
+        "name_en": "Pole (10-‐foot)",
+        "name_ru": "Шест (10 футов)",
+        "cost": {
+          "amount": 5,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 7.0,
+          "text": "7 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_blanket",
+        "name_en": "Blanket",
+        "name_ru": "Одеяло",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_pot-iron",
+        "name_en": "Pot, iron",
+        "name_ru": "Котелок (железный)",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_block-and-tackle",
+        "name_en": "Block and tackle",
+        "name_ru": "Блок и таль",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_potion-of-healing",
+        "name_en": "Potion of healing",
+        "name_ru": "Зелье лечения",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 0.5,
+          "text": "1/2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_book",
+        "name_en": "Book",
+        "name_ru": "Книга",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_pouch",
+        "name_en": "Pouch",
+        "name_ru": "Мешочек",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_bottle-glass",
+        "name_en": "Bottle, glass",
+        "name_ru": "Бутылка (стеклянная)",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_quiver",
+        "name_en": "Quiver",
+        "name_ru": "Колчан",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_bucket",
+        "name_en": "Bucket",
+        "name_ru": "Ведро",
+        "cost": {
+          "amount": 5,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_ram-portable",
+        "name_en": "Ram, portable",
+        "name_ru": "Таран, переносной",
+        "cost": {
+          "amount": 4,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 35.0,
+          "text": "35 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_caltrops-bag-of-20",
+        "name_en": "Caltrops (bag of 20)",
+        "name_ru": "Калтропы (мешочек 20)",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_rations-1-day",
+        "name_en": "Rations (1 day)",
+        "name_ru": "Провизия (1 день)",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_candle",
+        "name_en": "Candle",
+        "name_ru": "Свеча",
+        "cost": {
+          "amount": 1,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_robes",
+        "name_en": "Robes",
+        "name_ru": "Одеяние/роба",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_case-crossbow-bolt",
+        "name_en": "Case, crossbow bolt",
+        "name_ru": "Футляр для болтов",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_rope-hempen-50-feet",
+        "name_en": "Rope, hempen (50 feet)",
+        "name_ru": "Верёвка пеньковая (50 футов)",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_case-map-or-scroll",
+        "name_en": "Case, map or scroll",
+        "name_ru": "Тубус для карт/свитков",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_rope-silk-50-feet",
+        "name_en": "Rope, silk (50 feet)",
+        "name_ru": "Верёвка шёлковая (50 футов)",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_chain-10-feet",
+        "name_en": "Chain (10 feet)",
+        "name_ru": "Цепь (10 футов)",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_sack",
+        "name_en": "Sack",
+        "name_ru": "Мешок",
+        "cost": {
+          "amount": 1,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 0.5,
+          "text": "1/2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_chalk-1-piece",
+        "name_en": "Chalk (1 piece)",
+        "name_ru": "Мел (кусок)",
+        "cost": {
+          "amount": 1,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_scale-merchant-s",
+        "name_en": "Scale, merchant’s",
+        "name_ru": "Весы торговые",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_chest",
+        "name_en": "Chest",
+        "name_ru": "Сундук",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 25.0,
+          "text": "25 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_sealing-wax",
+        "name_en": "Sealing wax",
+        "name_ru": "Сургуч",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_climber-s-kit",
+        "name_en": "Climber’s kit",
+        "name_ru": "Набор скалолаза",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 12.0,
+          "text": "12 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_shovel",
+        "name_en": "Shovel",
+        "name_ru": "Лопата",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_clothes-common",
+        "name_en": "Clothes, common",
+        "name_ru": "Одежда, простая",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_signal-whistle",
+        "name_en": "Signal whistle",
+        "name_ru": "Сигнальный свисток",
+        "cost": {
+          "amount": 5,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_clothes-costume",
+        "name_en": "Clothes, costume",
+        "name_ru": "Одежда, костюм",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_signet-ring",
+        "name_en": "Signet ring",
+        "name_ru": "Перстень-печатка",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_clothes-fine",
+        "name_en": "Clothes, fine",
+        "name_ru": "Одежда, хорошая",
+        "cost": {
+          "amount": 15,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_soap",
+        "name_en": "Soap",
+        "name_ru": "Мыло",
+        "cost": {
+          "amount": 2,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_clothes-traveler-s",
+        "name_en": "Clothes, traveler’s",
+        "name_ru": "Одежда путешественника",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_spellbook",
+        "name_en": "Spellbook",
+        "name_ru": "Книга заклинаний",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_component-pouch",
+        "name_en": "Component pouch",
+        "name_ru": "Мешочек компонентов",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_spikes-iron-10",
+        "name_en": "Spikes, iron (10)",
+        "name_ru": "Колья железные (10)",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_crowbar",
+        "name_en": "Crowbar",
+        "name_ru": "Лом",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_spyglass",
+        "name_en": "Spyglass",
+        "name_ru": "Подзорная труба",
+        "cost": {
+          "amount": 1000,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_tent-two-person",
+        "name_en": "Tent, two-‐person",
+        "name_ru": "Палатка (на двоих)",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 20.0,
+          "text": "20 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_sprig-of-mistletoe",
+        "name_en": "Sprig of mistletoe",
+        "name_ru": "Веточка омелы",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_tinderbox",
+        "name_en": "Tinderbox",
+        "name_ru": "Огниво",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_totem",
+        "name_en": "Totem",
+        "name_ru": "Тотем",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_torch",
+        "name_en": "Torch",
+        "name_ru": "Факел",
+        "cost": {
+          "amount": 1,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_wooden-staff",
+        "name_en": "Wooden staff",
+        "name_ru": "Деревянный посох",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_vial",
+        "name_en": "Vial",
+        "name_ru": "Пузырёк",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_yew-wand",
+        "name_en": "Yew wand",
+        "name_ru": "Тисовая палочка",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_waterskin",
+        "name_en": "Waterskin",
+        "name_ru": "Бурдюк",
+        "cost": {
+          "amount": 2,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.. (full)"
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_fishing-tackle",
+        "name_en": "Fishing tackle",
+        "name_ru": "Рыболовные снасти",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_whetstone",
+        "name_en": "Whetstone",
+        "name_ru": "Точильный камень",
+        "cost": {
+          "amount": 1,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_flask-or-tankard",
+        "name_en": "Flask or tankard",
+        "name_ru": "Фляга или кружка",
+        "cost": {
+          "amount": 2,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      },
+      {
+        "id": "gear_grappling-hook",
+        "name_en": "Grappling hook",
+        "name_ru": "Кошка",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 4.0,
+          "text": "4 lb.."
+        },
+        "description_ru": "",
+        "type": "gear"
+      }
+    ],
+    "tools": [
+      {
+        "id": "tool_alchemist-s-supplies",
+        "name_en": "Alchemist’s supplies",
+        "name_ru": "Инструменты алхимика",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 8.0,
+          "text": "8 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_brewer-s-supplies",
+        "name_en": "Brewer’s supplies",
+        "name_ru": "Инструменты пивовара",
+        "cost": {
+          "amount": 20,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 9.0,
+          "text": "9 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_calligrapher-s-supplies",
+        "name_en": "Calligrapher's supplies",
+        "name_ru": "Инструменты каллиграфа",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_carpenter-s-tools",
+        "name_en": "Carpenter’s tools",
+        "name_ru": "Инструменты плотника",
+        "cost": {
+          "amount": 8,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_cartographer-s-tools",
+        "name_en": "Cartographer’s tools",
+        "name_ru": "Инструменты картографа",
+        "cost": {
+          "amount": 15,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_cobbler-s-tools",
+        "name_en": "Cobbler’s tools",
+        "name_ru": "Инструменты сапожника",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_cook-s-utensils",
+        "name_en": "Cook’s utensils",
+        "name_ru": "Инструменты повара",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 8.0,
+          "text": "8 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_glassblower-s-tools",
+        "name_en": "Glassblower’s tools",
+        "name_ru": "Инструменты стеклодува",
+        "cost": {
+          "amount": 30,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_jeweler-s-tools",
+        "name_en": "Jeweler’s tools",
+        "name_ru": "Ювелирные инструменты",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_leatherworker-s-tools",
+        "name_en": "Leatherworker’s tools",
+        "name_ru": "Инструменты кожевника",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_mason-s-tools",
+        "name_en": "Mason’s tools",
+        "name_ru": "Инструменты каменщика",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 8.0,
+          "text": "8 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_painter-s-supplies",
+        "name_en": "Painter’s supplies",
+        "name_ru": "Инструменты художника",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_potter-s-tools",
+        "name_en": "Potter’s tools",
+        "name_ru": "Инструменты гончара",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_smith-s-tools",
+        "name_en": "Smith’s tools",
+        "name_ru": "Инструменты кузнеца",
+        "cost": {
+          "amount": 20,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 8.0,
+          "text": "8 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_tinker-s-tools",
+        "name_en": "Tinker’s tools",
+        "name_ru": "Инструменты жестянщика",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_weaver-s-tools",
+        "name_en": "Weaver’s tools",
+        "name_ru": "Инструменты ткача",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_woodcarver-s-tools",
+        "name_en": "Woodcarver’s tools",
+        "name_ru": "Инструменты резчика по дереву",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_disguise-kit",
+        "name_en": "Disguise kit",
+        "name_ru": "Набор для грима",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_forgery-kit",
+        "name_en": "Forgery kit",
+        "name_ru": "Набор для фальсификации",
+        "cost": {
+          "amount": 15,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 5.0,
+          "text": "5 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_dice-set",
+        "name_en": "Dice set",
+        "name_ru": "Игральные кости",
+        "cost": {
+          "amount": 1,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_playing-card-set",
+        "name_en": "Playing card set",
+        "name_ru": "Карты",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_herbalism-kit",
+        "name_en": "Herbalism kit",
+        "name_ru": "Набор травника",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_bagpipes",
+        "name_en": "Bagpipes",
+        "name_ru": "Волынка",
+        "cost": {
+          "amount": 30,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 6.0,
+          "text": "6 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_drum",
+        "name_en": "Drum",
+        "name_ru": "Барабан",
+        "cost": {
+          "amount": 6,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 3.0,
+          "text": "3 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_dulcimer",
+        "name_en": "Dulcimer",
+        "name_ru": "Цимбалы",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_flute",
+        "name_en": "Flute",
+        "name_ru": "Флейта",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_lute",
+        "name_en": "Lute",
+        "name_ru": "Лютня",
+        "cost": {
+          "amount": 35,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_lyre",
+        "name_en": "Lyre",
+        "name_ru": "Лира",
+        "cost": {
+          "amount": 30,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_horn",
+        "name_en": "Horn",
+        "name_ru": "Рожок",
+        "cost": {
+          "amount": 3,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_pan-flute",
+        "name_en": "Pan flute",
+        "name_ru": "Свирель",
+        "cost": {
+          "amount": 12,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_shawm",
+        "name_en": "Shawm",
+        "name_ru": "Шалмей",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_viol",
+        "name_en": "Viol",
+        "name_ru": "Виола",
+        "cost": {
+          "amount": 30,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_navigator-s-tools",
+        "name_en": "Navigator’s tools",
+        "name_ru": "Инструменты навигатора",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_poisoner-s-kit",
+        "name_en": "Poisoner’s kit",
+        "name_ru": "Инструменты отравителя",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 2.0,
+          "text": "2 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      },
+      {
+        "id": "tool_thieves-tools",
+        "name_en": "Thieves’ tools",
+        "name_ru": "Воровские инструменты",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "description_ru": "",
+        "type": "tool"
+      }
+    ],
+    "mounts_animals": [
+      {
+        "id": "mount_camel",
+        "name_en": "Camel",
+        "name_ru": "Верблюд",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_ft": 50,
+        "carrying_capacity_lb": 480,
+        "type": "mount"
+      },
+      {
+        "id": "mount_donkey-or-mule",
+        "name_en": "Donkey or mule",
+        "name_ru": "Осёл или мул",
+        "cost": {
+          "amount": 8,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_ft": 40,
+        "carrying_capacity_lb": 420,
+        "type": "mount"
+      },
+      {
+        "id": "mount_elephant",
+        "name_en": "Elephant",
+        "name_ru": "Слон",
+        "cost": {
+          "amount": 200,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_ft": 40,
+        "carrying_capacity_lb": 1320,
+        "type": "mount"
+      },
+      {
+        "id": "mount_horse-draft",
+        "name_en": "Horse, draft",
+        "name_ru": "Лошадь, тягловая",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_ft": 40,
+        "carrying_capacity_lb": 540,
+        "type": "mount"
+      },
+      {
+        "id": "mount_horse-riding",
+        "name_en": "Horse, riding",
+        "name_ru": "Лошадь, ездовая",
+        "cost": {
+          "amount": 75,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_ft": 60,
+        "carrying_capacity_lb": 480,
+        "type": "mount"
+      },
+      {
+        "id": "mount_mastiff",
+        "name_en": "Mastiff",
+        "name_ru": "Мастиф",
+        "cost": {
+          "amount": 25,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_ft": 40,
+        "carrying_capacity_lb": 195,
+        "type": "mount"
+      },
+      {
+        "id": "mount_pony",
+        "name_en": "Pony",
+        "name_ru": "Пони",
+        "cost": {
+          "amount": 30,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_ft": 40,
+        "carrying_capacity_lb": 225,
+        "type": "mount"
+      },
+      {
+        "id": "mount_warhorse",
+        "name_en": "Warhorse",
+        "name_ru": "Боевой конь",
+        "cost": {
+          "amount": 400,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_ft": 60,
+        "carrying_capacity_lb": 540,
+        "type": "mount"
+      }
+    ],
+    "tack_vehicles": [
+      {
+        "id": "tack_bit-and-bridle",
+        "name_en": "Bit and bridle",
+        "name_ru": "Упряжь и уздечка",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 1.0,
+          "text": "1 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_carriage",
+        "name_en": "Carriage",
+        "name_ru": "Повозка",
+        "cost": {
+          "amount": 100,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 600.0,
+          "text": "600 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_cart",
+        "name_en": "Cart",
+        "name_ru": "Тележка",
+        "cost": {
+          "amount": 15,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 200.0,
+          "text": "200 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_chariot",
+        "name_en": "Chariot",
+        "name_ru": "Колесница",
+        "cost": {
+          "amount": 250,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 100.0,
+          "text": "100 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_feed-per-day",
+        "name_en": "Feed (per day)",
+        "name_ru": "Корм (в день)",
+        "cost": {
+          "amount": 5,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "weight": {
+          "lb": 10.0,
+          "text": "10 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_exotic",
+        "name_en": "Exotic",
+        "name_ru": "Седло: экзотическое",
+        "cost": {
+          "amount": 60,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 40.0,
+          "text": "40 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_military",
+        "name_en": "Military",
+        "name_ru": "Седло: военное",
+        "cost": {
+          "amount": 20,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 30.0,
+          "text": "30 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_pack",
+        "name_en": "Pack",
+        "name_ru": "Седло: грузовое",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 15.0,
+          "text": "15 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_riding",
+        "name_en": "Riding",
+        "name_ru": "Седло: ездовое",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 25.0,
+          "text": "25 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_saddlebags",
+        "name_en": "Saddlebags",
+        "name_ru": "Седельные сумки",
+        "cost": {
+          "amount": 4,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 8.0,
+          "text": "8 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_sled",
+        "name_en": "Sled",
+        "name_ru": "Сани",
+        "cost": {
+          "amount": 20,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 300.0,
+          "text": "300 lb.."
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_stabling-per-day",
+        "name_en": "Stabling (per day)",
+        "name_ru": "Конюшня (в день)",
+        "cost": {
+          "amount": 5,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "weight": {
+          "lb": null,
+          "text": "—"
+        },
+        "type": "vehicle"
+      },
+      {
+        "id": "tack_wagon",
+        "name_en": "Wagon",
+        "name_ru": "Вагон",
+        "cost": {
+          "amount": 35,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "weight": {
+          "lb": 400.0,
+          "text": "400 lb.."
+        },
+        "type": "vehicle"
+      }
+    ],
+    "water_vehicles": [
+      {
+        "id": "vehicle_water_galley",
+        "name_en": "Galley",
+        "name_ru": "Галера",
+        "cost": {
+          "amount": 30000,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_mph": 4.0,
+        "type": "vehicle_water"
+      },
+      {
+        "id": "vehicle_water_keelboat",
+        "name_en": "Keelboat",
+        "name_ru": "Баркас",
+        "cost": {
+          "amount": 3000,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_mph": 1.0,
+        "type": "vehicle_water"
+      },
+      {
+        "id": "vehicle_water_longship",
+        "name_en": "Longship",
+        "name_ru": "Драккар",
+        "cost": {
+          "amount": 10000,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_mph": 3.0,
+        "type": "vehicle_water"
+      },
+      {
+        "id": "vehicle_water_rowboat",
+        "name_en": "Rowboat",
+        "name_ru": "Шлюпка",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_mph": 1.5,
+        "type": "vehicle_water"
+      },
+      {
+        "id": "vehicle_water_sailing-ship",
+        "name_en": "Sailing ship",
+        "name_ru": "Парусный корабль",
+        "cost": {
+          "amount": 10000,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_mph": 2.0,
+        "type": "vehicle_water"
+      },
+      {
+        "id": "vehicle_water_warship",
+        "name_en": "Warship",
+        "name_ru": "Военный корабль",
+        "cost": {
+          "amount": 25000,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "speed_mph": 2.5,
+        "type": "vehicle_water"
+      }
+    ],
+    "trade_goods": [
+      {
+        "id": "trade_1-lb-of-wheat",
+        "name_en": "1 lb. of wheat",
+        "name_ru": "1 фунт пшеницы",
+        "cost": {
+          "amount": 1,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-flour-or-one-chicken",
+        "name_en": "1 lb. of flour or one chicken",
+        "name_ru": "1 фунт муки или 1 курица",
+        "cost": {
+          "amount": 2,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-salt",
+        "name_en": "1 lb. of salt",
+        "name_ru": "1 фунт соли",
+        "cost": {
+          "amount": 5,
+          "coin": "cp",
+          "coin_ru": "мм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-iron-or-1-sq-yd-of-canvas",
+        "name_en": "1 lb. of iron or 1 sq. yd. of canvas",
+        "name_ru": "1 фунт железа или 1 кв. ярд холста",
+        "cost": {
+          "amount": 1,
+          "coin": "sp",
+          "coin_ru": "см"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-ginger-or-one-goat",
+        "name_en": "1 lb. of ginger or one goat",
+        "name_ru": "1 фунт имбиря или 1 коза",
+        "cost": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-cinnamon-or-pepper-or-one-sheep",
+        "name_en": "1 lb. of cinnamon or pepper, or one sheep",
+        "name_ru": "1 фунт корицы или перца, или 1 овца",
+        "cost": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-cloves-or-one-pig",
+        "name_en": "1 lb. of cloves or one pig",
+        "name_ru": "1 фунт гвоздики или 1 свинья",
+        "cost": {
+          "amount": 3,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-silver-or-1-sq-yd-of-linen",
+        "name_en": "1 lb. of silver or 1 sq. yd. of linen",
+        "name_ru": "1 фунт серебра или 1 кв. ярд льна",
+        "cost": {
+          "amount": 5,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-sq-yd-of-silk-or-one-cow",
+        "name_en": "1 sq. yd. of silk or one cow",
+        "name_ru": "1 кв. ярд шёлка или 1 корова",
+        "cost": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-saffron-or-one-ox",
+        "name_en": "1 lb. of saffron or one ox",
+        "name_ru": "1 фунт шафрана или 1 бык",
+        "cost": {
+          "amount": 15,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-gold",
+        "name_en": "1 lb. of gold",
+        "name_ru": "1 фунт золота",
+        "cost": {
+          "amount": 50,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "type": "trade_good"
+      },
+      {
+        "id": "trade_1-lb-of-platinum",
+        "name_en": "1 lb. of platinum",
+        "name_ru": "1 фунт платины",
+        "cost": {
+          "amount": 500,
+          "coin": "gp",
+          "coin_ru": "зм"
+        },
+        "type": "trade_good"
+      }
+    ],
+    "lifestyle_expenses": [
+      {
+        "id": "lifestyle_wretched",
+        "type": "expense_lifestyle",
+        "name_en": "Wretched",
+        "name_ru": "Нищенский",
+        "cost_per_day": null
+      },
+      {
+        "id": "lifestyle_squalid",
+        "type": "expense_lifestyle",
+        "name_en": "Squalid",
+        "name_ru": "Убогий",
+        "cost_per_day": {
+          "amount": 1,
+          "coin": "sp",
+          "coin_ru": "см"
+        }
+      },
+      {
+        "id": "lifestyle_poor",
+        "type": "expense_lifestyle",
+        "name_en": "Poor",
+        "name_ru": "Бедный",
+        "cost_per_day": {
+          "amount": 2,
+          "coin": "sp",
+          "coin_ru": "см"
+        }
+      },
+      {
+        "id": "lifestyle_modest",
+        "type": "expense_lifestyle",
+        "name_en": "Modest",
+        "name_ru": "Скромный",
+        "cost_per_day": {
+          "amount": 1,
+          "coin": "gp",
+          "coin_ru": "зм"
+        }
+      },
+      {
+        "id": "lifestyle_comfortable",
+        "type": "expense_lifestyle",
+        "name_en": "Comfortable",
+        "name_ru": "Комфортный",
+        "cost_per_day": {
+          "amount": 2,
+          "coin": "gp",
+          "coin_ru": "зм"
+        }
+      },
+      {
+        "id": "lifestyle_wealthy",
+        "type": "expense_lifestyle",
+        "name_en": "Wealthy",
+        "name_ru": "Богатый",
+        "cost_per_day": {
+          "amount": 4,
+          "coin": "gp",
+          "coin_ru": "зм"
+        }
+      },
+      {
+        "id": "lifestyle_aristocratic",
+        "type": "expense_lifestyle",
+        "name_en": "Aristocratic",
+        "name_ru": "Аристократический",
+        "cost_per_day": {
+          "amount": 10,
+          "coin": "gp",
+          "coin_ru": "зм"
+        }
+      }
+    ]
+  }
+}
