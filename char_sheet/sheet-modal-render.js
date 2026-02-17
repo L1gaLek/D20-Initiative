@@ -602,99 +602,63 @@ function renderCombatTab(vm) {
   function fmtCost(cost) {
     if (!cost || typeof cost !== "object") return "—";
     const a = (cost.amount ?? cost.value ?? "");
-    const c = String(cost.coin || cost.coin_ru || "").toLowerCase();
-    const RU = { cp: "мм", sp: "см", ep: "эм", gp: "зм", pp: "пм" };
-    const coin = cost.coin_ru || RU[c] || cost.coin || "";
+    const coin = cost.coin_ru || cost.coin || "";
     if (a === "" && !coin) return "—";
     return `${escapeHtml(String(a))} ${escapeHtml(String(coin))}`.trim();
   }
-function renderInvItemCard(item, tabId, idx, canEdit) {
-  const it = item && typeof item === "object" ? item : {};
-  const name = it.name_ru || it.name || it.name_en || "(без названия)";
-  const qty = safeInt(it.qty, 1);
 
-  const costObj = (it.cost && typeof it.cost === "object") ? it.cost : { amount: 0, coin: "gp" };
-  const coinCode = String(costObj.coin || costObj.coin_ru || "gp").toLowerCase();
-  const RU = { cp: "мм", sp: "см", ep: "эм", gp: "зм", pp: "пм" };
-  const costText = fmtCost(costObj);
+  function renderInvItemCard(item, tabId, idx, canEdit) {
+    const it = item && typeof item === "object" ? item : {};
+    const name = it.name_ru || it.name || it.name_en || "(без названия)";
+    const qty = safeInt(it.qty, 1);
+    const cost = fmtCost(it.cost);
+    const w = (it.weight && typeof it.weight === "object") ? (it.weight.text || (it.weight.lb != null ? `${it.weight.lb} lb.` : "")) : (it.weight || "");
+    const desc = (it.description_ru || it.desc_ru || it.desc || "").trim();
+    const descCollapsed = !!it.descCollapsed;
 
-  const wObj = (it.weight && typeof it.weight === "object") ? it.weight : { lb: 0, text: "" };
-  const wLb = (wObj.lb != null && wObj.lb !== "") ? safeInt(wObj.lb, 0) : 0;
-  const wText = (wObj.text || (wObj.lb != null ? `${wLb} фн.` : "")) || "—";
+    const extra = (() => {
+      if (it.type === "weapon" && it.weapon) {
+        const dmg = it.weapon.damage ? `Урон: ${escapeHtml(String(it.weapon.damage))} (${escapeHtml(String(it.weapon.damage_type || ""))})` : "";
+        const props = it.weapon.properties_ru ? `Свойства: ${escapeHtml(String(it.weapon.properties_ru))}` : "";
+        return [dmg, props].filter(Boolean).map(t => `<div class="equip-meta">${t}</div>`).join("");
+      }
+      if (it.type === "armor" && it.armor) {
+        const ac = it.armor.ac ? `КД: ${escapeHtml(String(it.armor.ac))}` : "";
+        const st = (it.armor.str_req != null && String(it.armor.str_req).trim() !== "") ? `Сила: ${escapeHtml(String(it.armor.str_req))}` : "";
+        const dis = it.armor.stealth_disadv ? `Помеха скрытности` : "";
+        return [ac, st, dis].filter(Boolean).map(t => `<div class="equip-meta">${t}</div>`).join("");
+      }
+      return "";
+    })();
 
-  const desc = String(it.description_ru || it.desc_ru || it.desc || "").trim();
-
-  const extra = (() => {
-    if (it.type === "weapon" && it.weapon) {
-      const dmg = it.weapon.damage ? `Урон: ${escapeHtml(String(it.weapon.damage))} (${escapeHtml(String(it.weapon.damage_type || ""))})` : "";
-      const props = it.weapon.properties_ru ? `Свойства: ${escapeHtml(String(it.weapon.properties_ru))}` : "";
-      return [dmg, props].filter(Boolean).map(t => `<div class="equip-meta">${t}</div>`).join("");
-    }
-    if (it.type === "armor" && it.armor) {
-      const ac = it.armor.ac ? `КД: ${escapeHtml(String(it.armor.ac))}` : "";
-      const st = (it.armor.str_req != null && String(it.armor.str_req).trim() !== "") ? `Сила: ${escapeHtml(String(it.armor.str_req))}` : "";
-      const dis = it.armor.stealth_disadv ? `Помеха скрытности` : "";
-      return [ac, st, dis].filter(Boolean).map(t => `<div class="equip-meta">${t}</div>`).join("");
-    }
-    return "";
-  })();
-
-  const costEditor = canEdit ? `
-    <div class="equip-editline">
-      <div class="equip-editlbl">Цена</div>
-      <input class="equip-editnum" type="number" min="0" max="999999" value="${escapeHtml(String(costObj.amount ?? 0))}"
-        data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.cost.amount">
-      <select class="equip-editcoin" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.cost.coin">
-        <option value="cp" ${coinCode==="cp"?"selected":""}>мм</option>
-        <option value="sp" ${coinCode==="sp"?"selected":""}>см</option>
-        <option value="ep" ${coinCode==="ep"?"selected":""}>эм</option>
-        <option value="gp" ${coinCode==="gp"?"selected":""}>зм</option>
-        <option value="pp" ${coinCode==="pp"?"selected":""}>пм</option>
-      </select>
-    </div>
-    <div class="equip-editline">
-      <div class="equip-editlbl">Вес</div>
-      <input class="equip-editnum" type="number" min="0" max="999999" value="${escapeHtml(String(wLb))}"
-        data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.weight.lb">
-      <div class="equip-editunit">фн.</div>
-    </div>
-  ` : `
-    <div class="equip-sub">
-      <span class="equip-pill">Цена: ${costText}</span>
-      <span class="equip-pill">Вес: ${escapeHtml(String(wText))}</span>
-    </div>
-  `;
-
-  const descBlock = canEdit
-    ? `<textarea class="sheet-textarea equip-descedit" rows="3" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.description_ru"
-         placeholder="Описание...">${escapeHtml(desc)}</textarea>`
-    : (desc ? `<div class="equip-desc">${escapeHtml(desc)}</div>` : "");
-
-  return `
-    <div class="equip-card" data-inv-item data-inv-tabid="${escapeHtml(tabId)}" data-inv-idx="${idx}">
-      <div class="equip-head">
-        <div class="equip-title">
-          ${canEdit ? `<input class="equip-name" type="text" value="${escapeHtml(String(name))}" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.name_ru">`
-                   : `<div class="equip-name ro">${escapeHtml(String(name))}</div>`}
-          ${costEditor}
-        </div>
-
-        <div class="equip-actions">
-          <div class="equip-qty">
-            <span class="equip-qty-lbl">x</span>
-            <input class="equip-qty-in" type="number" min="1" max="999" value="${escapeHtml(String(qty))}" ${canEdit ? "" : "disabled"} data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.qty">
+    return `
+      <div class="equip-card" data-inv-item data-inv-tabid="${escapeHtml(tabId)}" data-inv-idx="${idx}">
+        <div class="equip-head">
+          <div class="equip-title">
+            ${canEdit ? `<input class="equip-name" type="text" value="${escapeHtml(String(name))}" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.name_ru">`
+                     : `<div class="equip-name ro">${escapeHtml(String(name))}</div>`}
+            <div class="equip-sub equip-sub--row">
+              <span class="equip-pill">Цена: ${cost}</span>
+              <span class="equip-pill">Вес: ${escapeHtml(String(w || "—"))}</span>
+            </div>
           </div>
-          <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-sell data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Продать</button>
-          <button class="weapon-btn danger" type="button" ${canEdit ? "" : "disabled"} data-inv-del data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Удалить</button>
+
+          <div class="equip-actions">
+            <div class="equip-qty">
+              <span class="equip-qty-lbl">x</span>
+              <input class="equip-qty-in" type="number" min="1" max="999" value="${escapeHtml(String(qty))}" ${canEdit ? "" : "disabled"} data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.qty">
+            </div>
+            ${(desc ? `<button class="weapon-btn" type="button" data-inv-toggle-desc data-tab="${escapeHtml(tabId)}" data-idx="${idx}">${descCollapsed ? "Показать" : "Скрыть"}</button>` : "")}
+            <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-sell data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Продать</button>
+            <button class="weapon-btn danger" type="button" ${canEdit ? "" : "disabled"} data-inv-del data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Удалить</button>
+          </div>
         </div>
+
+        ${extra ? `<div class="equip-extra">${extra}</div>` : ""}
+        ${desc ? `<div class="equip-desc ${descCollapsed ? "is-hidden" : ""}" data-inv-desc>${escapeHtml(desc)}</div>` : ""}
       </div>
-
-      ${extra ? `<div class="equip-extra">${extra}</div>` : ""}
-      ${descBlock}
-    </div>
-  `;
-}
-
+    `;
+  }
 
   function renderInventoryTab(vm, canEdit) {
     const denom = String(vm?.coinsViewDenom || "gp").toLowerCase();
@@ -863,27 +827,32 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
       </div>
     `;
   }
-function renderShopTab(vm, canEdit) {
-  return `
-    <div class="sheet-section" data-shop-root>
-      <h3>Магазин</h3>
 
-      <div class="sheet-card fullwidth">
-        <div class="equip-topline">
-          <h4 style="margin:0">Каталог SRD</h4>
-          <div class="equip-top-actions">
-            <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-shop-open-db>Открыть снова</button>
+  function renderShopTab(vm, canEdit) {
+    return `
+      <div class="sheet-section" data-shop-root>
+        <h3>Магазин</h3>
+
+        <div class="sheet-card fullwidth">
+          <div class="equip-topline">
+            <h4 style="margin:0">Каталог SRD</h4>
+            <div class="equip-top-actions">
+              <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-shop-open-db>Открыть магазин</button>
+            </div>
+          </div>
+
+          <div class="sheet-note">Открой магазин — выбери вкладку (оружие/доспехи/снаряжение и т.д.), найди предмет и купи за монеты персонажа. Купленный предмет сразу появится в инвентаре в соответствующей вкладке.</div>
+
+          <div class="equip-subtabs" role="tablist">
+            ${(EQUIP_TAB_DEFS).map(t => {
+              const active = String(vm?.shop?.activeTab || "weapons") === t.id;
+              return `<button class="equip-subtab ${active ? "active" : ""}" type="button" data-shop-subtab="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`;
+            }).join("")}
           </div>
         </div>
-
-        <div class="sheet-note">
-          Каталог открывается поверх листа персонажа. Выбирай предметы и покупай за монеты — они сразу попадут в инвентарь (и оружие — в «Бой»).
-        </div>
       </div>
-    </div>
-  `;
-}
-
+    `;
+  }
 
   function renderPersonalityTab(vm) {
     return `
@@ -1169,24 +1138,13 @@ function renderShopTab(vm, canEdit) {
       </div>
     `;
 
-    const shopTab = tabs.find(t => t.id === "shop");
-    const mainTabs = tabs.filter(t => t.id !== "shop");
-
     const sidebarHtml = `
       <div class="sheet-sidebar">
-        ${mainTabs.map(t => `
+        ${tabs.map(t => `
           <button class="sheet-tab ${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">
             ${escapeHtml(t.label)}
           </button>
         `).join("")}
-
-        <div class="sheet-tab-sep"></div>
-
-        ${shopTab ? `
-          <button class="sheet-tab sheet-tab--shop ${shopTab.id === activeTab ? "active" : ""}" data-tab="${shopTab.id}">
-            ${escapeHtml(shopTab.label)}
-          </button>
-        ` : ""}
       </div>
     `;
 
@@ -1231,11 +1189,6 @@ function renderShopTab(vm, canEdit) {
     bindInventoryEditors(sheetContent, player, canEdit);
     bindEquipmentUi(sheetContent, player, canEdit);
     updateCoinsTotal(sheetContent, player.sheet?.parsed);
-    // Авто-открытие магазина поверх листа при выборе вкладки
-    // (раньше тут по ошибке использовался tabId вне области видимости)
-    if (activeTab === "shop") {
-      try { window.__equipUi?.open?.("buy"); } catch {}
-    }
 
     // важное: быстрые клики "Вдохновение" / "Истощение" / "Состояние"
     // (на некоторых браузерах клики по input могут не доходить, если он disabled)
@@ -1274,11 +1227,6 @@ function renderShopTab(vm, canEdit) {
           bindEquipmentUi(sheetContent, player, canEdit);
           bindLanguagesUi(sheetContent, player, canEdit);
           updateCoinsTotal(sheetContent, player.sheet?.parsed);
-    // Авто-открытие магазина поверх листа при выборе вкладки
-    // (раньше тут по ошибке использовался tabId вне области видимости)
-    if (activeTab === "shop") {
-      try { window.__equipUi?.open?.("buy"); } catch {}
-    }
         }
       });
     });

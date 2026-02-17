@@ -1313,7 +1313,6 @@ function bindTextareaHeightPersistence(root, player) {
     }
 
     function openEquipOverlay(mode) {
-      try { document.querySelectorAll('.equip-overlay').forEach(x => x.remove()); } catch {}
       const { player: curPlayer, canEdit: curCanEdit } = getState();
       if (!curCanEdit) return;
       const sheet = curPlayer?.sheet?.parsed;
@@ -1425,9 +1424,10 @@ function bindTextareaHeightPersistence(root, player) {
               <div class="equip-row__left">
                 <div class="equip-row__name">${name}</div>
                 <div class="equip-row__meta">Цена: ${cost}${w ? ` • Вес: ${escapeHtml(String(w))}` : ''}${meta ? ` • ${meta}` : ''}</div>
-                ${desc ? `<div class="equip-row__desc">${desc}</div>` : ''}
+                ${desc ? `<div class="equip-row__desc is-hidden" data-equip-desc>${desc}</div>` : ''}
               </div>
               <div class="equip-row__right">
+                ${desc ? `<button class="weapon-btn" type="button" data-equip-desc-toggle data-item-id="${escapeHtml(String(it.id || ''))}">Описание</button>` : ''}
                 <button class="weapon-btn" type="button" data-equip-action data-item-id="${escapeHtml(String(it.id || ''))}">${mode === 'buy' ? 'Купить' : 'Добавить'}</button>
               </div>
             </div>
@@ -1455,6 +1455,14 @@ function bindTextareaHeightPersistence(root, player) {
       qInp.addEventListener('input', renderList);
 
       listEl.addEventListener('click', (e) => {
+        const tog = e.target?.closest?.('[data-equip-desc-toggle][data-item-id]');
+        if (tog) {
+          const row = tog.closest?.('.equip-row');
+          const descEl = row?.querySelector?.('[data-equip-desc]');
+          if (descEl) descEl.classList.toggle('is-hidden');
+          return;
+        }
+
         const btn = e.target?.closest?.('[data-equip-action][data-item-id]');
         if (!btn) return;
         const id = btn.getAttribute('data-item-id') || '';
@@ -1497,13 +1505,6 @@ function bindTextareaHeightPersistence(root, player) {
         rerenderActiveTab(curPlayer);
       });
     }
-
-
-    // expose UI opener for sidebar auto-open (Shop tab)
-    try {
-      if (!window.__equipUi) window.__equipUi = {};
-      window.__equipUi.open = openEquipOverlay;
-    } catch {}
 
     root.addEventListener('click', (e) => {
       const { player: curPlayer, canEdit: curCanEdit } = getState();
@@ -1660,6 +1661,26 @@ function bindTextareaHeightPersistence(root, player) {
       }
 
       // sell/delete inventory item
+      const togDescBtn = e.target?.closest?.('[data-inv-toggle-desc][data-tab][data-idx]');
+      if (togDescBtn) {
+        const tabId = String(togDescBtn.getAttribute('data-tab') || 'weapons');
+        const idx = safeInt(togDescBtn.getAttribute('data-idx'), -1);
+        const sheet = curPlayer?.sheet?.parsed;
+        if (!sheet?.inventory || !Array.isArray(sheet.inventory[tabId]) || idx < 0 || idx >= sheet.inventory[tabId].length) return;
+        const it = sheet.inventory[tabId][idx];
+        if (!it || typeof it !== 'object') return;
+        it.descCollapsed = !it.descCollapsed;
+
+        // live toggle without full rerender
+        const card = togDescBtn.closest?.('.equip-card');
+        const descEl = card?.querySelector?.('[data-inv-desc]');
+        if (descEl) descEl.classList.toggle('is-hidden', !!it.descCollapsed);
+        togDescBtn.textContent = it.descCollapsed ? 'Показать' : 'Скрыть';
+
+        scheduleSheetSave(curPlayer);
+        return;
+      }
+
       const sellBtn = e.target?.closest?.('[data-inv-sell][data-tab][data-idx]');
       if (sellBtn) {
         if (!curCanEdit) return;
