@@ -19,7 +19,7 @@ function renderBoard(state) {
   if (!wallsLayer) {
     wallsLayer = document.createElement('div');
     wallsLayer.id = 'walls-layer';
-    board.appendChild(wallsLayer);
+    // Append later (after cells) so it sits above the grid in DOM order.
   }
 
   board.style.position = 'relative';
@@ -45,6 +45,12 @@ function renderBoard(state) {
     }
     window.__boardGridKey = key;
   }
+
+  // Ensure walls layer is the LAST child so it renders above cells.
+  try {
+    if (!wallsLayer.parentNode) board.appendChild(wallsLayer);
+    else board.appendChild(wallsLayer); // moves to end
+  } catch {}
 
   // Render wall segments (edges) on top of the grid (below tokens).
   try { renderWallEdges(state, wallsLayer); } catch {}
