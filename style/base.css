@@ -2319,3 +2319,17 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .cmp-map-actions select{ background:rgba(0,0,0,.35); }
 
 .cmp-empty{ opacity:.75; padding:8px 0; }
+
+
+/* --- Sheet sidebar shop separator --- */
+.sheet-sidebar{display:flex;flex-direction:column;}
+.sheet-tab-sep{flex:1 1 auto; margin-top:10px; border-top:1px solid rgba(255,255,255,0.08);}
+.sheet-tab--shop{margin-top:10px;}
+
+/* Inventory item editors */
+.equip-editline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;}
+.equip-editlbl{font-size:12px;color:#aaa;min-width:42px;}
+.equip-editnum{width:92px;}
+.equip-editcoin{width:72px;}
+.equip-editunit{font-size:12px;color:#aaa;}
+.equip-descedit{margin-top:8px;}
