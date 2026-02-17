@@ -699,16 +699,19 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: true }));
+      const items = stPlayers.map(p => ({ id: p.id, inCombat: true }));
+      sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: false }));
+      const items = stPlayers.map(p => ({ id: p.id, inCombat: false }));
+      sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      stPlayers.forEach(p => {
+      const items = stPlayers.map(p => {
         const placed = (p && p.x !== null && p.y !== null);
-        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!placed });
+        return { id: p.id, inCombat: !!placed };
       });
+      sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
 
     controlsLi.appendChild(btnAll);
@@ -979,7 +982,9 @@ function updatePlayerList() {
 
       // ===== Выбор инициативы для участника боя (в инициативе или позднее в бою) =====
       const phaseNow = String(lastState?.phase || '');
-      const canPickInit = (phaseNow === 'initiative' || phaseNow === 'combat');
+      // По запросу: эти кнопки должны появляться ТОЛЬКО когда во время боя создают нового участника
+      // (а не в фазе инициативы). Поэтому показываем только в 'combat'.
+      const canPickInit = (phaseNow === 'combat');
       if (lastState && canPickInit && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
         const box = document.createElement('div');
         box.className = 'init-choice-box';

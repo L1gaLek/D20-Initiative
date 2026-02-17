@@ -929,7 +929,12 @@ async function applyDiceEventToMain(ev) {
   renderRollChips(rolls.length ? rolls : [Number(ev.total) || 0], -1, sides);
 
   // анимация кубика (как при обычном "Бросить")
-  if (!diceAnimBusy && diceCtx && diceCanvas && sides && rolls.length) {
+  // ⚠️ Важно: для своих бросков мы уже анимируем в gameplay-ui.js (по клику),
+  // а затем прилетает echo diceEvent. Чтобы не было ДВОЙНОЙ анимации — пропускаем её по localNonce.
+  const lastNonce = (() => { try { return window._lastSentDiceNonce; } catch { return null; } })();
+  const isEchoOfLocal = !!(ev.localNonce && lastNonce && String(ev.localNonce) === String(lastNonce));
+
+  if (!isEchoOfLocal && !diceAnimBusy && diceCtx && diceCanvas && sides && rolls.length) {
     diceAnimBusy = true;
     try {
       for (const r of rolls) {
