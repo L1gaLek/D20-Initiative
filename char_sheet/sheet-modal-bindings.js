@@ -2168,7 +2168,7 @@ function bindAppearanceUi(root, player, canEdit) {
     btn.textContent = 'Генерация...';
 
     try {
-      const { data, error } = await sb.functions.invoke('generate-portrait', {
+      const { data, error } = await sb.functions.invoke('smooth-worker', {
         body: {
           playerId: curPlayer.id,
           race,
