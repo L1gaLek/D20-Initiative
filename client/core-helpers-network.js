@@ -313,19 +313,25 @@ async function ensureSupabaseReady() {
   return sbClient;
 }
 
-async function upsertRoomState(roomId, nextState) {
+async function fetchRoomStateRow(roomId) {
   await ensureSupabaseReady();
-  // v4 architecture: room_state is NOT the source of truth for token positions or logs.
-  // Keeping those inside room_state causes race conditions ("last write wins").
-  // We persist only the low-frequency game state here.
+  if (!roomId) return null;
+  const { data, error } = await sbClient
+    .from('room_state')
+    .select('state,updated_at,phase,current_actor_id')
+    .eq('room_id', roomId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  try { if (data.updated_at) lastRoomStateUpdatedAt = String(data.updated_at); } catch {}
+  return data;
+}
+
+function buildRoomStatePayload(roomId, nextState) {
   const stSafe = deepClone(nextState || {});
   // Do not persist logs inside room_state; logs are append-only in room_log.
   stSafe.log = [];
-
   // Do not persist token positions inside room_state.
-  // Positions are authoritative in public.room_tokens (realtime). If we keep x/y here,
-  // any unrelated room_state upsert (walls/fog/etc.) can overwrite fresh positions
-  // and cause visible "rollback" when multiple users act concurrently.
   try {
     const pls = Array.isArray(stSafe.players) ? stSafe.players : [];
     pls.forEach((p) => {
@@ -334,8 +340,7 @@ async function upsertRoomState(roomId, nextState) {
       p.y = null;
     });
   } catch {}
-
-  // Also clear legacy per-map mirrors if present.
+  // Clear legacy per-map mirrors if present.
   try {
     const maps = Array.isArray(stSafe.maps) ? stSafe.maps : [];
     maps.forEach((m) => {
@@ -343,15 +348,63 @@ async function upsertRoomState(roomId, nextState) {
       if (m.playersPos && typeof m.playersPos === 'object') m.playersPos = {};
     });
   } catch {}
-  const payload = {
+
+  return {
     room_id: roomId,
-    phase: String(stSafe?.phase || "lobby"),
+    phase: String(stSafe?.phase || 'lobby'),
     current_actor_id: stSafe?.turnOrder?.[stSafe?.currentTurnIndex] ?? null,
     state: syncActiveToMap(stSafe),
     updated_at: new Date().toISOString()
   };
-  const { error } = await sbClient.from("room_state").upsert(payload);
+}
+
+async function saveRoomStateCAS(roomId, nextState, expectedUpdatedAt) {
+  await ensureSupabaseReady();
+  const payload = buildRoomStatePayload(roomId, nextState);
+
+  // If we don't have an expected timestamp, fall back to upsert.
+  const exp = expectedUpdatedAt || lastRoomStateUpdatedAt;
+  if (!exp) {
+    const { error } = await sbClient.from('room_state').upsert(payload);
+    if (error) throw error;
+    lastRoomStateUpdatedAt = payload.updated_at;
+    return { ok: true, updatedAt: payload.updated_at, cas: false };
+  }
+
+  const { data, error } = await sbClient
+    .from('room_state')
+    .update(payload)
+    .eq('room_id', roomId)
+    .eq('updated_at', String(exp))
+    .select('updated_at')
+    .limit(1);
   if (error) throw error;
+  if (Array.isArray(data) && data.length) {
+    lastRoomStateUpdatedAt = String(data[0].updated_at || payload.updated_at);
+    return { ok: true, updatedAt: lastRoomStateUpdatedAt, cas: true };
+  }
+  return { ok: false, conflict: true };
+}
+
+async function patchRoomStateCAS(roomId, patchFn, opts = {}) {
+  const tries = Math.max(1, Math.min(5, Number(opts.tries) || 3));
+  for (let i = 0; i < tries; i++) {
+    const row = await fetchRoomStateRow(roomId);
+    const base = row?.state || {};
+    const exp = row?.updated_at || lastRoomStateUpdatedAt;
+    const next = patchFn(deepClone(base));
+    const res = await saveRoomStateCAS(roomId, next, exp);
+    if (res?.ok) return true;
+  }
+  return false;
+}
+
+async function upsertRoomState(roomId, nextState) {
+  await ensureSupabaseReady();
+  const payload = buildRoomStatePayload(roomId, nextState);
+  const { error } = await sbClient.from('room_state').upsert(payload);
+  if (error) throw error;
+  lastRoomStateUpdatedAt = payload.updated_at;
 }
 
 
@@ -412,6 +465,7 @@ async function subscribeRoomDb(roomId) {
       (payload) => {
         const row = payload.new;
         if (row && row.state) {
+          try { if (row.updated_at) lastRoomStateUpdatedAt = String(row.updated_at); } catch {}
           handleMessage({ type: "state", state: row.state });
         }
       }
@@ -938,53 +992,52 @@ async function sendMessage(msg) {
         const savedSheet = data?.state?.data;
         if (!savedSheet) throw new Error("Пустой файл персонажа");
 
-        const next = deepClone(lastState);
-        const p = (next.players || []).find(pl => pl.id === msg.playerId);
-        if (!p || !p.isBase) {
-          handleMessage({ type: "error", message: "Загружать можно только в персонажа 'Основа'." });
+        const ok = await patchRoomStateCAS(currentRoomId, (st) => {
+          const next = ensureStateHasMaps(st);
+          const p = (next.players || []).find(pl => pl.id === msg.playerId);
+          if (!p || !p.isBase) return next;
+          p.sheet = deepClone(savedSheet);
+          try {
+            const parsed = p.sheet?.parsed;
+            const nextName = parsed?.name?.value ?? parsed?.name;
+            if (typeof nextName === 'string' && nextName.trim()) p.name = nextName.trim();
+          } catch {}
+          return next;
+        });
+        if (!ok) {
+          handleMessage({ type: 'error', message: 'Конфликт обновления комнаты (попробуйте ещё раз).' });
           return;
         }
-        p.sheet = deepClone(savedSheet);
-        try {
-          const parsed = p.sheet?.parsed;
-          const nextName = parsed?.name?.value ?? parsed?.name;
-          if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
-        } catch {}
-
-        await upsertRoomState(currentRoomId, next);
-        handleMessage({ type: "savedBaseApplied", playerId: p.id, savedId });
+        handleMessage({ type: "savedBaseApplied", playerId: msg.playerId, savedId });
         break;
       }
 
       case "setPlayerSheet": {
-  if (!currentRoomId) return;
-  if (!lastState) return;
-
-  const next = deepClone(lastState);
-  const isGm = (String(myRole || "") === "GM");
-  const myUserId = String(localStorage.getItem("dnd_user_id") || "");
-
-  const p = (next.players || []).find(pl => pl.id === msg.id);
-  if (!p) return;
-
-  const owns = (pl) => pl && String(pl.ownerId) === myUserId;
-  if (!isGm && !owns(p)) return;
-
-  p.sheet = deepClone(msg.sheet);
-  try {
-    const ts = Number(msg.sheetUpdatedAt) || Date.now();
-    p.sheetUpdatedAt = ts;
-  } catch {}
-
-  // синхронизируем имя персонажа из sheet (если есть)
-  try {
-    const parsed = p.sheet?.parsed;
-    const nextName = parsed?.name?.value ?? parsed?.name;
-    if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
-  } catch {}
-
-  await upsertRoomState(currentRoomId, next);
-  break;
+        if (!currentRoomId) return;
+        const isGm = (String(myRole || "") === "GM");
+        const myUserId = String(localStorage.getItem("dnd_user_id") || "");
+        const ok = await patchRoomStateCAS(currentRoomId, (st) => {
+          const next = ensureStateHasMaps(st);
+          const p = (next.players || []).find(pl => pl.id === msg.id);
+          if (!p) return next;
+          const owns = (pl) => pl && String(pl.ownerId) === myUserId;
+          if (!isGm && !owns(p)) return next;
+          p.sheet = deepClone(msg.sheet);
+          try {
+            const ts = Number(msg.sheetUpdatedAt) || Date.now();
+            p.sheetUpdatedAt = ts;
+          } catch {}
+          try {
+            const parsed = p.sheet?.parsed;
+            const nextName = parsed?.name?.value ?? parsed?.name;
+            if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
+          } catch {}
+          return next;
+        });
+        if (!ok) {
+          handleMessage({ type: 'error', message: 'Конфликт обновления комнаты (попробуйте ещё раз).' });
+        }
+        break;
 }
 
 // ===== Game logic (DB truth via room_state.state) =====
@@ -992,7 +1045,13 @@ async function sendMessage(msg) {
         if (!currentRoomId) return;
         if (!lastState) return;
 
-        const next = deepClone(lastState);
+        // Use a fresh DB snapshot as the base to reduce concurrent overwrites.
+        let baseRow = null;
+        try { baseRow = await fetchRoomStateRow(currentRoomId); } catch {}
+        const baseState = baseRow?.state || lastState;
+        const expectedUpdatedAt = baseRow?.updated_at || lastRoomStateUpdatedAt;
+
+        const next = deepClone(baseState);
         const isGM = (String(myRole || "") === "GM");
         const myUserId = String(localStorage.getItem("dnd_user_id") || "");
 
@@ -1179,7 +1238,11 @@ async function sendMessage(msg) {
 
 
         if (handled) {
-          await upsertRoomState(currentRoomId, next);
+          const res = await saveRoomStateCAS(currentRoomId, next, expectedUpdatedAt);
+          if (!res?.ok) {
+            // Retry a couple times on conflict.
+            await patchRoomStateCAS(currentRoomId, () => next, { tries: 2 });
+          }
           break;
         }
 
@@ -1828,12 +1891,19 @@ else if (type === "addWall") {
           logEventToState(next, 'Туман войны: очищено исследованное');
         }
 
-        else if (type === "fogSetExplored") {
-          // GM updates shared explored cells (array of "x,y")
+        else if (type === "fogAddExplored") {
+          // GM merges explored cells (delta) to avoid overwriting concurrent updates.
           if (!isGM) return;
           if (!next.fog || typeof next.fog !== 'object') next.fog = {};
-          const arr = Array.isArray(msg.cells) ? msg.cells.map(String) : [];
-          next.fog.explored = arr;
+          const cur = Array.isArray(next.fog.explored) ? next.fog.explored.map(String) : [];
+          const add = Array.isArray(msg.cells) ? msg.cells.map(String) : [];
+          if (!add.length) return;
+          const set = new Set(cur);
+          for (const c of add) set.add(c);
+          // cap to a reasonable size to prevent huge snapshots
+          const merged = Array.from(set);
+          if (merged.length > 50000) merged.splice(0, merged.length - 50000);
+          next.fog.explored = merged;
         }
 
 
@@ -1852,9 +1922,19 @@ else if (type === "addWall") {
             p.hasRolledInitiative = true;
 
             const sign = dexMod >= 0 ? "+" : "";
-            logEventToState(next, `${p.name} бросил инициативу: ${roll}${sign}${dexMod} = ${total}`);
-
-            // live dice event (broadcast only)
+            // Persist dice + log as append-only (no room_state races)
+            await insertDiceEvent(currentRoomId, {
+              fromId: myUserId,
+              fromName: p.name,
+              kindText: `Инициатива: d20${dexMod >= 0 ? "+" : ""}${dexMod}`,
+              sides: 20,
+              count: 1,
+              bonus: dexMod,
+              rolls: [roll],
+              total,
+              crit: ""
+            });
+            // Also broadcast for instant animation (optional)
             await broadcastDiceEventOnly({
               fromId: myUserId,
               fromName: p.name,
@@ -1949,7 +2029,12 @@ else if (type === "addWall") {
           return;
         }
 
-        await upsertRoomState(currentRoomId, next);
+        {
+          const res = await saveRoomStateCAS(currentRoomId, next, expectedUpdatedAt);
+          if (!res?.ok) {
+            await patchRoomStateCAS(currentRoomId, () => next, { tries: 2 });
+          }
+        }
 
 		// v4+: mirror GM "eye" visibility into room_tokens for reliable realtime visibility updates.
 		if (type === 'setPlayerPublic') {

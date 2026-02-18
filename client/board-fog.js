@@ -219,6 +219,7 @@
         if (s.includes(',')) next.add(s);
       }
       this._exploredSet = next;
+      this._exploredDelta = new Set();
     },
 
     _wallEdgesSet() {
@@ -390,6 +391,7 @@
       try {
         if (typeof myRole !== 'undefined' && String(myRole) === 'GM' && fog.exploredEnabled) {
           let changed = false;
+          if (!this._exploredDelta) this._exploredDelta = new Set();
           for (let i = 0; i < visible.length; i++) {
             if (visible[i] !== 1) continue;
             const x = i % w;
@@ -397,6 +399,7 @@
             const k = `${x},${y}`;
             if (!this._exploredSet.has(k)) {
               this._exploredSet.add(k);
+              this._exploredDelta.add(k);
               changed = true;
             }
           }
@@ -411,7 +414,11 @@
         this._pendingExploredSync = null;
         try {
           if (typeof sendMessage === 'function') {
-            sendMessage({ type: 'fogSetExplored', cells: Array.from(this._exploredSet) });
+            const delta = Array.from(this._exploredDelta || []);
+            if (delta.length) {
+              sendMessage({ type: 'fogAddExplored', cells: delta });
+              this._exploredDelta = new Set();
+            }
           }
         } catch {}
       }, 250);
