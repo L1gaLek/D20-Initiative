@@ -704,16 +704,24 @@
     let tMaxX = (dx === 0) ? Infinity : Math.abs((nextV - ox) / dx);
     let tMaxY = (dy === 0) ? Infinity : Math.abs((nextH - oy) / dy);
 
-    // Numerical tolerance. Too small => rare diagonal leaks near corners due to float error.
-    const EPS = 1e-6;
+    const EPS = 1e-4; // tolerance to avoid diagonal leaks near corners
 
     while (!(cx === x1 && cy === y1)) {
       if (Math.abs(tMaxX - tMaxY) < EPS) {
-        // corner: crossing vertical + horizontal boundaries
+        // corner: ray passes through a grid vertex.
+        // To prevent "peeking" around an outside corner, be strict:
+        // block if ANY of the four edges touching this vertex (on either side) are walled.
         const nx = cx + stepX;
         const ny = cy + stepY;
+
+        // near edges (leaving current cell)
         if (blocked(cx, cy, nx, cy)) return false;
         if (blocked(cx, cy, cx, ny)) return false;
+
+        // far edges (entering diagonal cell) – fixes outside-corner diagonal leaks
+        if (blocked(nx, cy, nx, ny)) return false;
+        if (blocked(cx, ny, nx, ny)) return false;
+
         cx = nx;
         cy = ny;
         tMaxX += tDeltaX;
