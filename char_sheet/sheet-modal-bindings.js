@@ -428,6 +428,10 @@ function bindCombatEditors(root, player, canEdit) {
 function bindEditableInputs(root, player, canEdit) {
     if (!root || !player?.sheet?.parsed) return;
 
+    // Upgrade large textareas to a lightweight rich-text editor (toolbar + contenteditable).
+    // This is used for backstory/notes/descriptions etc.
+    try { upgradeSheetTextareasToRte(root, canEdit); } catch {}
+
     const inputs = root.querySelectorAll("[data-sheet-path]");
     inputs.forEach(inp => {
       const path = inp.getAttribute("data-sheet-path");
@@ -446,11 +450,24 @@ function bindEditableInputs(root, player, canEdit) {
       }
 
       const raw = getByPath(player.sheet.parsed, path);
+
+      // Support both classic inputs/textarea and rich-text contenteditable nodes.
+      const isRte = (String(inp.getAttribute?.('contenteditable') || '') === 'true');
       if (inp.type === "checkbox") inp.checked = !!raw;
+      else if (isRte) inp.innerHTML = String(raw ?? "");
       else inp.value = (raw ?? "");
 
       if (!canEdit) {
-        inp.disabled = true;
+        // disable classic form controls
+        try { inp.disabled = true; } catch {}
+        // disable rich text editor
+        if (isRte) {
+          try { inp.setAttribute('contenteditable', 'false'); } catch {}
+          try {
+            const wrap = inp.closest?.('[data-rte]');
+            wrap?.classList?.add('rte--disabled');
+          } catch {}
+        }
         return;
       }
 
@@ -458,6 +475,7 @@ function bindEditableInputs(root, player, canEdit) {
         let val;
         if (inp.type === "checkbox") val = !!inp.checked;
         else if (inp.type === "number") val = inp.value === "" ? "" : Number(inp.value);
+        else if (isRte) val = inp.innerHTML;
         else val = inp.value;
 
         setByPath(player.sheet.parsed, path, val);
@@ -494,6 +512,117 @@ if (path === "proficiency" || path === "proficiencyCustom") {
   });
 
   updateWeaponsBonuses(root, player.sheet.parsed);
+}
+
+// ================== RICH TEXT (lightweight) ==================
+// Converts selected textareas into a simple rich-text editor using contenteditable + execCommand.
+// Stored value is HTML string in the same data-sheet-path.
+function upgradeSheetTextareasToRte(root, canEdit) {
+  if (!root) return;
+  const htmlEscape = (s) => String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  const selector = [
+    'textarea.sheet-textarea',
+    'textarea.note-text',
+    'textarea.weapon-desc-text',
+    'textarea.combat-ability-text',
+    'textarea.equip-descedit',
+    'textarea.lss-prof-text',
+    'textarea.spell-desc-editor'
+  ].join(',');
+
+  const textareas = Array.from(root.querySelectorAll(selector));
+  textareas.forEach((ta) => {
+    // don't upgrade twice
+    if (ta.closest('[data-rte]')) return;
+    const path = ta.getAttribute('data-sheet-path');
+    if (!path) return;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'rte';
+    wrap.setAttribute('data-rte', '');
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'rte-toolbar';
+    toolbar.innerHTML = `
+      <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
+      <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+      <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
+      <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
+      <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
+      <select class="rte-select" data-rte-fontsize title="Размер текста">
+        <option value="2">S</option>
+        <option value="3" selected>M</option>
+        <option value="5">L</option>
+        <option value="6">XL</option>
+      </select>
+    `;
+
+    const editor = document.createElement('div');
+    editor.className = 'rte-editor';
+    editor.setAttribute('contenteditable', canEdit ? 'true' : 'false');
+    editor.setAttribute('data-sheet-path', path);
+    editor.setAttribute('data-rte-editor', '');
+
+    // preserve placeholder via CSS
+    const ph = ta.getAttribute('placeholder');
+    if (ph) editor.setAttribute('data-placeholder', ph);
+
+    // Copy initial value as HTML.
+    // If it looks like plain text, keep line breaks.
+    const raw = String(ta.value || '');
+    editor.innerHTML = raw
+      ? (raw.includes('<') ? raw : htmlEscape(raw).replace(/\n/g, '<br>'))
+      : '';
+
+    // Mirror style hints from textarea
+    try {
+      const rows = Number(ta.getAttribute('rows') || 0);
+      if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
+    } catch {}
+
+    wrap.appendChild(toolbar);
+    wrap.appendChild(editor);
+
+    // Replace in DOM
+    ta.replaceWith(wrap);
+
+    // Wire toolbar actions
+    if (!canEdit) {
+      wrap.classList.add('rte--disabled');
+      return;
+    }
+
+    toolbar.addEventListener('mousedown', (e) => {
+      // prevent editor blur when clicking toolbar
+      e.preventDefault();
+    });
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target?.closest?.('button');
+      if (!btn) return;
+      editor.focus();
+      if (btn.hasAttribute('data-rte-link')) {
+        const url = prompt('Ссылка (URL):', 'https://');
+        if (url && url.trim()) {
+          try { document.execCommand('createLink', false, url.trim()); } catch {}
+        }
+        return;
+      }
+      const cmd = btn.getAttribute('data-rte-cmd');
+      if (!cmd) return;
+      try { document.execCommand(cmd, false, null); } catch {}
+    });
+    const sizeSel = toolbar.querySelector('[data-rte-fontsize]');
+    sizeSel?.addEventListener('change', () => {
+      editor.focus();
+      const v = String(sizeSel.value || '3');
+      try { document.execCommand('fontSize', false, v); } catch {}
+    });
+  });
 }
         if (path === "vitality.ac.value" || path === "vitality.hp-max.value" || path === "vitality.hp-current.value" || path === "vitality.speed.value") {
           updateHeroChips(root, player.sheet.parsed);
