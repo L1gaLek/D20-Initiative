@@ -1030,6 +1030,72 @@ button:hover {
   line-height: 16px;
 }
 
+/* ===== Rich Text Editor (sheet) ===== */
+.rte{
+  width: 100%;
+  border: 1px solid #666;
+  border-radius: 10px;
+  background: #111;
+  overflow: hidden;
+}
+
+.rte-toolbar{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  padding: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+}
+
+.rte-btn{
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  color: #eee;
+  cursor: pointer;
+}
+
+.rte-btn:active{
+  transform: translateY(1px);
+}
+
+.rte-select{
+  margin-left: auto;
+  background: rgba(255,255,255,0.06);
+  color: #eee;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.rte-editor{
+  padding: 6px 8px;
+  min-height: 90px;
+  color: #eee;
+  font-size: 13px;
+  line-height: 16px;
+  outline: none;
+  white-space: normal;
+}
+
+.rte-editor:empty:before{
+  content: attr(data-placeholder);
+  opacity: 0.55;
+}
+
+.rte--disabled{
+  opacity: 0.65;
+}
+
+.rte--disabled .rte-editor{
+  pointer-events: none;
+}
+
+
 .note-add-btn{
   padding: 5px 10px;
   font-size: 12px;
