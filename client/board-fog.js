@@ -704,7 +704,8 @@
     let tMaxX = (dx === 0) ? Infinity : Math.abs((nextV - ox) / dx);
     let tMaxY = (dy === 0) ? Infinity : Math.abs((nextH - oy) / dy);
 
-    const EPS = 1e-9;
+    // Numerical tolerance. Too small => rare diagonal leaks near corners due to float error.
+    const EPS = 1e-6;
 
     while (!(cx === x1 && cy === y1)) {
       if (Math.abs(tMaxX - tMaxY) < EPS) {

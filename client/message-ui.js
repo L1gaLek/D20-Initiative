@@ -512,19 +512,56 @@ function setupRoleUI(role) {
 //
 // ================== LOG ==================
 function renderLog(logs) {
+  if (!logList) return;
+
+  // Avoid flicker: do NOT fully re-render the log on every update.
+  // Keep last 50 lines and update incrementally.
+  const lines = (Array.isArray(logs) ? logs : []).slice(-50).map(v => String(v ?? ''));
+  const prev = Array.isArray(renderLog._last) ? renderLog._last : [];
+  const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  if (same(lines, prev)) return;
+
   const wasNearBottom =
     (logList.scrollTop + logList.clientHeight) >= (logList.scrollHeight - 30);
 
+  // Case A: only last line changed (server corrected text) -> update last <li>.
+  if (
+    prev.length &&
+    lines.length === prev.length &&
+    lines.slice(0, -1).every((v, i) => v === prev[i])
+  ) {
+    const lastLi = logList.lastElementChild;
+    if (lastLi) lastLi.textContent = lines[lines.length - 1] || '';
+    renderLog._last = lines;
+    if (wasNearBottom) logList.scrollTop = logList.scrollHeight;
+    return;
+  }
+
+  // Case B: append-only -> add missing <li> nodes.
+  if (prev.length && lines.length >= prev.length && lines.slice(0, prev.length).every((v, i) => v === prev[i])) {
+    for (let i = prev.length; i < lines.length; i++) {
+      const li = document.createElement('li');
+      li.textContent = lines[i] || '';
+      logList.appendChild(li);
+    }
+    // Trim DOM if window moved
+    while (logList.children.length > 50) {
+      try { logList.removeChild(logList.firstChild); } catch { break; }
+    }
+    renderLog._last = lines;
+    if (wasNearBottom) logList.scrollTop = logList.scrollHeight;
+    return;
+  }
+
+  // Fallback: rebuild (rare)
   logList.innerHTML = '';
-  logs.slice(-50).forEach(line => {
+  lines.forEach(line => {
     const li = document.createElement('li');
     li.textContent = line;
     logList.appendChild(li);
   });
-
-  if (wasNearBottom) {
-    logList.scrollTop = logList.scrollHeight;
-  }
+  renderLog._last = lines;
+  if (wasNearBottom) logList.scrollTop = logList.scrollHeight;
 }
 
 // ================== CURRENT PLAYER ==================
