@@ -277,6 +277,20 @@
       // в какую монету пересчитывать общий итог (по умолчанию ЗМ)
       coinsView: { denom: "gp" },
 
+
+// ===== Облик (база) =====
+look: {
+  race: { value: "aasimar" },
+  gender: { value: "male" }, // male|female
+  equip: {
+    weaponMainId: { value: "" },
+    weaponOffId: { value: "" },
+    armorId: { value: "" },
+    shieldId: { value: "" }
+  }
+},
+
+
       // ===== Инвентарь (структурированный, с вкладками как в базе) =====
       inventory: {
         activeTab: "weapons",
@@ -290,15 +304,6 @@
         trade_goods: [],
         lifestyle_expenses: [],
         other: []
-      },
-
-
-      // ===== Облик (base) =====
-      look: {
-        // slug расы (используется для пути /assets/base/<race>/<gender>.png)
-        race: "",
-        // male | female
-        gender: "male"
       },
 
       // ===== Магазин (только UI-состояние) =====
@@ -407,14 +412,6 @@
     const cls = get(sheet, 'info.charClass.value', '-');
     const lvl = get(sheet, 'info.level.value', '-');
     const race = get(sheet, 'info.race.value', '-');
-
-    // Облик (base)
-    const lookRace = String(get(sheet, 'look.race', '') || '');
-    const lookGender = String(get(sheet, 'look.gender', 'male') || 'male');
-    const lookBaseUrl = (lookRace && lookGender)
-      ? `assets/base/${lookRace}/${lookGender}.png`
-      : "";
-
 
     const hp = get(sheet, 'vitality.hp-max.value', '-');
     const hpCur = get(sheet, 'vitality.hp-current.value', '-');
@@ -681,7 +678,7 @@ const weapons = weaponsRaw
       profBonus: getProfBonus(sheet),
       weapons, combatAbilitiesEntries,
       coins, coinsViewDenom,
-      lookRace, lookGender, lookBaseUrl,
+      look: (sheet?.look && typeof sheet.look === "object") ? sheet.look : null,
       inventory: inv,
       shop
     };

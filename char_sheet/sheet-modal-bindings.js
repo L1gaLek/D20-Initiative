@@ -462,6 +462,15 @@ function bindEditableInputs(root, player, canEdit) {
 
         setByPath(player.sheet.parsed, path, val);
 
+// === LOOK (Облик): правила экипировки (двуручное/щит) ===
+if (path.startsWith("look.")) {
+  try {
+    applyLookEquipRules(player.sheet.parsed);
+    syncLookInputs(root, player.sheet.parsed);
+  } catch (e) {}
+}
+
+
 
         // Истощение (0..6) и Состояние (строка) не связаны
         if (path === "exhaustion") {
@@ -2875,50 +2884,67 @@ function bindSpellAddAndDesc(root, player, canEdit) {
   }
 
 
-// ================== LOOK (BASE) UI ==================
-function bindLookUi(root, player, canEdit) {
-  if (!root || !player?.sheet?.parsed) return;
-  if (root.__lookBound) return;
-  root.__lookBound = true;
-
-  const getSheet = () => player?.sheet?.parsed;
-
-  function computeBaseUrl(sheet) {
-    const race = String(sheet?.look?.race || "");
-    const gender = String(sheet?.look?.gender || "male");
-    if (!race) return "";
-    return `assets/base/${race}/${gender}.png`;
+// ================== LOOK HELPERS ==================
+function isShieldItem(it) {
+  if (!it || typeof it !== "object") return false;
+  if (it.type === "armor" && it.armor && typeof it.armor === "object") {
+    return String(it.armor.type || it.armor.armor_type || "").toLowerCase() === "shield";
   }
-
-  function refreshPreview() {
-    const sheet = getSheet();
-    if (!sheet) return;
-
-    const url = computeBaseUrl(sheet);
-    const img = root.querySelector('[data-look-preview]');
-    const empty = root.querySelector('[data-look-empty]');
-
-    if (img) {
-      img.src = url || "";
-      img.classList.toggle('hidden', !url);
-    }
-    if (empty) {
-      empty.classList.toggle('hidden', !!url);
-    }
-  }
-
-  // слушаем изменения именно на селектах облика
-  root.addEventListener('change', (e) => {
-    const el = e.target;
-    if (!(el instanceof HTMLElement)) return;
-    const path = el.getAttribute && el.getAttribute('data-sheet-path');
-    if (path === 'look.race' || path === 'look.gender') {
-      // bindEditableInputs уже записал значение в sheet.parsed,
-      // нам остаётся только обновить превью
-      refreshPreview();
-    }
-  });
-
-  // первичное состояние (на случай если вкладка открыта сразу)
-  refreshPreview();
+  const nm = String(it.name_ru || it.name || it.name_en || "").toLowerCase();
+  return nm.includes("щит") || nm.includes("shield");
 }
+
+function isTwoHandedWeapon(it) {
+  if (!it || typeof it !== "object") return false;
+  const p = String(it?.weapon?.properties_en || it?.weapon?.properties_ru || "").toLowerCase();
+  const norm = p.replace(/[^a-zа-я0-9]+/gi, "");
+  return norm.includes("twohanded") || norm.includes("двуруч");
+}
+
+function applyLookEquipRules(sheet) {
+  if (!sheet || typeof sheet !== "object") return;
+  const look = (sheet.look && typeof sheet.look === "object") ? sheet.look : null;
+  if (!look) return;
+
+  if (!look.equip || typeof look.equip !== "object") {
+    look.equip = { weaponMainId: { value: "" }, weaponOffId: { value: "" }, armorId: { value: "" }, shieldId: { value: "" } };
+  }
+
+  const weaponMainId = String(look?.equip?.weaponMainId?.value || "");
+  const weaponOffId  = String(look?.equip?.weaponOffId?.value || "");
+  const shieldId     = String(look?.equip?.shieldId?.value || "");
+
+  const inv = (sheet.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
+  const weapons = Array.isArray(inv?.weapons) ? inv.weapons : [];
+
+  const wMain = weapons.find(w => String(w.id) === weaponMainId) || null;
+  const mainTwoHanded = isTwoHandedWeapon(wMain);
+
+  if (mainTwoHanded) {
+    // двуручное оружие блокирует левую руку и щит
+    if (look.equip.weaponOffId?.value) look.equip.weaponOffId.value = "";
+    if (look.equip.shieldId?.value) look.equip.shieldId.value = "";
+    return;
+  }
+
+  // щит и оружие в левой руке — взаимоисключаем
+  if (shieldId && weaponOffId) {
+    // приоритет: щит (как более частый кейс)
+    look.equip.weaponOffId.value = "";
+  }
+}
+
+function syncLookInputs(root, sheet) {
+  // синхронизируем значения в DOM без полного перерендера
+  const paths = [
+    "look.equip.weaponOffId.value",
+    "look.equip.shieldId.value"
+  ];
+  paths.forEach(p => {
+    const el = root.querySelector(`[data-sheet-path="${p}"]`);
+    if (!el) return;
+    const raw = getByPath(sheet, p);
+    if (el.tagName === "SELECT") el.value = (raw ?? "");
+  });
+}
+
