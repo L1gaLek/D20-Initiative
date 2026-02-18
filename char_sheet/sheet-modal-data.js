@@ -653,8 +653,6 @@ const weapons = weaponsRaw
     const inv = (sheet?.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
     const shop = (sheet?.shop && typeof sheet.shop === "object") ? sheet.shop : null;
 
-    const appearance = (sheet?.appearance && typeof sheet.appearance === 'object') ? sheet.appearance : null;
-
     return {
       name, cls, lvl, race,
       hp, hpCur, hpTemp, ac, spd,
@@ -667,8 +665,7 @@ const weapons = weaponsRaw
       weapons, combatAbilitiesEntries,
       coins, coinsViewDenom,
       inventory: inv,
-      shop,
-      appearance
+      shop
     };
   }
 

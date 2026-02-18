@@ -888,168 +888,6 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
       </div>
     `;
   }
-
-  // ================== RENDER: APPEARANCE ==================
-  function itemLabel(it) {
-    if (!it || typeof it !== 'object') return '';
-    return String(it.name_ru || it.name || it.name_en || '').trim();
-  }
-
-  function itemKey(it, tabId, idx) {
-    const id = String(it?.id || '').trim();
-    if (id) return `${tabId}:id:${id}`;
-    const name = itemLabel(it);
-    if (name) return `${tabId}:name:${name}`;
-    return `${tabId}:idx:${idx}`;
-  }
-
-  function findByKey(arr, tabId, key) {
-    const k = String(key || '').trim();
-    if (!k) return { idx: -1, item: null };
-    for (let i = 0; i < (arr || []).length; i++) {
-      const it = arr[i];
-      if (itemKey(it, tabId, i) === k) return { idx: i, item: it };
-    }
-    return { idx: -1, item: null };
-  }
-
-  function isTwoHandedWeapon(it) {
-    const props = String(it?.weapon?.properties_ru || it?.weapon?.properties || '').toLowerCase();
-    return props.includes('двуруч') || props.includes('two-handed') || props.includes('two handed');
-  }
-
-  function renderAppearanceTab(vm, canEdit) {
-    const inv = (vm?.inventory && typeof vm.inventory === 'object') ? vm.inventory : null;
-    const weapons = Array.isArray(inv?.weapons) ? inv.weapons : [];
-    const armor = Array.isArray(inv?.armor) ? inv.armor : [];
-
-    const app = (vm?.appearance && typeof vm.appearance === 'object') ? vm.appearance : {};
-
-    const raceVal = String(app.race || vm?.race || '').trim();
-    const clsVal = String(app.className || vm?.cls || '').trim();
-
-    const right = findByKey(weapons, 'weapons', app.rightKey);
-    const rightItem = right.item;
-    const rightIsTwoH = rightItem ? isTwoHandedWeapon(rightItem) : false;
-
-    const shields = armor.filter((it) => {
-      const nm = itemLabel(it).toLowerCase();
-      const tp = String(it?.armor?.type || it?.armor?.armor_type || '').toLowerCase();
-      return nm.includes('щит') || tp.includes('shield');
-    });
-
-    const leftOptionsWeapons = weapons.filter((it) => !isTwoHandedWeapon(it));
-    const leftAll = [
-      ...leftOptionsWeapons.map((it, idx) => ({ it, tab: 'weapons', idx })),
-      ...shields.map((it, idx) => ({ it, tab: 'armor', idx }))
-    ];
-
-    const armorKey = String(app.armorKey || '').trim();
-    const rightKey = String(app.rightKey || '').trim();
-    let leftKey = String(app.leftKey || '').trim();
-    if (rightIsTwoH) leftKey = '';
-
-    const armorOpts = armor
-      .filter((it) => (it?.type === 'armor') || (it?.armor && typeof it.armor === 'object'))
-      .map((it, idx) => {
-        const k = itemKey(it, 'armor', idx);
-        const lbl = itemLabel(it) || '(без названия)';
-        return `<option value="${escapeHtml(k)}" ${k === armorKey ? 'selected' : ''}>${escapeHtml(lbl)}</option>`;
-      })
-      .join('');
-
-    const rightOpts = weapons
-      .map((it, idx) => {
-        const k = itemKey(it, 'weapons', idx);
-        const lbl = itemLabel(it) || '(без названия)';
-        const badge = isTwoHandedWeapon(it) ? ' (двуручн.)' : '';
-        return `<option value="${escapeHtml(k)}" ${k === rightKey ? 'selected' : ''}>${escapeHtml(lbl + badge)}</option>`;
-      })
-      .join('');
-
-    const leftOpts = leftAll
-      .map(({ it, tab, idx }) => {
-        const k = itemKey(it, tab, idx);
-        const lbl = itemLabel(it) || '(без названия)';
-        const badge = (tab === 'armor') ? ' (щит)' : '';
-        return `<option value="${escapeHtml(k)}" ${k === leftKey ? 'selected' : ''}>${escapeHtml(lbl + badge)}</option>`;
-      })
-      .join('');
-
-    const imgUrl = String(app.imageUrl || '').trim();
-
-    return `
-      <div class="sheet-section" data-appearance-root>
-        <h3>Внешность</h3>
-
-        <div class="app-layout">
-          <div class="app-preview">
-            ${imgUrl ? `<img class="app-preview-img" src="${escapeHtml(imgUrl)}" alt="Персонаж">` : `<div class="app-preview-empty">Пока нет изображения</div>`}
-
-            <div class="app-preview-actions">
-              <button class="weapon-btn" type="button" ${canEdit ? '' : 'disabled'} data-app-generate>
-                ${imgUrl ? 'Перегенерировать' : 'Сгенерировать'}
-              </button>
-              <div class="sheet-note" style="margin:0; opacity:.85">
-                Генерируется полный рост. Двуручное оружие занимает обе руки.
-              </div>
-            </div>
-          </div>
-
-          <div class="app-controls">
-            <div class="sheet-card fullwidth">
-              <h4 style="margin:0 0 10px 0">Параметры</h4>
-              <div class="app-grid">
-                <div class="kv"><div class="k">Раса</div><div class="v"><input type="text" ${canEdit ? '' : 'disabled'} data-sheet-path="appearance.race" value="${escapeHtml(raceVal)}"></div></div>
-                <div class="kv"><div class="k">Класс</div><div class="v"><input type="text" ${canEdit ? '' : 'disabled'} data-sheet-path="appearance.className" value="${escapeHtml(clsVal)}"></div></div>
-              </div>
-            </div>
-
-            <div class="sheet-card fullwidth" style="margin-top:10px">
-              <h4 style="margin:0 0 10px 0">Экипировка (из инвентаря)</h4>
-
-              <div class="app-grid">
-                <div class="kv">
-                  <div class="k">Доспехи</div>
-                  <div class="v">
-                    <select ${canEdit ? '' : 'disabled'} data-sheet-path="appearance.armorKey" data-app-armor>
-                      <option value="">—</option>
-                      ${armorOpts}
-                    </select>
-                  </div>
-                </div>
-
-                <div class="kv">
-                  <div class="k">Правая рука</div>
-                  <div class="v">
-                    <select ${canEdit ? '' : 'disabled'} data-sheet-path="appearance.rightKey" data-app-right>
-                      <option value="">—</option>
-                      ${rightOpts}
-                    </select>
-                  </div>
-                </div>
-
-                <div class="kv">
-                  <div class="k">Левая рука</div>
-                  <div class="v">
-                    <select ${canEdit ? '' : 'disabled'} ${rightIsTwoH ? 'disabled' : ''} data-sheet-path="appearance.leftKey" data-app-left>
-                      <option value="">—</option>
-                      ${leftOpts}
-                    </select>
-                    ${rightIsTwoH ? `<div class="sheet-note" style="margin:6px 0 0 0">Левая рука занята двуручным оружием.</div>` : ''}
-                  </div>
-                </div>
-              </div>
-
-              <div class="sheet-note" style="margin-top:10px">
-                Подсказка: если не видишь предметы в списках — добавь их в «Инвентарь → База предметов».
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
 function renderShopTab(vm, canEdit) {
   return `
     <div class="sheet-section" data-shop-root>
@@ -1167,7 +1005,6 @@ function renderShopTab(vm, canEdit) {
 
   function renderActiveTab(tabId, vm, canEdit) {
     if (tabId === "basic") return renderBasicTab(vm, canEdit);
-    if (tabId === "appearance") return renderAppearanceTab(vm, canEdit);
     if (tabId === "spells") return renderSpellsTab(vm);
     if (tabId === "combat") return renderCombatTab(vm);
     if (tabId === "inventory") return renderInventoryTab(vm, canEdit);
@@ -1304,7 +1141,6 @@ function renderShopTab(vm, canEdit) {
 
     const tabs = [
       { id: "basic", label: "Основное" },
-      { id: "appearance", label: "Внешность" },
       { id: "spells", label: "Заклинания" },
       { id: "combat", label: "Бой" },
       { id: "inventory", label: "Инвентарь" },
@@ -1419,7 +1255,6 @@ function renderShopTab(vm, canEdit) {
     bindCombatEditors(sheetContent, player, canEdit);
     bindInventoryEditors(sheetContent, player, canEdit);
     bindEquipmentUi(sheetContent, player, canEdit);
-    bindAppearanceUi(sheetContent, player, canEdit);
     updateCoinsTotal(sheetContent, player.sheet?.parsed);
     // Авто-открытие магазина поверх листа при выборе вкладки
     // (раньше тут по ошибке использовался tabId вне области видимости)
@@ -1462,7 +1297,6 @@ function renderShopTab(vm, canEdit) {
           bindCombatEditors(sheetContent, player, canEdit);
           bindInventoryEditors(sheetContent, player, canEdit);
           bindEquipmentUi(sheetContent, player, canEdit);
-          bindAppearanceUi(sheetContent, player, canEdit);
           bindLanguagesUi(sheetContent, player, canEdit);
           updateCoinsTotal(sheetContent, player.sheet?.parsed);
     // Авто-открытие магазина поверх листа при выборе вкладки
