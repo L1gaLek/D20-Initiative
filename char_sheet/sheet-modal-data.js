@@ -292,6 +292,15 @@
         other: []
       },
 
+
+      // ===== Облик (base) =====
+      look: {
+        // slug расы (используется для пути /assets/base/<race>/<gender>.png)
+        race: "",
+        // male | female
+        gender: "male"
+      },
+
       // ===== Магазин (только UI-состояние) =====
       shop: {
         activeTab: "weapons"
@@ -398,6 +407,14 @@
     const cls = get(sheet, 'info.charClass.value', '-');
     const lvl = get(sheet, 'info.level.value', '-');
     const race = get(sheet, 'info.race.value', '-');
+
+    // Облик (base)
+    const lookRace = String(get(sheet, 'look.race', '') || '');
+    const lookGender = String(get(sheet, 'look.gender', 'male') || 'male');
+    const lookBaseUrl = (lookRace && lookGender)
+      ? `assets/base/${lookRace}/${lookGender}.png`
+      : "";
+
 
     const hp = get(sheet, 'vitality.hp-max.value', '-');
     const hpCur = get(sheet, 'vitality.hp-current.value', '-');
@@ -664,6 +681,7 @@ const weapons = weaponsRaw
       profBonus: getProfBonus(sheet),
       weapons, combatAbilitiesEntries,
       coins, coinsViewDenom,
+      lookRace, lookGender, lookBaseUrl,
       inventory: inv,
       shop
     };

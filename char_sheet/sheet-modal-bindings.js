@@ -2873,3 +2873,52 @@ function bindSpellAddAndDesc(root, player, canEdit) {
       scoreEl.value = String(sheet.stats[statKey].score);
     }
   }
+
+
+// ================== LOOK (BASE) UI ==================
+function bindLookUi(root, player, canEdit) {
+  if (!root || !player?.sheet?.parsed) return;
+  if (root.__lookBound) return;
+  root.__lookBound = true;
+
+  const getSheet = () => player?.sheet?.parsed;
+
+  function computeBaseUrl(sheet) {
+    const race = String(sheet?.look?.race || "");
+    const gender = String(sheet?.look?.gender || "male");
+    if (!race) return "";
+    return `assets/base/${race}/${gender}.png`;
+  }
+
+  function refreshPreview() {
+    const sheet = getSheet();
+    if (!sheet) return;
+
+    const url = computeBaseUrl(sheet);
+    const img = root.querySelector('[data-look-preview]');
+    const empty = root.querySelector('[data-look-empty]');
+
+    if (img) {
+      img.src = url || "";
+      img.classList.toggle('hidden', !url);
+    }
+    if (empty) {
+      empty.classList.toggle('hidden', !!url);
+    }
+  }
+
+  // слушаем изменения именно на селектах облика
+  root.addEventListener('change', (e) => {
+    const el = e.target;
+    if (!(el instanceof HTMLElement)) return;
+    const path = el.getAttribute && el.getAttribute('data-sheet-path');
+    if (path === 'look.race' || path === 'look.gender') {
+      // bindEditableInputs уже записал значение в sheet.parsed,
+      // нам остаётся только обновить превью
+      refreshPreview();
+    }
+  });
+
+  // первичное состояние (на случай если вкладка открыта сразу)
+  refreshPreview();
+}

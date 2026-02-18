@@ -1002,11 +1002,77 @@ function renderShopTab(vm, canEdit) {
     `;
   }
 
+  // ================== RENDER: LOOK (BASE) ==================
+  const LOOK_RACES = [
+    { id: "aasimar", label: "Аасимар" },
+    { id: "aarakocra", label: "Ааракокра" },
+    { id: "bugbear", label: "Багбир" },
+    { id: "vedalken", label: "Ведалкен" },
+    { id: "verdan", label: "Вердан" },
+    { id: "giff", label: "Гифф" },
+    { id: "githyanki", label: "Гитянки" }
+  ];
+
+  function renderLookTab(vm, canEdit) {
+    const race = String(vm.lookRace || "");
+    const gender = String(vm.lookGender || "male");
+    const baseUrl = String(vm.lookBaseUrl || "");
+
+    const raceOptions = [
+      `<option value="">— Не выбрано —</option>`,
+      ...LOOK_RACES.map(r => `<option value="${escapeHtml(r.id)}" ${r.id === race ? "selected" : ""}>${escapeHtml(r.label)}</option>`)
+    ].join("");
+
+    const genderOptions = `
+      <option value="male" ${gender === "male" ? "selected" : ""}>Мужской</option>
+      <option value="female" ${gender === "female" ? "selected" : ""}>Женский</option>
+    `;
+
+    return `
+      <div class="sheet-section">
+        <h3>Облик (основа)</h3>
+
+        <div class="look-grid">
+          <div class="look-preview">
+            ${`<img class="look-img ${baseUrl ? "" : "hidden"}" data-look-preview src="${escapeHtml(baseUrl)}" alt="Облик персонажа">`}
+            <div class="sheet-note ${baseUrl ? "hidden" : ""}" data-look-empty>Выбери расу и пол — появится базовый облик.</div>
+          </div>
+
+          <div class="look-panel">
+            <div class="look-row">
+              <div class="k">Раса</div>
+              <div class="v">
+                <select class="look-select" data-sheet-path="look.race" ${canEdit ? "" : "disabled"}>
+                  ${raceOptions}
+                </select>
+              </div>
+            </div>
+
+            <div class="look-row">
+              <div class="k">Пол</div>
+              <div class="v">
+                <select class="look-select" data-sheet-path="look.gender" ${canEdit ? "" : "disabled"}>
+                  ${genderOptions}
+                </select>
+              </div>
+            </div>
+
+            <div class="sheet-note" style="margin-top:10px;">
+              Путь к базе берётся из <code>assets/base/&lt;race&gt;/&lt;gender&gt;.png</code>.
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+
 
   function renderActiveTab(tabId, vm, canEdit) {
     if (tabId === "basic") return renderBasicTab(vm, canEdit);
     if (tabId === "spells") return renderSpellsTab(vm);
     if (tabId === "combat") return renderCombatTab(vm);
+    if (tabId === "look") return renderLookTab(vm, canEdit);
     if (tabId === "inventory") return renderInventoryTab(vm, canEdit);
     if (tabId === "shop") return renderShopTab(vm, canEdit);
     if (tabId === "personality") return renderPersonalityTab(vm);
@@ -1141,6 +1207,7 @@ function renderShopTab(vm, canEdit) {
 
     const tabs = [
       { id: "basic", label: "Основное" },
+      { id: "look", label: "Облик" },
       { id: "spells", label: "Заклинания" },
       { id: "combat", label: "Бой" },
       { id: "inventory", label: "Инвентарь" },
@@ -1255,6 +1322,7 @@ function renderShopTab(vm, canEdit) {
     bindCombatEditors(sheetContent, player, canEdit);
     bindInventoryEditors(sheetContent, player, canEdit);
     bindEquipmentUi(sheetContent, player, canEdit);
+    bindLookUi(sheetContent, player, canEdit);
     updateCoinsTotal(sheetContent, player.sheet?.parsed);
     // Авто-открытие магазина поверх листа при выборе вкладки
     // (раньше тут по ошибке использовался tabId вне области видимости)
