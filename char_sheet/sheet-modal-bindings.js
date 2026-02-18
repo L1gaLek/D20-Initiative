@@ -1077,84 +1077,6 @@ function bindTextareaHeightPersistence(root, player) {
   }
 
   // ===== Equipment DB / Shop / Inventory (structured) =====
-
-
-  // ================== LOOK (appearance) bindings ==================
-  function bindLookUi(root, player, canEdit) {
-    const wrap = root.querySelector('.sheet-look');
-    if (!wrap) return;
-    if (!canEdit) return;
-
-    const sheet = player?.sheet?.parsed;
-    if (!sheet) return;
-
-    // ensure defaults
-    if (!sheet.look || typeof sheet.look !== "object") sheet.look = {};
-    if (!sheet.look.equip || typeof sheet.look.equip !== "object") sheet.look.equip = {};
-    const mkVal = (v="") => ({ value: v });
-    if (!sheet.look.equip.weaponMainId) sheet.look.equip.weaponMainId = mkVal("");
-    if (!sheet.look.equip.weaponOffId) sheet.look.equip.weaponOffId = mkVal("");
-    if (!sheet.look.equip.armorId) sheet.look.equip.armorId = mkVal("");
-    if (!sheet.look.equip.shieldId) sheet.look.equip.shieldId = mkVal("");
-
-    const inv = (sheet.inventory && typeof sheet.inventory === "object") ? sheet.inventory : {};
-    const weapons = Array.isArray(inv.weapons) ? inv.weapons : [];
-    const armor = Array.isArray(inv.armor) ? inv.armor : [];
-
-    const isTwoHanded = (w) => {
-      if (!w || typeof w !== "object") return false;
-      const props = String(w?.weapon?.properties_ru || w?.weapon?.properties || w?.properties_ru || w?.properties || "").toLowerCase();
-      const name = String(w?.name_ru || w?.name || "").toLowerCase();
-      return props.includes("двуруч") || props.includes("two-handed") || name.includes("двуруч");
-    };
-
-    const isShield = (a) => {
-      if (!a || typeof a !== "object") return false;
-      const t = String(a?.armor?.type || a?.armorType || a?.type || "").toLowerCase();
-      const name = String(a?.name_ru || a?.name || "").toLowerCase();
-      return t === "shield" || name.includes("щит");
-    };
-
-    const applyRules = () => {
-      const mainIdx = String(sheet.look.equip.weaponMainId.value || "");
-      const offIdx = String(sheet.look.equip.weaponOffId.value || "");
-      const shieldIdx = String(sheet.look.equip.shieldId.value || "");
-
-      const mainW = (mainIdx !== "" && weapons[Number(mainIdx)]) ? weapons[Number(mainIdx)] : null;
-
-      // two-handed in main => clear off + shield
-      if (mainW && isTwoHanded(mainW)) {
-        if (offIdx !== "") sheet.look.equip.weaponOffId.value = "";
-        if (shieldIdx !== "") sheet.look.equip.shieldId.value = "";
-      }
-
-      // shield selected => clear offhand weapon
-      if (String(sheet.look.equip.shieldId.value || "") !== "" && offIdx !== "") {
-        sheet.look.equip.weaponOffId.value = "";
-      }
-    };
-
-    const persistAndRefresh = () => {
-      applyRules();
-      scheduleSheetSave(player);
-      markModalInteracted(player.id);
-      // безопаснее принудительный ререндер модалки (обновит превью и селекты)
-      try { renderSheetModal(player, { force: true }); } catch (e) { console.error(e); }
-    };
-
-    wrap.querySelectorAll('select[data-look-sel]').forEach(sel => {
-      sel.addEventListener('change', () => {
-        const kind = sel.getAttribute('data-look-sel');
-        const v = String(sel.value || "");
-        if (kind === "weaponMain") sheet.look.equip.weaponMainId.value = v;
-        if (kind === "weaponOff") sheet.look.equip.weaponOffId.value = v;
-        if (kind === "armor") sheet.look.equip.armorId.value = v;
-        if (kind === "shield") sheet.look.equip.shieldId.value = v;
-        persistAndRefresh();
-      });
-    });
-  }
-
   function bindEquipmentUi(root, player, canEdit) {
     if (!root) return;
     root.__equipState = { player, canEdit };
@@ -1384,7 +1306,6 @@ function bindTextareaHeightPersistence(root, player) {
         bindSpellAddAndDesc(root, curPlayer, curCanEdit);
         bindCombatEditors(root, curPlayer, curCanEdit);
         bindInventoryEditors(root, curPlayer, curCanEdit);
-        bindLookUi(root, curPlayer, curCanEdit);
         bindEquipmentUi(root, curPlayer, curCanEdit);
         bindLanguagesUi(root, curPlayer, curCanEdit);
         updateCoinsTotal(root, curPlayer.sheet?.parsed);
@@ -2163,6 +2084,117 @@ function cleanupSpellDesc(raw) {
     .trim();
 
   return s;
+}
+
+// ===== Appearance (AI full-body portrait) =====
+function bindAppearanceUi(root, player, canEdit) {
+  if (!root) return;
+  root.__appState = { player, canEdit };
+  const getState = () => root.__appState || { player, canEdit };
+
+  if (root.__appBound) return;
+  root.__appBound = true;
+
+  function getSb() {
+    const sbGetter = (typeof window !== 'undefined' && typeof window.getSbClient === 'function') ? window.getSbClient : null;
+    return sbGetter ? sbGetter() : null;
+  }
+
+  function optText(sel) {
+    try {
+      const o = sel?.selectedOptions?.[0];
+      return (o && typeof o.textContent === 'string') ? o.textContent.trim() : '';
+    } catch { return ''; }
+  }
+
+  function isTwoHandedSelected(sel) {
+    const t = optText(sel).toLowerCase();
+    return t.includes('двуруч') || t.includes('two-hand');
+  }
+
+  root.addEventListener('change', (e) => {
+    const rightSel = e.target?.closest?.('[data-app-right]');
+    if (!rightSel) return;
+
+    const { player: curPlayer, canEdit: curCanEdit } = getState();
+    if (!curCanEdit) return;
+    const sheet = curPlayer?.sheet?.parsed;
+    if (!sheet) return;
+
+    const leftSel = root.querySelector('[data-app-left]');
+    if (!leftSel) return;
+
+    if (isTwoHandedSelected(rightSel)) {
+      // очищаем левую руку и блокируем
+      leftSel.value = '';
+      leftSel.disabled = true;
+      setByPath(sheet, 'appearance.leftKey', '');
+      scheduleSheetSave(curPlayer);
+    } else {
+      // разблокируем
+      leftSel.disabled = false;
+    }
+  });
+
+  root.addEventListener('click', async (e) => {
+    const btn = e.target?.closest?.('[data-app-generate]');
+    if (!btn) return;
+    const { player: curPlayer, canEdit: curCanEdit } = getState();
+    if (!curCanEdit) return;
+
+    const sheet = curPlayer?.sheet?.parsed;
+    if (!sheet) return;
+
+    const sb = getSb();
+    if (!sb || !sb.functions || typeof sb.functions.invoke !== 'function') {
+      alert('Supabase client не настроен. Проверь SUPABASE_URL и SUPABASE_ANON_KEY в index.html');
+      return;
+    }
+
+    const rootBox = root.querySelector('[data-appearance-root]') || root;
+    const race = String(getByPath(sheet, 'appearance.race') || sheet?.info?.race?.value || '').trim();
+    const className = String(getByPath(sheet, 'appearance.className') || sheet?.info?.charClass?.value || '').trim();
+
+    const armorSel = rootBox.querySelector('[data-app-armor]');
+    const rightSel = rootBox.querySelector('[data-app-right]');
+    const leftSel = rootBox.querySelector('[data-app-left]');
+
+    const armor = optText(armorSel);
+    const rightHand = optText(rightSel);
+    const leftHand = (leftSel && !leftSel.disabled) ? optText(leftSel) : '';
+
+    btn.disabled = true;
+    const prevText = btn.textContent;
+    btn.textContent = 'Генерация...';
+
+    try {
+      const { data, error } = await sb.functions.invoke('generate-portrait', {
+        body: {
+          playerId: curPlayer.id,
+          race,
+          className,
+          armor,
+          rightHand,
+          leftHand
+        }
+      });
+      if (error) throw error;
+      if (!data || !data.url) throw new Error('Функция не вернула url');
+
+      if (!sheet.appearance || typeof sheet.appearance !== 'object') sheet.appearance = {};
+      sheet.appearance.imageUrl = String(data.url);
+      scheduleSheetSave(curPlayer);
+
+      // обновим только вкладку (быстро)
+      try { window.InfoModal?.rerenderActiveTab?.(); } catch {}
+    } catch (err) {
+      console.error(err);
+      alert('Не удалось сгенерировать изображение. Проверь Edge Function и OPENAI_API_KEY.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prevText || 'Сгенерировать';
+    }
+  });
 }
 
 function extractSpellFromHtml(html) {

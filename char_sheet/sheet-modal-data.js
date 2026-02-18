@@ -277,39 +277,6 @@
       // в какую монету пересчитывать общий итог (по умолчанию ЗМ)
       coinsView: { denom: "gp" },
 
-
-// ===== Облик (база) =====
-look: {
-  race: { value: "aasimar" },
-  gender: { value: "male" }, // male|female
-  equip: {
-    weaponMainId: { value: "" },
-    weaponOffId: { value: "" },
-    armorId: { value: "" },
-    shieldId: { value: "" }
-  }
-},
-
-
-
-      // ===== Облик (base-портрет + выбор экипировки для отображения) =====
-      look: {
-        race: { value: "aasimar" },
-        gender: { value: "male" },
-        equip: {
-          armorId: { value: "" },
-          shieldId: { value: "" },
-          weaponMainId: { value: "" },
-          weaponOffId: { value: "" }
-        },
-        layers: {
-          armor: { value: "" },
-          shield: { value: "" },
-          weaponMain: { value: "" },
-          weaponOff: { value: "" }
-        }
-      },
-
       // ===== Инвентарь (структурированный, с вкладками как в базе) =====
       inventory: {
         activeTab: "weapons",
@@ -686,6 +653,8 @@ const weapons = weaponsRaw
     const inv = (sheet?.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
     const shop = (sheet?.shop && typeof sheet.shop === "object") ? sheet.shop : null;
 
+    const appearance = (sheet?.appearance && typeof sheet.appearance === 'object') ? sheet.appearance : null;
+
     return {
       name, cls, lvl, race,
       hp, hpCur, hpTemp, ac, spd,
@@ -697,9 +666,9 @@ const weapons = weaponsRaw
       profBonus: getProfBonus(sheet),
       weapons, combatAbilitiesEntries,
       coins, coinsViewDenom,
-      look: (sheet?.look && typeof sheet.look === "object") ? sheet.look : null,
       inventory: inv,
-      shop
+      shop,
+      appearance
     };
   }
 
