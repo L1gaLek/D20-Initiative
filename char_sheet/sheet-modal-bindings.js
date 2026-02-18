@@ -462,15 +462,6 @@ function bindEditableInputs(root, player, canEdit) {
 
         setByPath(player.sheet.parsed, path, val);
 
-// === LOOK (Облик): правила экипировки (двуручное/щит) ===
-if (path.startsWith("look.")) {
-  try {
-    applyLookEquipRules(player.sheet.parsed);
-    syncLookInputs(root, player.sheet.parsed);
-  } catch (e) {}
-}
-
-
 
         // Истощение (0..6) и Состояние (строка) не связаны
         if (path === "exhaustion") {
@@ -1086,6 +1077,84 @@ function bindTextareaHeightPersistence(root, player) {
   }
 
   // ===== Equipment DB / Shop / Inventory (structured) =====
+
+
+  // ================== LOOK (appearance) bindings ==================
+  function bindLookUi(root, player, canEdit) {
+    const wrap = root.querySelector('.sheet-look');
+    if (!wrap) return;
+    if (!canEdit) return;
+
+    const sheet = player?.sheet?.parsed;
+    if (!sheet) return;
+
+    // ensure defaults
+    if (!sheet.look || typeof sheet.look !== "object") sheet.look = {};
+    if (!sheet.look.equip || typeof sheet.look.equip !== "object") sheet.look.equip = {};
+    const mkVal = (v="") => ({ value: v });
+    if (!sheet.look.equip.weaponMainId) sheet.look.equip.weaponMainId = mkVal("");
+    if (!sheet.look.equip.weaponOffId) sheet.look.equip.weaponOffId = mkVal("");
+    if (!sheet.look.equip.armorId) sheet.look.equip.armorId = mkVal("");
+    if (!sheet.look.equip.shieldId) sheet.look.equip.shieldId = mkVal("");
+
+    const inv = (sheet.inventory && typeof sheet.inventory === "object") ? sheet.inventory : {};
+    const weapons = Array.isArray(inv.weapons) ? inv.weapons : [];
+    const armor = Array.isArray(inv.armor) ? inv.armor : [];
+
+    const isTwoHanded = (w) => {
+      if (!w || typeof w !== "object") return false;
+      const props = String(w?.weapon?.properties_ru || w?.weapon?.properties || w?.properties_ru || w?.properties || "").toLowerCase();
+      const name = String(w?.name_ru || w?.name || "").toLowerCase();
+      return props.includes("двуруч") || props.includes("two-handed") || name.includes("двуруч");
+    };
+
+    const isShield = (a) => {
+      if (!a || typeof a !== "object") return false;
+      const t = String(a?.armor?.type || a?.armorType || a?.type || "").toLowerCase();
+      const name = String(a?.name_ru || a?.name || "").toLowerCase();
+      return t === "shield" || name.includes("щит");
+    };
+
+    const applyRules = () => {
+      const mainIdx = String(sheet.look.equip.weaponMainId.value || "");
+      const offIdx = String(sheet.look.equip.weaponOffId.value || "");
+      const shieldIdx = String(sheet.look.equip.shieldId.value || "");
+
+      const mainW = (mainIdx !== "" && weapons[Number(mainIdx)]) ? weapons[Number(mainIdx)] : null;
+
+      // two-handed in main => clear off + shield
+      if (mainW && isTwoHanded(mainW)) {
+        if (offIdx !== "") sheet.look.equip.weaponOffId.value = "";
+        if (shieldIdx !== "") sheet.look.equip.shieldId.value = "";
+      }
+
+      // shield selected => clear offhand weapon
+      if (String(sheet.look.equip.shieldId.value || "") !== "" && offIdx !== "") {
+        sheet.look.equip.weaponOffId.value = "";
+      }
+    };
+
+    const persistAndRefresh = () => {
+      applyRules();
+      scheduleSheetSave(player);
+      markModalInteracted(player.id);
+      // безопаснее принудительный ререндер модалки (обновит превью и селекты)
+      try { renderSheetModal(player, { force: true }); } catch (e) { console.error(e); }
+    };
+
+    wrap.querySelectorAll('select[data-look-sel]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const kind = sel.getAttribute('data-look-sel');
+        const v = String(sel.value || "");
+        if (kind === "weaponMain") sheet.look.equip.weaponMainId.value = v;
+        if (kind === "weaponOff") sheet.look.equip.weaponOffId.value = v;
+        if (kind === "armor") sheet.look.equip.armorId.value = v;
+        if (kind === "shield") sheet.look.equip.shieldId.value = v;
+        persistAndRefresh();
+      });
+    });
+  }
+
   function bindEquipmentUi(root, player, canEdit) {
     if (!root) return;
     root.__equipState = { player, canEdit };
@@ -1315,6 +1384,7 @@ function bindTextareaHeightPersistence(root, player) {
         bindSpellAddAndDesc(root, curPlayer, curCanEdit);
         bindCombatEditors(root, curPlayer, curCanEdit);
         bindInventoryEditors(root, curPlayer, curCanEdit);
+        bindLookUi(root, curPlayer, curCanEdit);
         bindEquipmentUi(root, curPlayer, curCanEdit);
         bindLanguagesUi(root, curPlayer, curCanEdit);
         updateCoinsTotal(root, curPlayer.sheet?.parsed);
@@ -2882,69 +2952,3 @@ function bindSpellAddAndDesc(root, player, canEdit) {
       scoreEl.value = String(sheet.stats[statKey].score);
     }
   }
-
-
-// ================== LOOK HELPERS ==================
-function isShieldItem(it) {
-  if (!it || typeof it !== "object") return false;
-  if (it.type === "armor" && it.armor && typeof it.armor === "object") {
-    return String(it.armor.type || it.armor.armor_type || "").toLowerCase() === "shield";
-  }
-  const nm = String(it.name_ru || it.name || it.name_en || "").toLowerCase();
-  return nm.includes("щит") || nm.includes("shield");
-}
-
-function isTwoHandedWeapon(it) {
-  if (!it || typeof it !== "object") return false;
-  const p = String(it?.weapon?.properties_en || it?.weapon?.properties_ru || "").toLowerCase();
-  const norm = p.replace(/[^a-zа-я0-9]+/gi, "");
-  return norm.includes("twohanded") || norm.includes("двуруч");
-}
-
-function applyLookEquipRules(sheet) {
-  if (!sheet || typeof sheet !== "object") return;
-  const look = (sheet.look && typeof sheet.look === "object") ? sheet.look : null;
-  if (!look) return;
-
-  if (!look.equip || typeof look.equip !== "object") {
-    look.equip = { weaponMainId: { value: "" }, weaponOffId: { value: "" }, armorId: { value: "" }, shieldId: { value: "" } };
-  }
-
-  const weaponMainId = String(look?.equip?.weaponMainId?.value || "");
-  const weaponOffId  = String(look?.equip?.weaponOffId?.value || "");
-  const shieldId     = String(look?.equip?.shieldId?.value || "");
-
-  const inv = (sheet.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
-  const weapons = Array.isArray(inv?.weapons) ? inv.weapons : [];
-
-  const wMain = weapons.find(w => String(w.id) === weaponMainId) || null;
-  const mainTwoHanded = isTwoHandedWeapon(wMain);
-
-  if (mainTwoHanded) {
-    // двуручное оружие блокирует левую руку и щит
-    if (look.equip.weaponOffId?.value) look.equip.weaponOffId.value = "";
-    if (look.equip.shieldId?.value) look.equip.shieldId.value = "";
-    return;
-  }
-
-  // щит и оружие в левой руке — взаимоисключаем
-  if (shieldId && weaponOffId) {
-    // приоритет: щит (как более частый кейс)
-    look.equip.weaponOffId.value = "";
-  }
-}
-
-function syncLookInputs(root, sheet) {
-  // синхронизируем значения в DOM без полного перерендера
-  const paths = [
-    "look.equip.weaponOffId.value",
-    "look.equip.shieldId.value"
-  ];
-  paths.forEach(p => {
-    const el = root.querySelector(`[data-sheet-path="${p}"]`);
-    if (!el) return;
-    const raw = getByPath(sheet, p);
-    if (el.tagName === "SELECT") el.value = (raw ?? "");
-  });
-}
-

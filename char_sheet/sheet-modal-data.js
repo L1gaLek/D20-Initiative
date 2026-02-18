@@ -291,6 +291,25 @@ look: {
 },
 
 
+
+      // ===== Облик (base-портрет + выбор экипировки для отображения) =====
+      look: {
+        race: { value: "aasimar" },
+        gender: { value: "male" },
+        equip: {
+          armorId: { value: "" },
+          shieldId: { value: "" },
+          weaponMainId: { value: "" },
+          weaponOffId: { value: "" }
+        },
+        layers: {
+          armor: { value: "" },
+          shield: { value: "" },
+          weaponMain: { value: "" },
+          weaponOff: { value: "" }
+        }
+      },
+
       // ===== Инвентарь (структурированный, с вкладками как в базе) =====
       inventory: {
         activeTab: "weapons",

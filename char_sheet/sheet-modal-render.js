@@ -307,132 +307,7 @@ function renderSpellCard({ level, name, href, desc }) {
     return `<div class="sheet-grid-2">${blocks}</div>`;
   }
 
-  
-// ================== LOOK (APPEARANCE) TAB ==================
-function renderLookTab(vm, canEdit) {
-  const look = (vm?.look && typeof vm.look === "object") ? vm.look : {};
-  const race = String(look?.race?.value || "aasimar").toLowerCase();
-  const gender = String(look?.gender?.value || "male").toLowerCase();
-
-  const equip = (look?.equip && typeof look.equip === "object") ? look.equip : {};
-  const weaponMainId = String(equip?.weaponMainId?.value || "");
-  const weaponOffId  = String(equip?.weaponOffId?.value || "");
-  const armorId      = String(equip?.armorId?.value || "");
-  const shieldId     = String(equip?.shieldId?.value || "");
-
-  const inv = (vm?.inventory && typeof vm.inventory === "object") ? vm.inventory : null;
-  const weapons = Array.isArray(inv?.weapons) ? inv.weapons : [];
-  const armorAll = Array.isArray(inv?.armor) ? inv.armor : [];
-
-  const isShield = (it) => {
-    if (!it || typeof it !== "object") return false;
-    if (it.type === "armor" && it.armor && typeof it.armor === "object") {
-      return String(it.armor.type || it.armor.armor_type || "").toLowerCase() === "shield";
-    }
-    const nm = String(it.name_ru || it.name || it.name_en || "").toLowerCase();
-    return nm.includes("щит") || nm.includes("shield");
-  };
-
-  const isTwoHanded = (w) => {
-    if (!w || typeof w !== "object") return false;
-    const p = String(w?.weapon?.properties_en || w?.weapon?.properties_ru || "").toLowerCase();
-    const norm = p.replace(/[^a-zа-я0-9]+/gi, "");
-    return norm.includes("twohanded") || norm.includes("двуруч");
-  };
-
-  const wMain = weapons.find(w => String(w.id) === weaponMainId) || null;
-  const mainTwoHanded = isTwoHanded(wMain);
-
-  const armorList = armorAll.filter(a => !isShield(a));
-  const shieldList = armorAll.filter(a => isShield(a));
-
-  const baseSrc = `assets/base/${race}/${gender}.png`;
-
-  const opt = (id, label, selectedId) => `<option value="${escapeHtml(String(id))}" ${String(id)===String(selectedId)?"selected":""}>${escapeHtml(String(label))}</option>`;
-  const noneOpt = `<option value="" ${!weaponMainId?"selected":""}>— не выбрано —</option>`;
-
-  const weaponsOptions = [ `<option value="" ${!weaponMainId?"selected":""}>— не выбрано —</option>` ]
-    .concat(weapons.map(w => opt(w.id, (w.name_ru || w.name || w.name_en || "(оружие)"), weaponMainId))).join("");
-
-  const weaponsOffOptions = [ `<option value="" ${!weaponOffId?"selected":""}>— не выбрано —</option>` ]
-    .concat(weapons.map(w => opt(w.id, (w.name_ru || w.name || w.name_en || "(оружие)"), weaponOffId))).join("");
-
-  const armorOptions = [ `<option value="" ${!armorId?"selected":""}>— не выбрано —</option>` ]
-    .concat(armorList.map(a => opt(a.id, (a.name_ru || a.name || a.name_en || "(доспех)"), armorId))).join("");
-
-  const shieldOptions = [ `<option value="" ${!shieldId?"selected":""}>— не выбрано —</option>` ]
-    .concat(shieldList.map(s => opt(s.id, (s.name_ru || s.name || s.name_en || "(щит)"), shieldId))).join("");
-
-  // races we have now
-  const races = [
-    ["aasimar","Аасимар"],
-    ["aarakocra","Ааракокра"],
-    ["bugbear","Багбир"],
-    ["vedalken","Ведалкен"],
-    ["verdan","Вердан"],
-    ["giff","Гифф"],
-    ["githyanki","Гитянки"]
-  ];
-
-  const raceOptions = races.map(([id,label]) => opt(id, label, race)).join("");
-  const genderOptions = `
-    <option value="male" ${gender==="male"?"selected":""}>Мужской</option>
-    <option value="female" ${gender==="female"?"selected":""}>Женский</option>
-  `;
-
-  return `
-    <div class="look-grid">
-      <div class="look-preview" aria-label="Предпросмотр облика">
-        <img class="look-layer look-layer--base" src="${escapeHtml(baseSrc)}" alt="База персонажа">
-      </div>
-
-      <div class="look-panel">
-        <div class="look-row">
-          <div class="look-label">Раса</div>
-          <select class="look-select" data-sheet-path="look.race.value" ${canEdit?"":"disabled"}>${raceOptions}</select>
-        </div>
-        <div class="look-row">
-          <div class="look-label">Пол</div>
-          <select class="look-select" data-sheet-path="look.gender.value" ${canEdit?"":"disabled"}>${genderOptions}</select>
-        </div>
-
-        <div class="look-sep"></div>
-
-        <div class="look-row">
-          <div class="look-label">Оружие (правая)</div>
-          <select class="look-select" data-sheet-path="look.equip.weaponMainId.value" ${canEdit?"":"disabled"}>${weaponsOptions}</select>
-        </div>
-
-        <div class="look-row">
-          <div class="look-label">Оружие (левая)</div>
-          <select class="look-select" data-sheet-path="look.equip.weaponOffId.value" ${(!canEdit || mainTwoHanded || !!shieldId)?"disabled":""}>
-            ${weaponsOffOptions}
-          </select>
-          ${mainTwoHanded ? `<div class="look-hint">Двуручное оружие — левая рука недоступна.</div>` : (shieldId ? `<div class="look-hint">Выбран щит — левая рука недоступна.</div>` : ``)}
-        </div>
-
-        <div class="look-row">
-          <div class="look-label">Броня</div>
-          <select class="look-select" data-sheet-path="look.equip.armorId.value" ${canEdit?"":"disabled"}>${armorOptions}</select>
-        </div>
-
-        <div class="look-row">
-          <div class="look-label">Щит</div>
-          <select class="look-select" data-sheet-path="look.equip.shieldId.value" ${(!canEdit || mainTwoHanded || !!weaponOffId)?"disabled":""}>
-            ${shieldOptions}
-          </select>
-          ${mainTwoHanded ? `<div class="look-hint">Двуручное оружие — щит недоступен.</div>` : (weaponOffId ? `<div class="look-hint">Выбрано оружие в левой руке — щит недоступен.</div>` : ``)}
-        </div>
-
-        <div class="sheet-note" style="margin-top:10px;">
-          Сейчас это выбор базы/экипировки. На следующем шаге подключим графические слои (броня/оружие/щит).
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderSpellsTab(vm) {
+  function renderSpellsTab(vm) {
     const base = (vm?.spellsInfo?.base || "").trim() || "int";
 
     const statScoreByKey = {};
@@ -1127,6 +1002,166 @@ function renderShopTab(vm, canEdit) {
     `;
   }
 
+
+
+  // ================== RENDER: LOOK (appearance) ==================
+  const LOOK_RACES = [
+    { id: "aasimar", label: "Аасимар" },
+    { id: "aarakocra", label: "Ааракокра" },
+    { id: "bugbear", label: "Багбир" },
+    { id: "vedalken", label: "Ведалкен" },
+    { id: "verdan", label: "Вердан" },
+    { id: "giff", label: "Гифф" },
+    { id: "githyanki", label: "Гит (гитянки)" }
+  ];
+
+  function renderLookTab(vm, canEdit) {
+    const look = (vm?.look && typeof vm.look === "object") ? vm.look : {};
+    const race = String(look?.race?.value || "aasimar");
+    const gender = String(look?.gender?.value || "male");
+
+    const equip = (look?.equip && typeof look.equip === "object") ? look.equip : {};
+    const layers = (look?.layers && typeof look.layers === "object") ? look.layers : {};
+
+    const inv = (vm?.inventory && typeof vm.inventory === "object") ? vm.inventory : {};
+    const weapons = Array.isArray(inv.weapons) ? inv.weapons : [];
+    const armor = Array.isArray(inv.armor) ? inv.armor : [];
+
+    const isShield = (it) => {
+      if (!it || typeof it !== "object") return false;
+      const t = String(it?.armor?.type || it?.armorType || it?.type || "").toLowerCase();
+      const name = String(it?.name_ru || it?.name || "").toLowerCase();
+      return t === "shield" || name.includes("щит");
+    };
+
+    const armorOnly = armor.filter(a => !isShield(a));
+    const shieldsOnly = armor.filter(a => isShield(a));
+
+    const selVal = (v) => (v && typeof v === "object" && v.value !== undefined) ? String(v.value) : "";
+
+    const weaponMainId = selVal(equip.weaponMainId);
+    const weaponOffId = selVal(equip.weaponOffId);
+    const armorId = selVal(equip.armorId);
+    const shieldId = selVal(equip.shieldId);
+
+    const optIdx = (arr, selectedIdx) => arr.map((it, idx) => {
+      const nm = it?.name_ru || it?.name || it?.name_en || `#${idx + 1}`;
+      const sel = (String(selectedIdx) !== "" && String(selectedIdx) === String(idx)) ? "selected" : "";
+      return `<option value="${escapeHtml(String(idx))}" ${sel}>${escapeHtml(String(nm))}</option>`;
+    }).join("");
+
+    const baseUrl = `assets/base/${race}/${gender}.png`;
+
+    const layerUrl = (x) => {
+      if (!x || typeof x !== "object") return "";
+      return String(x.value || "").trim();
+    };
+
+    const armorLayer = layerUrl(layers.armor);
+    const weaponMainLayer = layerUrl(layers.weaponMain);
+    const weaponOffLayer = layerUrl(layers.weaponOff);
+    const shieldLayer = layerUrl(layers.shield);
+
+    const raceOpts = LOOK_RACES.map(r => `<option value="${escapeHtml(r.id)}" ${r.id === race ? "selected" : ""}>${escapeHtml(r.label)}</option>`).join("");
+    const genderOpts = `
+      <option value="male" ${gender==="male"?"selected":""}>Мужской</option>
+      <option value="female" ${gender==="female"?"selected":""}>Женский</option>
+    `;
+
+    return `
+      <div class="sheet-section sheet-look">
+        <h3>Облик</h3>
+
+        <div class="look-grid">
+          <div class="look-preview">
+            <div class="paperdoll">
+              <img class="paperdoll-layer" alt="base" src="${escapeHtml(baseUrl)}" />
+              ${armorLayer ? `<img class="paperdoll-layer" alt="armor" src="${escapeHtml(armorLayer)}" />` : ""}
+              ${weaponMainLayer ? `<img class="paperdoll-layer" alt="weapon-main" src="${escapeHtml(weaponMainLayer)}" />` : ""}
+              ${shieldLayer ? `<img class="paperdoll-layer" alt="shield" src="${escapeHtml(shieldLayer)}" />` : ""}
+              ${weaponOffLayer ? `<img class="paperdoll-layer" alt="weapon-off" src="${escapeHtml(weaponOffLayer)}" />` : ""}
+            </div>
+            <div class="sheet-note" style="margin-top:8px; opacity:0.85">
+              Слои (броня/оружие/щит) — это PNG 1024×2048 с прозрачным фоном, которые накладываются поверх базы.
+            </div>
+          </div>
+
+          <div class="look-controls">
+            <div class="sheet-card fullwidth">
+              <h4>База</h4>
+              <div class="kv"><div class="k">Раса</div>
+                <div class="v">
+                  <select ${canEdit ? "" : "disabled"} data-sheet-path="look.race.value">
+                    ${raceOpts}
+                  </select>
+                </div>
+              </div>
+              <div class="kv"><div class="k">Пол</div>
+                <div class="v">
+                  <select ${canEdit ? "" : "disabled"} data-sheet-path="look.gender.value">
+                    ${genderOpts}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="sheet-card fullwidth" style="margin-top:10px">
+              <h4>Экипировка (из инвентаря)</h4>
+
+              <div class="kv"><div class="k">Оружие (правая)</div><div class="v">
+                <select ${canEdit ? "" : "disabled"} data-look-sel="weaponMain">
+                  <option value="" ${weaponMainId===""?"selected":""}>—</option>
+                  ${optIdx(weapons, weaponMainId)}
+                </select>
+              </div></div>
+
+              <div class="kv"><div class="k">Оружие (левая)</div><div class="v">
+                <select ${canEdit ? "" : "disabled"} data-look-sel="weaponOff">
+                  <option value="" ${weaponOffId===""?"selected":""}>—</option>
+                  ${optIdx(weapons, weaponOffId)}
+                </select>
+              </div></div>
+
+              <div class="kv"><div class="k">Броня</div><div class="v">
+                <select ${canEdit ? "" : "disabled"} data-look-sel="armor">
+                  <option value="" ${armorId===""?"selected":""}>—</option>
+                  ${optIdx(armorOnly, armorId)}
+                </select>
+              </div></div>
+
+              <div class="kv"><div class="k">Щит</div><div class="v">
+                <select ${canEdit ? "" : "disabled"} data-look-sel="shield">
+                  <option value="" ${shieldId===""?"selected":""}>—</option>
+                  ${optIdx(shieldsOnly, shieldId)}
+                </select>
+              </div></div>
+
+              <div class="sheet-note" style="opacity:0.85">
+                Сейчас выбор сохраняется в персонажа. На следующем шаге привяжем к предметам автоматические слои (appearanceLayerUrl),
+                чтобы при выборе предмета слой подставлялся сам.
+              </div>
+            </div>
+
+            <div class="sheet-card fullwidth" style="margin-top:10px">
+              <h4>Слои (PNG URL)</h4>
+              <div class="kv"><div class="k">Слой брони</div><div class="v">
+                <input type="text" ${canEdit ? "" : "disabled"} placeholder="assets/layers/armor/..." data-sheet-path="look.layers.armor.value">
+              </div></div>
+              <div class="kv"><div class="k">Оружие (правая)</div><div class="v">
+                <input type="text" ${canEdit ? "" : "disabled"} placeholder="assets/layers/weapons/..." data-sheet-path="look.layers.weaponMain.value">
+              </div></div>
+              <div class="kv"><div class="k">Щит</div><div class="v">
+                <input type="text" ${canEdit ? "" : "disabled"} placeholder="assets/layers/shields/..." data-sheet-path="look.layers.shield.value">
+              </div></div>
+              <div class="kv"><div class="k">Оружие (левая)</div><div class="v">
+                <input type="text" ${canEdit ? "" : "disabled"} placeholder="assets/layers/weapons/..." data-sheet-path="look.layers.weaponOff.value">
+              </div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   function renderActiveTab(tabId, vm, canEdit) {
     if (tabId === "basic") return renderBasicTab(vm, canEdit);
