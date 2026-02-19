@@ -656,21 +656,104 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
     return "";
   })();
 
-  // === Armor AC custom editor (only for inventory->armor tab) ===
+  
+  // === Armor AC editor (compact, per user spec) ===
   const armorAcEditor = (() => {
-    if (!canEdit) return "";
-    if (String(tabId) !== 'armor') return "";
-    if (it.type !== 'armor' || !it.armor || typeof it.armor !== 'object') return "";
+    if (String(tabId) !== 'armor') return '';
+    if (it.type !== 'armor' || !it.armor || typeof it.armor !== 'object') return '';
 
-    const acRaw = String(it.armor.ac || '').trim();
     const custom = (it.armor.custom && typeof it.armor.custom === 'object') ? it.armor.custom : {};
+    const acRaw = String(it.armor.ac || '').trim();
 
-    const isBonusOnly = (custom.bonusOnly === true) || String(custom.bonusOnly).toLowerCase() === 'true' || String(custom.bonusOnly) === '1' || /^\+\s*\d+/.test(acRaw);
+    // Backward compatibility:
+    // - bonusOnly=true => shield
+    // - old fields: base/ability/max/bonus
+    const kind = String(custom.kind || (custom.bonusOnly ? 'shield' : 'armor')).toLowerCase();
+    const kindVal = (kind === 'shield') ? 'shield' : 'armor';
 
-    const baseFromStr = (() => {
+    const parseBaseFromStr = () => {
       const m = acRaw.match(/^(\d+)/);
       return m ? (parseInt(m[1], 10) || 0) : 0;
-    })();
+    };
+    const parseShieldBonusFromStr = () => {
+      const m = acRaw.match(/^\+\s*(\d+)/);
+      return m ? Math.max(0, parseInt(m[1], 10) || 0) : 2;
+    };
+    const parseAbilityFromStr = () => {
+      if (/мод\.?\s*ловк/i.test(acRaw)) return 'dex';
+      if (/мод\.?\s*сил/i.test(acRaw)) return 'str';
+      if (/мод\.?\s*тел/i.test(acRaw)) return 'con';
+      if (/мод\.?\s*инт/i.test(acRaw)) return 'int';
+      if (/мод\.?\s*мдр/i.test(acRaw)) return 'wis';
+      if (/мод\.?\s*хар/i.test(acRaw)) return 'cha';
+      return '';
+    };
+    const parseMaxFromStr = () => {
+      const m = acRaw.match(/макс\.?\s*(\d+)/i);
+      if (!m) return '';
+      const n = parseInt(m[1], 10);
+      return Number.isFinite(n) ? String(n) : '';
+    };
+
+    const baseVal = (custom.base != null && custom.base !== '') ? safeInt(custom.base, parseBaseFromStr()) : parseBaseFromStr();
+    const abilityVal = String(custom.ability || parseAbilityFromStr() || '').toLowerCase();
+    const maxVal = (custom.max != null && custom.max !== '') ? String(custom.max) : String(parseMaxFromStr() || '');
+    const shieldBonus = (custom.bonus != null && custom.bonus !== '') ? safeInt(custom.bonus, parseShieldBonusFromStr()) : parseShieldBonusFromStr();
+
+    const dash = '<span class="equip-dash">—</span>';
+
+    const disabled = !canEdit ? 'disabled' : '';
+
+    return `
+      <div class="equip-ac-mini">
+        <div class="equip-ac-mini__title">КД (настройка)</div>
+        <div class="equip-ac-mini__grid" data-armor-mini-grid>
+          <label class="equip-ac-mini__lbl">Тип</label>
+          <label class="equip-ac-mini__lbl">КД</label>
+          <label class="equip-ac-mini__lbl">Модификатор</label>
+          <label class="equip-ac-mini__lbl">Макс.</label>
+
+          <select class="equip-ac-mini__ctl" ${disabled}
+            data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.kind">
+            <option value="armor" ${kindVal==='armor'?'selected':''}>Доспехи</option>
+            <option value="shield" ${kindVal==='shield'?'selected':''}>Щит</option>
+          </select>
+
+          ${
+            kindVal === 'shield'
+              ? `${dash}`
+              : `<input class="equip-ac-mini__ctl equip-ac-mini__num" type="number" min="0" max="50" value="${escapeHtml(String(baseVal))}" ${disabled}
+                   data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.base" />`
+          }
+
+          ${
+            kindVal === 'shield'
+              ? `${dash}`
+              : `<select class="equip-ac-mini__ctl" ${disabled}
+                   data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.ability">
+                   <option value="" ${!abilityVal?'selected':''}>—</option>
+                   <option value="dex" ${abilityVal==='dex'?'selected':''}>Ловкость</option>
+                   <option value="str" ${abilityVal==='str'?'selected':''}>Сила</option>
+                   <option value="con" ${abilityVal==='con'?'selected':''}>Телосложение</option>
+                   <option value="int" ${abilityVal==='int'?'selected':''}>Интеллект</option>
+                   <option value="wis" ${abilityVal==='wis'?'selected':''}>Мудрость</option>
+                   <option value="cha" ${abilityVal==='cha'?'selected':''}>Харизма</option>
+                 </select>`
+          }
+
+          ${
+            kindVal === 'shield'
+              ? `${dash}`
+              : `<input class="equip-ac-mini__ctl equip-ac-mini__num" type="number" min="0" max="20" value="${escapeHtml(String(maxVal))}" placeholder="—" ${disabled}
+                   data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.max" />`
+          }
+        </div>
+
+        ${kindVal === 'shield' ? `<div class="sheet-note" style="margin-top:6px; opacity:.85;">Щит добавляет бонус к КД (по умолчанию берётся из SRD/описания, либо +2). Сейчас: +${escapeHtml(String(shieldBonus))}.</div>` : ``}
+        <div class="sheet-note" style="margin-top:6px; opacity:.85;">Если доспех надет в «Облик» → значение «Броня» пересчитывается в реальном времени при изменении характеристик/этих полей.</div>
+      </div>
+    `;
+  })();
 
     const bonusFromStr = (() => {
       const m = acRaw.match(/^\+\s*(\d+)/);

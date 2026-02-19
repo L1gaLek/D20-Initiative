@@ -372,6 +372,152 @@ function bindAppearanceUi(root, player, canEdit) {
   }
 }
 
+
+// ===== Equipment -> AC sync (Armor/Shield) =====
+function _parseArmorAbilityFromAcText(acRaw) {
+  const s = String(acRaw || '');
+  if (/мод\.?\s*ловк/i.test(s)) return 'dex';
+  if (/мод\.?\s*сил/i.test(s)) return 'str';
+  if (/мод\.?\s*тел/i.test(s)) return 'con';
+  if (/мод\.?\s*инт/i.test(s)) return 'int';
+  if (/мод\.?\s*мдр/i.test(s)) return 'wis';
+  if (/мод\.?\s*хар/i.test(s)) return 'cha';
+  return '';
+}
+function _parseArmorMaxFromAcText(acRaw) {
+  const s = String(acRaw || '');
+  const m = s.match(/макс\.?\s*(\d+)/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return Number.isFinite(n) ? n : null;
+}
+function _parseArmorBaseFromAcText(acRaw) {
+  const s = String(acRaw || '').trim();
+  const m = s.match(/^(\d+)/);
+  return m ? (parseInt(m[1], 10) || 0) : 0;
+}
+function _parseShieldBonusFromAcText(acRaw) {
+  const s = String(acRaw || '').trim();
+  const m = s.match(/^\+\s*(\d+)/);
+  if (m) return Math.max(0, parseInt(m[1], 10) || 0);
+  // most SRD shields are +2
+  return 2;
+}
+function _getInvArmorArray(sheet) {
+  const arr = sheet?.inventory?.armor;
+  return Array.isArray(arr) ? arr : [];
+}
+function _itemId(it) {
+  return String((it && typeof it === 'object') ? (it.id || it._id || '') : '').trim();
+}
+function _itemName(it) {
+  if (!it || typeof it !== 'object') return '';
+  return String(it.name_ru || it.name || it.name_en || it.title || '').trim();
+}
+function _findInvItemBySelection(arr, selVal) {
+  const v = String(selVal || '').trim();
+  if (!v) return null;
+  const vLow = v.toLowerCase();
+  // try id first
+  const byId = arr.find(it => _itemId(it) && _itemId(it) === v);
+  if (byId) return byId;
+  // then name (case-insensitive)
+  const byName = arr.find(it => _itemName(it).toLowerCase() === vLow);
+  if (byName) return byName;
+  // fallback: contains
+  const byContains = arr.find(it => _itemName(it).toLowerCase().includes(vLow));
+  return byContains || null;
+}
+function _getAbilityMod(sheet, abilityKey) {
+  const k = String(abilityKey || '').toLowerCase();
+  if (!k) return 0;
+  return safeInt(sheet?.stats?.[k]?.modifier, 0);
+}
+function _getArmorCalc(it) {
+  if (!it || typeof it !== 'object' || it.type !== 'armor' || !it.armor || typeof it.armor !== 'object') return null;
+
+  const custom = (it.armor.custom && typeof it.armor.custom === 'object') ? it.armor.custom : {};
+  const acRaw = String(it.armor.ac || '').trim();
+
+  // normalize kind (new) + legacy (bonusOnly)
+  const kind = String(custom.kind || (custom.bonusOnly ? 'shield' : '')).toLowerCase();
+  const nameLooksShield = /щит/i.test(_itemName(it));
+  const kindFinal = (kind === 'shield' || nameLooksShield) ? 'shield' : 'armor';
+
+  if (kindFinal === 'shield') {
+    const bonus = (custom.bonus != null && custom.bonus !== '') ? safeInt(custom.bonus, _parseShieldBonusFromAcText(acRaw)) : _parseShieldBonusFromAcText(acRaw);
+    return { kind: 'shield', bonus: Math.max(0, bonus) };
+  }
+
+  const base = (custom.base != null && custom.base !== '') ? safeInt(custom.base, _parseArmorBaseFromAcText(acRaw)) : _parseArmorBaseFromAcText(acRaw);
+  const ability = String(custom.ability || _parseArmorAbilityFromAcText(acRaw) || '').toLowerCase();
+  const maxRaw = (custom.max != null && custom.max !== '') ? safeInt(custom.max, 0) : (_parseArmorMaxFromAcText(acRaw) ?? 0);
+  const max = (custom.max === '' || custom.max == null) ? (_parseArmorMaxFromAcText(acRaw) ?? null) : (Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : null);
+
+  return { kind: 'armor', base: Math.max(0, base), ability: ability || '', max };
+}
+function updateAcFromEquippedArmor(root, sheet) {
+  try {
+    if (!sheet || typeof sheet !== 'object') return;
+
+    // keep legacy flag in sync if user edits kind
+    try {
+      const arr = _getInvArmorArray(sheet);
+      arr.forEach(it => {
+        if (!it || typeof it !== 'object' || it.type !== 'armor' || !it.armor) return;
+        if (!it.armor.custom || typeof it.armor.custom !== 'object') it.armor.custom = {};
+        const k = String(it.armor.custom.kind || '').toLowerCase();
+        if (k === 'shield') it.armor.custom.bonusOnly = true;
+        else if (k === 'armor') it.armor.custom.bonusOnly = false;
+      });
+    } catch {}
+
+    const selArmor = getByPath(sheet, 'appearance.slots.armor');
+    const selShield = getByPath(sheet, 'appearance.slots.shield');
+
+    const arr = _getInvArmorArray(sheet);
+    const armorItem = _findInvItemBySelection(arr, selArmor);
+    const shieldItem = _findInvItemBySelection(arr, selShield);
+
+    const armorCalc = _getArmorCalc(armorItem);
+    const shieldCalc = _getArmorCalc(shieldItem);
+
+    // If nothing equipped — do nothing (don't override manual AC)
+    if (!armorCalc && !shieldCalc) return;
+
+    let ac = null;
+
+    if (armorCalc && armorCalc.kind === 'armor') {
+      const mod = armorCalc.ability ? _getAbilityMod(sheet, armorCalc.ability) : 0;
+      const capped = (armorCalc.max == null) ? mod : Math.max(-99, Math.min(mod, armorCalc.max));
+      ac = Math.max(0, safeInt(armorCalc.base, 0) + safeInt(capped, 0));
+    } else {
+      // No armor equipped (or wrong kind in slot) — assume 10 + Dex as baseline (but don't decrease existing AC)
+      const dex = _getAbilityMod(sheet, 'dex');
+      const baseline = 10 + dex;
+      const cur = safeInt(getByPath(sheet, 'vitality.ac.value'), baseline);
+      ac = Math.max(cur, baseline);
+    }
+
+    if (shieldCalc && shieldCalc.kind === 'shield') {
+      ac += Math.max(0, safeInt(shieldCalc.bonus, 2));
+    }
+
+    setByPath(sheet, 'vitality.ac.value', ac);
+
+    // update UI value if the input is currently in DOM
+    try {
+      const acInp = root?.querySelector?.('input[data-sheet-path="vitality.ac.value"]');
+      if (acInp) acInp.value = String(ac);
+    } catch {}
+
+    updateHeroChips(root, sheet);
+  } catch (e) {
+    console.warn('updateAcFromEquippedArmor failed', e);
+  }
+}
+
+
 function bindCombatEditors(root, player, canEdit) {
   if (!root || !player?.sheet?.parsed) return;
   const sheet = player.sheet.parsed;
@@ -463,6 +609,16 @@ function bindCombatEditors(root, player, canEdit) {
         if (player?._activeSheetTab === "spells" && (path === "proficiency" || path === "proficiencyCustom")) {
           const s = player.sheet?.parsed;
           if (s) rerenderSpellsTabInPlace(root, player, s, canEdit);
+        }
+
+
+        // AC auto-sync from equipped armor/shield (Облик)
+        if (
+          path === "appearance.slots.armor" || path === "appearance.slots.shield" ||
+          path.startsWith("inventory.armor.") && path.includes(".armor.custom.") ||
+          /^stats\.(str|dex|con|int|wis|cha)\.(score|modifier)$/.test(path)
+        ) {
+          updateAcFromEquippedArmor(root, player.sheet.parsed);
         }
 
         scheduleSheetSave(player);
