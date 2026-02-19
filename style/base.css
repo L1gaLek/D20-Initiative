@@ -52,6 +52,15 @@
   gap: 8px;
   align-items: end;
 }
+
+/* Per-kind column sizing for readability */
+.appearance-armor-meta[data-armor-meta="shield"] .meta-grid{
+  grid-template-columns: minmax(80px, 1fr) minmax(72px, 1fr);
+}
+.appearance-armor-meta[data-armor-meta="armor"] .meta-grid{
+  grid-template-columns: minmax(92px, 1.3fr) minmax(72px, 1fr) minmax(64px, 0.9fr) minmax(56px, 0.8fr);
+}
+
 .appearance-armor-meta .meta-item{
   min-width: 0;
 }
