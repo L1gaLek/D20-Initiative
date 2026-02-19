@@ -141,7 +141,7 @@ function defaultArmorRulesFromItem(item) {
   const a = item?.armor;
   const type = String(a?.type || '').toLowerCase();
   // base AC
-  const base = parseAcNumber(a?.ac, 0);
+  const base = parseAcNumber(a?.ac, 2);
   // Determine dex contribution from armor type
   // light: add Dex (no max)
   // medium: add Dex (max 2)
@@ -155,7 +155,7 @@ function defaultArmorRulesFromItem(item) {
 
 function defaultShieldRulesFromItem(item) {
   const a = item?.armor;
-  const bonus = parseAcNumber(a?.ac, 0);
+  const bonus = 2;
   return { bonus };
 }
 

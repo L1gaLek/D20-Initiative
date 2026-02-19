@@ -500,7 +500,9 @@ function bindEditableInputs(root, player, canEdit) {
         }
       }
 
-      const raw = getByPath(player.sheet.parsed, path);
+      let raw = getByPath(player.sheet.parsed, path);
+
+      if (path === "appearance.armorRules.max" && raw === 0) raw = "";
 
       // Support both classic inputs/textarea and rich-text contenteditable nodes.
       const isRte = (String(inp.getAttribute?.('contenteditable') || '') === 'true');
@@ -525,7 +527,10 @@ function bindEditableInputs(root, player, canEdit) {
       const handler = () => {
         let val;
         if (inp.type === "checkbox") val = !!inp.checked;
-        else if (inp.type === "number") val = inp.value === "" ? "" : Number(inp.value);
+        else if (inp.type === "number") {
+          val = (inp.value === "" ? "" : Number(inp.value));
+          if (path === "appearance.armorRules.max" && val === 0) val = "";
+        }
         else if (isRte) val = inp.innerHTML;
         else val = inp.value;
 

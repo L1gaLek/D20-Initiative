@@ -1059,11 +1059,6 @@ function renderShopTab(vm, canEdit) {
               <div class="appearance-preview-wrap">
                 <img class="appearance-preview" data-appearance-preview src="${escapeHtml(baseUrl)}" alt="Облик" />
               </div>
-
-              <div class="sheet-note" style="margin-top:10px; opacity:0.85">
-                Авто-путь: <code>assets/base/&lt;Раса&gt;/&lt;male|female&gt;.png</code>. Если нужно — можно переопределить вручную.
-              </div>
-
               <div class="kv" style="margin-top:10px">
                 <div class="k">Ссылка на базовую картинку</div>
                 <div class="v" style="width:100%">
@@ -1095,18 +1090,6 @@ function renderShopTab(vm, canEdit) {
                         <div class="meta-lbl">Щит КД</div>
                         <input class="meta-input" type="number" min="0" max="20" data-sheet-path="appearance.shieldRules.bonus" ${canEdit ? "" : "disabled"}>
                       </div>
-                      <div class="meta-item meta-dash">
-                        <div class="meta-lbl">КД</div>
-                        <div class="meta-val">—</div>
-                      </div>
-                      <div class="meta-item meta-dash">
-                        <div class="meta-lbl">Модификатор</div>
-                        <div class="meta-val">—</div>
-                      </div>
-                      <div class="meta-item meta-dash">
-                        <div class="meta-lbl">Макс.</div>
-                        <div class="meta-val">—</div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1124,7 +1107,7 @@ function renderShopTab(vm, canEdit) {
                         <input class="meta-input" type="number" min="0" max="30" data-sheet-path="appearance.armorRules.base" ${canEdit ? "" : "disabled"}>
                       </div>
                       <div class="meta-item">
-                        <div class="meta-lbl">Модификатор</div>
+                        <div class="meta-lbl">Мод.</div>
                         <select class="meta-select" data-sheet-path="appearance.armorRules.modStat" ${canEdit ? "" : "disabled"}>
                           <option value="-">—</option>
                           <option value="str">СИЛ</option>
@@ -1137,7 +1120,7 @@ function renderShopTab(vm, canEdit) {
                       </div>
                       <div class="meta-item">
                         <div class="meta-lbl">Макс.</div>
-                        <input class="meta-input" type="number" min="0" max="10" data-sheet-path="appearance.armorRules.max" placeholder="—" ${canEdit ? "" : "disabled"}>
+                        <input class="meta-input" type="number" min="1" max="10" data-sheet-path="appearance.armorRules.max" placeholder="—" ${canEdit ? "" : "disabled"}>
                       </div>
                     </div>
                   </div>
