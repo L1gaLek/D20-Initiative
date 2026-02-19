@@ -135,6 +135,18 @@
 
 
   function renderBasicTab(vm, canEdit) {
+    const races = [
+      "Аасимар","Ааракокра","Багбир","Ведалкен","Вердан","Гифф","Гит","Гном","Грунг","Гоблин","Голиаф","Дварф","Дженази",
+      "Драконорожденный","Зайцегон","Калаштар","Кенку","Кобольд","Кованый","Кентавр","Леонин","Локата","Локсодон","Людокрыса",
+      "Людоящер","Мурлок","Минотавр","Орк","Полурослик","Полуорк","Полуэльф","Плазмоид","Сатир","Совлин","Табакси","Тифлинг",
+      "Тортл","Тритон","Три-крин","Фирболг","Фэйри","Хобгоблин","Человек","Чейнджлинг","Эладрин","Эльф","Юань-Ти"
+    ];
+    const raceCur = String(vm?.race || "");
+    const raceOptions = [
+      `<option value="" ${!raceCur || raceCur === "-" ? "selected" : ""}>— выбери —</option>`,
+      ...races.map(r => `<option value="${escapeHtml(r)}" ${raceCur === r ? "selected" : ""}>${escapeHtml(r)}</option>`)
+    ].join("");
+
     return `
       <div class="sheet-section">
         <div class="sheet-topline">
@@ -164,7 +176,7 @@
             </div>
 
             <div class="profile-col">
-              <div class="kv"><div class="k">Раса</div><div class="v"><input type="text" data-sheet-path="info.race.value" style="width:180px"></div></div>
+              <div class="kv"><div class="k">Раса</div><div class="v"><select data-sheet-path="info.race.value" style="width:190px" ${canEdit ? "" : "disabled"}>${raceOptions}</select></div></div>
               <div class="kv"><div class="k">Архетип расы</div><div class="v"><input type="text" data-sheet-path="info.raceArchetype.value" style="width:180px"></div></div>
               <div class="kv"><div class="k">Предыстория</div><div class="v"><input type="text" data-sheet-path="info.background.value" style="width:180px"></div></div>
               <div class="kv"><div class="k">Мировоззрение</div><div class="v"><input type="text" data-sheet-path="info.alignment.value" style="width:180px"></div></div>
@@ -911,6 +923,13 @@ function renderShopTab(vm, canEdit) {
 
 
   function renderPersonalityTab(vm) {
+    const genderCur = String(vm?.notesDetails?.gender || "");
+    const genderNorm = genderKeyFromText(genderCur);
+    const genderOptions = [
+      `<option value="" ${!genderCur ? "selected" : ""}>— выбери —</option>`,
+      `<option value="male" ${genderNorm === "male" ? "selected" : ""}>Мужской</option>`,
+      `<option value="female" ${genderNorm === "female" ? "selected" : ""}>Женский</option>`
+    ].join("");
     return `
       <div class="sheet-section">
         <h3>Личность</h3>
@@ -919,7 +938,7 @@ function renderShopTab(vm, canEdit) {
           <div class="sheet-card">
             <h4>Внешность</h4>
             <div class="notes-details-grid">
-              <div class="kv"><div class="k">Пол</div><div class="v"><input type="text" data-sheet-path="notes.details.gender.value" style="width:140px"></div></div>
+              <div class="kv"><div class="k">Пол</div><div class="v"><select data-sheet-path="notes.details.gender.value" style="width:150px">${genderOptions}</select></div></div>
               <div class="kv"><div class="k">Рост</div><div class="v"><input type="text" data-sheet-path="notes.details.height.value" style="width:140px"></div></div>
               <div class="kv"><div class="k">Вес</div><div class="v"><input type="text" data-sheet-path="notes.details.weight.value" style="width:140px"></div></div>
               <div class="kv"><div class="k">Возраст</div><div class="v"><input type="text" data-sheet-path="notes.details.age.value" style="width:140px"></div></div>
@@ -1037,6 +1056,58 @@ function renderShopTab(vm, canEdit) {
     return "unknown";
   }
 
+  // Папки с базовыми образами рас (assets/base/<папка>/<male|female>.png)
+  // Рекомендуем называть папки ровно как значение расы в выпадающем списке.
+  const RACE_FOLDER_MAP = {
+    "Аасимар": "Аасимар",
+    "Ааракокра": "Ааракокра",
+    "Багбир": "Багбир",
+    "Ведалкен": "Ведалкен",
+    "Вердан": "Вердан",
+    "Гифф": "Гифф",
+    "Гит": "Гит",
+    "Гном": "Гном",
+    "Грунг": "Грунг",
+    "Гоблин": "Гоблин",
+    "Голиаф": "Голиаф",
+    "Дварф": "Дварф",
+    "Дженази": "Дженази",
+    "Драконорожденный": "Драконорожденный",
+    "Зайцегон": "Зайцегон",
+    "Калаштар": "Калаштар",
+    "Кенку": "Кенку",
+    "Кобольд": "Кобольд",
+    "Кованый": "Кованый",
+    "Кентавр": "Кентавр",
+    "Леонин": "Леонин",
+    "Локата": "Локата",
+    "Локсодон": "Локсодон",
+    "Людокрыса": "Людокрыса",
+    "Людоящер": "Людоящер",
+    "Мурлок": "Мурлок",
+    "Минотавр": "Минотавр",
+    "Орк": "Орк",
+    "Полурослик": "Полурослик",
+    "Полуорк": "Полуорк",
+    "Полуэльф": "Полуэльф",
+    "Плазмоид": "Плазмоид",
+    "Сатир": "Сатир",
+    "Совлин": "Совлин",
+    "Табакси": "Табакси",
+    "Тифлинг": "Тифлинг",
+    "Тортл": "Тортл",
+    "Тритон": "Тритон",
+    "Три-крин": "Три-крин",
+    "Фирболг": "Фирболг",
+    "Фэйри": "Фэйри",
+    "Хобгоблин": "Хобгоблин",
+    "Человек": "Человек",
+    "Чейнджлинг": "Чейнджлинг",
+    "Эладрин": "Эладрин",
+    "Эльф": "Эльф",
+    "Юань-Ти": "Юань-Ти"
+  };
+
   function getItemImgUrl(it) {
     // поддерживаем разные названия полей (пользователь может добавить свои)
     return String(it?.imgUrl || it?.imageUrl || it?.img || it?.image || it?.icon || "").trim();
@@ -1061,15 +1132,16 @@ function renderShopTab(vm, canEdit) {
 
   function renderAppearanceTab(vm, canEdit) {
     const race = String(vm?.race || "");
-    const raceKey = normalizeLookKey(race) || "race";
     const gender = vm?.notesDetails?.gender;
     const gKey = genderKeyFromText(gender);
 
+    const folder = RACE_FOLDER_MAP[race] || String(race || "").trim();
+    const safeFolder = folder ? folder : "_unknown";
+
     const app = (vm?.appearance && typeof vm.appearance === "object") ? vm.appearance : {};
     const baseUrl = String(app.baseUrl || "").trim();
-    // Дефолтный путь: races/<raceKey>_<gender>.png
-    // Можно положить свои картинки в проект и/или заполнить поле "Ссылка на базовую картинку".
-    const baseSrc = baseUrl || `races/${raceKey}_${gKey}.png`;
+    // Дефолтный путь: assets/base/<раса>/<male|female>.png
+    const baseSrc = baseUrl || `assets/base/${safeFolder}/${gKey}.png`;
 
     const invWeapons = Array.isArray(vm?.inventory?.weapons) ? vm.inventory.weapons : [];
     const invArmor = Array.isArray(vm?.inventory?.armor) ? vm.inventory.armor : [];
@@ -1131,8 +1203,8 @@ function renderShopTab(vm, canEdit) {
       <div class="sheet-section">
         <h3>Облик</h3>
         <div class="sheet-note" style="margin-bottom:10px;">
-          Базовая картинка выбирается по расе и полу. По умолчанию путь такой: <b>races/${escapeHtml(raceKey)}_${escapeHtml(gKey)}.png</b>.
-          Если у тебя картинки лежат по другому пути — просто вставь ссылку ниже.
+          Базовая картинка выбирается по расе и полу. По умолчанию путь такой: <b>assets/base/${escapeHtml(safeFolder)}/${escapeHtml(gKey)}.png</b>.
+          Если у тебя картинки лежат по другому пути — вставь ссылку ниже (перекрывает авто-путь).
         </div>
 
         <div class="look-layout">
@@ -1147,7 +1219,7 @@ function renderShopTab(vm, canEdit) {
             <div class="look-baseurl">
               <div class="look-baseurl__label">Ссылка на базовую картинку</div>
               <input class="look-baseurl__input" type="text" ${canEdit ? "" : "disabled"}
-                value="${escapeHtml(baseUrl)}" placeholder="(пусто = использовать races/${escapeHtml(raceKey)}_${escapeHtml(gKey)}.png)"
+                value="${escapeHtml(baseUrl)}" placeholder="(пусто = использовать assets/base/${escapeHtml(safeFolder)}/${escapeHtml(gKey)}.png)"
                 data-look-path="appearance.baseUrl">
             </div>
           </div>

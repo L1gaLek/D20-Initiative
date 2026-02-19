@@ -640,6 +640,11 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         }
 
         scheduleSheetSave(player);
+
+        // Вкладка «Облик»: если меняем расу или пол — обновим превью сразу
+        if (path === "info.race.value" || path === "notes.details.gender.value") {
+          try { renderSheetModal(player, { force: true }); } catch {}
+        }
       };
 
       inp.addEventListener("input", handler);
