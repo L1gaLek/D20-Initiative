@@ -45,6 +45,10 @@
     const wallToolSel = document.getElementById('wall-tool');
     const wallTypeSel = document.getElementById('wall-type');
     const wallThicknessSel = document.getElementById('wall-thickness');
+    const wallDraftChk = document.getElementById('wall-draft-enabled');
+    const wallDraftApplyBtn = document.getElementById('wall-draft-apply');
+    const wallDraftResetBtn = document.getElementById('wall-draft-reset');
+    const wallDraftCountEl = document.getElementById('wall-draft-count');
     const clearBoardBtn = document.getElementById('clear-board');
     const resetGameBtn = document.getElementById('reset-game');
 
@@ -144,6 +148,122 @@
     let wallMode = null; // 'add' | 'remove'
     let mouseDown = false;
 
+    // ===== Draft walls (local-only until applied) =====
+    const LS_WALL_DRAFT = 'dnd_wall_draft_enabled';
+    let draftWallsEnabled = !!readIntLs(LS_WALL_DRAFT, 0);
+    // pendingAdd: Map<"x,y,dir", edgeFull>
+    const pendingAdd = new Map();
+    // pendingRemove: Map<"x,y,dir", edgeFullFromStateIfKnown>
+    const pendingRemove = new Map();
+
+    function keyXYZ(x, y, dir) { return `${x},${y},${String(dir||'').toUpperCase()}`; }
+
+    function findEdgeInState(x, y, dir) {
+      const st = ctx.getState?.() || {};
+      const walls = Array.isArray(st.walls) ? st.walls : [];
+      const wantDir = String(dir || '').toUpperCase();
+      for (const ed of walls) {
+        const ex = Number(ed?.x);
+        const ey = Number(ed?.y);
+        const edir = String(ed?.dir || ed?.direction || '').toUpperCase();
+        if (ex === x && ey === y && edir === wantDir) {
+          return {
+            x: ex,
+            y: ey,
+            dir: edir,
+            type: String(ed?.type || 'stone'),
+            thickness: Math.max(1, Math.min(12, Number(ed?.thickness || 4)))
+          };
+        }
+      }
+      return null;
+    }
+
+    function updateDraftUi() {
+      if (wallDraftChk) wallDraftChk.checked = !!draftWallsEnabled;
+      const count = pendingAdd.size + pendingRemove.size;
+      if (wallDraftCountEl) wallDraftCountEl.textContent = String(count);
+      const canApply = !!draftWallsEnabled && count > 0 && !!ctx.isGM?.();
+      if (wallDraftApplyBtn) wallDraftApplyBtn.disabled = !canApply;
+      if (wallDraftResetBtn) wallDraftResetBtn.disabled = !(!!draftWallsEnabled && count > 0 && !!ctx.isGM?.());
+    }
+
+    function bufferDraft(mode, edges) {
+      if (!Array.isArray(edges) || !edges.length) return;
+      for (const ed of edges) {
+        const x = Number(ed?.x);
+        const y = Number(ed?.y);
+        const dir = String(ed?.dir || ed?.direction || '').toUpperCase();
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+        const k = keyXYZ(x, y, dir);
+        if (mode === 'add') {
+          pendingRemove.delete(k);
+          pendingAdd.set(k, {
+            x, y, dir,
+            type: String(ed?.type || wallType || 'stone'),
+            thickness: Math.max(1, Math.min(12, Number(ed?.thickness || wallThickness || 4)))
+          });
+        } else {
+          // remove
+          pendingAdd.delete(k);
+          // try to keep full info to be able to "reset" accurately
+          const prev = findEdgeInState(x, y, dir);
+          pendingRemove.set(k, prev || { x, y, dir });
+        }
+      }
+      updateDraftUi();
+    }
+
+    function applyDraftToOthers() {
+      if (!ctx.isGM?.()) return;
+      const adds = Array.from(pendingAdd.values());
+      const rems = Array.from(pendingRemove.values()).map((ed) => ({ x: ed.x, y: ed.y, dir: ed.dir }));
+      if (!adds.length && !rems.length) return;
+
+      // send in 1-2 packets
+      if (rems.length) ctx.sendMessage?.({ type: 'bulkWallEdges', mode: 'remove', edges: rems });
+      if (adds.length) ctx.sendMessage?.({ type: 'bulkWallEdges', mode: 'add', edges: adds });
+
+      pendingAdd.clear();
+      pendingRemove.clear();
+      updateDraftUi();
+    }
+
+    function resetDraftLocally() {
+      // revert local-only changes (best-effort)
+      try {
+        const adds = Array.from(pendingAdd.values());
+        const rems = Array.from(pendingRemove.values());
+        if (adds.length) {
+          window.dispatchEvent(new CustomEvent('dnd_local_wall_edges', {
+            detail: { mode: 'remove', edges: adds.map((ed) => ({ x: ed.x, y: ed.y, dir: ed.dir })) }
+          }));
+        }
+        if (rems.length) {
+          // re-add removed edges using stored metadata when possible
+          const toAddBack = rems
+            .filter((ed) => ed && Number.isFinite(Number(ed.x)) && Number.isFinite(Number(ed.y)))
+            .map((ed) => ({
+              x: Number(ed.x),
+              y: Number(ed.y),
+              dir: String(ed.dir || 'N').toUpperCase(),
+              type: String(ed.type || 'stone'),
+              thickness: Math.max(1, Math.min(12, Number(ed.thickness || 4)))
+            }));
+          if (toAddBack.length) {
+            window.dispatchEvent(new CustomEvent('dnd_local_wall_edges', {
+              detail: { mode: 'add', edges: toAddBack }
+            }));
+          }
+        }
+      } catch {}
+
+      pendingAdd.clear();
+      pendingRemove.clear();
+      updateDraftUi();
+    }
+
     // tool: brush | line | rect
     let wallTool = String(wallToolSel?.value || 'brush');
     let wallType = String(wallTypeSel?.value || 'stone');
@@ -173,11 +293,55 @@
       if (clearBoardBtn) clearBoardBtn.disabled = !gm;
       if (resetGameBtn) resetGameBtn.disabled = !gm;
 
+       // draft walls UI is GM-only (visibility handled by client.js), but we also protect here
+       if (wallDraftChk) wallDraftChk.disabled = !gm;
+
       // UI: подсветка режимов
       if (editEnvBtn) editEnvBtn.classList.toggle('is-on', !!editEnvironment);
       if (addWallBtn) addWallBtn.classList.toggle('is-active', !!editEnvironment && wallMode === 'add');
       if (removeWallBtn) removeWallBtn.classList.toggle('is-active', !!editEnvironment && wallMode === 'remove');
     }
+
+    // Init draft UI
+    if (wallDraftChk) wallDraftChk.checked = !!draftWallsEnabled;
+    updateDraftUi();
+
+    wallDraftChk?.addEventListener('change', () => {
+      if (!ctx.isGM?.()) {
+        if (wallDraftChk) wallDraftChk.checked = false;
+        return;
+      }
+      const next = !!wallDraftChk?.checked;
+      const hasPending = (pendingAdd.size + pendingRemove.size) > 0;
+      if (!next && hasPending) {
+        const ok = confirm('Есть изменения в черновике стен. Подгрузить их для всех?\n\nOK — подгрузить, Отмена — оставить черновик включенным.');
+        if (ok) {
+          applyDraftToOthers();
+          draftWallsEnabled = false;
+        } else {
+          // keep draft enabled
+          draftWallsEnabled = true;
+          if (wallDraftChk) wallDraftChk.checked = true;
+        }
+      } else {
+        draftWallsEnabled = next;
+      }
+      writeIntLs(LS_WALL_DRAFT, draftWallsEnabled ? 1 : 0);
+      updateDraftUi();
+    });
+
+    wallDraftApplyBtn?.addEventListener('click', () => {
+      if (!ctx.isGM?.()) return;
+      if (!draftWallsEnabled) return;
+      applyDraftToOthers();
+    });
+
+    wallDraftResetBtn?.addEventListener('click', () => {
+      if (!ctx.isGM?.()) return;
+      if (!draftWallsEnabled) return;
+      if (!confirm('Сбросить черновик стен? Локальные изменения будут отменены (насколько возможно).')) return;
+      resetDraftLocally();
+    });
 
     editEnvBtn?.addEventListener('click', () => {
       if (!ctx.isGM?.()) return;
@@ -365,12 +529,19 @@
             detail: { mode: wallMode, edges: changed }
           }));
         } catch {}
-        // IMPORTANT:
-        // The project uses *edge walls* (v2) on cell borders. The room state handler
-        // expects message type `bulkWallEdges` with field `edges`.
-        // Sending legacy `bulkWalls` (which expects `cells`) causes walls to appear
-        // optimistically for a moment and then disappear (state never updates).
-        ctx.sendMessage?.({ type: 'bulkWallEdges', mode: wallMode, edges: changed });
+
+        // If draft mode is enabled — do NOT spam realtime.
+        // We buffer the changes and send them in one (or two) packets on "Подгрузить".
+        if (draftWallsEnabled) {
+          bufferDraft(wallMode, changed);
+        } else {
+          // IMPORTANT:
+          // The project uses *edge walls* (v2) on cell borders. The room state handler
+          // expects message type `bulkWallEdges` with field `edges`.
+          // Sending legacy `bulkWalls` (which expects `cells`) causes walls to appear
+          // optimistically for a moment and then disappear (state never updates).
+          ctx.sendMessage?.({ type: 'bulkWallEdges', mode: wallMode, edges: changed });
+        }
       }
 
       dragTouched = new Set();
