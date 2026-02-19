@@ -204,319 +204,7 @@ function bindAppearanceUi(root, player, canEdit) {
   raceSel?.addEventListener('change', onAny);
   genderSel?.addEventListener('change', onAny);
   baseOverrideInp?.addEventListener('input', onAny);
-
-  // ===== Equipment selects (Правая/Левая/Щит/Доспех) =====
-  // 1) Списки должны показывать ТОЛЬКО то, что есть в инвентаре (это обеспечено рендером).
-  // 2) При выборе доспеха/щита — пересчитать КД (Броню).
-
-  const getAbilityMod = (abilityKey) => {
-    const k = String(abilityKey || '').trim().toLowerCase();
-    if (!k) return 0;
-    // в наших данных обычно уже есть sheet.stats.<key>.modifier
-    const m = Number(sheet?.stats?.[k]?.modifier);
-    if (Number.isFinite(m)) return Math.trunc(m);
-    // fallback: считаем из score
-    const score = Number(sheet?.stats?.[k]?.score);
-    if (!Number.isFinite(score)) return 0;
-    return Math.floor((Math.trunc(score) - 10) / 2);
-  };
-
-  const findInvItem = (arr, key) => {
-    const k = String(key || '').trim();
-    if (!k || !Array.isArray(arr)) return null;
-    // 1) match by id
-    const byId = arr.find(it => String(it?.id || it?._id || '').trim() === k);
-    if (byId) return byId;
-    // 2) match by ru/en name (backward compat if раньше сохраняли имя)
-    const low = k.toLowerCase();
-    return arr.find(it => {
-      const ru = String(it?.name_ru || it?.name || '').trim().toLowerCase();
-      const en = String(it?.name_en || it?.title || '').trim().toLowerCase();
-      return ru === low || en === low;
-    }) || null;
-  };
-
-  const parseArmorAc = (acRaw) => {
-    // Примеры из базы: "18", "11 + мод. Ловк", "14 + мод. Ловк (макс. 2)", "+2" (щит)
-    // Поддержка произвольного модификатора: "11 + мод. Сил" и т.п.
-    const s = String(acRaw || '').trim();
-    if (!s) return { base: 0, addMod: false, modAbility: '', modCap: null, bonusOnly: false };
-
-    // shield / bonus-only
-    if (/^\+\s*\d+/.test(s)) {
-      const m = s.match(/\+\s*(\d+)/);
-      return { base: 0, addMod: false, modAbility: '', modCap: null, bonusOnly: true, bonus: m ? Math.max(0, parseInt(m[1], 10) || 0) : 0 };
-    }
-
-    const base = (() => {
-      const m = s.match(/^(\d+)/);
-      return m ? (parseInt(m[1], 10) || 0) : 0;
-    })();
-    // ability key
-    const modAbility = (() => {
-      if (/мод\.?\s*ловк/i.test(s)) return 'dex';
-      if (/мод\.?\s*сил/i.test(s)) return 'str';
-      if (/мод\.?\s*тел/i.test(s)) return 'con';
-      if (/мод\.?\s*инт/i.test(s)) return 'int';
-      if (/мод\.?\s*мдр/i.test(s)) return 'wis';
-      if (/мод\.?\s*хар/i.test(s)) return 'cha';
-      return '';
-    })();
-
-    const cap = (() => {
-      const m = s.match(/макс\.?\s*(\d+)/i);
-      if (!m) return null;
-      const n = parseInt(m[1], 10);
-      return Number.isFinite(n) ? n : null;
-    })();
-    return { base, addMod: !!modAbility, modAbility, modCap: cap, bonusOnly: false };
-  };
-
-  const getArmorRule = (armorItem) => {
-    const it = armorItem && typeof armorItem === 'object' ? armorItem : null;
-    const a = it?.armor && typeof it.armor === 'object' ? it.armor : null;
-    const custom = a?.custom && typeof a.custom === 'object' ? a.custom : null;
-    if (custom) {
-      const base = Math.max(0, safeInt(custom.base, safeInt(a?.ac, 0)));
-      const modAbility = String(custom.ability || '').trim().toLowerCase();
-      const modCap = (custom.max == null || custom.max === '') ? null : Math.max(0, safeInt(custom.max, 0));
-      const bonusOnly = (custom.bonusOnly === true) || String(custom.bonusOnly).toLowerCase() === 'true' || String(custom.bonusOnly) === '1';
-      const bonus = Math.max(0, safeInt(custom.bonus, 0));
-      return { base, addMod: !!modAbility, modAbility, modCap, bonusOnly, bonus };
-    }
-    return parseArmorAc(a?.ac);
-  };
-
-  const recomputeAcFromEquipped = () => {
-    try {
-      if (!canEdit) return; // не меняем чужие листы
-      if (!sheet?.vitality) sheet.vitality = {};
-      if (!sheet.vitality.ac) sheet.vitality.ac = { value: 10 };
-
-      const inv = sheet?.inventory;
-      const invArmor = Array.isArray(inv?.armor) ? inv.armor : [];
-
-      const armorKey = getByPath(sheet, 'appearance.slots.armor') || '';
-      const shieldKey = getByPath(sheet, 'appearance.slots.shield') || '';
-
-      const armorIt = findInvItem(invArmor, armorKey);
-      const shieldIt = findInvItem(invArmor, shieldKey);
-
-      // если нет доспеха — ничего не делаем (не ломаем пользовательские значения КД)
-      if (!armorIt || !armorIt.armor) return;
-
-      const a = getArmorRule(armorIt);
-      let ac = Math.max(0, Math.trunc(a.base || 0));
-
-      if (a.addMod && a.modAbility) {
-        const mod = getAbilityMod(a.modAbility);
-        const cap = (a.modCap == null) ? null : Math.max(0, Math.trunc(a.modCap));
-        const add = (cap == null) ? mod : Math.min(mod, cap);
-        ac += Math.trunc(add);
-      }
-
-      // shield bonus (если выбран)
-      if (shieldIt && shieldIt.armor) {
-        const sh = getArmorRule(shieldIt);
-        if (sh.bonusOnly && Number.isFinite(sh.bonus)) ac += Math.trunc(sh.bonus);
-      }
-
-      sheet.vitality.ac.value = Math.max(0, Math.trunc(ac));
-      scheduleSheetSave(player);
-      // локально обновим чип КД (если он на экране)
-      try {
-        const acEl = root.querySelector('[data-hero-val="ac"], [data-hp-field="ac"], [data-sheet-path="vitality.ac.value"]');
-        if (acEl && 'value' in acEl) acEl.value = String(sheet.vitality.ac.value);
-      } catch {}
-    } catch (e) {
-      console.warn('recomputeAcFromEquipped failed', e);
-    }
-  };
-
-  const slotSelects = root.querySelectorAll('[data-appearance-slot]');
-  slotSelects.forEach(sel => {
-    sel.addEventListener('change', () => {
-      // bindEditableInputs уже записывает значение в sheet по data-sheet-path
-      // здесь — только доп. эффекты
-      const slot = String(sel.getAttribute('data-appearance-slot') || '');
-      if (slot === 'armor' || slot === 'shield') recomputeAcFromEquipped();
-    });
-  });
-
-  // live recompute when ability scores/modifiers change OR when armor custom fields edited
-  if (!root.__appearanceAcLiveBound) {
-    root.__appearanceAcLiveBound = true;
-    const handler = (e) => {
-      if (!canEdit) return;
-      const el = e.target;
-      if (!(el instanceof HTMLElement)) return;
-      const path = el.getAttribute?.('data-sheet-path') || '';
-      if (!path) return;
-
-      // 1) stats.* changes
-      if (path.startsWith('stats.')) {
-        const armorKey = getByPath(sheet, 'appearance.slots.armor') || '';
-        if (armorKey) recomputeAcFromEquipped();
-        return;
-      }
-
-      // 2) inventory armor custom fields edits
-      if (path.startsWith('inventory.armor.') && (path.includes('.armor.custom.') || path.endsWith('.armor.ac'))) {
-        const armorKey = getByPath(sheet, 'appearance.slots.armor') || '';
-        if (armorKey) recomputeAcFromEquipped();
-        return;
-      }
-    };
-    root.addEventListener('input', handler, { passive: true });
-    root.addEventListener('change', handler, { passive: true });
-  }
 }
-
-
-// ===== Equipment -> AC sync (Armor/Shield) =====
-function _parseArmorAbilityFromAcText(acRaw) {
-  const s = String(acRaw || '');
-  if (/мод\.?\s*ловк/i.test(s)) return 'dex';
-  if (/мод\.?\s*сил/i.test(s)) return 'str';
-  if (/мод\.?\s*тел/i.test(s)) return 'con';
-  if (/мод\.?\s*инт/i.test(s)) return 'int';
-  if (/мод\.?\s*мдр/i.test(s)) return 'wis';
-  if (/мод\.?\s*хар/i.test(s)) return 'cha';
-  return '';
-}
-function _parseArmorMaxFromAcText(acRaw) {
-  const s = String(acRaw || '');
-  const m = s.match(/макс\.?\s*(\d+)/i);
-  if (!m) return null;
-  const n = parseInt(m[1], 10);
-  return Number.isFinite(n) ? n : null;
-}
-function _parseArmorBaseFromAcText(acRaw) {
-  const s = String(acRaw || '').trim();
-  const m = s.match(/^(\d+)/);
-  return m ? (parseInt(m[1], 10) || 0) : 0;
-}
-function _parseShieldBonusFromAcText(acRaw) {
-  const s = String(acRaw || '').trim();
-  const m = s.match(/^\+\s*(\d+)/);
-  if (m) return Math.max(0, parseInt(m[1], 10) || 0);
-  // most SRD shields are +2
-  return 2;
-}
-function _getInvArmorArray(sheet) {
-  const arr = sheet?.inventory?.armor;
-  return Array.isArray(arr) ? arr : [];
-}
-function _itemId(it) {
-  return String((it && typeof it === 'object') ? (it.id || it._id || '') : '').trim();
-}
-function _itemName(it) {
-  if (!it || typeof it !== 'object') return '';
-  return String(it.name_ru || it.name || it.name_en || it.title || '').trim();
-}
-function _findInvItemBySelection(arr, selVal) {
-  const v = String(selVal || '').trim();
-  if (!v) return null;
-  const vLow = v.toLowerCase();
-  // try id first
-  const byId = arr.find(it => _itemId(it) && _itemId(it) === v);
-  if (byId) return byId;
-  // then name (case-insensitive)
-  const byName = arr.find(it => _itemName(it).toLowerCase() === vLow);
-  if (byName) return byName;
-  // fallback: contains
-  const byContains = arr.find(it => _itemName(it).toLowerCase().includes(vLow));
-  return byContains || null;
-}
-function _getAbilityMod(sheet, abilityKey) {
-  const k = String(abilityKey || '').toLowerCase();
-  if (!k) return 0;
-  return safeInt(sheet?.stats?.[k]?.modifier, 0);
-}
-function _getArmorCalc(it) {
-  if (!it || typeof it !== 'object' || it.type !== 'armor' || !it.armor || typeof it.armor !== 'object') return null;
-
-  const custom = (it.armor.custom && typeof it.armor.custom === 'object') ? it.armor.custom : {};
-  const acRaw = String(it.armor.ac || '').trim();
-
-  // normalize kind (new) + legacy (bonusOnly)
-  const kind = String(custom.kind || (custom.bonusOnly ? 'shield' : '')).toLowerCase();
-  const nameLooksShield = /щит/i.test(_itemName(it));
-  const kindFinal = (kind === 'shield' || nameLooksShield) ? 'shield' : 'armor';
-
-  if (kindFinal === 'shield') {
-    const bonus = (custom.bonus != null && custom.bonus !== '') ? safeInt(custom.bonus, _parseShieldBonusFromAcText(acRaw)) : _parseShieldBonusFromAcText(acRaw);
-    return { kind: 'shield', bonus: Math.max(0, bonus) };
-  }
-
-  const base = (custom.base != null && custom.base !== '') ? safeInt(custom.base, _parseArmorBaseFromAcText(acRaw)) : _parseArmorBaseFromAcText(acRaw);
-  const ability = String(custom.ability || _parseArmorAbilityFromAcText(acRaw) || '').toLowerCase();
-  const maxRaw = (custom.max != null && custom.max !== '') ? safeInt(custom.max, 0) : (_parseArmorMaxFromAcText(acRaw) ?? 0);
-  const max = (custom.max === '' || custom.max == null) ? (_parseArmorMaxFromAcText(acRaw) ?? null) : (Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : null);
-
-  return { kind: 'armor', base: Math.max(0, base), ability: ability || '', max };
-}
-function updateAcFromEquippedArmor(root, sheet) {
-  try {
-    if (!sheet || typeof sheet !== 'object') return;
-
-    // keep legacy flag in sync if user edits kind
-    try {
-      const arr = _getInvArmorArray(sheet);
-      arr.forEach(it => {
-        if (!it || typeof it !== 'object' || it.type !== 'armor' || !it.armor) return;
-        if (!it.armor.custom || typeof it.armor.custom !== 'object') it.armor.custom = {};
-        const k = String(it.armor.custom.kind || '').toLowerCase();
-        if (k === 'shield') it.armor.custom.bonusOnly = true;
-        else if (k === 'armor') it.armor.custom.bonusOnly = false;
-      });
-    } catch {}
-
-    const selArmor = getByPath(sheet, 'appearance.slots.armor');
-    const selShield = getByPath(sheet, 'appearance.slots.shield');
-
-    const arr = _getInvArmorArray(sheet);
-    const armorItem = _findInvItemBySelection(arr, selArmor);
-    const shieldItem = _findInvItemBySelection(arr, selShield);
-
-    const armorCalc = _getArmorCalc(armorItem);
-    const shieldCalc = _getArmorCalc(shieldItem);
-
-    // If nothing equipped — do nothing (don't override manual AC)
-    if (!armorCalc && !shieldCalc) return;
-
-    let ac = null;
-
-    if (armorCalc && armorCalc.kind === 'armor') {
-      const mod = armorCalc.ability ? _getAbilityMod(sheet, armorCalc.ability) : 0;
-      const capped = (armorCalc.max == null) ? mod : Math.max(-99, Math.min(mod, armorCalc.max));
-      ac = Math.max(0, safeInt(armorCalc.base, 0) + safeInt(capped, 0));
-    } else {
-      // No armor equipped (or wrong kind in slot) — assume 10 + Dex as baseline (but don't decrease existing AC)
-      const dex = _getAbilityMod(sheet, 'dex');
-      const baseline = 10 + dex;
-      const cur = safeInt(getByPath(sheet, 'vitality.ac.value'), baseline);
-      ac = Math.max(cur, baseline);
-    }
-
-    if (shieldCalc && shieldCalc.kind === 'shield') {
-      ac += Math.max(0, safeInt(shieldCalc.bonus, 2));
-    }
-
-    setByPath(sheet, 'vitality.ac.value', ac);
-
-    // update UI value if the input is currently in DOM
-    try {
-      const acInp = root?.querySelector?.('input[data-sheet-path="vitality.ac.value"]');
-      if (acInp) acInp.value = String(ac);
-    } catch {}
-
-    updateHeroChips(root, sheet);
-  } catch (e) {
-    console.warn('updateAcFromEquippedArmor failed', e);
-  }
-}
-
 
 function bindCombatEditors(root, player, canEdit) {
   if (!root || !player?.sheet?.parsed) return;
@@ -609,16 +297,6 @@ function bindCombatEditors(root, player, canEdit) {
         if (player?._activeSheetTab === "spells" && (path === "proficiency" || path === "proficiencyCustom")) {
           const s = player.sheet?.parsed;
           if (s) rerenderSpellsTabInPlace(root, player, s, canEdit);
-        }
-
-
-        // AC auto-sync from equipped armor/shield (Облик)
-        if (
-          path === "appearance.slots.armor" || path === "appearance.slots.shield" ||
-          path.startsWith("inventory.armor.") && path.includes(".armor.custom.") ||
-          /^stats\.(str|dex|con|int|wis|cha)\.(score|modifier)$/.test(path)
-        ) {
-          updateAcFromEquippedArmor(root, player.sheet.parsed);
         }
 
         scheduleSheetSave(player);
@@ -852,6 +530,19 @@ function bindEditableInputs(root, player, canEdit) {
         else val = inp.value;
 
         setByPath(player.sheet.parsed, path, val);
+
+        // ===== Auto AC from equipment =====
+        // If user changes equipped armor/shield or edits armor params, recompute AC immediately.
+        if (
+          path.startsWith('appearance.slots.') ||
+          path.startsWith('appearance.armorRules') ||
+          path.startsWith('appearance.shieldRules')
+        ) {
+          try {
+            window.__equipAc?.applyAutoAcToSheet?.(player.sheet.parsed);
+            updateHeroChips(root, player.sheet.parsed);
+          } catch {}
+        }
 
 
         // Истощение (0..6) и Состояние (строка) не связаны
@@ -1340,6 +1031,12 @@ function bindTextareaHeightPersistence(root, player) {
         updateSkillsAndPassives(root, sheet);
          updateWeaponsBonuses(root, sheet);
 
+        // Auto AC from equipped armor/shield (if any)
+        try {
+          window.__equipAc?.applyAutoAcToSheet?.(sheet);
+          updateHeroChips(root, sheet);
+        } catch {}
+
         scheduleSheetSave(player);
       };
 
@@ -1793,6 +1490,8 @@ function bindTextareaHeightPersistence(root, player) {
       // перерисуем только main текущей вкладки, как это делает обработчик табов
       const main = root.querySelector('#sheet-main');
       const sheet = curPlayer?.sheet?.parsed || createEmptySheet(curPlayer?.name);
+      // Keep AC in sync with equipped armor/shield before building VM
+      try { window.__equipAc?.applyAutoAcToSheet?.(sheet); } catch {}
       const vm = toViewModel(sheet, curPlayer?.name);
       const tabId = curPlayer?._activeSheetTab || (getUiState(curPlayer.id)?.activeTab) || 'basic';
       const { canEdit: curCanEdit } = getState();
@@ -1809,7 +1508,6 @@ function bindTextareaHeightPersistence(root, player) {
         bindCombatEditors(root, curPlayer, curCanEdit);
         bindInventoryEditors(root, curPlayer, curCanEdit);
         bindEquipmentUi(root, curPlayer, curCanEdit);
-        bindAppearanceUi(root, curPlayer, curCanEdit);
         bindLanguagesUi(root, curPlayer, curCanEdit);
         updateCoinsTotal(root, curPlayer.sheet?.parsed);
       }

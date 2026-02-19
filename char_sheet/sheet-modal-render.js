@@ -656,171 +656,6 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
     return "";
   })();
 
-  
-  // === Armor AC editor (compact, per user spec) ===
-  const armorAcEditor = (() => {
-    if (String(tabId) !== 'armor') return '';
-    if (it.type !== 'armor' || !it.armor || typeof it.armor !== 'object') return '';
-
-    const custom = (it.armor.custom && typeof it.armor.custom === 'object') ? it.armor.custom : {};
-    const acRaw = String(it.armor.ac || '').trim();
-
-    // Backward compatibility:
-    // - bonusOnly=true => shield
-    // - old fields: base/ability/max/bonus
-    const kind = String(custom.kind || (custom.bonusOnly ? 'shield' : 'armor')).toLowerCase();
-    const kindVal = (kind === 'shield') ? 'shield' : 'armor';
-
-    const parseBaseFromStr = () => {
-      const m = acRaw.match(/^(\d+)/);
-      return m ? (parseInt(m[1], 10) || 0) : 0;
-    };
-    const parseShieldBonusFromStr = () => {
-      const m = acRaw.match(/^\+\s*(\d+)/);
-      return m ? Math.max(0, parseInt(m[1], 10) || 0) : 2;
-    };
-    const parseAbilityFromStr = () => {
-      if (/мод\.?\s*ловк/i.test(acRaw)) return 'dex';
-      if (/мод\.?\s*сил/i.test(acRaw)) return 'str';
-      if (/мод\.?\s*тел/i.test(acRaw)) return 'con';
-      if (/мод\.?\s*инт/i.test(acRaw)) return 'int';
-      if (/мод\.?\s*мдр/i.test(acRaw)) return 'wis';
-      if (/мод\.?\s*хар/i.test(acRaw)) return 'cha';
-      return '';
-    };
-    const parseMaxFromStr = () => {
-      const m = acRaw.match(/макс\.?\s*(\d+)/i);
-      if (!m) return '';
-      const n = parseInt(m[1], 10);
-      return Number.isFinite(n) ? String(n) : '';
-    };
-
-    const baseVal = (custom.base != null && custom.base !== '') ? safeInt(custom.base, parseBaseFromStr()) : parseBaseFromStr();
-    const abilityVal = String(custom.ability || parseAbilityFromStr() || '').toLowerCase();
-    const maxVal = (custom.max != null && custom.max !== '') ? String(custom.max) : String(parseMaxFromStr() || '');
-    const shieldBonus = (custom.bonus != null && custom.bonus !== '') ? safeInt(custom.bonus, parseShieldBonusFromStr()) : parseShieldBonusFromStr();
-
-    const dash = '<span class="equip-dash">—</span>';
-
-    const disabled = !canEdit ? 'disabled' : '';
-
-    return `
-      <div class="equip-ac-mini">
-        <div class="equip-ac-mini__title">КД (настройка)</div>
-        <div class="equip-ac-mini__grid" data-armor-mini-grid>
-          <label class="equip-ac-mini__lbl">Тип</label>
-          <label class="equip-ac-mini__lbl">КД</label>
-          <label class="equip-ac-mini__lbl">Модификатор</label>
-          <label class="equip-ac-mini__lbl">Макс.</label>
-
-          <select class="equip-ac-mini__ctl" ${disabled}
-            data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.kind">
-            <option value="armor" ${kindVal==='armor'?'selected':''}>Доспехи</option>
-            <option value="shield" ${kindVal==='shield'?'selected':''}>Щит</option>
-          </select>
-
-          ${
-            kindVal === 'shield'
-              ? `${dash}`
-              : `<input class="equip-ac-mini__ctl equip-ac-mini__num" type="number" min="0" max="50" value="${escapeHtml(String(baseVal))}" ${disabled}
-                   data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.base" />`
-          }
-
-          ${
-            kindVal === 'shield'
-              ? `${dash}`
-              : `<select class="equip-ac-mini__ctl" ${disabled}
-                   data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.ability">
-                   <option value="" ${!abilityVal?'selected':''}>—</option>
-                   <option value="dex" ${abilityVal==='dex'?'selected':''}>Ловкость</option>
-                   <option value="str" ${abilityVal==='str'?'selected':''}>Сила</option>
-                   <option value="con" ${abilityVal==='con'?'selected':''}>Телосложение</option>
-                   <option value="int" ${abilityVal==='int'?'selected':''}>Интеллект</option>
-                   <option value="wis" ${abilityVal==='wis'?'selected':''}>Мудрость</option>
-                   <option value="cha" ${abilityVal==='cha'?'selected':''}>Харизма</option>
-                 </select>`
-          }
-
-          ${
-            kindVal === 'shield'
-              ? `${dash}`
-              : `<input class="equip-ac-mini__ctl equip-ac-mini__num" type="number" min="0" max="20" value="${escapeHtml(String(maxVal))}" placeholder="—" ${disabled}
-                   data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.max" />`
-          }
-        </div>
-
-        ${kindVal === 'shield' ? `<div class="sheet-note" style="margin-top:6px; opacity:.85;">Щит добавляет бонус к КД (по умолчанию берётся из SRD/описания, либо +2). Сейчас: +${escapeHtml(String(shieldBonus))}.</div>` : ``}
-        <div class="sheet-note" style="margin-top:6px; opacity:.85;">Если доспех надет в «Облик» → значение «Броня» пересчитывается в реальном времени при изменении характеристик/этих полей.</div>
-      </div>
-    `;
-  })();
-
-    const bonusFromStr = (() => {
-      const m = acRaw.match(/^\+\s*(\d+)/);
-      return m ? Math.max(0, parseInt(m[1], 10) || 0) : 0;
-    })();
-
-    const abilityFromStr = (() => {
-      if (/мод\.?\s*ловк/i.test(acRaw)) return 'dex';
-      if (/мод\.?\s*сил/i.test(acRaw)) return 'str';
-      if (/мод\.?\s*тел/i.test(acRaw)) return 'con';
-      if (/мод\.?\s*инт/i.test(acRaw)) return 'int';
-      if (/мод\.?\s*мдр/i.test(acRaw)) return 'wis';
-      if (/мод\.?\s*хар/i.test(acRaw)) return 'cha';
-      return '';
-    })();
-
-    const maxFromStr = (() => {
-      const m = acRaw.match(/макс\.?\s*(\d+)/i);
-      if (!m) return '';
-      const n = parseInt(m[1], 10);
-      return Number.isFinite(n) ? String(n) : '';
-    })();
-
-    const baseVal = (custom.base != null && custom.base !== '') ? safeInt(custom.base, baseFromStr) : baseFromStr;
-    const abilityVal = String(custom.ability || abilityFromStr || '').toLowerCase();
-    const maxVal = (custom.max != null && custom.max !== '') ? String(custom.max) : String(maxFromStr || '');
-    const bonusVal = (custom.bonus != null && custom.bonus !== '') ? safeInt(custom.bonus, bonusFromStr) : bonusFromStr;
-    const bonusOnlyVal = isBonusOnly ? '1' : '0';
-
-    return `
-      <div class="equip-editline" style="margin-top:8px;">
-        <div class="equip-editlbl" style="margin-bottom:6px;">КД (настройка)</div>
-        <div class="equip-editline equip-editline--row">
-          <div class="equip-editlbl">Тип</div>
-          <select class="equip-editcoin" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.bonusOnly">
-            <option value="false" ${bonusOnlyVal==='0'?'selected':''}>Доспех</option>
-            <option value="true" ${bonusOnlyVal==='1'?'selected':''}>Бонус (щит)</option>
-          </select>
-          <div class="equip-editspacer"></div>
-          <div class="equip-editlbl">Бонус</div>
-          <input class="equip-editnum" type="number" min="0" max="50" value="${escapeHtml(String(bonusVal))}"
-            data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.bonus" title="Используется, если Тип = Бонус (щит)">
-
-          <div class="equip-editlbl" style="margin-left:10px;">База</div>
-          <input class="equip-editnum" type="number" min="0" max="50" value="${escapeHtml(String(baseVal))}"
-            data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.base" title="Используется, если Тип = Доспех">
-
-          <div class="equip-editlbl" style="margin-left:10px;">Мод</div>
-          <select class="equip-editcoin" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.ability" title="К какой характеристике привязан бонус к КД">
-            <option value="" ${!abilityVal?'selected':''}>—</option>
-            <option value="dex" ${abilityVal==='dex'?'selected':''}>Ловкость</option>
-            <option value="str" ${abilityVal==='str'?'selected':''}>Сила</option>
-            <option value="con" ${abilityVal==='con'?'selected':''}>Телосложение</option>
-            <option value="int" ${abilityVal==='int'?'selected':''}>Интеллект</option>
-            <option value="wis" ${abilityVal==='wis'?'selected':''}>Мудрость</option>
-            <option value="cha" ${abilityVal==='cha'?'selected':''}>Харизма</option>
-          </select>
-
-          <div class="equip-editlbl" style="margin-left:10px;">Макс</div>
-          <input class="equip-editnum" type="number" min="0" max="20" value="${escapeHtml(String(maxVal))}" placeholder="—"
-            data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.max" title="Если пусто — берём полный модификатор">
-        </div>
-        <div class="sheet-note" style="margin-top:6px; opacity:.85;">Если доспех надет в «Облик» → КД пересчитывается автоматически при изменении характеристики.</div>
-      </div>
-    `;
-  };
-
   const costEditor = canEdit ? `
     <div class="equip-editline equip-editline--row">
       <div class="equip-editlbl">Цена</div>
@@ -892,7 +727,6 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
       </div>
 
       ${extra ? `<div class="equip-extra">${extra}</div>` : ""}
-      ${armorAcEditor || ""}
       ${descBlock}
       ${detailsBlock}
     </div>
@@ -1194,33 +1028,26 @@ function renderShopTab(vm, canEdit) {
     const weapons = Array.isArray(inv.weapons) ? inv.weapons : [];
     const armor = Array.isArray(inv.armor) ? inv.armor : [];
 
-    // Inventory items come from equipment DB and обычно имеют поля: id, name_ru, name_en.
-    // Ранее тут ожидались it.name / it.title, из-за чего списки могли быть пустыми.
-    const itemName = (it, fallback) => {
-      const ru = (it && typeof it === 'object') ? (it.name_ru || it.name) : '';
-      const en = (it && typeof it === 'object') ? (it.name_en || it.title) : '';
-      const v = String(ru || en || fallback || '').trim();
-      return v || String(fallback || '');
-    };
-    const itemId = (it) => String((it && typeof it === 'object') ? (it.id || it._id || '') : '').trim();
-
     const optNone = `<option value="">—</option>`;
     const weaponOptions = optNone + weapons.map((it, i) => {
-      const name = escapeHtml(itemName(it, `Оружие-${i+1}`));
-      // value = id (стабильнее), fallback = имя для обратной совместимости
-      const val = escapeHtml(itemId(it) || itemName(it, ''));
+      const name = escapeHtml(String(it?.name_ru || it?.name || it?.title || it?.name_en || `Оружие-${i+1}`));
+      const val = escapeHtml(String(it?.id || it?.name_ru || it?.name || it?.title || ""));
       return `<option value="${val}">${name}</option>`;
     }).join('');
-    const armorOptions = optNone + armor.filter(a => !/щит/i.test(String(a?.name||a?.title||""))).map((it, i) => {
-      const name = escapeHtml(itemName(it, `Доспех-${i+1}`));
-      const val = escapeHtml(itemId(it) || itemName(it, ''));
-      return `<option value="${val}">${name}</option>`;
-    }).join('');
-    const shieldOptions = optNone + armor.filter(a => /щит/i.test(String(a?.name||a?.title||""))).map((it, i) => {
-      const name = escapeHtml(itemName(it, `Щит-${i+1}`));
-      const val = escapeHtml(itemId(it) || itemName(it, ''));
-      return `<option value="${val}">${name}</option>`;
-    }).join('');
+    const armorOptions = optNone + armor
+      .filter(a => String(a?.armor?.type || '').toLowerCase() !== 'shield' && !/щит/i.test(String(a?.name_ru||a?.name||a?.title||"")))
+      .map((it, i) => {
+        const name = escapeHtml(String(it?.name_ru || it?.name || it?.title || it?.name_en || `Доспех-${i+1}`));
+        const val = escapeHtml(String(it?.id || it?.name_ru || it?.name || it?.title || ""));
+        return `<option value="${val}">${name}</option>`;
+      }).join('');
+    const shieldOptions = optNone + armor
+      .filter(a => String(a?.armor?.type || '').toLowerCase() === 'shield' || /щит/i.test(String(a?.name_ru||a?.name||a?.title||"")))
+      .map((it, i) => {
+        const name = escapeHtml(String(it?.name_ru || it?.name || it?.title || it?.name_en || `Щит-${i+1}`));
+        const val = escapeHtml(String(it?.id || it?.name_ru || it?.name || it?.title || ""));
+        return `<option value="${val}">${name}</option>`;
+      }).join('');
 
     return `
       <div class="sheet-section" data-appearance-root>
@@ -1258,10 +1085,62 @@ function renderShopTab(vm, canEdit) {
                 <div class="appearance-slot">
                   <div class="lbl">Щит</div>
                   <select data-sheet-path="appearance.slots.shield" data-appearance-slot="shield" ${canEdit ? "" : "disabled"}>${shieldOptions}</select>
+                  <div class="appearance-armor-meta" data-armor-meta="shield">
+                    <div class="meta-grid">
+                      <div class="meta-item">
+                        <div class="meta-lbl">Тип</div>
+                        <div class="meta-val">Щит</div>
+                      </div>
+                      <div class="meta-item">
+                        <div class="meta-lbl">Щит КД</div>
+                        <input class="meta-input" type="number" min="0" max="20" data-sheet-path="appearance.shieldRules.bonus" ${canEdit ? "" : "disabled"}>
+                      </div>
+                      <div class="meta-item meta-dash">
+                        <div class="meta-lbl">КД</div>
+                        <div class="meta-val">—</div>
+                      </div>
+                      <div class="meta-item meta-dash">
+                        <div class="meta-lbl">Модификатор</div>
+                        <div class="meta-val">—</div>
+                      </div>
+                      <div class="meta-item meta-dash">
+                        <div class="meta-lbl">Макс.</div>
+                        <div class="meta-val">—</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="appearance-slot">
                   <div class="lbl">Доспех</div>
                   <select data-sheet-path="appearance.slots.armor" data-appearance-slot="armor" ${canEdit ? "" : "disabled"}>${armorOptions}</select>
+                  <div class="appearance-armor-meta" data-armor-meta="armor">
+                    <div class="meta-grid">
+                      <div class="meta-item">
+                        <div class="meta-lbl">Тип</div>
+                        <div class="meta-val">Доспехи</div>
+                      </div>
+                      <div class="meta-item">
+                        <div class="meta-lbl">КД</div>
+                        <input class="meta-input" type="number" min="0" max="30" data-sheet-path="appearance.armorRules.base" ${canEdit ? "" : "disabled"}>
+                      </div>
+                      <div class="meta-item">
+                        <div class="meta-lbl">Модификатор</div>
+                        <select class="meta-select" data-sheet-path="appearance.armorRules.modStat" ${canEdit ? "" : "disabled"}>
+                          <option value="-">—</option>
+                          <option value="str">СИЛ</option>
+                          <option value="dex">ЛОВ</option>
+                          <option value="con">ТЕЛ</option>
+                          <option value="int">ИНТ</option>
+                          <option value="wis">МДР</option>
+                          <option value="cha">ХАР</option>
+                        </select>
+                      </div>
+                      <div class="meta-item">
+                        <div class="meta-lbl">Макс.</div>
+                        <input class="meta-input" type="number" min="0" max="10" data-sheet-path="appearance.armorRules.max" placeholder="—" ${canEdit ? "" : "disabled"}>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
