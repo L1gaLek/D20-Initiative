@@ -656,6 +656,88 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
     return "";
   })();
 
+  // === Armor AC custom editor (only for inventory->armor tab) ===
+  const armorAcEditor = (() => {
+    if (!canEdit) return "";
+    if (String(tabId) !== 'armor') return "";
+    if (it.type !== 'armor' || !it.armor || typeof it.armor !== 'object') return "";
+
+    const acRaw = String(it.armor.ac || '').trim();
+    const custom = (it.armor.custom && typeof it.armor.custom === 'object') ? it.armor.custom : {};
+
+    const isBonusOnly = (custom.bonusOnly === true) || String(custom.bonusOnly).toLowerCase() === 'true' || String(custom.bonusOnly) === '1' || /^\+\s*\d+/.test(acRaw);
+
+    const baseFromStr = (() => {
+      const m = acRaw.match(/^(\d+)/);
+      return m ? (parseInt(m[1], 10) || 0) : 0;
+    })();
+
+    const bonusFromStr = (() => {
+      const m = acRaw.match(/^\+\s*(\d+)/);
+      return m ? Math.max(0, parseInt(m[1], 10) || 0) : 0;
+    })();
+
+    const abilityFromStr = (() => {
+      if (/мод\.?\s*ловк/i.test(acRaw)) return 'dex';
+      if (/мод\.?\s*сил/i.test(acRaw)) return 'str';
+      if (/мод\.?\s*тел/i.test(acRaw)) return 'con';
+      if (/мод\.?\s*инт/i.test(acRaw)) return 'int';
+      if (/мод\.?\s*мдр/i.test(acRaw)) return 'wis';
+      if (/мод\.?\s*хар/i.test(acRaw)) return 'cha';
+      return '';
+    })();
+
+    const maxFromStr = (() => {
+      const m = acRaw.match(/макс\.?\s*(\d+)/i);
+      if (!m) return '';
+      const n = parseInt(m[1], 10);
+      return Number.isFinite(n) ? String(n) : '';
+    })();
+
+    const baseVal = (custom.base != null && custom.base !== '') ? safeInt(custom.base, baseFromStr) : baseFromStr;
+    const abilityVal = String(custom.ability || abilityFromStr || '').toLowerCase();
+    const maxVal = (custom.max != null && custom.max !== '') ? String(custom.max) : String(maxFromStr || '');
+    const bonusVal = (custom.bonus != null && custom.bonus !== '') ? safeInt(custom.bonus, bonusFromStr) : bonusFromStr;
+    const bonusOnlyVal = isBonusOnly ? '1' : '0';
+
+    return `
+      <div class="equip-editline" style="margin-top:8px;">
+        <div class="equip-editlbl" style="margin-bottom:6px;">КД (настройка)</div>
+        <div class="equip-editline equip-editline--row">
+          <div class="equip-editlbl">Тип</div>
+          <select class="equip-editcoin" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.bonusOnly">
+            <option value="false" ${bonusOnlyVal==='0'?'selected':''}>Доспех</option>
+            <option value="true" ${bonusOnlyVal==='1'?'selected':''}>Бонус (щит)</option>
+          </select>
+          <div class="equip-editspacer"></div>
+          <div class="equip-editlbl">Бонус</div>
+          <input class="equip-editnum" type="number" min="0" max="50" value="${escapeHtml(String(bonusVal))}"
+            data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.bonus" title="Используется, если Тип = Бонус (щит)">
+
+          <div class="equip-editlbl" style="margin-left:10px;">База</div>
+          <input class="equip-editnum" type="number" min="0" max="50" value="${escapeHtml(String(baseVal))}"
+            data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.base" title="Используется, если Тип = Доспех">
+
+          <div class="equip-editlbl" style="margin-left:10px;">Мод</div>
+          <select class="equip-editcoin" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.ability" title="К какой характеристике привязан бонус к КД">
+            <option value="" ${!abilityVal?'selected':''}>—</option>
+            <option value="dex" ${abilityVal==='dex'?'selected':''}>Ловкость</option>
+            <option value="str" ${abilityVal==='str'?'selected':''}>Сила</option>
+            <option value="con" ${abilityVal==='con'?'selected':''}>Телосложение</option>
+            <option value="int" ${abilityVal==='int'?'selected':''}>Интеллект</option>
+            <option value="wis" ${abilityVal==='wis'?'selected':''}>Мудрость</option>
+            <option value="cha" ${abilityVal==='cha'?'selected':''}>Харизма</option>
+          </select>
+
+          <div class="equip-editlbl" style="margin-left:10px;">Макс</div>
+          <input class="equip-editnum" type="number" min="0" max="20" value="${escapeHtml(String(maxVal))}" placeholder="—"
+            data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.armor.custom.max" title="Если пусто — берём полный модификатор">
+        </div>
+        <div class="sheet-note" style="margin-top:6px; opacity:.85;">Если доспех надет в «Облик» → КД пересчитывается автоматически при изменении характеристики.</div>
+      </div>
+    `;
+  })();
+
   const costEditor = canEdit ? `
     <div class="equip-editline equip-editline--row">
       <div class="equip-editlbl">Цена</div>
@@ -727,6 +809,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
       </div>
 
       ${extra ? `<div class="equip-extra">${extra}</div>` : ""}
+      ${armorAcEditor || ""}
       ${descBlock}
       ${detailsBlock}
     </div>

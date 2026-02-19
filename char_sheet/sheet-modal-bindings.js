@@ -209,14 +209,16 @@ function bindAppearanceUi(root, player, canEdit) {
   // 1) Списки должны показывать ТОЛЬКО то, что есть в инвентаре (это обеспечено рендером).
   // 2) При выборе доспеха/щита — пересчитать КД (Броню).
 
-  const getDexMod = () => {
-    // в наших данных обычно уже есть sheet.stats.dex.modifier
-    const m = Number(sheet?.stats?.dex?.modifier);
+  const getAbilityMod = (abilityKey) => {
+    const k = String(abilityKey || '').trim().toLowerCase();
+    if (!k) return 0;
+    // в наших данных обычно уже есть sheet.stats.<key>.modifier
+    const m = Number(sheet?.stats?.[k]?.modifier);
     if (Number.isFinite(m)) return Math.trunc(m);
     // fallback: считаем из score
-    const score = Number(sheet?.stats?.dex?.score);
+    const score = Number(sheet?.stats?.[k]?.score);
     if (!Number.isFinite(score)) return 0;
-    return Math.trunc((Math.trunc(score) - 10) / 2);
+    return Math.floor((Math.trunc(score) - 10) / 2);
   };
 
   const findInvItem = (arr, key) => {
@@ -236,27 +238,53 @@ function bindAppearanceUi(root, player, canEdit) {
 
   const parseArmorAc = (acRaw) => {
     // Примеры из базы: "18", "11 + мод. Ловк", "14 + мод. Ловк (макс. 2)", "+2" (щит)
+    // Поддержка произвольного модификатора: "11 + мод. Сил" и т.п.
     const s = String(acRaw || '').trim();
-    if (!s) return { base: 0, addDex: false, dexCap: null, bonusOnly: false };
+    if (!s) return { base: 0, addMod: false, modAbility: '', modCap: null, bonusOnly: false };
 
     // shield / bonus-only
     if (/^\+\s*\d+/.test(s)) {
       const m = s.match(/\+\s*(\d+)/);
-      return { base: 0, addDex: false, dexCap: null, bonusOnly: true, bonus: m ? Math.max(0, parseInt(m[1], 10) || 0) : 0 };
+      return { base: 0, addMod: false, modAbility: '', modCap: null, bonusOnly: true, bonus: m ? Math.max(0, parseInt(m[1], 10) || 0) : 0 };
     }
 
     const base = (() => {
       const m = s.match(/^(\d+)/);
       return m ? (parseInt(m[1], 10) || 0) : 0;
     })();
-    const addDex = /мод\.?\s*ловк/i.test(s);
+    // ability key
+    const modAbility = (() => {
+      if (/мод\.?\s*ловк/i.test(s)) return 'dex';
+      if (/мод\.?\s*сил/i.test(s)) return 'str';
+      if (/мод\.?\s*тел/i.test(s)) return 'con';
+      if (/мод\.?\s*инт/i.test(s)) return 'int';
+      if (/мод\.?\s*мдр/i.test(s)) return 'wis';
+      if (/мод\.?\s*хар/i.test(s)) return 'cha';
+      return '';
+    })();
+
     const cap = (() => {
       const m = s.match(/макс\.?\s*(\d+)/i);
       if (!m) return null;
       const n = parseInt(m[1], 10);
       return Number.isFinite(n) ? n : null;
     })();
-    return { base, addDex, dexCap: cap, bonusOnly: false };
+    return { base, addMod: !!modAbility, modAbility, modCap: cap, bonusOnly: false };
+  };
+
+  const getArmorRule = (armorItem) => {
+    const it = armorItem && typeof armorItem === 'object' ? armorItem : null;
+    const a = it?.armor && typeof it.armor === 'object' ? it.armor : null;
+    const custom = a?.custom && typeof a.custom === 'object' ? a.custom : null;
+    if (custom) {
+      const base = Math.max(0, safeInt(custom.base, safeInt(a?.ac, 0)));
+      const modAbility = String(custom.ability || '').trim().toLowerCase();
+      const modCap = (custom.max == null || custom.max === '') ? null : Math.max(0, safeInt(custom.max, 0));
+      const bonusOnly = (custom.bonusOnly === true) || String(custom.bonusOnly).toLowerCase() === 'true' || String(custom.bonusOnly) === '1';
+      const bonus = Math.max(0, safeInt(custom.bonus, 0));
+      return { base, addMod: !!modAbility, modAbility, modCap, bonusOnly, bonus };
+    }
+    return parseArmorAc(a?.ac);
   };
 
   const recomputeAcFromEquipped = () => {
@@ -277,19 +305,19 @@ function bindAppearanceUi(root, player, canEdit) {
       // если нет доспеха — ничего не делаем (не ломаем пользовательские значения КД)
       if (!armorIt || !armorIt.armor) return;
 
-      const dexMod = getDexMod();
-      const a = parseArmorAc(armorIt?.armor?.ac);
+      const a = getArmorRule(armorIt);
       let ac = Math.max(0, Math.trunc(a.base || 0));
 
-      if (a.addDex) {
-        const cap = (a.dexCap == null) ? null : Math.max(0, Math.trunc(a.dexCap));
-        const add = (cap == null) ? dexMod : Math.min(dexMod, cap);
+      if (a.addMod && a.modAbility) {
+        const mod = getAbilityMod(a.modAbility);
+        const cap = (a.modCap == null) ? null : Math.max(0, Math.trunc(a.modCap));
+        const add = (cap == null) ? mod : Math.min(mod, cap);
         ac += Math.trunc(add);
       }
 
       // shield bonus (если выбран)
       if (shieldIt && shieldIt.armor) {
-        const sh = parseArmorAc(shieldIt?.armor?.ac);
+        const sh = getArmorRule(shieldIt);
         if (sh.bonusOnly && Number.isFinite(sh.bonus)) ac += Math.trunc(sh.bonus);
       }
 
@@ -314,6 +342,34 @@ function bindAppearanceUi(root, player, canEdit) {
       if (slot === 'armor' || slot === 'shield') recomputeAcFromEquipped();
     });
   });
+
+  // live recompute when ability scores/modifiers change OR when armor custom fields edited
+  if (!root.__appearanceAcLiveBound) {
+    root.__appearanceAcLiveBound = true;
+    const handler = (e) => {
+      if (!canEdit) return;
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+      const path = el.getAttribute?.('data-sheet-path') || '';
+      if (!path) return;
+
+      // 1) stats.* changes
+      if (path.startsWith('stats.')) {
+        const armorKey = getByPath(sheet, 'appearance.slots.armor') || '';
+        if (armorKey) recomputeAcFromEquipped();
+        return;
+      }
+
+      // 2) inventory armor custom fields edits
+      if (path.startsWith('inventory.armor.') && (path.includes('.armor.custom.') || path.endsWith('.armor.ac'))) {
+        const armorKey = getByPath(sheet, 'appearance.slots.armor') || '';
+        if (armorKey) recomputeAcFromEquipped();
+        return;
+      }
+    };
+    root.addEventListener('input', handler, { passive: true });
+    root.addEventListener('change', handler, { passive: true });
+  }
 }
 
 function bindCombatEditors(root, player, canEdit) {
