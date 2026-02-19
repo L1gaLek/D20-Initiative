@@ -37,6 +37,13 @@
       if (spdEl.tagName === "INPUT" || spdEl.tagName === "TEXTAREA") spdEl.value = String(spd);
       else spdEl.textContent = String(spd);
     }
+
+    // Shield indicator inside AC chip
+    try {
+      const hasShield = !!String(sheet?.appearance?.slots?.shield || '').trim();
+      const sh = root.querySelector('[data-ac-shield-icon]');
+      if (sh) sh.classList.toggle('on', hasShield);
+    } catch {}
   }
 
   function updateSkillsAndPassives(root, sheet) {

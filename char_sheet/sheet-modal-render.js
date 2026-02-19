@@ -1165,6 +1165,8 @@ function renderShopTab(vm, canEdit) {
     const canEdit = (myRole === "GM" || String(player.ownerId) === String(myId));
     lastCanEdit = !!canEdit;
 
+    const shieldEquipped = !!String(player?.sheet?.parsed?.appearance?.slots?.shield || '').trim();
+
     sheetTitle.textContent = `Инфа: ${player.name}`;
     sheetSubtitle.textContent = `Владелец: ${player.ownerName || 'Unknown'} • Тип: ${player.isBase ? 'Основа' : '-'}`;
 
@@ -1309,7 +1311,11 @@ function renderShopTab(vm, canEdit) {
             </div>
 
             <div class="sheet-chip" data-hero="ac">
-              <div class="k">Броня</div>
+              <div class="k">Броня
+                <svg class="ac-shield-icon ${shieldEquipped ? "on" : ""}" data-ac-shield-icon viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 2l8 4v6c0 5-3.5 9.5-8 10-4.5-.5-8-5-8-10V6l8-4z"></path>
+                </svg>
+              </div>
               <input class="sheet-chip-input" type="number" min="0" max="40" ${canEdit ? "" : "disabled"} data-sheet-path="vitality.ac.value" data-hero-val="ac" value="${escapeHtml(String(vm.ac))}">
             </div>
             <div class="sheet-chip sheet-chip--hp" data-hero="hp" data-hp-open role="button" tabindex="0" style="--hp-fill-pct:${escapeHtml(String(vm.hp ? Math.max(0, Math.min(100, Math.round((Number(vm.hpCur) / Math.max(1, Number(vm.hp))) * 100))) : 0))}%">
