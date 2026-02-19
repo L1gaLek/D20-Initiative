@@ -478,6 +478,15 @@ function bindEditableInputs(root, player, canEdit) {
         else if (isRte) val = inp.innerHTML;
         else val = inp.value;
 
+        // ===== Normalizers for race/gender (used by Appearance tab) =====
+        if (path === "notes.details.gender.value") {
+          const t = String(val ?? "").trim().toLowerCase();
+          if (!t) val = "male";
+          else if (t === "male" || t === "m" || t.startsWith("м") || t.includes("муж")) val = "male";
+          else if (t === "female" || t === "f" || t.startsWith("ж") || t.includes("жен")) val = "female";
+          else val = "male";
+        }
+
         setByPath(player.sheet.parsed, path, val);
 
 
@@ -488,6 +497,15 @@ function bindEditableInputs(root, player, canEdit) {
         }
 
         if (path === "name.value") player.name = val || player.name;
+
+        // If race/gender changed — rerender to update Appearance preview + header subtitle.
+        if (path === "info.race.value" || path === "notes.details.gender.value") {
+          try {
+            markModalInteracted(player.id);
+            // save is already scheduled below; rerender keeps active tab
+            renderSheetModal(player, { force: true });
+          } catch {}
+        }
 
         // keep hp popup synced after re-render
     try {
@@ -2154,22 +2172,6 @@ function bindAppearanceUi(root, player, canEdit) {
     }
 
     setByPath(live.sheet.parsed, path, val);
-
-    // ===== Auto-calc AC from equipped armor/shield (inventory) =====
-    // Требование: при надевании доспеха (slot armorId) его КД записывается в vitality.ac.value
-    // с учетом модификатора Ловкости (и cap: макс. N, если указан).
-    // Также учитываем щит (обычно +2), если выбран в slot shieldId.
-    try {
-      const p = String(path || '');
-      if (p === 'appearance.armorId' || p === 'appearance.shieldId') {
-        const sheet = live.sheet.parsed;
-        const nextAc = calcEquippedAC(sheet);
-        if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
-        if (!sheet.vitality.ac || typeof sheet.vitality.ac !== 'object') sheet.vitality.ac = { value: 0 };
-        sheet.vitality.ac.value = nextAc;
-      }
-    } catch {}
-
     markModalInteracted(live.id);
     scheduleSheetSave(live);
     // обновим превью (полный ререндер умеет сохранять вкладку/скролл)
@@ -2178,65 +2180,6 @@ function bindAppearanceUi(root, player, canEdit) {
 
   root.addEventListener('change', handle);
   root.addEventListener('input', handle);
-}
-
-// --- Helpers: AC parsing/calc from inventory items ---
-function parseArmorAcText(acText) {
-  const s = String(acText || '').trim();
-  if (!s) return { base: null, addDex: false, dexCap: null, bonusOnly: null };
-
-  // Shield-like: "+2" or "+ 2"
-  const bonusM = s.match(/^\+\s*(\d+)/);
-  if (bonusM) return { base: null, addDex: false, dexCap: null, bonusOnly: safeInt(bonusM[1], 0) };
-
-  // Base number (e.g. "14 + мод. Ловк (макс. 2)" or "16")
-  const baseM = s.match(/^(\d+)/);
-  const base = baseM ? safeInt(baseM[1], 0) : null;
-
-  const addDex = /ловк/i.test(s) && /мод/i.test(s);
-  const capM = s.match(/макс\.?\s*(\d+)/i);
-  const dexCap = capM ? safeInt(capM[1], null) : null;
-  return { base, addDex, dexCap, bonusOnly: null };
-}
-
-function calcEquippedAC(sheet) {
-  const dexMod = safeInt(sheet?.stats?.dex?.modifier, 0);
-
-  const app = (sheet?.appearance && typeof sheet.appearance === 'object') ? sheet.appearance : {};
-  const armorId = String(app?.armorId || '').trim();
-  const shieldId = String(app?.shieldId || '').trim();
-
-  const invArmor = (sheet?.inventory && Array.isArray(sheet.inventory.armor)) ? sheet.inventory.armor : [];
-
-  const findInv = (id) => invArmor.find(it => String(it?.id || '') === String(id));
-  const armorIt = armorId ? findInv(armorId) : null;
-  const shieldIt = shieldId ? findInv(shieldId) : null;
-
-  // Base (no armor) = 10 + Dex
-  let baseAc = 10;
-  let dexAdd = dexMod;
-
-  if (armorIt && armorIt.armor && armorIt.armor.ac != null) {
-    const parsed = parseArmorAcText(armorIt.armor.ac);
-    if (parsed.base != null) {
-      baseAc = parsed.base;
-      if (parsed.addDex) {
-        if (parsed.dexCap != null && dexMod > parsed.dexCap) dexAdd = parsed.dexCap;
-        else dexAdd = dexMod;
-      } else {
-        dexAdd = 0;
-      }
-    }
-  }
-
-  // Shield bonus (usually +2)
-  let shieldBonus = 0;
-  if (shieldIt && shieldIt.armor && shieldIt.armor.ac != null) {
-    const p = parseArmorAcText(shieldIt.armor.ac);
-    if (p.bonusOnly != null) shieldBonus = safeInt(p.bonusOnly, 0);
-  }
-
-  return Math.max(0, safeInt(baseAc, 0) + safeInt(dexAdd, 0) + safeInt(shieldBonus, 0));
 }
 
 // ===== add spells by URL + toggle descriptions =====
@@ -3121,16 +3064,5 @@ function bindSpellAddAndDesc(root, player, canEdit) {
     const scoreEl = root.querySelector(`.lss-ability-score-input[data-stat-key="${statKey}"]`);
     if (scoreEl && sheet?.stats?.[statKey]?.score != null) {
       scoreEl.value = String(sheet.stats[statKey].score);
-    }
-
-    // Если меняется Ловкость — пересчитываем КД от надетых доспехов/щита (если выбраны во вкладке "Облик").
-    if (String(statKey) === 'dex') {
-      try {
-        if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
-        if (!sheet.vitality.ac || typeof sheet.vitality.ac !== 'object') sheet.vitality.ac = { value: 0 };
-        sheet.vitality.ac.value = calcEquippedAC(sheet);
-        const acInp = root.querySelector('input[data-sheet-path="vitality.ac.value"], input[data-sheet-path="vitality.ac"], input[data-sheet-path="vitality.ac.value"]');
-        if (acInp) acInp.value = String(sheet.vitality.ac.value);
-      } catch {}
     }
   }

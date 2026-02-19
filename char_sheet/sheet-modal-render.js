@@ -911,6 +911,17 @@ function renderShopTab(vm, canEdit) {
 
 
   function renderPersonalityTab(vm) {
+    const rawGender = String(vm?.notesDetails?.gender || "").trim();
+    const gNorm = (() => {
+      const t = rawGender.toLowerCase();
+      if (!t) return "male";
+      if (t === 'male' || t === 'm') return 'male';
+      if (t === 'female' || t === 'f') return 'female';
+      if (t.startsWith('м') || t.includes('муж')) return 'male';
+      if (t.startsWith('ж') || t.includes('жен')) return 'female';
+      return 'male';
+    })();
+
     return `
       <div class="sheet-section">
         <h3>Личность</h3>
@@ -919,7 +930,12 @@ function renderShopTab(vm, canEdit) {
           <div class="sheet-card">
             <h4>Внешность</h4>
             <div class="notes-details-grid">
-              <div class="kv"><div class="k">Пол</div><div class="v"><input type="text" data-sheet-path="notes.details.gender.value" style="width:140px"></div></div>
+              <div class="kv"><div class="k">Пол</div><div class="v">
+                <select data-sheet-path="notes.details.gender.value" style="width:160px">
+                  <option value="male" ${gNorm === 'male' ? 'selected' : ''}>Мужской</option>
+                  <option value="female" ${gNorm === 'female' ? 'selected' : ''}>Женский</option>
+                </select>
+              </div></div>
               <div class="kv"><div class="k">Рост</div><div class="v"><input type="text" data-sheet-path="notes.details.height.value" style="width:140px"></div></div>
               <div class="kv"><div class="k">Вес</div><div class="v"><input type="text" data-sheet-path="notes.details.weight.value" style="width:140px"></div></div>
               <div class="kv"><div class="k">Возраст</div><div class="v"><input type="text" data-sheet-path="notes.details.age.value" style="width:140px"></div></div>
@@ -1029,12 +1045,14 @@ function renderShopTab(vm, canEdit) {
 
   function genderKeyFromText(g) {
     const t = String(g || "").trim().toLowerCase();
-    if (!t) return "unknown";
+    // default = male (requested)
+    if (!t) return "male";
     if (t.startsWith("м")) return "male";
     if (t.includes("male") || t.includes("man") || t.includes("муж")) return "male";
     if (t.startsWith("ж")) return "female";
     if (t.includes("female") || t.includes("woman") || t.includes("жен")) return "female";
-    return "unknown";
+    // if unknown text — keep safe default
+    return "male";
   }
 
   function getItemImgUrl(it) {
@@ -1061,15 +1079,16 @@ function renderShopTab(vm, canEdit) {
 
   function renderAppearanceTab(vm, canEdit) {
     const race = String(vm?.race || "");
-    const raceKey = normalizeLookKey(race) || "race";
+    // folder name is in Cyrillic exactly as race string
+    const raceFolder = String(race || "").trim() || "Человек";
     const gender = vm?.notesDetails?.gender;
     const gKey = genderKeyFromText(gender);
 
     const app = (vm?.appearance && typeof vm.appearance === "object") ? vm.appearance : {};
     const baseUrl = String(app.baseUrl || "").trim();
-    // Дефолтный путь: races/<raceKey>_<gender>.png
-    // Можно положить свои картинки в проект и/или заполнить поле "Ссылка на базовую картинку".
-    const baseSrc = baseUrl || `races/${raceKey}_${gKey}.png`;
+    // Дефолтный путь: assets/base/<raceFolder>/<male|female>.png
+    // Можно заполнить поле "Ссылка на базовую картинку" (appearance.baseUrl), чтобы переопределить.
+    const baseSrc = baseUrl || `assets/base/${raceFolder}/${gKey}.png`;
 
     const invWeapons = Array.isArray(vm?.inventory?.weapons) ? vm.inventory.weapons : [];
     const invArmor = Array.isArray(vm?.inventory?.armor) ? vm.inventory.armor : [];
