@@ -819,7 +819,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
         <div class="sheet-note" style="margin-top:6px; opacity:.85;">Если доспех надет в «Облик» → КД пересчитывается автоматически при изменении характеристики.</div>
       </div>
     `;
-  })();
+  }();
 
   const costEditor = canEdit ? `
     <div class="equip-editline equip-editline--row">
