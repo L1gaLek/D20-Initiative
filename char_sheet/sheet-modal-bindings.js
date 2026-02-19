@@ -2118,6 +2118,52 @@ function bindSlotEditors(root, player, canEdit) {
   }
 }
 
+// ================== APPEARANCE ("ОБЛИК") ==================
+// Вкладка "Облик" хранит выбор в sheet.appearance.*.
+// Мы ререндерим модалку форсом после изменения, чтобы обновлялось превью.
+function bindAppearanceUi(root, player, canEdit) {
+  if (!root) return;
+  root.__lookState = { player, canEdit };
+  const getState = () => root.__lookState || { player, canEdit };
+
+  if (root.__lookBound) return;
+  root.__lookBound = true;
+
+  const getLivePlayer = () => {
+    try { return getOpenedPlayerSafe() || player; } catch { return player; }
+  };
+
+  function handle(e) {
+    const el = e.target;
+    const path = el?.getAttribute?.('data-look-path');
+    if (!path) return;
+    const st = getState();
+    if (!st.canEdit) return;
+
+    const live = getLivePlayer();
+    if (!live?.sheet?.parsed) return;
+
+    let val = '';
+    if (el instanceof HTMLInputElement) val = String(el.value || '');
+    else if (el instanceof HTMLSelectElement) val = String(el.value || '');
+    else return;
+
+    // ensure appearance object
+    if (!live.sheet.parsed.appearance || typeof live.sheet.parsed.appearance !== 'object') {
+      live.sheet.parsed.appearance = { baseUrl: '', mainHandId: '', offHandId: '', shieldId: '', armorId: '' };
+    }
+
+    setByPath(live.sheet.parsed, path, val);
+    markModalInteracted(live.id);
+    scheduleSheetSave(live);
+    // обновим превью (полный ререндер умеет сохранять вкладку/скролл)
+    try { renderSheetModal(live, { force: true }); } catch {}
+  }
+
+  root.addEventListener('change', handle);
+  root.addEventListener('input', handle);
+}
+
 // ===== add spells by URL + toggle descriptions =====
 function normalizeDndSuUrl(url) {
   const u = String(url || "").trim();

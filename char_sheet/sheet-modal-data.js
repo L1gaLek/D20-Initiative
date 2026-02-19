@@ -295,6 +295,17 @@
       // ===== Магазин (только UI-состояние) =====
       shop: {
         activeTab: "weapons"
+      },
+
+      // ===== Облик (визуальные слоты/картинки) =====
+      // baseUrl можно оставить пустым — тогда UI попробует подобрать картинку по расе+полу
+      // (см. вкладку «Облик»). Остальные поля — выбранные id предметов из инвентаря.
+      appearance: {
+        baseUrl: "",
+        mainHandId: "",
+        offHandId: "",
+        shieldId: "",
+        armorId: ""
       }
     };
   }
@@ -652,6 +663,9 @@ const weapons = weaponsRaw
 
     const inv = (sheet?.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
     const shop = (sheet?.shop && typeof sheet.shop === "object") ? sheet.shop : null;
+    const appearance = (sheet?.appearance && typeof sheet.appearance === "object")
+      ? sheet.appearance
+      : { baseUrl: "", mainHandId: "", offHandId: "", shieldId: "", armorId: "" };
 
     return {
       name, cls, lvl, race,
@@ -665,7 +679,8 @@ const weapons = weaponsRaw
       weapons, combatAbilitiesEntries,
       coins, coinsViewDenom,
       inventory: inv,
-      shop
+      shop,
+      appearance
     };
   }
 
