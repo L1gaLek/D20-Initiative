@@ -155,6 +155,57 @@ function rerenderCombatTabInPlace(root, player, canEdit) {
   updateWeaponsBonuses(root, player.sheet?.parsed);
 }
 
+// ===== Appearance (Облик) =====
+function normalizeGenderKeyForAppearance(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  if (!v) return 'male';
+  if (v === 'male' || v === 'm') return 'male';
+  if (v === 'female' || v === 'f') return 'female';
+  if (v.startsWith('м')) return 'male';
+  if (v.startsWith('ж')) return 'female';
+  return 'male';
+}
+
+function updateAppearancePreview(root, sheet) {
+  try {
+    const img = root?.querySelector?.('[data-appearance-preview]');
+    if (!img || !sheet) return;
+
+    const race = String(getByPath(sheet, 'info.race.value') || '').trim();
+    const genderRaw = String(getByPath(sheet, 'notes.details.gender.value') || '').trim();
+    const gender = normalizeGenderKeyForAppearance(genderRaw);
+    const override = String(getByPath(sheet, 'appearance.baseUrl') || '').trim();
+
+    const src = override || (race ? `assets/base/${race}/${gender}.png` : '');
+    if (!src) return;
+    if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+  } catch (e) {
+    console.warn('updateAppearancePreview failed', e);
+  }
+}
+
+function bindAppearanceUi(root, player, canEdit) {
+  if (!root || !player?.sheet?.parsed) return;
+  const sheet = player.sheet.parsed;
+
+  // ensure containers exist
+  if (!sheet.appearance || typeof sheet.appearance !== 'object') sheet.appearance = {};
+  if (!sheet.appearance.slots || typeof sheet.appearance.slots !== 'object') sheet.appearance.slots = {};
+
+  // initial preview update
+  updateAppearancePreview(root, sheet);
+
+  // live updates
+  const raceSel = root.querySelector('[data-race-select]');
+  const genderSel = root.querySelector('[data-gender-select]');
+  const baseOverrideInp = root.querySelector('[data-appearance-base-override]');
+
+  const onAny = () => updateAppearancePreview(root, sheet);
+  raceSel?.addEventListener('change', onAny);
+  genderSel?.addEventListener('change', onAny);
+  baseOverrideInp?.addEventListener('input', onAny);
+}
+
 function bindCombatEditors(root, player, canEdit) {
   if (!root || !player?.sheet?.parsed) return;
   const sheet = player.sheet.parsed;
@@ -478,15 +529,6 @@ function bindEditableInputs(root, player, canEdit) {
         else if (isRte) val = inp.innerHTML;
         else val = inp.value;
 
-        // ===== Normalizers for race/gender (used by Appearance tab) =====
-        if (path === "notes.details.gender.value") {
-          const t = String(val ?? "").trim().toLowerCase();
-          if (!t) val = "male";
-          else if (t === "male" || t === "m" || t.startsWith("м") || t.includes("муж")) val = "male";
-          else if (t === "female" || t === "f" || t.startsWith("ж") || t.includes("жен")) val = "female";
-          else val = "male";
-        }
-
         setByPath(player.sheet.parsed, path, val);
 
 
@@ -497,15 +539,6 @@ function bindEditableInputs(root, player, canEdit) {
         }
 
         if (path === "name.value") player.name = val || player.name;
-
-        // If race/gender changed — rerender to update Appearance preview + header subtitle.
-        if (path === "info.race.value" || path === "notes.details.gender.value") {
-          try {
-            markModalInteracted(player.id);
-            // save is already scheduled below; rerender keeps active tab
-            renderSheetModal(player, { force: true });
-          } catch {}
-        }
 
         // keep hp popup synced after re-render
     try {
@@ -2134,52 +2167,6 @@ function bindSlotEditors(root, player, canEdit) {
       scheduleSheetSave(curPlayer);
     });
   }
-}
-
-// ================== APPEARANCE ("ОБЛИК") ==================
-// Вкладка "Облик" хранит выбор в sheet.appearance.*.
-// Мы ререндерим модалку форсом после изменения, чтобы обновлялось превью.
-function bindAppearanceUi(root, player, canEdit) {
-  if (!root) return;
-  root.__lookState = { player, canEdit };
-  const getState = () => root.__lookState || { player, canEdit };
-
-  if (root.__lookBound) return;
-  root.__lookBound = true;
-
-  const getLivePlayer = () => {
-    try { return getOpenedPlayerSafe() || player; } catch { return player; }
-  };
-
-  function handle(e) {
-    const el = e.target;
-    const path = el?.getAttribute?.('data-look-path');
-    if (!path) return;
-    const st = getState();
-    if (!st.canEdit) return;
-
-    const live = getLivePlayer();
-    if (!live?.sheet?.parsed) return;
-
-    let val = '';
-    if (el instanceof HTMLInputElement) val = String(el.value || '');
-    else if (el instanceof HTMLSelectElement) val = String(el.value || '');
-    else return;
-
-    // ensure appearance object
-    if (!live.sheet.parsed.appearance || typeof live.sheet.parsed.appearance !== 'object') {
-      live.sheet.parsed.appearance = { baseUrl: '', mainHandId: '', offHandId: '', shieldId: '', armorId: '' };
-    }
-
-    setByPath(live.sheet.parsed, path, val);
-    markModalInteracted(live.id);
-    scheduleSheetSave(live);
-    // обновим превью (полный ререндер умеет сохранять вкладку/скролл)
-    try { renderSheetModal(live, { force: true }); } catch {}
-  }
-
-  root.addEventListener('change', handle);
-  root.addEventListener('input', handle);
 }
 
 // ===== add spells by URL + toggle descriptions =====
