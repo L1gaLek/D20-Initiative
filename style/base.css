@@ -2461,3 +2461,30 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .equip-row__details{margin-top:6px; opacity:.92; line-height:1.25;}
 .equip-row__desc.collapsed{display:none;}
 .equip-row__details.collapsed{display:none;}
+
+
+/* ===== Armor AC mini editor (inventory -> armor) ===== */
+.equip-ac-mini { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
+.equip-ac-mini__title { font-size: 12px; opacity: 0.9; margin-bottom: 6px; }
+.equip-ac-mini__grid {
+  display: grid;
+  grid-template-columns: 1.1fr .7fr 1.1fr .6fr;
+  gap: 6px 8px;
+  align-items: center;
+}
+.equip-ac-mini__lbl { font-size: 11px; opacity: 0.75; }
+.equip-ac-mini__ctl {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.20);
+  color: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.equip-ac-mini__num { text-align: center; }
+.equip-dash { display:inline-block; width:100%; text-align:center; opacity:.65; padding: 6px 0; }
+@media (max-width: 720px) {
+  .equip-ac-mini__grid { grid-template-columns: 1fr 1fr; }
+}
