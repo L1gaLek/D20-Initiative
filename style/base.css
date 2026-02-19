@@ -38,6 +38,55 @@
   width:100%;
 }
 
+/* Compact armor params under selects */
+.appearance-armor-meta{
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px;
+  background: rgba(0,0,0,0.18);
+}
+.appearance-armor-meta .meta-grid{
+  display:grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+.appearance-armor-meta .meta-item{
+  min-width: 0;
+}
+.appearance-armor-meta .meta-lbl{
+  font-size: 11px;
+  opacity: 0.75;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.appearance-armor-meta .meta-val{
+  font-size: 12px;
+  opacity: 0.9;
+  padding: 6px 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  text-align: center;
+}
+.appearance-armor-meta .meta-input,
+.appearance-armor-meta .meta-select{
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.appearance-armor-meta .meta-dash .meta-val{
+  opacity: 0.55;
+}
+
+@media (max-width: 860px){
+  .appearance-armor-meta .meta-grid{
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 860px){
   .appearance-layout{ flex-direction:column; }
   .appearance-right{ width: 100%; flex: 1 1 auto; }
@@ -2461,30 +2510,3 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .equip-row__details{margin-top:6px; opacity:.92; line-height:1.25;}
 .equip-row__desc.collapsed{display:none;}
 .equip-row__details.collapsed{display:none;}
-
-
-/* ===== Armor AC mini editor (inventory -> armor) ===== */
-.equip-ac-mini { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); }
-.equip-ac-mini__title { font-size: 12px; opacity: 0.9; margin-bottom: 6px; }
-.equip-ac-mini__grid {
-  display: grid;
-  grid-template-columns: 1.1fr .7fr 1.1fr .6fr;
-  gap: 6px 8px;
-  align-items: center;
-}
-.equip-ac-mini__lbl { font-size: 11px; opacity: 0.75; }
-.equip-ac-mini__ctl {
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,0.20);
-  color: inherit;
-  font-size: 12px;
-  outline: none;
-}
-.equip-ac-mini__num { text-align: center; }
-.equip-dash { display:inline-block; width:100%; text-align:center; opacity:.65; padding: 6px 0; }
-@media (max-width: 720px) {
-  .equip-ac-mini__grid { grid-template-columns: 1fr 1fr; }
-}
