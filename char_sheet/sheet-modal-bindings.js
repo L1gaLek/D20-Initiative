@@ -204,6 +204,116 @@ function bindAppearanceUi(root, player, canEdit) {
   raceSel?.addEventListener('change', onAny);
   genderSel?.addEventListener('change', onAny);
   baseOverrideInp?.addEventListener('input', onAny);
+
+  // ===== Equipment selects (Правая/Левая/Щит/Доспех) =====
+  // 1) Списки должны показывать ТОЛЬКО то, что есть в инвентаре (это обеспечено рендером).
+  // 2) При выборе доспеха/щита — пересчитать КД (Броню).
+
+  const getDexMod = () => {
+    // в наших данных обычно уже есть sheet.stats.dex.modifier
+    const m = Number(sheet?.stats?.dex?.modifier);
+    if (Number.isFinite(m)) return Math.trunc(m);
+    // fallback: считаем из score
+    const score = Number(sheet?.stats?.dex?.score);
+    if (!Number.isFinite(score)) return 0;
+    return Math.trunc((Math.trunc(score) - 10) / 2);
+  };
+
+  const findInvItem = (arr, key) => {
+    const k = String(key || '').trim();
+    if (!k || !Array.isArray(arr)) return null;
+    // 1) match by id
+    const byId = arr.find(it => String(it?.id || it?._id || '').trim() === k);
+    if (byId) return byId;
+    // 2) match by ru/en name (backward compat if раньше сохраняли имя)
+    const low = k.toLowerCase();
+    return arr.find(it => {
+      const ru = String(it?.name_ru || it?.name || '').trim().toLowerCase();
+      const en = String(it?.name_en || it?.title || '').trim().toLowerCase();
+      return ru === low || en === low;
+    }) || null;
+  };
+
+  const parseArmorAc = (acRaw) => {
+    // Примеры из базы: "18", "11 + мод. Ловк", "14 + мод. Ловк (макс. 2)", "+2" (щит)
+    const s = String(acRaw || '').trim();
+    if (!s) return { base: 0, addDex: false, dexCap: null, bonusOnly: false };
+
+    // shield / bonus-only
+    if (/^\+\s*\d+/.test(s)) {
+      const m = s.match(/\+\s*(\d+)/);
+      return { base: 0, addDex: false, dexCap: null, bonusOnly: true, bonus: m ? Math.max(0, parseInt(m[1], 10) || 0) : 0 };
+    }
+
+    const base = (() => {
+      const m = s.match(/^(\d+)/);
+      return m ? (parseInt(m[1], 10) || 0) : 0;
+    })();
+    const addDex = /мод\.?\s*ловк/i.test(s);
+    const cap = (() => {
+      const m = s.match(/макс\.?\s*(\d+)/i);
+      if (!m) return null;
+      const n = parseInt(m[1], 10);
+      return Number.isFinite(n) ? n : null;
+    })();
+    return { base, addDex, dexCap: cap, bonusOnly: false };
+  };
+
+  const recomputeAcFromEquipped = () => {
+    try {
+      if (!canEdit) return; // не меняем чужие листы
+      if (!sheet?.vitality) sheet.vitality = {};
+      if (!sheet.vitality.ac) sheet.vitality.ac = { value: 10 };
+
+      const inv = sheet?.inventory;
+      const invArmor = Array.isArray(inv?.armor) ? inv.armor : [];
+
+      const armorKey = getByPath(sheet, 'appearance.slots.armor') || '';
+      const shieldKey = getByPath(sheet, 'appearance.slots.shield') || '';
+
+      const armorIt = findInvItem(invArmor, armorKey);
+      const shieldIt = findInvItem(invArmor, shieldKey);
+
+      // если нет доспеха — ничего не делаем (не ломаем пользовательские значения КД)
+      if (!armorIt || !armorIt.armor) return;
+
+      const dexMod = getDexMod();
+      const a = parseArmorAc(armorIt?.armor?.ac);
+      let ac = Math.max(0, Math.trunc(a.base || 0));
+
+      if (a.addDex) {
+        const cap = (a.dexCap == null) ? null : Math.max(0, Math.trunc(a.dexCap));
+        const add = (cap == null) ? dexMod : Math.min(dexMod, cap);
+        ac += Math.trunc(add);
+      }
+
+      // shield bonus (если выбран)
+      if (shieldIt && shieldIt.armor) {
+        const sh = parseArmorAc(shieldIt?.armor?.ac);
+        if (sh.bonusOnly && Number.isFinite(sh.bonus)) ac += Math.trunc(sh.bonus);
+      }
+
+      sheet.vitality.ac.value = Math.max(0, Math.trunc(ac));
+      scheduleSheetSave(player);
+      // локально обновим чип КД (если он на экране)
+      try {
+        const acEl = root.querySelector('[data-hero-val="ac"], [data-hp-field="ac"], [data-sheet-path="vitality.ac.value"]');
+        if (acEl && 'value' in acEl) acEl.value = String(sheet.vitality.ac.value);
+      } catch {}
+    } catch (e) {
+      console.warn('recomputeAcFromEquipped failed', e);
+    }
+  };
+
+  const slotSelects = root.querySelectorAll('[data-appearance-slot]');
+  slotSelects.forEach(sel => {
+    sel.addEventListener('change', () => {
+      // bindEditableInputs уже записывает значение в sheet по data-sheet-path
+      // здесь — только доп. эффекты
+      const slot = String(sel.getAttribute('data-appearance-slot') || '');
+      if (slot === 'armor' || slot === 'shield') recomputeAcFromEquipped();
+    });
+  });
 }
 
 function bindCombatEditors(root, player, canEdit) {
@@ -1487,6 +1597,7 @@ function bindTextareaHeightPersistence(root, player) {
         bindCombatEditors(root, curPlayer, curCanEdit);
         bindInventoryEditors(root, curPlayer, curCanEdit);
         bindEquipmentUi(root, curPlayer, curCanEdit);
+        bindAppearanceUi(root, curPlayer, curCanEdit);
         bindLanguagesUi(root, curPlayer, curCanEdit);
         updateCoinsTotal(root, curPlayer.sheet?.parsed);
       }

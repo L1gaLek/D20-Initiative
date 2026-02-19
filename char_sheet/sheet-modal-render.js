@@ -1028,20 +1028,31 @@ function renderShopTab(vm, canEdit) {
     const weapons = Array.isArray(inv.weapons) ? inv.weapons : [];
     const armor = Array.isArray(inv.armor) ? inv.armor : [];
 
+    // Inventory items come from equipment DB and обычно имеют поля: id, name_ru, name_en.
+    // Ранее тут ожидались it.name / it.title, из-за чего списки могли быть пустыми.
+    const itemName = (it, fallback) => {
+      const ru = (it && typeof it === 'object') ? (it.name_ru || it.name) : '';
+      const en = (it && typeof it === 'object') ? (it.name_en || it.title) : '';
+      const v = String(ru || en || fallback || '').trim();
+      return v || String(fallback || '');
+    };
+    const itemId = (it) => String((it && typeof it === 'object') ? (it.id || it._id || '') : '').trim();
+
     const optNone = `<option value="">—</option>`;
     const weaponOptions = optNone + weapons.map((it, i) => {
-      const name = escapeHtml(String(it?.name || it?.title || `Оружие-${i+1}`));
-      const val = escapeHtml(String(it?.name || it?.title || ""));
+      const name = escapeHtml(itemName(it, `Оружие-${i+1}`));
+      // value = id (стабильнее), fallback = имя для обратной совместимости
+      const val = escapeHtml(itemId(it) || itemName(it, ''));
       return `<option value="${val}">${name}</option>`;
     }).join('');
     const armorOptions = optNone + armor.filter(a => !/щит/i.test(String(a?.name||a?.title||""))).map((it, i) => {
-      const name = escapeHtml(String(it?.name || it?.title || `Доспех-${i+1}`));
-      const val = escapeHtml(String(it?.name || it?.title || ""));
+      const name = escapeHtml(itemName(it, `Доспех-${i+1}`));
+      const val = escapeHtml(itemId(it) || itemName(it, ''));
       return `<option value="${val}">${name}</option>`;
     }).join('');
     const shieldOptions = optNone + armor.filter(a => /щит/i.test(String(a?.name||a?.title||""))).map((it, i) => {
-      const name = escapeHtml(String(it?.name || it?.title || `Щит-${i+1}`));
-      const val = escapeHtml(String(it?.name || it?.title || ""));
+      const name = escapeHtml(itemName(it, `Щит-${i+1}`));
+      const val = escapeHtml(itemId(it) || itemName(it, ''));
       return `<option value="${val}">${name}</option>`;
     }).join('');
 
