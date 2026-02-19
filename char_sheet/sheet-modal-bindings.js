@@ -155,57 +155,6 @@ function rerenderCombatTabInPlace(root, player, canEdit) {
   updateWeaponsBonuses(root, player.sheet?.parsed);
 }
 
-// ===== Appearance (Облик) =====
-function normalizeGenderKeyForAppearance(raw) {
-  const v = String(raw || '').trim().toLowerCase();
-  if (!v) return 'male';
-  if (v === 'male' || v === 'm') return 'male';
-  if (v === 'female' || v === 'f') return 'female';
-  if (v.startsWith('м')) return 'male';
-  if (v.startsWith('ж')) return 'female';
-  return 'male';
-}
-
-function updateAppearancePreview(root, sheet) {
-  try {
-    const img = root?.querySelector?.('[data-appearance-preview]');
-    if (!img || !sheet) return;
-
-    const race = String(getByPath(sheet, 'info.race.value') || '').trim();
-    const genderRaw = String(getByPath(sheet, 'notes.details.gender.value') || '').trim();
-    const gender = normalizeGenderKeyForAppearance(genderRaw);
-    const override = String(getByPath(sheet, 'appearance.baseUrl') || '').trim();
-
-    const src = override || (race ? `assets/base/${race}/${gender}.png` : '');
-    if (!src) return;
-    if (img.getAttribute('src') !== src) img.setAttribute('src', src);
-  } catch (e) {
-    console.warn('updateAppearancePreview failed', e);
-  }
-}
-
-function bindAppearanceUi(root, player, canEdit) {
-  if (!root || !player?.sheet?.parsed) return;
-  const sheet = player.sheet.parsed;
-
-  // ensure containers exist
-  if (!sheet.appearance || typeof sheet.appearance !== 'object') sheet.appearance = {};
-  if (!sheet.appearance.slots || typeof sheet.appearance.slots !== 'object') sheet.appearance.slots = {};
-
-  // initial preview update
-  updateAppearancePreview(root, sheet);
-
-  // live updates
-  const raceSel = root.querySelector('[data-race-select]');
-  const genderSel = root.querySelector('[data-gender-select]');
-  const baseOverrideInp = root.querySelector('[data-appearance-base-override]');
-
-  const onAny = () => updateAppearancePreview(root, sheet);
-  raceSel?.addEventListener('change', onAny);
-  genderSel?.addEventListener('change', onAny);
-  baseOverrideInp?.addEventListener('input', onAny);
-}
-
 function bindCombatEditors(root, player, canEdit) {
   if (!root || !player?.sheet?.parsed) return;
   const sheet = player.sheet.parsed;
@@ -2169,6 +2118,127 @@ function bindSlotEditors(root, player, canEdit) {
   }
 }
 
+// ================== APPEARANCE ("ОБЛИК") ==================
+// Вкладка "Облик" хранит выбор в sheet.appearance.*.
+// Мы ререндерим модалку форсом после изменения, чтобы обновлялось превью.
+function bindAppearanceUi(root, player, canEdit) {
+  if (!root) return;
+  root.__lookState = { player, canEdit };
+  const getState = () => root.__lookState || { player, canEdit };
+
+  if (root.__lookBound) return;
+  root.__lookBound = true;
+
+  const getLivePlayer = () => {
+    try { return getOpenedPlayerSafe() || player; } catch { return player; }
+  };
+
+  function handle(e) {
+    const el = e.target;
+    const path = el?.getAttribute?.('data-look-path');
+    if (!path) return;
+    const st = getState();
+    if (!st.canEdit) return;
+
+    const live = getLivePlayer();
+    if (!live?.sheet?.parsed) return;
+
+    let val = '';
+    if (el instanceof HTMLInputElement) val = String(el.value || '');
+    else if (el instanceof HTMLSelectElement) val = String(el.value || '');
+    else return;
+
+    // ensure appearance object
+    if (!live.sheet.parsed.appearance || typeof live.sheet.parsed.appearance !== 'object') {
+      live.sheet.parsed.appearance = { baseUrl: '', mainHandId: '', offHandId: '', shieldId: '', armorId: '' };
+    }
+
+    setByPath(live.sheet.parsed, path, val);
+
+    // ===== Auto-calc AC from equipped armor/shield (inventory) =====
+    // Требование: при надевании доспеха (slot armorId) его КД записывается в vitality.ac.value
+    // с учетом модификатора Ловкости (и cap: макс. N, если указан).
+    // Также учитываем щит (обычно +2), если выбран в slot shieldId.
+    try {
+      const p = String(path || '');
+      if (p === 'appearance.armorId' || p === 'appearance.shieldId') {
+        const sheet = live.sheet.parsed;
+        const nextAc = calcEquippedAC(sheet);
+        if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
+        if (!sheet.vitality.ac || typeof sheet.vitality.ac !== 'object') sheet.vitality.ac = { value: 0 };
+        sheet.vitality.ac.value = nextAc;
+      }
+    } catch {}
+
+    markModalInteracted(live.id);
+    scheduleSheetSave(live);
+    // обновим превью (полный ререндер умеет сохранять вкладку/скролл)
+    try { renderSheetModal(live, { force: true }); } catch {}
+  }
+
+  root.addEventListener('change', handle);
+  root.addEventListener('input', handle);
+}
+
+// --- Helpers: AC parsing/calc from inventory items ---
+function parseArmorAcText(acText) {
+  const s = String(acText || '').trim();
+  if (!s) return { base: null, addDex: false, dexCap: null, bonusOnly: null };
+
+  // Shield-like: "+2" or "+ 2"
+  const bonusM = s.match(/^\+\s*(\d+)/);
+  if (bonusM) return { base: null, addDex: false, dexCap: null, bonusOnly: safeInt(bonusM[1], 0) };
+
+  // Base number (e.g. "14 + мод. Ловк (макс. 2)" or "16")
+  const baseM = s.match(/^(\d+)/);
+  const base = baseM ? safeInt(baseM[1], 0) : null;
+
+  const addDex = /ловк/i.test(s) && /мод/i.test(s);
+  const capM = s.match(/макс\.?\s*(\d+)/i);
+  const dexCap = capM ? safeInt(capM[1], null) : null;
+  return { base, addDex, dexCap, bonusOnly: null };
+}
+
+function calcEquippedAC(sheet) {
+  const dexMod = safeInt(sheet?.stats?.dex?.modifier, 0);
+
+  const app = (sheet?.appearance && typeof sheet.appearance === 'object') ? sheet.appearance : {};
+  const armorId = String(app?.armorId || '').trim();
+  const shieldId = String(app?.shieldId || '').trim();
+
+  const invArmor = (sheet?.inventory && Array.isArray(sheet.inventory.armor)) ? sheet.inventory.armor : [];
+
+  const findInv = (id) => invArmor.find(it => String(it?.id || '') === String(id));
+  const armorIt = armorId ? findInv(armorId) : null;
+  const shieldIt = shieldId ? findInv(shieldId) : null;
+
+  // Base (no armor) = 10 + Dex
+  let baseAc = 10;
+  let dexAdd = dexMod;
+
+  if (armorIt && armorIt.armor && armorIt.armor.ac != null) {
+    const parsed = parseArmorAcText(armorIt.armor.ac);
+    if (parsed.base != null) {
+      baseAc = parsed.base;
+      if (parsed.addDex) {
+        if (parsed.dexCap != null && dexMod > parsed.dexCap) dexAdd = parsed.dexCap;
+        else dexAdd = dexMod;
+      } else {
+        dexAdd = 0;
+      }
+    }
+  }
+
+  // Shield bonus (usually +2)
+  let shieldBonus = 0;
+  if (shieldIt && shieldIt.armor && shieldIt.armor.ac != null) {
+    const p = parseArmorAcText(shieldIt.armor.ac);
+    if (p.bonusOnly != null) shieldBonus = safeInt(p.bonusOnly, 0);
+  }
+
+  return Math.max(0, safeInt(baseAc, 0) + safeInt(dexAdd, 0) + safeInt(shieldBonus, 0));
+}
+
 // ===== add spells by URL + toggle descriptions =====
 function normalizeDndSuUrl(url) {
   const u = String(url || "").trim();
@@ -3051,5 +3121,16 @@ function bindSpellAddAndDesc(root, player, canEdit) {
     const scoreEl = root.querySelector(`.lss-ability-score-input[data-stat-key="${statKey}"]`);
     if (scoreEl && sheet?.stats?.[statKey]?.score != null) {
       scoreEl.value = String(sheet.stats[statKey].score);
+    }
+
+    // Если меняется Ловкость — пересчитываем КД от надетых доспехов/щита (если выбраны во вкладке "Облик").
+    if (String(statKey) === 'dex') {
+      try {
+        if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
+        if (!sheet.vitality.ac || typeof sheet.vitality.ac !== 'object') sheet.vitality.ac = { value: 0 };
+        sheet.vitality.ac.value = calcEquippedAC(sheet);
+        const acInp = root.querySelector('input[data-sheet-path="vitality.ac.value"], input[data-sheet-path="vitality.ac"], input[data-sheet-path="vitality.ac.value"]');
+        if (acInp) acInp.value = String(sheet.vitality.ac.value);
+      } catch {}
     }
   }
