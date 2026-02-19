@@ -58,7 +58,23 @@
   grid-template-columns: minmax(80px, 1fr) minmax(72px, 1fr);
 }
 .appearance-armor-meta[data-armor-meta="armor"] .meta-grid{
-  grid-template-columns: minmax(92px, 1.3fr) minmax(72px, 1fr) minmax(64px, 0.9fr) minmax(56px, 0.8fr);
+  /* Type just fits "Доспехи", AC is compact, Mod slightly compact */
+  grid-template-columns: max-content minmax(46px, 0.75fr) minmax(56px, 0.85fr) minmax(56px, 0.8fr);
+}
+
+/* AC chip shield indicator */
+.ac-shield-icon{
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  vertical-align: -2px;
+  fill: transparent;
+  stroke: rgba(255,255,255,0.55);
+  stroke-width: 2;
+}
+.ac-shield-icon.on{
+  fill: rgba(255,165,0,0.85);
+  stroke: rgba(255,165,0,0.95);
 }
 
 .appearance-armor-meta .meta-item{
