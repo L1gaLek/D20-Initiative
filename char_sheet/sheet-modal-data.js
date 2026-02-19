@@ -295,17 +295,6 @@
       // ===== Магазин (только UI-состояние) =====
       shop: {
         activeTab: "weapons"
-      },
-
-      // ===== Облик (визуальные слоты/картинки) =====
-      // baseUrl можно оставить пустым — тогда UI попробует подобрать картинку по расе+полу
-      // (см. вкладку «Облик»). Остальные поля — выбранные id предметов из инвентаря.
-      appearance: {
-        baseUrl: "",
-        mainHandId: "",
-        offHandId: "",
-        shieldId: "",
-        armorId: ""
       }
     };
   }
@@ -409,6 +398,17 @@
     const cls = get(sheet, 'info.charClass.value', '-');
     const lvl = get(sheet, 'info.level.value', '-');
     const race = get(sheet, 'info.race.value', '-');
+
+    // Gender is stored in notes.details.gender.value (legacy field). For the new UI we keep
+    // the value normalized as: "male" | "female".
+    const genderRaw = String(get(sheet, 'notes.details.gender.value', '') || '').trim();
+    const gender = normalizeGenderKey(genderRaw);
+
+    // Appearance base image (auto) — can be overridden by sheet.appearance.baseUrl
+    const baseOverride = String(get(sheet, 'appearance.baseUrl', '') || '').trim();
+    const raceFolder = (race && race !== '-') ? String(race).trim() : '';
+    const baseAuto = (raceFolder ? `assets/base/${raceFolder}/${gender}.png` : '');
+    const appearanceBaseUrl = baseOverride || baseAuto;
 
     const hp = get(sheet, 'vitality.hp-max.value', '-');
     const hpCur = get(sheet, 'vitality.hp-current.value', '-');
@@ -663,12 +663,11 @@ const weapons = weaponsRaw
 
     const inv = (sheet?.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
     const shop = (sheet?.shop && typeof sheet.shop === "object") ? sheet.shop : null;
-    const appearance = (sheet?.appearance && typeof sheet.appearance === "object")
-      ? sheet.appearance
-      : { baseUrl: "", mainHandId: "", offHandId: "", shieldId: "", armorId: "" };
 
     return {
       name, cls, lvl, race,
+      gender,
+      appearanceBaseUrl,
       hp, hpCur, hpTemp, ac, spd,
       inspiration, exhaustion, conditions,
       stats, passive,
@@ -679,9 +678,19 @@ const weapons = weaponsRaw
       weapons, combatAbilitiesEntries,
       coins, coinsViewDenom,
       inventory: inv,
-      shop,
-      appearance
+      shop
     };
+  }
+
+  function normalizeGenderKey(raw) {
+    const v = String(raw || '').trim().toLowerCase();
+    if (!v) return 'male';
+    if (v === 'male' || v === 'm') return 'male';
+    if (v === 'female' || v === 'f') return 'female';
+    // Russian variants
+    if (v.startsWith('м')) return 'male';
+    if (v.startsWith('ж')) return 'female';
+    return 'male';
   }
 
   // ================== SHEET UPDATE HELPERS ==================

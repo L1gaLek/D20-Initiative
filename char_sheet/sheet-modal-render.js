@@ -135,16 +135,17 @@
 
 
   function renderBasicTab(vm, canEdit) {
-    const races = [
-      "Аасимар","Ааракокра","Багбир","Ведалкен","Вердан","Гифф","Гит","Гном","Грунг","Гоблин","Голиаф","Дварф","Дженази",
-      "Драконорожденный","Зайцегон","Калаштар","Кенку","Кобольд","Кованый","Кентавр","Леонин","Локата","Локсодон","Людокрыса",
-      "Людоящер","Мурлок","Минотавр","Орк","Полурослик","Полуорк","Полуэльф","Плазмоид","Сатир","Совлин","Табакси","Тифлинг",
-      "Тортл","Тритон","Три-крин","Фирболг","Фэйри","Хобгоблин","Человек","Чейнджлинг","Эладрин","Эльф","Юань-Ти"
+    const RACES = [
+      "Аасимар","Ааракокра","Багбир","Ведалкен","Вердан","Гифф","Гит","Гном","Грунг","Гоблин","Голиаф","Дварф",
+      "Дженази","Драконорожденный","Зайцегон","Калаштар","Кенку","Кобольд","Кованый","Кентавр","Леонин","Локата","Локсодон",
+      "Людокрыса","Людоящер","Мурлок","Минотавр","Орк","Полурослик","Полуорк","Полуэльф","Плазмоид","Сатир","Совлин","Табакси",
+      "Тифлинг","Тортл","Тритон","Три-крин","Фирболг","Фэйри","Хобгоблин","Человек","Чейнджлинг","Эладрин","Эльф","Юань-Ти"
     ];
-    const raceCur = String(vm?.race || "");
+
+    const raceVal = String(vm?.race || "-");
     const raceOptions = [
-      `<option value="" ${!raceCur || raceCur === "-" ? "selected" : ""}>— выбери —</option>`,
-      ...races.map(r => `<option value="${escapeHtml(r)}" ${raceCur === r ? "selected" : ""}>${escapeHtml(r)}</option>`)
+      `<option value="">—</option>`,
+      ...RACES.map(r => `<option value="${escapeHtml(r)}" ${r===raceVal ? "selected" : ""}>${escapeHtml(r)}</option>`)
     ].join("");
 
     return `
@@ -176,7 +177,7 @@
             </div>
 
             <div class="profile-col">
-              <div class="kv"><div class="k">Раса</div><div class="v"><select data-sheet-path="info.race.value" style="width:190px" ${canEdit ? "" : "disabled"}>${raceOptions}</select></div></div>
+              <div class="kv"><div class="k">Раса</div><div class="v"><select data-sheet-path="info.race.value" data-race-select style="width:190px" ${canEdit ? "" : "disabled"}>${raceOptions}</select></div></div>
               <div class="kv"><div class="k">Архетип расы</div><div class="v"><input type="text" data-sheet-path="info.raceArchetype.value" style="width:180px"></div></div>
               <div class="kv"><div class="k">Предыстория</div><div class="v"><input type="text" data-sheet-path="info.background.value" style="width:180px"></div></div>
               <div class="kv"><div class="k">Мировоззрение</div><div class="v"><input type="text" data-sheet-path="info.alignment.value" style="width:180px"></div></div>
@@ -923,13 +924,7 @@ function renderShopTab(vm, canEdit) {
 
 
   function renderPersonalityTab(vm) {
-    const genderCur = String(vm?.notesDetails?.gender || "");
-    const genderNorm = genderKeyFromText(genderCur);
-    const genderOptions = [
-      `<option value="" ${!genderCur ? "selected" : ""}>— выбери —</option>`,
-      `<option value="male" ${genderNorm === "male" ? "selected" : ""}>Мужской</option>`,
-      `<option value="female" ${genderNorm === "female" ? "selected" : ""}>Женский</option>`
-    ].join("");
+    const genderVal = String(vm?.gender || "male");
     return `
       <div class="sheet-section">
         <h3>Личность</h3>
@@ -938,7 +933,12 @@ function renderShopTab(vm, canEdit) {
           <div class="sheet-card">
             <h4>Внешность</h4>
             <div class="notes-details-grid">
-              <div class="kv"><div class="k">Пол</div><div class="v"><select data-sheet-path="notes.details.gender.value" style="width:150px">${genderOptions}</select></div></div>
+              <div class="kv"><div class="k">Пол</div><div class="v">
+                <select data-sheet-path="notes.details.gender.value" data-gender-select style="width:150px">
+                  <option value="male" ${genderVal==="male"?"selected":""}>Мужской</option>
+                  <option value="female" ${genderVal==="female"?"selected":""}>Женский</option>
+                </select>
+              </div></div>
               <div class="kv"><div class="k">Рост</div><div class="v"><input type="text" data-sheet-path="notes.details.height.value" style="width:140px"></div></div>
               <div class="kv"><div class="k">Вес</div><div class="v"><input type="text" data-sheet-path="notes.details.weight.value" style="width:140px"></div></div>
               <div class="kv"><div class="k">Возраст</div><div class="v"><input type="text" data-sheet-path="notes.details.age.value" style="width:140px"></div></div>
@@ -1021,222 +1021,90 @@ function renderShopTab(vm, canEdit) {
     `;
   }
 
+  function renderAppearanceTab(vm, canEdit) {
+    const baseUrl = String(vm?.appearanceBaseUrl || "");
+    // Inventory lists (new format): vm.inventory.weapons / vm.inventory.armor
+    const inv = (vm?.inventory && typeof vm.inventory === 'object') ? vm.inventory : {};
+    const weapons = Array.isArray(inv.weapons) ? inv.weapons : [];
+    const armor = Array.isArray(inv.armor) ? inv.armor : [];
+
+    const optNone = `<option value="">—</option>`;
+    const weaponOptions = optNone + weapons.map((it, i) => {
+      const name = escapeHtml(String(it?.name || it?.title || `Оружие-${i+1}`));
+      const val = escapeHtml(String(it?.name || it?.title || ""));
+      return `<option value="${val}">${name}</option>`;
+    }).join('');
+    const armorOptions = optNone + armor.filter(a => !/щит/i.test(String(a?.name||a?.title||""))).map((it, i) => {
+      const name = escapeHtml(String(it?.name || it?.title || `Доспех-${i+1}`));
+      const val = escapeHtml(String(it?.name || it?.title || ""));
+      return `<option value="${val}">${name}</option>`;
+    }).join('');
+    const shieldOptions = optNone + armor.filter(a => /щит/i.test(String(a?.name||a?.title||""))).map((it, i) => {
+      const name = escapeHtml(String(it?.name || it?.title || `Щит-${i+1}`));
+      const val = escapeHtml(String(it?.name || it?.title || ""));
+      return `<option value="${val}">${name}</option>`;
+    }).join('');
+
+    return `
+      <div class="sheet-section" data-appearance-root>
+        <h3>Облик</h3>
+
+        <div class="sheet-card fullwidth">
+          <div class="appearance-layout">
+            <div class="appearance-left">
+              <div class="appearance-preview-wrap">
+                <img class="appearance-preview" data-appearance-preview src="${escapeHtml(baseUrl)}" alt="Облик" />
+              </div>
+
+              <div class="sheet-note" style="margin-top:10px; opacity:0.85">
+                Авто-путь: <code>assets/base/&lt;Раса&gt;/&lt;male|female&gt;.png</code>. Если нужно — можно переопределить вручную.
+              </div>
+
+              <div class="kv" style="margin-top:10px">
+                <div class="k">Ссылка на базовую картинку</div>
+                <div class="v" style="width:100%">
+                  <input type="text" data-sheet-path="appearance.baseUrl" placeholder="(необязательно)" ${canEdit ? "" : "disabled"} style="width:100%" data-appearance-base-override>
+                </div>
+              </div>
+            </div>
+
+            <div class="appearance-right">
+              <div class="appearance-slots">
+                <div class="appearance-slot">
+                  <div class="lbl">Правая рука</div>
+                  <select data-sheet-path="appearance.slots.right" data-appearance-slot="right" ${canEdit ? "" : "disabled"}>${weaponOptions}</select>
+                </div>
+                <div class="appearance-slot">
+                  <div class="lbl">Левая рука</div>
+                  <select data-sheet-path="appearance.slots.left" data-appearance-slot="left" ${canEdit ? "" : "disabled"}>${weaponOptions}</select>
+                </div>
+                <div class="appearance-slot">
+                  <div class="lbl">Щит</div>
+                  <select data-sheet-path="appearance.slots.shield" data-appearance-slot="shield" ${canEdit ? "" : "disabled"}>${shieldOptions}</select>
+                </div>
+                <div class="appearance-slot">
+                  <div class="lbl">Доспех</div>
+                  <select data-sheet-path="appearance.slots.armor" data-appearance-slot="armor" ${canEdit ? "" : "disabled"}>${armorOptions}</select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
 
   function renderActiveTab(tabId, vm, canEdit) {
     if (tabId === "basic") return renderBasicTab(vm, canEdit);
-    if (tabId === "appearance") return renderAppearanceTab(vm, canEdit);
     if (tabId === "spells") return renderSpellsTab(vm);
     if (tabId === "combat") return renderCombatTab(vm);
     if (tabId === "inventory") return renderInventoryTab(vm, canEdit);
     if (tabId === "shop") return renderShopTab(vm, canEdit);
     if (tabId === "personality") return renderPersonalityTab(vm);
+    if (tabId === "appearance") return renderAppearanceTab(vm, canEdit);
     if (tabId === "notes") return renderNotesTab(vm);
     return `<div class="sheet-note">Раздел в разработке</div>`;
-  }
-
-  // ================== RENDER: APPEARANCE ("ОБЛИК") ==================
-  function normalizeLookKey(s) {
-    return String(s || "")
-      .trim()
-      .toLowerCase()
-      .replace(/ё/g, "е")
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_\-а-я]/gi, "")
-      .replace(/_+/g, "_")
-      .replace(/^_+|_+$/g, "");
-  }
-
-  function genderKeyFromText(g) {
-    const t = String(g || "").trim().toLowerCase();
-    if (!t) return "unknown";
-    if (t.startsWith("м")) return "male";
-    if (t.includes("male") || t.includes("man") || t.includes("муж")) return "male";
-    if (t.startsWith("ж")) return "female";
-    if (t.includes("female") || t.includes("woman") || t.includes("жен")) return "female";
-    return "unknown";
-  }
-
-  // Папки с базовыми образами рас (assets/base/<папка>/<male|female>.png)
-  // Рекомендуем называть папки ровно как значение расы в выпадающем списке.
-  const RACE_FOLDER_MAP = {
-    "Аасимар": "Аасимар",
-    "Ааракокра": "Ааракокра",
-    "Багбир": "Багбир",
-    "Ведалкен": "Ведалкен",
-    "Вердан": "Вердан",
-    "Гифф": "Гифф",
-    "Гит": "Гит",
-    "Гном": "Гном",
-    "Грунг": "Грунг",
-    "Гоблин": "Гоблин",
-    "Голиаф": "Голиаф",
-    "Дварф": "Дварф",
-    "Дженази": "Дженази",
-    "Драконорожденный": "Драконорожденный",
-    "Зайцегон": "Зайцегон",
-    "Калаштар": "Калаштар",
-    "Кенку": "Кенку",
-    "Кобольд": "Кобольд",
-    "Кованый": "Кованый",
-    "Кентавр": "Кентавр",
-    "Леонин": "Леонин",
-    "Локата": "Локата",
-    "Локсодон": "Локсодон",
-    "Людокрыса": "Людокрыса",
-    "Людоящер": "Людоящер",
-    "Мурлок": "Мурлок",
-    "Минотавр": "Минотавр",
-    "Орк": "Орк",
-    "Полурослик": "Полурослик",
-    "Полуорк": "Полуорк",
-    "Полуэльф": "Полуэльф",
-    "Плазмоид": "Плазмоид",
-    "Сатир": "Сатир",
-    "Совлин": "Совлин",
-    "Табакси": "Табакси",
-    "Тифлинг": "Тифлинг",
-    "Тортл": "Тортл",
-    "Тритон": "Тритон",
-    "Три-крин": "Три-крин",
-    "Фирболг": "Фирболг",
-    "Фэйри": "Фэйри",
-    "Хобгоблин": "Хобгоблин",
-    "Человек": "Человек",
-    "Чейнджлинг": "Чейнджлинг",
-    "Эладрин": "Эладрин",
-    "Эльф": "Эльф",
-    "Юань-Ти": "Юань-Ти"
-  };
-
-  function getItemImgUrl(it) {
-    // поддерживаем разные названия полей (пользователь может добавить свои)
-    return String(it?.imgUrl || it?.imageUrl || it?.img || it?.image || it?.icon || "").trim();
-  }
-
-  function renderLookSlot({ title, slotKey, value, options, canEdit }) {
-    const optHtml = options.map(o => {
-      const id = String(o.id || "");
-      const nm = String(o.label || "");
-      return `<option value="${escapeHtml(id)}" ${String(value) === id ? "selected" : ""}>${escapeHtml(nm)}</option>`;
-    }).join("");
-
-    return `
-      <div class="look-slot" data-look-slot="${escapeHtml(slotKey)}">
-        <div class="look-slot__title">${escapeHtml(title)}</div>
-        <select class="look-slot__select" ${canEdit ? "" : "disabled"} data-look-path="appearance.${escapeHtml(slotKey)}">
-          ${optHtml}
-        </select>
-      </div>
-    `;
-  }
-
-  function renderAppearanceTab(vm, canEdit) {
-    const race = String(vm?.race || "");
-    const gender = vm?.notesDetails?.gender;
-    const gKey = genderKeyFromText(gender);
-
-    const folder = RACE_FOLDER_MAP[race] || String(race || "").trim();
-    const safeFolder = folder ? folder : "_unknown";
-
-    const app = (vm?.appearance && typeof vm.appearance === "object") ? vm.appearance : {};
-    const baseUrl = String(app.baseUrl || "").trim();
-    // Дефолтный путь: assets/base/<раса>/<male|female>.png
-    const baseSrc = baseUrl || `assets/base/${safeFolder}/${gKey}.png`;
-
-    const invWeapons = Array.isArray(vm?.inventory?.weapons) ? vm.inventory.weapons : [];
-    const invArmor = Array.isArray(vm?.inventory?.armor) ? vm.inventory.armor : [];
-
-    const isShield = (it) => {
-      const nm = String(it?.name_ru || it?.name || "").toLowerCase();
-      const tRu = String(it?.armor?.type_ru || "").toLowerCase();
-      const tEn = String(it?.armor?.type_en || "").toLowerCase();
-      return nm.includes("щит") || tRu.includes("щит") || tEn.includes("shield");
-    };
-
-    const shields = invArmor.filter(isShield);
-    const armors = invArmor.filter(a => !isShield(a));
-
-    const optNone = { id: "", label: "— не выбрано —" };
-    const weaponOpts = [optNone, ...invWeapons.map(w => ({
-      id: String(w?.id || ""),
-      label: String(w?.name_ru || w?.name || w?.name_en || "Оружие").trim() || "Оружие",
-      img: getItemImgUrl(w)
-    })).filter(o => o.id !== null)];
-
-    const shieldOpts = [optNone, ...shields.map(s => ({
-      id: String(s?.id || ""),
-      label: String(s?.name_ru || s?.name || s?.name_en || "Щит").trim() || "Щит",
-      img: getItemImgUrl(s)
-    })).filter(o => o.id !== null)];
-
-    const armorOpts = [optNone, ...armors.map(a => ({
-      id: String(a?.id || ""),
-      label: String(a?.name_ru || a?.name || a?.name_en || "Доспех").trim() || "Доспех",
-      img: getItemImgUrl(a)
-    })).filter(o => o.id !== null)];
-
-    const mainHandId = String(app.mainHandId || "");
-    const offHandId = String(app.offHandId || "");
-    const shieldId = String(app.shieldId || "");
-    const armorId = String(app.armorId || "");
-
-    const findById = (arr, id) => arr.find(x => String(x?.id || "") === String(id));
-    const mainW = findById(invWeapons, mainHandId);
-    const offW = findById(invWeapons, offHandId);
-    const sh = findById(invArmor, shieldId);
-    const ar = findById(invArmor, armorId);
-
-    const mainImg = getItemImgUrl(mainW);
-    const offImg = getItemImgUrl(offW);
-    const shieldImg = getItemImgUrl(sh);
-    const armorImg = getItemImgUrl(ar);
-
-    // Визуальные оверлеи — опционально (если у предметов есть img/imgUrl)
-    const overlayImgs = [
-      { key: "armor", url: armorImg },
-      { key: "main", url: mainImg },
-      { key: "off", url: offImg },
-      { key: "shield", url: shieldImg }
-    ].filter(x => x.url);
-
-    return `
-      <div class="sheet-section">
-        <h3>Облик</h3>
-        <div class="sheet-note" style="margin-bottom:10px;">
-          Базовая картинка выбирается по расе и полу. По умолчанию путь такой: <b>assets/base/${escapeHtml(safeFolder)}/${escapeHtml(gKey)}.png</b>.
-          Если у тебя картинки лежат по другому пути — вставь ссылку ниже (перекрывает авто-путь).
-        </div>
-
-        <div class="look-layout">
-          <div class="look-preview">
-            <div class="look-preview__frame">
-              <img class="look-preview__img" src="${escapeHtml(baseSrc)}" alt="${escapeHtml(race)}">
-              ${overlayImgs.map(o => `
-                <img class="look-preview__overlay look-preview__overlay--${escapeHtml(o.key)}" src="${escapeHtml(o.url)}" alt="">
-              `).join("")}
-            </div>
-
-            <div class="look-baseurl">
-              <div class="look-baseurl__label">Ссылка на базовую картинку</div>
-              <input class="look-baseurl__input" type="text" ${canEdit ? "" : "disabled"}
-                value="${escapeHtml(baseUrl)}" placeholder="(пусто = использовать assets/base/${escapeHtml(safeFolder)}/${escapeHtml(gKey)}.png)"
-                data-look-path="appearance.baseUrl">
-            </div>
-          </div>
-
-          <div class="look-slots">
-            ${renderLookSlot({ title: "Правая рука", slotKey: "mainHandId", value: mainHandId, options: weaponOpts, canEdit })}
-            ${renderLookSlot({ title: "Левая рука", slotKey: "offHandId", value: offHandId, options: weaponOpts, canEdit })}
-            ${renderLookSlot({ title: "Щит", slotKey: "shieldId", value: shieldId, options: shieldOpts, canEdit })}
-            ${renderLookSlot({ title: "Доспех", slotKey: "armorId", value: armorId, options: armorOpts, canEdit })}
-
-            <div class="sheet-note" style="margin-top:10px;">
-              Примечание: оверлеи (оружие/щит/доспех) появятся на превью, только если у выбранных предметов заполнено поле <code>img</code>/<code>imgUrl</code> (в инвентаре).
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
   }
 
   // ================== RENDER MODAL ==================
@@ -1366,12 +1234,12 @@ function renderShopTab(vm, canEdit) {
 
     const tabs = [
       { id: "basic", label: "Основное" },
-      { id: "appearance", label: "Облик" },
       { id: "spells", label: "Заклинания" },
       { id: "combat", label: "Бой" },
       { id: "inventory", label: "Инвентарь" },
       { id: "shop", label: "Магазин" },
       { id: "personality", label: "Личность" },
+      { id: "appearance", label: "Облик" },
       { id: "notes", label: "Заметки" }
     ];
 
@@ -1524,7 +1392,6 @@ function renderShopTab(vm, canEdit) {
           bindCombatEditors(sheetContent, player, canEdit);
           bindInventoryEditors(sheetContent, player, canEdit);
           bindEquipmentUi(sheetContent, player, canEdit);
-          bindAppearanceUi(sheetContent, player, canEdit);
           bindLanguagesUi(sheetContent, player, canEdit);
           updateCoinsTotal(sheetContent, player.sheet?.parsed);
     // Авто-открытие магазина поверх листа при выборе вкладки
