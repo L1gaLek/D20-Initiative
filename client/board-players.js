@@ -418,7 +418,6 @@ function updateHpBar(player, tokenEl) {
     if (typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(player)) {
       const existing = hpBarElements.get(pid);
       if (existing?.main) existing.main.style.display = 'none';
-      if (existing?.temp) existing.temp.style.display = 'none';
       return;
     }
   } catch {}
@@ -432,98 +431,47 @@ function updateHpBar(player, tokenEl) {
     main.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
     board.appendChild(main);
 
-    const temp = document.createElement('div');
-    temp.className = 'token-hpbar token-hpbar--temp';
-    temp.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
-    board.appendChild(temp);
-
-    bars = { main, temp };
+    // Temp HP is shown inside the same bar (swap style/text), so no extra bar.
+    bars = { main };
     hpBarElements.set(pid, bars);
   }
 
   const bar = bars.main;
-  const tempBar = bars.temp;
 
   if (!tokenEl || tokenEl.style.display === 'none' || player.x === null || player.y === null) {
     bar.style.display = 'none';
-    if (tempBar) tempBar.style.display = 'none';
     return;
   }
 
   const { hpMax, hpCur, hpTemp } = getQuickSheetStats(player);
   const max = (hpMax !== null ? Math.max(0, hpMax) : 0);
   const cur = (hpCur !== null ? hpCur : max);
-  const pct = max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0;
+
+  // If temp HP exists, show it inside the same bar (and style as temp).
+  const tempVal = (hpTemp !== null ? Math.max(0, hpTemp) : 0);
+  const showTemp = tempVal > 0;
+
+  const pct = (!showTemp && max > 0)
+    ? Math.max(0, Math.min(100, Math.round((cur / max) * 100)))
+    : 100;
 
   bar.style.display = 'block';
   bar.style.width = `${size * 50}px`;
   bar.style.left = `${tokenEl.offsetLeft}px`;
-  // Leave space for the nameplate (12px) under the HP bar
-  bar.style.top = `${tokenEl.offsetTop - 26}px`;
+  bar.style.top = `${tokenEl.offsetTop - 14}px`;
 
   const fill = bar.querySelector('.fill');
   const txt = bar.querySelector('.txt');
   if (fill) fill.style.width = `${pct}%`;
-  if (txt) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
-
-  // Temp HP bar (appears only if hp-temp > 0)
-  const tempVal = (hpTemp !== null ? Math.max(0, hpTemp) : 0);
-  if (tempBar) {
-    if (tempVal > 0) {
-      tempBar.style.display = 'block';
-      tempBar.style.width = `${size * 50}px`;
-      tempBar.style.left = `${tokenEl.offsetLeft}px`;
-      tempBar.style.top = `${tokenEl.offsetTop - 40}px`;
-      const tFill = tempBar.querySelector('.fill');
-      const tTxt = tempBar.querySelector('.txt');
-      if (tFill) tFill.style.width = `100%`;
-      if (tTxt) tTxt.textContent = `${tempVal}`;
-    } else {
-      tempBar.style.display = 'none';
-    }
+  if (showTemp) {
+    bar.classList.add('token-hpbar--temp');
+    if (txt) txt.textContent = `${tempVal}`;
+  } else {
+    bar.classList.remove('token-hpbar--temp');
+    if (txt) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
   }
 }
 
-
-
-// ================== NAMEPLATE (имя над токеном, под полоской HP) ==================
-function updateNamePlate(player, tokenEl) {
-  const pid = String(player?.id || '');
-  if (!pid) return;
-  try { window.__namePlateElements = window.__namePlateElements || new Map(); } catch {}
-  const map = window.__namePlateElements;
-  let el = map?.get?.(pid) || null;
-
-  const size = Number(player?.size) || 1;
-
-  if (!el) {
-    el = document.createElement('div');
-    el.className = 'token-nameplate';
-    el.innerHTML = `<span class="txt"></span>`;
-    board.appendChild(el);
-    try { map.set(pid, el); } catch {}
-  }
-
-  if (!tokenEl || tokenEl.style.display === 'none' || player.x === null || player.y === null) {
-    el.style.display = 'none';
-    return;
-  }
-
-  el.style.display = 'block';
-  el.style.width = `${size * 50}px`;
-  el.style.left = `${tokenEl.offsetLeft}px`;
-  // place right above token, touching its top edge
-  el.style.top = `${tokenEl.offsetTop - 12}px`;
-
-  const t = el.querySelector('.txt');
-  if (t) t.textContent = String(player.name || '');
-  try { el.title = String(player.name || ''); } catch {}
-}
-
-function updateTokenOverlays(player, tokenEl) {
-  try { updateHpBar(player, tokenEl); } catch {}
-  try { updateNamePlate(player, tokenEl); } catch {}
-}
 // ================== MINI POPUP (dblclick on token) ==================
 let tokenMiniEl = null;
 let tokenMiniPlayerId = null;
@@ -648,7 +596,7 @@ function openTokenMini(playerId) {
     upsertSheetNumber(p, 'vitality.hp-max', Math.max(0, max));
     upsertSheetNumber(p, 'vitality.hp-current', Math.max(0, Math.min(Math.max(0, max), cur)));
     // сразу обновим полоску
-    updateTokenOverlays(p, tokenEl);
+    updateHpBar(p, tokenEl);
   };
 
   // Instant feedback while typing; network update is debounced in upsertSheetNumber.
@@ -660,9 +608,35 @@ function openTokenMini(playerId) {
   const applyDelta = (sign) => {
     const delta = safeNum(hpDeltaInput?.value, 0) ?? 0;
     if (!delta) return;
+
     const cur = safeNum(hpCurInput?.value, 0) ?? 0;
     const max = safeNum(hpMaxInput?.value, 0) ?? 0;
-    const next = (sign < 0) ? (cur - delta) : (cur + delta);
+
+    // If taking damage and temp HP exists: subtract temp first, then current HP.
+    if (sign < 0) {
+      let dmg = Math.max(0, delta);
+      let temp = 0;
+      try {
+        const sh = (typeof getTokenSheetSafe === 'function') ? getTokenSheetSafe(p) : (p?.sheet || {});
+        temp = safeNum(getFrom(sh, 'vitality.hp-temp.value', 0), 0) ?? 0;
+      } catch {}
+
+      if (temp > 0 && dmg > 0) {
+        const used = Math.min(temp, dmg);
+        temp = Math.max(0, temp - used);
+        dmg = Math.max(0, dmg - used);
+        upsertSheetNumber(p, 'vitality.hp-temp', temp);
+      }
+
+      const nextHp = cur - dmg;
+      const clamped = Math.max(0, Math.min(Math.max(0, max), nextHp));
+      if (hpCurInput) hpCurInput.value = String(clamped);
+      applyHp();
+      return;
+    }
+
+    // Healing: affects current HP only (temp HP unchanged)
+    const next = cur + delta;
     const clamped = Math.max(0, Math.min(Math.max(0, max), next));
     if (hpCurInput) hpCurInput.value = String(clamped);
     applyHp();
@@ -811,8 +785,10 @@ function setPlayerPosition(player) {
   if (!el) {
     el = document.createElement('div');
     el.classList.add('player');
-    // token label is rendered as a separate overlay (nameplate)
-    el.innerHTML = ``;
+    // Имя под токеном (рамочка)
+    el.innerHTML = `<span class="token-label"></span>`;
+    const lbl0 = el.querySelector('.token-label');
+    if (lbl0) lbl0.textContent = String(player.name || '?');
     // Default fill; may be overridden by token portrait settings.
     el.style.backgroundColor = player.color;
     el.style.position = 'absolute';
@@ -871,6 +847,9 @@ function setPlayerPosition(player) {
     player.element = el;
   }
 
+  // Update full name label
+  const lbl = el.querySelector('.token-label');
+  if (lbl) lbl.textContent = String(player.name || '?');
   // Tooltip with full name on hover
   try { el.title = String(player.name || ''); } catch {}
   // Apply portrait / color mode
@@ -896,7 +875,7 @@ function setPlayerPosition(player) {
     // If token not placed, hide
     if (player.x === null || player.y === null) {
       el.style.display = 'none';
-      updateTokenOverlays(player, el);
+      updateHpBar(player, el);
       return;
     }
 
@@ -933,14 +912,14 @@ function setPlayerPosition(player) {
       if (lastCellVisibleNow && !tokenStillOnLastKnown) {
         window._fogLastKnown.delete(key);
         el.style.display = 'none';
-        updateTokenOverlays(player, el);
+        updateHpBar(player, el);
         return;
       }
     }
     if (!visibleNow && !known) {
       // not discovered yet
       el.style.display = 'none';
-      updateTokenOverlays(player, el);
+      updateHpBar(player, el);
       return;
     }
 
@@ -953,7 +932,7 @@ function setPlayerPosition(player) {
 
   if (player.x === null || player.y === null) {
     el.style.display = 'none';
-    updateTokenOverlays(player, el);
+    updateHpBar(player, el);
     return;
   }
   el.style.display = 'flex';
@@ -969,7 +948,7 @@ function setPlayerPosition(player) {
     el.style.top = `${cell.offsetTop}px`;
   }
 
-  updateTokenOverlays(player, el);
+  updateHpBar(player, el);
   if (tokenMiniEl && tokenMiniPlayerId === player.id) {
     positionTokenMini(el);
   }
