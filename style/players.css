@@ -108,7 +108,8 @@
 
 #action-log ul, #player-list {
   list-style: none;
-  padding-left: 10px;
+  padding-left: 6px;
+  padding-right: 16px; /* место под вертикальный скролл */
   margin: 0;
 }
 
