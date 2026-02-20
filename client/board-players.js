@@ -458,7 +458,8 @@ function updateHpBar(player, tokenEl) {
   bar.style.display = 'block';
   bar.style.width = `${size * 50}px`;
   bar.style.left = `${tokenEl.offsetLeft}px`;
-  bar.style.top = `${tokenEl.offsetTop - 14}px`;
+  // Leave space for the nameplate (12px) under the HP bar
+  bar.style.top = `${tokenEl.offsetTop - 26}px`;
 
   const fill = bar.querySelector('.fill');
   const txt = bar.querySelector('.txt');
@@ -472,7 +473,7 @@ function updateHpBar(player, tokenEl) {
       tempBar.style.display = 'block';
       tempBar.style.width = `${size * 50}px`;
       tempBar.style.left = `${tokenEl.offsetLeft}px`;
-      tempBar.style.top = `${tokenEl.offsetTop - 28}px`;
+      tempBar.style.top = `${tokenEl.offsetTop - 40}px`;
       const tFill = tempBar.querySelector('.fill');
       const tTxt = tempBar.querySelector('.txt');
       if (tFill) tFill.style.width = `100%`;
@@ -483,6 +484,46 @@ function updateHpBar(player, tokenEl) {
   }
 }
 
+
+
+// ================== NAMEPLATE (имя над токеном, под полоской HP) ==================
+function updateNamePlate(player, tokenEl) {
+  const pid = String(player?.id || '');
+  if (!pid) return;
+  try { window.__namePlateElements = window.__namePlateElements || new Map(); } catch {}
+  const map = window.__namePlateElements;
+  let el = map?.get?.(pid) || null;
+
+  const size = Number(player?.size) || 1;
+
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'token-nameplate';
+    el.innerHTML = `<span class="txt"></span>`;
+    board.appendChild(el);
+    try { map.set(pid, el); } catch {}
+  }
+
+  if (!tokenEl || tokenEl.style.display === 'none' || player.x === null || player.y === null) {
+    el.style.display = 'none';
+    return;
+  }
+
+  el.style.display = 'block';
+  el.style.width = `${size * 50}px`;
+  el.style.left = `${tokenEl.offsetLeft}px`;
+  // place right above token, touching its top edge
+  el.style.top = `${tokenEl.offsetTop - 12}px`;
+
+  const t = el.querySelector('.txt');
+  if (t) t.textContent = String(player.name || '');
+  try { el.title = String(player.name || ''); } catch {}
+}
+
+function updateTokenOverlays(player, tokenEl) {
+  try { updateHpBar(player, tokenEl); } catch {}
+  try { updateNamePlate(player, tokenEl); } catch {}
+}
 // ================== MINI POPUP (dblclick on token) ==================
 let tokenMiniEl = null;
 let tokenMiniPlayerId = null;
@@ -607,7 +648,7 @@ function openTokenMini(playerId) {
     upsertSheetNumber(p, 'vitality.hp-max', Math.max(0, max));
     upsertSheetNumber(p, 'vitality.hp-current', Math.max(0, Math.min(Math.max(0, max), cur)));
     // сразу обновим полоску
-    updateHpBar(p, tokenEl);
+    updateTokenOverlays(p, tokenEl);
   };
 
   // Instant feedback while typing; network update is debounced in upsertSheetNumber.
@@ -770,10 +811,8 @@ function setPlayerPosition(player) {
   if (!el) {
     el = document.createElement('div');
     el.classList.add('player');
-    // Имя под токеном (рамочка)
-    el.innerHTML = `<span class="token-label"></span>`;
-    const lbl0 = el.querySelector('.token-label');
-    if (lbl0) lbl0.textContent = String(player.name || '?');
+    // token label is rendered as a separate overlay (nameplate)
+    el.innerHTML = ``;
     // Default fill; may be overridden by token portrait settings.
     el.style.backgroundColor = player.color;
     el.style.position = 'absolute';
@@ -832,9 +871,6 @@ function setPlayerPosition(player) {
     player.element = el;
   }
 
-  // Update full name label
-  const lbl = el.querySelector('.token-label');
-  if (lbl) lbl.textContent = String(player.name || '?');
   // Tooltip with full name on hover
   try { el.title = String(player.name || ''); } catch {}
   // Apply portrait / color mode
@@ -860,7 +896,7 @@ function setPlayerPosition(player) {
     // If token not placed, hide
     if (player.x === null || player.y === null) {
       el.style.display = 'none';
-      updateHpBar(player, el);
+      updateTokenOverlays(player, el);
       return;
     }
 
@@ -897,14 +933,14 @@ function setPlayerPosition(player) {
       if (lastCellVisibleNow && !tokenStillOnLastKnown) {
         window._fogLastKnown.delete(key);
         el.style.display = 'none';
-        updateHpBar(player, el);
+        updateTokenOverlays(player, el);
         return;
       }
     }
     if (!visibleNow && !known) {
       // not discovered yet
       el.style.display = 'none';
-      updateHpBar(player, el);
+      updateTokenOverlays(player, el);
       return;
     }
 
@@ -917,7 +953,7 @@ function setPlayerPosition(player) {
 
   if (player.x === null || player.y === null) {
     el.style.display = 'none';
-    updateHpBar(player, el);
+    updateTokenOverlays(player, el);
     return;
   }
   el.style.display = 'flex';
@@ -933,7 +969,7 @@ function setPlayerPosition(player) {
     el.style.top = `${cell.offsetTop}px`;
   }
 
-  updateHpBar(player, el);
+  updateTokenOverlays(player, el);
   if (tokenMiniEl && tokenMiniPlayerId === player.id) {
     positionTokenMini(el);
   }
