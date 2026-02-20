@@ -299,6 +299,39 @@
     };
   }
 
+  // Ensure a partially-initialized sheet (e.g. created without importing .json)
+  // still has all required nested structures (stats/saves/skills/etc.).
+  // We merge defaults only for missing fields, without overwriting existing values.
+  function ensureSheetShape(sheet, fallbackName = "-") {
+    const base = createEmptySheet(fallbackName);
+    if (!sheet || typeof sheet !== 'object') return base;
+
+    function isPlainObject(x) {
+      return !!x && typeof x === 'object' && !Array.isArray(x);
+    }
+
+    function merge(dst, src) {
+      if (!isPlainObject(dst) || !isPlainObject(src)) return;
+      for (const k of Object.keys(src)) {
+        const sv = src[k];
+        const dv = dst[k];
+        if (dv === undefined || dv === null) {
+          // clone objects/arrays to avoid accidental shared refs
+          if (Array.isArray(sv)) dst[k] = sv.slice();
+          else if (isPlainObject(sv)) dst[k] = JSON.parse(JSON.stringify(sv));
+          else dst[k] = sv;
+          continue;
+        }
+        if (isPlainObject(dv) && isPlainObject(sv)) {
+          merge(dv, sv);
+        }
+      }
+    }
+
+    merge(sheet, base);
+    return sheet;
+  }
+
   function ensurePlayerSheetWrapper(player) {
     if (!player.sheet || typeof player.sheet !== "object") {
       player.sheet = { source: "manual", importedAt: Date.now(), raw: null, parsed: createEmptySheet(player.name) };
@@ -394,6 +427,10 @@
 
   // ================== VIEW MODEL ==================
   function toViewModel(sheet, fallbackName = "-") {
+    // Some players are created with a minimal sheet payload (only name),
+    // so we normalize the structure before building the VM.
+    sheet = ensureSheetShape(sheet, fallbackName);
+
     const name = get(sheet, 'name.value', fallbackName);
     const cls = get(sheet, 'info.charClass.value', '-');
     const lvl = get(sheet, 'info.level.value', '-');
@@ -431,7 +468,7 @@
     });
 
     // group skills under stats
-    const skillsRaw = (sheet?.skills && typeof sheet.skills === "object") ? sheet.skills : {};
+    const skillsRaw = (sheet?.skills && typeof sheet.skills === "object") ? sheet.skills : createEmptySheet("-").skills;
     for (const key of Object.keys(skillsRaw)) {
       const sk = skillsRaw[key];
       const baseStat = sk?.baseStat;
@@ -585,6 +622,14 @@ const normText = (x, fallback = "") => {
     if ("value" in x) return normText(x.value, fallback);
     if ("name" in x && x.name && typeof x.name === "object" && "value" in x.name) return normText(x.name.value, fallback);
   }
+
+  // expose for other modules
+  try {
+    window.__sheetData = window.__sheetData || {};
+    window.__sheetData.createEmptySheet = createEmptySheet;
+    window.__sheetData.ensureSheetShape = ensureSheetShape;
+    window.__sheetData.toViewModel = toViewModel;
+  } catch {}
   return fallback;
 };
 

@@ -1281,7 +1281,12 @@ function renderShopTab(vm, canEdit) {
         e.stopPropagation();
         if (!player.isBase) return;
         try {
-          const sheet = player.sheet || { parsed: createEmptySheet(player.name) };
+          const raw = player.sheet || { parsed: createEmptySheet(player.name) };
+          // normalize before saving so that fresh bases always contain skills/stats/etc.
+          try {
+            if (raw && raw.parsed) raw.parsed = ensureSheetShape(raw.parsed, player.name);
+          } catch {}
+          const sheet = raw;
           ctx?.sendMessage?.({
             type: 'saveSavedBase',
             playerId: player.id,
@@ -1310,7 +1315,14 @@ function renderShopTab(vm, canEdit) {
       sheetActions.appendChild(savedWrap);
     }
 
-    const sheet = player.sheet?.parsed || createEmptySheet(player.name);
+    // Players created without importing a .json may carry a minimal sheet payload.
+    // Normalize it once here so both render + bindings can rely on a full structure.
+    let sheet = player.sheet?.parsed;
+    if (!sheet || typeof sheet !== 'object') sheet = createEmptySheet(player.name);
+    sheet = ensureSheetShape(sheet, player.name);
+    if (!player.sheet || typeof player.sheet !== 'object') player.sheet = { source: 'manual', importedAt: Date.now(), raw: null, parsed: sheet };
+    else player.sheet.parsed = sheet;
+
     const vm = toViewModel(sheet, player.name);
 
     const tabs = [
