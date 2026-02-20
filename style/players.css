@@ -21,6 +21,9 @@
   width: var(--pl-w);
   max-height: 360px;
   overflow-x: hidden;
+  /* reserve space for vertical scrollbar so cards don't get clipped */
+  scrollbar-gutter: stable;
+  padding-right: 14px;
 }
 
 /* Справа под журналом: список + очередь друг под другом */
@@ -108,8 +111,8 @@
 
 #action-log ul, #player-list {
   list-style: none;
-  padding-left: 6px;
-  padding-right: 16px; /* место под вертикальный скролл */
+  /* a bit tighter so cards fit even when scrollbar appears */
+  padding-left: 4px;
   margin: 0;
 }
 
