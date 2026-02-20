@@ -1124,6 +1124,46 @@ function renderShopTab(vm, canEdit) {
                       </div>
                     </div>
                   </div>
+
+                  <!-- Token display settings (separate framed box) -->
+                  <div class="appearance-tokenbox" data-tokenbox>
+                    <div class="appearance-tokenbox__title">Токен на поле</div>
+                    <div class="appearance-tokenbox__body">
+                      <div class="appearance-tokenbox__preview" data-token-preview aria-label="Превью токена"></div>
+
+                      <div class="appearance-tokenbox__controls">
+                        <div class="appearance-tokenbox__modes">
+                          <label class="token-mode">
+                            <input type="radio" name="tokenMode" value="color" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
+                            <span>Цвет</span>
+                          </label>
+                          <label class="token-mode">
+                            <input type="radio" name="tokenMode" value="full" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
+                            <span>Облик целиком</span>
+                          </label>
+                          <label class="token-mode">
+                            <input type="radio" name="tokenMode" value="crop" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
+                            <span>Выбрать область</span>
+                          </label>
+                        </div>
+
+                        <div class="appearance-tokenbox__crop" data-token-crop>
+                          <div class="token-crop-row">
+                            <div class="token-crop-lbl">X</div>
+                            <input type="range" min="0" max="100" step="1" data-sheet-path="appearance.token.crop.x" ${canEdit ? "" : "disabled"}>
+                          </div>
+                          <div class="token-crop-row">
+                            <div class="token-crop-lbl">Y</div>
+                            <input type="range" min="0" max="100" step="1" data-sheet-path="appearance.token.crop.y" ${canEdit ? "" : "disabled"}>
+                          </div>
+                          <div class="token-crop-row">
+                            <div class="token-crop-lbl">Zoom</div>
+                            <input type="range" min="80" max="220" step="1" data-sheet-path="appearance.token.crop.zoom" ${canEdit ? "" : "disabled"}>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

@@ -191,6 +191,63 @@ function updateAppearancePreview(root, sheet) {
   }
 }
 
+function updateTokenPreview(root, player, sheet) {
+  try {
+    if (!root || !player || !sheet) return;
+    const box = root.querySelector('[data-tokenbox]');
+    const prev = root.querySelector('[data-token-preview]');
+    if (!box || !prev) return;
+
+    // Ensure token settings exist
+    if (!sheet.appearance || typeof sheet.appearance !== 'object') sheet.appearance = {};
+    if (!sheet.appearance.token || typeof sheet.appearance.token !== 'object') sheet.appearance.token = {};
+    if (!sheet.appearance.token.crop || typeof sheet.appearance.token.crop !== 'object') sheet.appearance.token.crop = {};
+
+    const mode = String(sheet.appearance.token.mode || '').trim() || 'crop';
+    const cropX = Math.max(0, Math.min(100, safeInt(sheet.appearance.token.crop.x, 50)));
+    const cropY = Math.max(0, Math.min(100, safeInt(sheet.appearance.token.crop.y, 35)));
+    const zoom = Math.max(80, Math.min(220, safeInt(sheet.appearance.token.crop.zoom, 140)));
+
+    // Base image URL (same logic as appearance preview)
+    const race = String(getByPath(sheet, 'info.race.value') || '').trim();
+    const genderRaw = String(getByPath(sheet, 'notes.details.gender.value') || '').trim();
+    const gender = normalizeGenderKeyForAppearance(genderRaw);
+    const override = String(getByPath(sheet, 'appearance.baseUrl') || '').trim();
+    const src = override || (race ? `assets/base/${race}/${gender}.png` : '');
+
+    // Border color from player
+    prev.style.setProperty('--token-border', String(player.color || '#888'));
+
+    // Show/hide crop controls
+    const cropWrap = root.querySelector('[data-token-crop]');
+    if (cropWrap) cropWrap.style.display = (mode === 'crop') ? '' : 'none';
+
+    if (mode === 'color' || !src) {
+      prev.classList.add('token-preview--color');
+      prev.style.backgroundImage = 'none';
+      prev.style.backgroundColor = String(player.color || '#666');
+      prev.style.backgroundSize = '';
+      prev.style.backgroundPosition = '';
+    } else {
+      prev.classList.remove('token-preview--color');
+      prev.style.backgroundColor = 'transparent';
+      prev.style.backgroundImage = `url("${src}")`;
+      prev.style.backgroundRepeat = 'no-repeat';
+
+      if (mode === 'full') {
+        prev.style.backgroundSize = 'contain';
+        prev.style.backgroundPosition = 'center center';
+      } else {
+        // crop mode
+        prev.style.backgroundSize = `${zoom}%`;
+        prev.style.backgroundPosition = `${cropX}% ${cropY}%`;
+      }
+    }
+  } catch (e) {
+    console.warn('updateTokenPreview failed', e);
+  }
+}
+
 function bindAppearanceUi(root, player, canEdit) {
   if (!root || !player?.sheet?.parsed) return;
   const sheet = player.sheet.parsed;
@@ -201,16 +258,30 @@ function bindAppearanceUi(root, player, canEdit) {
 
   // initial preview update
   updateAppearancePreview(root, sheet);
+  // token preview
+  try {
+    if (!sheet.appearance || typeof sheet.appearance !== 'object') sheet.appearance = {};
+    if (!sheet.appearance.token || typeof sheet.appearance.token !== 'object') sheet.appearance.token = { mode: 'crop', crop: { x: 50, y: 35, zoom: 140 } };
+    if (!sheet.appearance.token.crop || typeof sheet.appearance.token.crop !== 'object') sheet.appearance.token.crop = { x: 50, y: 35, zoom: 140 };
+    if (!sheet.appearance.token.mode) sheet.appearance.token.mode = 'crop';
+    if (sheet.appearance.token.crop.x === undefined) sheet.appearance.token.crop.x = 50;
+    if (sheet.appearance.token.crop.y === undefined) sheet.appearance.token.crop.y = 35;
+    if (sheet.appearance.token.crop.zoom === undefined) sheet.appearance.token.crop.zoom = 140;
+  } catch {}
+  updateTokenPreview(root, player, sheet);
 
   // live updates
   const raceSel = root.querySelector('[data-race-select]');
   const genderSel = root.querySelector('[data-gender-select]');
   const baseOverrideInp = root.querySelector('[data-appearance-base-override]');
 
-  const onAny = () => updateAppearancePreview(root, sheet);
-  raceSel?.addEventListener('change', onAny);
-  genderSel?.addEventListener('change', onAny);
-  baseOverrideInp?.addEventListener('input', onAny);
+  const onAnyToken = () => {
+    try { updateAppearancePreview(root, sheet); } catch {}
+    try { updateTokenPreview(root, player, sheet); } catch {}
+  };
+  raceSel?.addEventListener('change', onAnyToken);
+  genderSel?.addEventListener('change', onAnyToken);
+  baseOverrideInp?.addEventListener('input', onAnyToken);
 }
 
 function bindCombatEditors(root, player, canEdit) {
@@ -514,6 +585,7 @@ function bindEditableInputs(root, player, canEdit) {
       // Support both classic inputs/textarea and rich-text contenteditable nodes.
       const isRte = (String(inp.getAttribute?.('contenteditable') || '') === 'true');
       if (inp.type === "checkbox") inp.checked = !!raw;
+      else if (inp.type === "radio") inp.checked = (String(raw ?? '') === String(inp.value));
       else if (isRte) inp.innerHTML = String(raw ?? "");
       else inp.value = (raw ?? "");
 
@@ -534,6 +606,10 @@ function bindEditableInputs(root, player, canEdit) {
       const handler = () => {
         let val;
         if (inp.type === "checkbox") val = !!inp.checked;
+        else if (inp.type === "radio") {
+          if (!inp.checked) return; // only commit on the checked one
+          val = String(inp.value || '');
+        }
         else if (inp.type === "number") {
           val = (inp.value === "" ? "" : Number(inp.value));
           if (path === "appearance.armorRules.max" && val === 0) val = "";
@@ -554,6 +630,11 @@ function bindEditableInputs(root, player, canEdit) {
             window.__equipAc?.applyAutoAcToSheet?.(player.sheet.parsed);
             updateHeroChips(root, player.sheet.parsed);
           } catch {}
+        }
+
+        // Token preview refresh (mode/crop sliders)
+        if (path.startsWith('appearance.token.')) {
+          try { updateTokenPreview(root, player, player.sheet.parsed); } catch {}
         }
 
 
