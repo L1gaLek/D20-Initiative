@@ -275,6 +275,31 @@ button:hover {
   line-height: 9px;
 }
 
+
+
+/* ===== Nameplate над токеном (под полоской HP) ===== */
+.token-nameplate{
+  position: absolute;
+  height: 12px;
+  border: 1px solid #222;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.72);
+  color: #eee;
+  z-index: 9998;
+  pointer-events: none;
+  overflow: hidden;
+}
+.token-nameplate .txt{
+  display: block;
+  height: 12px;
+  line-height: 12px;
+  font-size: 10px;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ===== Мини-окно по двойному клику ===== */
 .token-mini{
   position: absolute;
