@@ -982,6 +982,10 @@ async function sendMessage(msg) {
     const nextName = parsed?.name?.value ?? parsed?.name;
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
   } catch {}
+  // Optimistic local apply so token/portrait updates instantly (zoom/crop/mode/base image)
+  try { lastState = next; } catch {}
+  try { setPlayerPosition?.(p); } catch {}
+  try { updatePlayerList?.(); } catch {}
 
   await upsertRoomState(currentRoomId, next);
   break;
@@ -1274,8 +1278,16 @@ async function sendMessage(msg) {
           const c = String(msg.color || '').trim();
           if (!/^#[0-9a-fA-F]{6}$/.test(c)) return;
           p.color = c;
+
+          // Optimistic UI update (no reload needed)
+          try { setPlayerPosition?.(p); } catch {}
+
+          // Keep local state in sync immediately
+          try { lastState = next; } catch {}
+
           logEventToState(next, `${p.name} изменил цвет`);
         }
+
 
         else if (type === "addPlayer") {
           const player = msg.player || {};
@@ -1558,7 +1570,12 @@ async function sendMessage(msg) {
             p.y = ny;
           }
           p.size = newSize;
-          logEventToState(next, `${p.name} изменил размер на ${p.size}x${p.size}`);
+
+          // Optimistic UI update
+          try { setPlayerPosition?.(p); } catch {}
+          try { lastState = next; } catch {}
+
+                    logEventToState(next, `${p.name} изменил размер на ${p.size}x${p.size}`);
         }
 
         else if (type === "removePlayerFromBoard") {
