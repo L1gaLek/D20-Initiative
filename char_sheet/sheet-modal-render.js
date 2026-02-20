@@ -1157,7 +1157,7 @@ function renderShopTab(vm, canEdit) {
                             <input type="range" min="0" max="100" step="1" data-sheet-path="appearance.token.crop.y" ${canEdit ? "" : "disabled"}>
                           </div>
                           <div class="token-crop-row">
-                            <div class="token-crop-lbl">Zoom</div>
+                            <div class="token-crop-lbl">Зум</div>
                             <input type="range" min="80" max="220" step="1" data-sheet-path="appearance.token.crop.zoom" ${canEdit ? "" : "disabled"}>
                           </div>
                         </div>
