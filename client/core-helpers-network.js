@@ -1559,30 +1559,65 @@ async function sendMessage(msg) {
           return;
         }
 
-        else if (type === "updatePlayerSize") {
+                else if (type === "updatePlayerSize") {
           const p = (next.players || []).find(pp => String(pp.id) === String(msg.id));
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
+
           const newSize = parseInt(msg.size, 10);
           if (!Number.isFinite(newSize) || newSize < 1 || newSize > 5) return;
 
+          // Validate placement (if token is on the board)
           if (p.x !== null && p.y !== null) {
             const maxX = next.boardWidth - newSize;
             const maxY = next.boardHeight - newSize;
             const nx = clamp(p.x, 0, maxX);
             const ny = clamp(p.y, 0, maxY);
+
             if (!isAreaFree(next, p.id, nx, ny, newSize)) {
-              handleMessage({ type: "error", message: "Нельзя увеличить размер: место занято" });
+              handleMessage({ type: "error", message: "Нельзя изменить размер: место занято" });
               return;
             }
             p.x = nx;
             p.y = ny;
           }
+
           p.size = newSize;
+
+          // Optimistic UI update (instant resize)
+          try { setPlayerPosition?.(p); } catch {}
+          try {
+            const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;
+            if (el) updateHpBar?.(p, el);
+          } catch {}
+          try { lastState = next; } catch {}
+
+          // Persist to tokens table (architecture v4/v5: token meta is authoritative there)
+          try {
+            const mapId = String(next.currentMapId || '');
+            const payload = {
+              room_id: currentRoomId,
+              map_id: mapId,
+              token_id: String(p.id),
+              x: (p.x === null ? null : Number(p.x)),
+              y: (p.y === null ? null : Number(p.y)),
+              size: newSize,
+              color: p.color || null,
+              owner_id: p.ownerId || null,
+              updated_at: new Date().toISOString()
+            };
+            const { error: uErr } = await sbClient
+              .from('room_tokens')
+              .upsert(payload, { onConflict: 'room_id,map_id,token_id' });
+            if (uErr) throw uErr;
+          } catch (e) {
+            console.warn('updatePlayerSize: token upsert failed', e);
+          }
+
           logEventToState(next, `${p.name} изменил размер на ${p.size}x${p.size}`);
         }
 
-        else if (type === "removePlayerFromBoard") {
+        else if (type === "removePlayerFromBoard") { {
           const p = (next.players || []).find(pp => String(pp.id) === String(msg.id));
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
