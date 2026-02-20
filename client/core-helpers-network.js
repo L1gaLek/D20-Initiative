@@ -964,7 +964,7 @@ async function sendMessage(msg) {
   const isGm = (String(myRole || "") === "GM");
   const myUserId = String(localStorage.getItem("dnd_user_id") || "");
 
-  const p = (next.players || []).find(pl => pl.id === msg.id);
+  const p = (next.players || []).find(pl => String(pl.id) === String(msg.id));
   if (!p) return;
 
   const owns = (pl) => pl && String(pl.ownerId) === myUserId;
@@ -1268,7 +1268,7 @@ async function sendMessage(msg) {
         }
 
         else if (type === "updatePlayerColor") {
-          const p = (next.players || []).find(pp => pp.id === msg.id);
+          const p = (next.players || []).find(pp => String(pp.id) === String(msg.id));
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
           const c = String(msg.color || '').trim();
@@ -1357,7 +1357,7 @@ async function sendMessage(msg) {
           const pid = String(msg.id || "");
           const choice = String(msg.choice || "");
           if (!pid) return;
-          const p = (next.players || []).find(pp => pp.id === pid);
+          const p = (next.players || []).find(pp => String(pp.id) === pid);
           if (!p) return;
           if (!p.inCombat) return;
           // Allow both explicit pending flow and direct usage from UI.
@@ -1470,7 +1470,7 @@ async function sendMessage(msg) {
         }
 
         else if (type === "movePlayer") {
-          const p = (next.players || []).find(pp => pp.id === msg.id);
+          const p = (next.players || []).find(pp => String(pp.id) === String(msg.id));
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
 
@@ -1539,7 +1539,7 @@ async function sendMessage(msg) {
         }
 
         else if (type === "updatePlayerSize") {
-          const p = (next.players || []).find(pp => pp.id === msg.id);
+          const p = (next.players || []).find(pp => String(pp.id) === String(msg.id));
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
           const newSize = parseInt(msg.size, 10);
@@ -1562,7 +1562,7 @@ async function sendMessage(msg) {
         }
 
         else if (type === "removePlayerFromBoard") {
-          const p = (next.players || []).find(pp => pp.id === msg.id);
+          const p = (next.players || []).find(pp => String(pp.id) === String(msg.id));
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
 
@@ -1591,7 +1591,7 @@ async function sendMessage(msg) {
         }
 
         else if (type === "removePlayerCompletely") {
-          const p = (next.players || []).find(pp => pp.id === msg.id);
+          const p = (next.players || []).find(pp => String(pp.id) === String(msg.id));
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
 
