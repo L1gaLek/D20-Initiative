@@ -159,9 +159,8 @@
     onTokenPositionsChanged(state) {
       try {
         this._lastState = state;
-        // Token-only updates can also include fog.explored changes ("исследование").
-        // If we don't sync explored here, the explored overlay will refresh only
-        // after a full board rerender (e.g. toggling fog), which feels broken.
+        // IMPORTANT: token moves can change both dynamic visibility and "исследование" (explored) set.
+        // We must sync explored from state here too, because token-only updates may not trigger a full board render.
         this._syncExploredFromState();
         this._maybeRecomputeDynamic();
         this._render();
@@ -216,12 +215,31 @@
     _syncExploredFromState() {
       const fog = this._fogObj();
       const arr = Array.isArray(fog.explored) ? fog.explored : [];
-      const next = new Set();
+      const incoming = new Set();
       for (const k of arr) {
         const s = String(k || '');
-        if (s.includes(',')) next.add(s);
+        if (s.includes(',')) incoming.add(s);
       }
-      this._exploredSet = next;
+
+      // GM client may have fresher explored cells locally (before the debounce sync hits the server).
+      // To prevent "откат" explored-области на GM, мы:
+      // - если сервер прислал пусто (clear) -> очищаем
+      // - иначе -> делаем union (сервер + локальное)
+      let isGm = false;
+      try { isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM'); } catch {}
+
+      if (isGm) {
+        if (incoming.size === 0) {
+          this._exploredSet = new Set();
+          return;
+        }
+        const merged = new Set(this._exploredSet || []);
+        for (const k of incoming) merged.add(k);
+        this._exploredSet = merged;
+        return;
+      }
+
+      this._exploredSet = incoming;
     },
 
     _wallEdgesSet() {
@@ -420,6 +438,15 @@
       }, 250);
     },
 
+    _cancelExploredSync() {
+      try {
+        if (this._pendingExploredSync) {
+          clearTimeout(this._pendingExploredSync);
+          this._pendingExploredSync = null;
+        }
+      } catch {}
+    },
+
     _render() {
       const st = this._lastState;
       if (!st || !this._ctx || !this._canvas) return;
@@ -591,19 +618,17 @@
       bindBtn('fog-hide-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'hideAll' }); } catch {} });
       bindBtn('fog-reveal-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'revealAll' }); } catch {} });
       bindBtn('fog-clear-explored', () => {
+        // IMPORTANT: after clearing explored on the server, we must also clear the local cache
+        // and cancel any pending debounce sync. Otherwise, an old scheduled sync can
+        // overwrite fresh exploration or keep clients stuck until a full fog toggle.
         try {
-          // Clear locally immediately so UI reacts without waiting for a state roundtrip.
-          try { this._exploredSet = new Set(); } catch {}
-          try {
-            if (this._pendingExploredSync) {
-              clearTimeout(this._pendingExploredSync);
-              this._pendingExploredSync = null;
-            }
-          } catch {}
-          try { this._render(); } catch {}
-
-          sendMessage?.({ type: 'fogClearExplored' });
+          this._exploredSet = new Set();
+          this._cancelExploredSync();
+          // Force dynamic recompute on next token update (exploration depends on it).
+          this._dynKey = '';
+          this._render();
         } catch {}
+        try { sendMessage?.({ type: 'fogClearExplored' }); } catch {}
       });
 
       const onSettingsChange = () => {
