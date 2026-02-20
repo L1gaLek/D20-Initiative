@@ -53,9 +53,8 @@
         return false;
       }
 
-      // Default: allow move to visible cells (old behavior)
-      // For multi-size tokens, require top-left visible (simple + consistent with movement model)
-      return this.isCellVisible(cx, cy);
+      // If restriction is disabled: allow moving anywhere (visible, explored, or hidden).
+      return true;
     },
 
     isCellVisible(x, y) {
