@@ -1018,10 +1018,15 @@ function updatePlayerList() {
       }
       actions.appendChild(topActions);
 
-      // ===== Выбор инициативы для участника боя (в инициативе или позднее в бою) =====
+      // ===== Выбор инициативы для участника боя (ТОЛЬКО для добавленных в бой во время боя) =====
       const phaseNow = String(lastState?.phase || '');
       const canPickInit = (phaseNow === 'initiative' || phaseNow === 'combat');
-      if (lastState && canPickInit && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
+      // В фазе инициативы кнопки "Бросить инициативу"/"Инициатива основы" мешают: они должны
+      // появляться только для персонажей, которых добавили в бой уже ПОСЛЕ старта боя.
+      // Такой сценарий помечается флагом pendingInitiativeChoice (ставится сервером в setPlayerInCombat,
+      // когда next.phase === 'combat').
+      const isLateJoiner = !!p.pendingInitiativeChoice;
+      if (lastState && canPickInit && isLateJoiner && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
         const box = document.createElement('div');
         box.className = 'init-choice-box';
 
