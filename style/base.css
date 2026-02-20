@@ -260,9 +260,9 @@ button:hover {
   background: rgba(44, 167, 78, 0.85);
 }
 
-/* ===== Временное здоровье (полоска над основной) ===== */
+/* ===== Временное здоровье (показываем ВМЕСТО основной шкалы) ===== */
 .token-hpbar.token-hpbar--temp{
-  height: 10px;
+  height: 12px; /* такая же высота, как у основной шкалы */
   border-radius: 6px;
   background: rgba(0,0,0,0.65);
 }
@@ -271,8 +271,8 @@ button:hover {
   background: rgba(0, 74, 107, 0.88);
 }
 .token-hpbar.token-hpbar--temp .txt{
-  font-size: 9px;
-  line-height: 9px;
+  font-size: 10px;
+  line-height: 12px;
 }
 
 
