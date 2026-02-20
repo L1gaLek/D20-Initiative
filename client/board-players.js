@@ -587,56 +587,84 @@ function getCurrentMapIdSafe() {
   return 'map';
 }
 
-// ===== Token portrait helper (appearance -> image inside token) =====
-function normalizeGenderKeyForToken(raw) {
-  const v = String(raw || '').trim().toLowerCase();
-  if (!v) return 'male';
-  if (v === 'male' || v === 'm') return 'male';
-  if (v === 'female' || v === 'f') return 'female';
-  if (v.startsWith('м')) return 'male';
-  if (v.startsWith('ж')) return 'female';
-  return 'male';
+// ================== TOKEN PORTRAIT HELPERS ==================
+function getTokenSheetSafe(p) {
+  try {
+    if (p?.sheet?.parsed) return p.sheet.parsed;
+    if (p?.sheet && typeof p.sheet === 'object') return p.sheet;
+  } catch {}
+  return null;
 }
 
-function getTokenPortraitUrl(player) {
+function getTokenBaseImageUrl(p) {
+  // Prefer explicit appearanceBaseUrl if present
   try {
-    const sheet = player?.sheet?.parsed;
-    if (!sheet) return '';
-    const race = String(sheet?.info?.race?.value || '').trim();
-    const genderRaw = String(sheet?.notes?.details?.gender?.value || '').trim();
-    const gender = normalizeGenderKeyForToken(genderRaw);
-    const override = String(sheet?.appearance?.baseUrl || '').trim();
-    const src = override || (race ? `assets/base/${race}/${gender}.png` : '');
-    return src;
-  } catch {
-    return '';
+    const direct = String(p?.appearanceBaseUrl || '').trim();
+    if (direct) return direct;
+  } catch {}
+
+  const sheet = getTokenSheetSafe(p);
+  if (sheet) {
+    try {
+      const override = String(sheet?.appearance?.baseUrl || '').trim();
+      if (override) return override;
+
+      const race = String(sheet?.info?.race?.value || '').trim();
+      const genderRaw = String(sheet?.notes?.details?.gender?.value || '').trim().toLowerCase();
+      const gender = (genderRaw.startsWith('ж') || genderRaw === 'female' || genderRaw === 'f') ? 'female' : 'male';
+      if (race) return `assets/base/${race}/${gender}.png`;
+    } catch {}
   }
+
+  // Fallback: if player has race/gender fields directly
+  try {
+    const race = String(p?.race || '').trim();
+    const gender = String(p?.gender || '').trim().toLowerCase();
+    const g = (gender.startsWith('ж') || gender === 'female' || gender === 'f') ? 'female' : 'male';
+    if (race) return `assets/base/${race}/${g}.png`;
+  } catch {}
+  return '';
 }
 
-function applyTokenLook(el, player) {
-  if (!el || !player) return;
-  // Thin outline in chosen player color
-  try {
-    const c = String(player.color || '').trim();
-    if (c) el.style.borderColor = c;
-  } catch {}
+function getTokenDisplaySettings(p) {
+  const sheet = getTokenSheetSafe(p);
+  const t = sheet?.appearance?.token || p?.appearance?.token || p?.token || null;
+  const mode = String(t?.mode || p?.tokenMode || '').trim() || 'crop';
+  const crop = (t?.crop && typeof t.crop === 'object') ? t.crop : {};
+  const x = Math.max(0, Math.min(100, Number(crop.x ?? 50) || 50));
+  const y = Math.max(0, Math.min(100, Number(crop.y ?? 35) || 35));
+  const zoom = Math.max(80, Math.min(220, Number(crop.zoom ?? 140) || 140));
+  return { mode, x, y, zoom };
+}
 
-  // Portrait inside token
-  try {
-    const img = el.querySelector?.('img.token-portrait');
-    if (!img) return;
-    const src = getTokenPortraitUrl(player);
-    if (src) {
-      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
-      img.style.display = '';
-      // fallback background behind image
-      el.style.backgroundColor = '#111';
-    } else {
-      img.removeAttribute('src');
-      img.style.display = 'none';
-      el.style.backgroundColor = player.color;
-    }
-  } catch {}
+function applyTokenVisual(el, player) {
+  if (!el || !player) return;
+  const { mode, x, y, zoom } = getTokenDisplaySettings(player);
+  const src = getTokenBaseImageUrl(player);
+
+  // Border always uses player color
+  const borderColor = String(player.color || '#888');
+  el.style.borderColor = borderColor;
+
+  if (mode === 'color' || !src) {
+    el.style.backgroundImage = 'none';
+    el.style.backgroundColor = borderColor;
+    el.style.backgroundSize = '';
+    el.style.backgroundPosition = '';
+    el.style.backgroundRepeat = '';
+    return;
+  }
+
+  el.style.backgroundColor = 'transparent';
+  el.style.backgroundImage = `url("${src}")`;
+  el.style.backgroundRepeat = 'no-repeat';
+  if (mode === 'full') {
+    el.style.backgroundSize = 'contain';
+    el.style.backgroundPosition = 'center center';
+  } else {
+    el.style.backgroundSize = `${zoom}%`;
+    el.style.backgroundPosition = `${x}% ${y}%`;
+  }
 }
 
 function setPlayerPosition(player) {
@@ -646,9 +674,10 @@ function setPlayerPosition(player) {
     el = document.createElement('div');
     el.classList.add('player');
     // Имя внутри токена
-    el.innerHTML = `<img class="token-portrait" alt="" draggable="false" /><span class="token-label"></span>`;
+    el.innerHTML = `<span class="token-label"></span>`;
     const lbl0 = el.querySelector('.token-label');
     if (lbl0) lbl0.textContent = String(player.name || '?');
+    // Default fill; may be overridden by token portrait settings.
     el.style.backgroundColor = player.color;
     el.style.position = 'absolute';
 
@@ -709,13 +738,10 @@ function setPlayerPosition(player) {
   // Update full name label
   const lbl = el.querySelector('.token-label');
   if (lbl) lbl.textContent = String(player.name || '?');
-  // background stays as fallback; portrait fills the token
-  el.style.backgroundColor = player.color;
+  // Apply portrait / color mode
+  try { applyTokenVisual(el, player); } catch {}
   el.style.width = `${player.size * 50}px`;
   el.style.height = `${player.size * 50}px`;
-
-  // Apply portrait + outline color
-  applyTokenLook(el, player);
 
   // ================== Visibility / discovery rules for exploration ==================
   // Treat GM in "Как у игрока" the same as a normal player.
