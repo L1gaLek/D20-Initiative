@@ -159,6 +159,9 @@
     onTokenPositionsChanged(state) {
       try {
         this._lastState = state;
+        // IMPORTANT: token moves can change both dynamic visibility and "исследование" (explored) set.
+        // We must sync explored from state here too, because token-only updates may not trigger a full board render.
+        this._syncExploredFromState();
         this._maybeRecomputeDynamic();
         this._render();
       } catch {}
@@ -212,12 +215,31 @@
     _syncExploredFromState() {
       const fog = this._fogObj();
       const arr = Array.isArray(fog.explored) ? fog.explored : [];
-      const next = new Set();
+      const incoming = new Set();
       for (const k of arr) {
         const s = String(k || '');
-        if (s.includes(',')) next.add(s);
+        if (s.includes(',')) incoming.add(s);
       }
-      this._exploredSet = next;
+
+      // GM client may have fresher explored cells locally (before the debounce sync hits the server).
+      // To prevent "откат" explored-области на GM, мы:
+      // - если сервер прислал пусто (clear) -> очищаем
+      // - иначе -> делаем union (сервер + локальное)
+      let isGm = false;
+      try { isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM'); } catch {}
+
+      if (isGm) {
+        if (incoming.size === 0) {
+          this._exploredSet = new Set();
+          return;
+        }
+        const merged = new Set(this._exploredSet || []);
+        for (const k of incoming) merged.add(k);
+        this._exploredSet = merged;
+        return;
+      }
+
+      this._exploredSet = incoming;
     },
 
     _wallEdgesSet() {
