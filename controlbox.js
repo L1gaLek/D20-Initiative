@@ -45,6 +45,88 @@
     const wallToolSel = document.getElementById('wall-tool');
     const wallTypeSel = document.getElementById('wall-type');
     const wallThicknessSel = document.getElementById('wall-thickness');
+    // draft (local) walls: GM can draw without network lag, then publish
+    let draftEnabled = false;
+    const draftMap = new Map(); // key -> { mode, edge }
+    let draftChk = null;
+    let draftBtn = null;
+    let draftInfo = null;
+
+    function ensureDraftUi() {
+      // inject UI row under wall tools
+      const tools = document.querySelector('#env-editor .env-wall-tools');
+      if (!tools) return;
+      if (document.getElementById('wall-draft')) {
+        draftChk = document.getElementById('wall-draft');
+        draftBtn = document.getElementById('wall-draft-commit');
+        draftInfo = document.getElementById('wall-draft-info');
+        return;
+      }
+      const row = document.createElement('div');
+      row.className = 'env-wall-row';
+      row.style.marginTop = '6px';
+      row.innerHTML = `
+        <label style="display:flex; align-items:center; gap:8px; flex:1;">
+          <input type="checkbox" id="wall-draft">
+          <span style="font-size:12px; opacity:.95;">Черновик (локально)</span>
+        </label>
+        <button id="wall-draft-commit" type="button" disabled style="white-space:nowrap;">Загрузить</button>
+        <span id="wall-draft-info" style="font-size:11px; opacity:.75; margin-left:auto;"></span>
+      `;
+      tools.appendChild(row);
+      draftChk = row.querySelector('#wall-draft');
+      draftBtn = row.querySelector('#wall-draft-commit');
+      draftInfo = row.querySelector('#wall-draft-info');
+
+      draftChk?.addEventListener('change', () => {
+        draftEnabled = !!draftChk.checked;
+        refreshDraftUi();
+      });
+      draftBtn?.addEventListener('click', () => {
+        if (!ctx.isGM?.()) return;
+        publishDraft();
+      });
+    }
+
+    function refreshDraftUi() {
+      if (!draftBtn) return;
+      const n = draftMap.size;
+      draftBtn.disabled = !(draftEnabled && n > 0);
+      if (draftInfo) {
+        draftInfo.textContent = (draftEnabled ? (n ? `Изменений: ${n}` : 'Пусто') : '');
+      }
+    }
+
+    function addToDraft(mode, edge) {
+      const m = String(mode || '');
+      const e = edge || {};
+      const x = Number(e.x), y = Number(e.y);
+      const dir = String(e.dir || '').toUpperCase();
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      if (!(dir === 'N' || dir === 'E' || dir === 'S' || dir === 'W')) return;
+      const k = `${x},${y},${dir}`;
+      if (m === 'add') draftMap.set(k, { mode: 'add', edge: { x, y, dir, type: e.type, thickness: e.thickness } });
+      else if (m === 'remove') draftMap.set(k, { mode: 'remove', edge: { x, y, dir } });
+      refreshDraftUi();
+    }
+
+    function publishDraft() {
+      if (!draftEnabled) return;
+      if (!draftMap.size) return;
+      const adds = [];
+      const removes = [];
+      for (const v of draftMap.values()) {
+        if (!v) continue;
+        if (v.mode === 'add') adds.push(v.edge);
+        else if (v.mode === 'remove') removes.push(v.edge);
+      }
+      // send in correct order: removals first, then adds (so repainting same edge is consistent)
+      if (removes.length) ctx.sendMessage?.({ type: 'bulkWallEdges', mode: 'remove', edges: removes });
+      if (adds.length) ctx.sendMessage?.({ type: 'bulkWallEdges', mode: 'add', edges: adds });
+      draftMap.clear();
+      refreshDraftUi();
+    }
+
     const clearBoardBtn = document.getElementById('clear-board');
     const resetGameBtn = document.getElementById('reset-game');
 
@@ -151,10 +233,15 @@
 
     const readWallUi = () => {
       wallTool = String(wallToolSel?.value || 'brush');
+      draftEnabled = !!(document.getElementById('wall-draft')?.checked);
       wallType = String(wallTypeSel?.value || 'stone');
       wallThickness = Math.max(1, Math.min(12, Number(wallThicknessSel?.value || 4)));
     };
     wallToolSel?.addEventListener('change', readWallUi);
+
+    // inject draft UI
+    ensureDraftUi();
+    refreshDraftUi();
     wallTypeSel?.addEventListener('change', readWallUi);
     wallThicknessSel?.addEventListener('change', readWallUi);
 
@@ -414,7 +501,12 @@
         // expects message type `bulkWallEdges` with field `edges`.
         // Sending legacy `bulkWalls` (which expects `cells`) causes walls to appear
         // optimistically for a moment and then disappear (state never updates).
-        ctx.sendMessage?.({ type: 'bulkWallEdges', mode: wallMode, edges: changed });
+        if (draftEnabled) {
+          // keep locally until GM clicks "Загрузить"
+          for (const ed of changed) addToDraft(wallMode, ed);
+        } else {
+          ctx.sendMessage?.({ type: 'bulkWallEdges', mode: wallMode, edges: changed });
+        }
       }
 
       dragTouched = new Set();
