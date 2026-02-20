@@ -587,6 +587,58 @@ function getCurrentMapIdSafe() {
   return 'map';
 }
 
+// ===== Token portrait helper (appearance -> image inside token) =====
+function normalizeGenderKeyForToken(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  if (!v) return 'male';
+  if (v === 'male' || v === 'm') return 'male';
+  if (v === 'female' || v === 'f') return 'female';
+  if (v.startsWith('м')) return 'male';
+  if (v.startsWith('ж')) return 'female';
+  return 'male';
+}
+
+function getTokenPortraitUrl(player) {
+  try {
+    const sheet = player?.sheet?.parsed;
+    if (!sheet) return '';
+    const race = String(sheet?.info?.race?.value || '').trim();
+    const genderRaw = String(sheet?.notes?.details?.gender?.value || '').trim();
+    const gender = normalizeGenderKeyForToken(genderRaw);
+    const override = String(sheet?.appearance?.baseUrl || '').trim();
+    const src = override || (race ? `assets/base/${race}/${gender}.png` : '');
+    return src;
+  } catch {
+    return '';
+  }
+}
+
+function applyTokenLook(el, player) {
+  if (!el || !player) return;
+  // Thin outline in chosen player color
+  try {
+    const c = String(player.color || '').trim();
+    if (c) el.style.borderColor = c;
+  } catch {}
+
+  // Portrait inside token
+  try {
+    const img = el.querySelector?.('img.token-portrait');
+    if (!img) return;
+    const src = getTokenPortraitUrl(player);
+    if (src) {
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      img.style.display = '';
+      // fallback background behind image
+      el.style.backgroundColor = '#111';
+    } else {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+      el.style.backgroundColor = player.color;
+    }
+  } catch {}
+}
+
 function setPlayerPosition(player) {
   let el = playerElements.get(player.id);
 
@@ -594,7 +646,7 @@ function setPlayerPosition(player) {
     el = document.createElement('div');
     el.classList.add('player');
     // Имя внутри токена
-    el.innerHTML = `<span class="token-label"></span>`;
+    el.innerHTML = `<img class="token-portrait" alt="" draggable="false" /><span class="token-label"></span>`;
     const lbl0 = el.querySelector('.token-label');
     if (lbl0) lbl0.textContent = String(player.name || '?');
     el.style.backgroundColor = player.color;
@@ -657,9 +709,13 @@ function setPlayerPosition(player) {
   // Update full name label
   const lbl = el.querySelector('.token-label');
   if (lbl) lbl.textContent = String(player.name || '?');
+  // background stays as fallback; portrait fills the token
   el.style.backgroundColor = player.color;
   el.style.width = `${player.size * 50}px`;
   el.style.height = `${player.size * 50}px`;
+
+  // Apply portrait + outline color
+  applyTokenLook(el, player);
 
   // ================== Visibility / discovery rules for exploration ==================
   // Treat GM in "Как у игрока" the same as a normal player.
