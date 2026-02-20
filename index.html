@@ -296,18 +296,15 @@
                 </label>
               </div>
 
-              <!-- Draft walls (GM): локальный черновик + подгрузка одним пакетом -->
-              <div class="env-wall-row" style="gap:10px; align-items:center;">
+              <!-- Черновик стен (локально) + кнопки: Загрузить / Сбросить -->
+              <div class="env-wall-row" style="margin-top:6px; align-items:center;">
                 <label style="display:flex; align-items:center; gap:8px; flex:1;">
-                  <input type="checkbox" id="wall-draft-enabled" />
-                  <span style="font-size:12px; opacity:.9;">Черновик (локально)</span>
+                  <input type="checkbox" id="wall-draft" />
+                  <span style="font-size:12px; opacity:.95;">Черновик (локально)</span>
                 </label>
-                <span style="font-size:12px; opacity:.8; white-space:nowrap;">Изм.: <b id="wall-draft-count">0</b></span>
-              </div>
-
-              <div class="env-wall-row" style="gap:8px;">
-                <button id="wall-draft-apply" type="button" disabled style="flex:1;">Подгрузить</button>
-                <button id="wall-draft-reset" type="button" disabled style="flex:1;">Сбросить</button>
+                <button id="wall-draft-upload" type="button" disabled style="white-space:nowrap;">Загрузить</button>
+                <button id="wall-draft-reset" type="button" disabled style="white-space:nowrap;">Сбросить</button>
+                <span id="wall-draft-info" style="font-size:11px; opacity:.75; margin-left:auto;"></span>
               </div>
             </div>
             <div class="env-range-row">
