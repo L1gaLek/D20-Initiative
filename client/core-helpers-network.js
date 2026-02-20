@@ -551,6 +551,19 @@ function applyTokenRowToLocalState(row) {
 
         // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates
         if (isPublic !== null) p.isPublic = isPublic;
+
+        // Apply to DOM immediately (position/color/visibility rules)
+        try { setPlayerPosition?.(p); } catch {}
+        try {
+          const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;
+          if (el) updateHpBar?.(p, el);
+        } catch {}
+
+        // Fog of war: token rows arrive via realtime; recompute dynamic visibility and refresh discoverable tokens.
+        try {
+          window.FogWar?.onTokenPositionsChanged?.(lastState);
+          (lastState?.players || []).forEach(pp => { try { setPlayerPosition?.(pp); } catch {} });
+        } catch {}
       }
     }
   } catch {}
@@ -982,10 +995,6 @@ async function sendMessage(msg) {
     const nextName = parsed?.name?.value ?? parsed?.name;
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
   } catch {}
-  // Optimistic local apply so token/portrait updates instantly (zoom/crop/mode/base image)
-  try { lastState = next; } catch {}
-  try { setPlayerPosition?.(p); } catch {}
-  try { updatePlayerList?.(); } catch {}
 
   await upsertRoomState(currentRoomId, next);
   break;
@@ -1278,16 +1287,8 @@ async function sendMessage(msg) {
           const c = String(msg.color || '').trim();
           if (!/^#[0-9a-fA-F]{6}$/.test(c)) return;
           p.color = c;
-
-          // Optimistic UI update (no reload needed)
-          try { setPlayerPosition?.(p); } catch {}
-
-          // Keep local state in sync immediately
-          try { lastState = next; } catch {}
-
           logEventToState(next, `${p.name} изменил цвет`);
         }
-
 
         else if (type === "addPlayer") {
           const player = msg.player || {};
@@ -1510,6 +1511,14 @@ async function sendMessage(msg) {
               const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;
               if (el) updateHpBar?.(p, el);
             } catch {}
+
+            // Fog of war must react instantly to movement (recompute dynamic vision + refresh discoverable tokens)
+            try {
+              const stNow = (typeof lastState !== 'undefined' && lastState) ? lastState : next;
+              window.FogWar?.onTokenPositionsChanged?.(stNow);
+              // Re-run token placement/visibility rules (GM-hidden NPC discovery) without full board rerender.
+              (stNow?.players || []).forEach(pp => { try { setPlayerPosition?.(pp); } catch {} });
+            } catch {}
           } catch {}
 
           try {
@@ -1570,12 +1579,7 @@ async function sendMessage(msg) {
             p.y = ny;
           }
           p.size = newSize;
-
-          // Optimistic UI update
-          try { setPlayerPosition?.(p); } catch {}
-          try { lastState = next; } catch {}
-
-                    logEventToState(next, `${p.name} изменил размер на ${p.size}x${p.size}`);
+          logEventToState(next, `${p.name} изменил размер на ${p.size}x${p.size}`);
         }
 
         else if (type === "removePlayerFromBoard") {
