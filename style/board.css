@@ -52,6 +52,14 @@
   pointer-events: none;
 }
 
+/* Draft/preview layer for walls while dragging (above walls, below tokens) */
+#walls-preview-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
 /* Когда есть подложка — делаем клетки полупрозрачными, но линии (outline) видны */
 #game-board.has-bg .cell {
   background-color: rgba(42, 42, 42, var(--grid-alpha, 0.35));
@@ -101,6 +109,14 @@ outline-color: #666;
   pointer-events: none;
   opacity: var(--wall-alpha, 1);
   border-radius: 2px;
+}
+
+/* Preview (draft) walls while dragging (line/rect) */
+.wall-edge.wall-preview{
+  background: rgba(255,255,255,0.12);
+  outline: 1px dashed rgba(255,255,255,0.75);
+  box-shadow: none;
+  opacity: 0.9;
 }
 
 .wall-type-stone{
