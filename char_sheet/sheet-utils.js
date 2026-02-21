@@ -190,6 +190,8 @@ function syncArmorRulesFromEquipped(sheet) {
   const armorIsShield = String(armorItem?.armor?.type || '').toLowerCase() === 'shield' || /щит/i.test(String(armorItem?.name_ru || armorItem?.name || ''));
 
   if (!ap.armorRules || typeof ap.armorRules !== 'object') ap.armorRules = {};
+  // New: optional AC bonus from proficiency when wearing armor (toggle in Appearance)
+  if (typeof ap.armorRules.addProf !== 'boolean') ap.armorRules.addProf = false;
   if (!armorItem || armorIsShield) {
     // no worn armor selected (or selected is a shield by mistake)
     ap.armorRules.sourceId = '';
@@ -263,7 +265,15 @@ function computeAutoAcFromEquipment(sheet) {
   // shield bonus
   const shieldBonus = hasShield ? safeInt(ap?.shieldRules?.bonus, parseAcNumber(shieldItem?.armor?.ac, 0)) : 0;
 
-  const total = Math.max(0, Math.trunc(base + dexBonus + shieldBonus));
+  // Optional: add proficiency bonus to AC when toggle is enabled (only when armor is worn)
+  let profBonus = 0;
+  try {
+    if (hasArmor && !!ap?.armorRules?.addProf) {
+      profBonus = (typeof getProfBonus === 'function') ? safeInt(getProfBonus(sheet), 0) : 0;
+    }
+  } catch { profBonus = 0; }
+
+  const total = Math.max(0, Math.trunc(base + dexBonus + shieldBonus + profBonus));
   return total;
 }
 

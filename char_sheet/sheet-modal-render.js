@@ -1094,7 +1094,13 @@ function renderShopTab(vm, canEdit) {
                   </div>
                 </div>
                 <div class="appearance-slot">
-                  <div class="lbl">Доспех</div>
+                  <div class="lbl appearance-lbl-row">
+                    <span>Доспех</span>
+                    <label class="appearance-prof-toggle" title="Добавить бонус владения к КД (если выбран доспех)">
+                      <input type="checkbox" data-sheet-path="appearance.armorRules.addProf" data-armor-prof ${canEdit ? "" : "disabled"}>
+                      <span>Владение</span>
+                    </label>
+                  </div>
                   <select data-sheet-path="appearance.slots.armor" data-appearance-slot="armor" ${canEdit ? "" : "disabled"}>${armorOptions}</select>
                   <div class="appearance-armor-meta" data-armor-meta="armor">
                     <div class="meta-grid">

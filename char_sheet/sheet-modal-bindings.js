@@ -557,6 +557,24 @@ function bindCombatEditors(root, player, canEdit) {
 function bindEditableInputs(root, player, canEdit) {
     if (!root || !player?.sheet?.parsed) return;
 
+    // "Владение" toggle for armor: enabled only when some armor is selected.
+    // If armor is cleared, we force toggle off.
+    const syncArmorProfToggleUi = () => {
+      try {
+        const cb = root.querySelector('[data-armor-prof]');
+        if (!cb) return;
+        const armorSel = String(getByPath(player.sheet.parsed, 'appearance.slots.armor') || '').trim();
+        const hasArmor = !!armorSel;
+        if (!hasArmor) {
+          // force OFF when no armor is equipped
+          try { cb.checked = false; } catch {}
+          try { setByPath(player.sheet.parsed, 'appearance.armorRules.addProf', false); } catch {}
+        }
+        // interactive only if canEdit and armor selected
+        try { cb.disabled = (!canEdit) || (!hasArmor); } catch {}
+      } catch {}
+    };
+
     // Upgrade large textareas to a lightweight rich-text editor (toolbar + contenteditable).
     // This is used for backstory/notes/descriptions etc.
     try { upgradeSheetTextareasToRte(root, canEdit); } catch {}
@@ -618,6 +636,11 @@ function bindEditableInputs(root, player, canEdit) {
         else val = inp.value;
 
         setByPath(player.sheet.parsed, path, val);
+
+        // Armor prof toggle state depends on whether armor is selected.
+        if (path === 'appearance.slots.armor') {
+          syncArmorProfToggleUi();
+        }
 
         // ===== Auto AC from equipment =====
         // If user changes equipped armor/shield or edits armor params, recompute AC immediately.
@@ -1007,6 +1030,9 @@ function bindTextareaHeightPersistence(root, player) {
         scheduleSheetSave(player);
       });
     });
+
+    // initial state
+    syncArmorProfToggleUi();
   }
 
   // ===== clickable dot binding (saving throws proficiency) =====
