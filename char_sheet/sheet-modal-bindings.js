@@ -1046,7 +1046,9 @@ function bindTextareaHeightPersistence(root, player) {
     });
 
     // initial state
-    syncArmorProfToggleUi();
+    // NOTE: armor proficiency toggle UI is owned by bindEditableInputs().
+    // Do not reference it here (different scope), otherwise the sheet modal
+    // can fail to open with "syncArmorProfToggleUi is not defined".
   }
 
   // ===== clickable dot binding (saving throws proficiency) =====
