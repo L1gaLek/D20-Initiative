@@ -271,8 +271,8 @@
 
   border: 1px solid #444;
   border-radius: 4px;
-  /* немного шире, чтобы рамка слегка "выступала" за кнопки (особенно "Удалить") */
-  padding: 6px 14px;
+  /* чуть шире внутренние отступы — кнопки визуально не упираются в границы */
+  padding: 6px 10px;
   margin-bottom: 6px;
 
   display: flex;
@@ -309,7 +309,7 @@
   gap: 4px;
   flex-shrink: 0;
   /* чтобы рамка карточки чуть выступала относительно кнопок */
-  padding: 0 6px;
+  padding: 0 3px;
 }
 
 .player-actions-top{
