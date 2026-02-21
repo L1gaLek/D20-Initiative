@@ -604,44 +604,6 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
   }
 }
 
-
-async function upsertTokenColor(roomId, tokenId, color) {
-  try {
-    await ensureSupabaseReady();
-    if (!roomId || !tokenId) return;
-    const c = String(color || '').trim();
-    if (!/^#[0-9a-fA-F]{6}$/.test(c)) return;
-
-    // Try update all rows of this token in this room (across maps).
-    const { data: upd, error: uErr } = await sbClient
-      .from('room_tokens')
-      .update({ color: c })
-      .eq('room_id', roomId)
-      .eq('token_id', tokenId)
-      .select('room_id')
-      .limit(1);
-    if (!uErr && Array.isArray(upd) && upd.length) return;
-
-    // If there is no row yet (token not placed), create a stub on current map.
-    const mapId = String(lastState?.currentMapId || '') || null;
-    const p = (lastState?.players || []).find(pp => String(pp?.id) === String(tokenId));
-    const payload = {
-      room_id: roomId,
-      map_id: String(p?.mapId || mapId || '') || null,
-      token_id: tokenId,
-      x: (p?.x === null || typeof p?.x === 'undefined') ? null : Number(p.x),
-      y: (p?.y === null || typeof p?.y === 'undefined') ? null : Number(p.y),
-      size: Number(p?.size) || 1,
-      color: c,
-      is_public: (typeof p?.isPublic !== 'undefined') ? !!p.isPublic : null
-    };
-    await sbClient.from('room_tokens').upsert(payload);
-  } catch (e) {
-    console.warn('upsertTokenColor failed', e);
-  }
-}
-
-
 async function insertRoomLog(roomId, text) {
   try {
     await ensureSupabaseReady();
@@ -1326,6 +1288,53 @@ async function sendMessage(msg) {
           if (!/^#[0-9a-fA-F]{6}$/.test(c)) return;
           p.color = c;
           logEventToState(next, `${p.name} изменил цвет`);
+
+          // v4+: Token visuals are mirrored via room_tokens rows (realtime).
+          // If we don't persist color there, incoming token rows will overwrite
+          // p.color and the board will appear to "ignore" the change.
+          // We update existing rows for this token across maps; if none exist
+          // (token never placed), we create a stub row on the current map.
+          try {
+            await ensureSupabaseReady();
+            const roomId = String(currentRoomId || '');
+            const tokenId = String(p.id);
+            if (roomId && tokenId) {
+              const nowIso = new Date().toISOString();
+
+              // Update all existing token rows for this token in this room (all maps)
+              const { data: upd, error: uErr } = await sbClient
+                .from('room_tokens')
+                .update({ color: c, updated_at: nowIso })
+                .eq('room_id', roomId)
+                .eq('token_id', tokenId)
+                .select('room_id')
+                .limit(1);
+
+              // If there is no row yet (token not placed anywhere), create stub on current map.
+              if (!uErr && (!Array.isArray(upd) || upd.length === 0)) {
+                const mapId = String(p?.mapId || next?.currentMapId || '');
+                if (mapId) {
+                  const payload = {
+                    room_id: roomId,
+                    map_id: mapId,
+                    token_id: tokenId,
+                    x: (p.x === null || typeof p.x === 'undefined') ? null : Number(p.x),
+                    y: (p.y === null || typeof p.y === 'undefined') ? null : Number(p.y),
+                    size: Number(p.size) || 1,
+                    color: c,
+                    owner_id: p.ownerId || null,
+                    updated_at: nowIso
+                  };
+                  await sbClient.from('room_tokens').upsert(payload, { onConflict: 'room_id,map_id,token_id' });
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('updatePlayerColor: room_tokens update failed', e);
+          }
+
+          // Optimistic DOM update (current client). Others will update via realtime/state.
+          try { setPlayerPosition?.(p); } catch {}
         }
 
         else if (type === "addPlayer") {
@@ -2040,16 +2049,6 @@ else if (type === "addWall") {
 				const pid = String(msg.id || '');
 				if (pid) await upsertTokenVisibility(currentRoomId, pid, !!msg.isPublic);
 			} catch {}
-
-		// v4+: mirror token color into room_tokens for reliable realtime color updates.
-		if (type === 'updatePlayerColor') {
-			try {
-				const pid = String(msg.id || '');
-				const c = String(msg.color || '').trim();
-				if (pid && /^#[0-9a-fA-F]{6}$/.test(c)) await upsertTokenColor(currentRoomId, pid, c);
-			} catch {}
-		}
-
 		}
         break;
       }
