@@ -866,6 +866,23 @@ function setPlayerPosition(player) {
   const ownerRole = getOwnerRoleForToken(player);
   const isGmHidden = (ownerRole === 'GM' && !player.isAlly);
 
+  // ================== GM "eye" visibility ==================
+  // If GM has hidden a GM-owned non-ally token (eye OFF), non-GM users must NEVER see it.
+  // Previously, token movement could briefly render the element before other UI updates hid it.
+  // Fix: enforce the visibility rule directly in setPlayerPosition before we set display/coords.
+  if (asPlayerView && isGmHidden && !player.isPublic) {
+    // If token is selected locally (shouldn't happen for players), clear selection.
+    try {
+      if (selectedPlayer && String(selectedPlayer.id) === String(player.id)) {
+        el.classList.remove('selected');
+        selectedPlayer = null;
+      }
+    } catch {}
+    el.style.display = 'none';
+    updateHpBar(player, el);
+    return;
+  }
+
   // Reset ghost flag by default
   try { el.dataset.fogGhost = ''; } catch {}
 
