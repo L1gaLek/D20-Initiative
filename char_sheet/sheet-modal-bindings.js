@@ -567,8 +567,18 @@ function bindEditableInputs(root, player, canEdit) {
         const hasArmor = !!armorSel;
         if (!hasArmor) {
           // force OFF when no armor is equipped
+          const wasOn = !!getByPath(player.sheet.parsed, 'appearance.armorRules.addProf');
           try { cb.checked = false; } catch {}
           try { setByPath(player.sheet.parsed, 'appearance.armorRules.addProf', false); } catch {}
+
+          // Persist and recompute AC immediately if state changed.
+          if (wasOn) {
+            try {
+              window.__equipAc?.applyAutoAcToSheet?.(player.sheet.parsed);
+              updateHeroChips(root, player.sheet.parsed);
+            } catch {}
+            try { scheduleSheetSave(player); } catch {}
+          }
         }
         // interactive only if canEdit and armor selected
         try { cb.disabled = (!canEdit) || (!hasArmor); } catch {}
@@ -825,6 +835,10 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       inp.addEventListener("input", handler);
       inp.addEventListener("change", handler);
     });
+
+    // Initial sync: checkbox "Владение" must be disabled until a worn armor is selected.
+    // Also clears stale addProf if armor is not equipped.
+    try { syncArmorProfToggleUi(); } catch {}
 
     // ===== Persist manual textarea resize (height) =====
     // Пользователь просил: если растянул textarea по высоте — высота должна сохраняться
