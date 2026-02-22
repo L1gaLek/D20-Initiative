@@ -1236,23 +1236,8 @@ button:hover {
   padding: 6px 8px;
   box-sizing: border-box;
   resize: vertical;
-  /* larger text for readability */
-  font-size: 15px;
-  line-height: 19px;
-}
-
-/* Spell description textarea (inside spells tab) — match sheet textarea readability */
-.spell-desc-editor{
-  width: 100%;
-  background: #111;
-  color: #eee;
-  border: 1px solid #666;
-  border-radius: 8px;
-  padding: 6px 8px;
-  box-sizing: border-box;
-  resize: vertical;
-  font-size: 15px;
-  line-height: 19px;
+  font-size: 16px;
+  line-height: 1.35;
 }
 
 /* ===== Rich Text Editor (sheet) ===== */
@@ -1301,102 +1286,27 @@ button:hover {
   padding: 6px 8px;
   min-height: 90px;
   color: #eee;
-  /* larger text for readability */
-  font-size: 15px;
-  line-height: 19px;
+  font-size: 16px;
+  line-height: 1.35;
   outline: none;
   white-space: normal;
-}
-
-/* Links inside rich text: bold + underline + clickable */
-.rte-editor a,
-.rte-modal-editor a{
-  font-weight: 800;
-  text-decoration: underline;
-}
-
-/* ===== Rich Text Editor: popup modal ===== */
-.rte-modal-overlay{
-  position: fixed;
-  inset: 0;
-  z-index: 10050;
-  background: rgba(0,0,0,0.68);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 14px;
-}
-
-.rte-modal{
-  width: min(980px, 96vw);
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 14px;
-  background: rgba(18,18,18,0.98);
-  box-shadow: 0 14px 48px rgba(0,0,0,0.55);
-  overflow: hidden;
-}
-
-.rte-modal-head{
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-}
-
-.rte-modal-title{
-  font-weight: 900;
-  font-size: 13px;
-  opacity: 0.92;
-}
-
-.rte-modal-close{
-  padding: 6px 10px;
-  border-radius: 10px;
-}
-
-.rte-modal-toolbar{
-  padding: 8px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.04);
-  display:flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.rte-modal-body{
-  padding: 10px;
-  overflow: auto;
-}
-
-.rte-modal-editor-wrap{
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 12px;
-  background: #111;
   overflow: auto;
   resize: vertical;
-  min-height: 220px;
-  max-height: 70vh;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
-.rte-modal-editor{
-  padding: 12px 12px;
-  min-height: 220px;
-  outline: none;
-  color: #eee;
-  font-size: 16px;
-  line-height: 21px;
+/* keep pasted blocks compact (no giant gaps between paragraphs) */
+.rte-editor p,
+.rte-editor div{
+  margin: 0;
 }
 
-.rte-modal-hint{
-  font-size: 12px;
-  opacity: 0.75;
-  margin-top: 8px;
+/* links: not blue, but bold + underlined and clickable */
+.rte-editor a{
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 .rte-editor:empty:before{

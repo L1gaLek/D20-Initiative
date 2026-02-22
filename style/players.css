@@ -433,6 +433,23 @@
   min-height: 90px;
   outline: none;
   white-space: normal;
+  font-size: 16px;
+  line-height: 1.35;
+  overflow: auto;
+  resize: vertical;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rte-editor p,
+.rte-editor div{
+  margin: 0;
+}
+
+.rte-editor a{
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 .rte-editor:empty:before {
