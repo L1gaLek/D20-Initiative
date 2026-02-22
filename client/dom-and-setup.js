@@ -27,16 +27,18 @@
 
   const handle = (e) => {
     try {
+      // NOTE: inside contenteditable the event target can be a Text node.
       const tgt = e.target;
-      if (!tgt || !(tgt instanceof Element)) return;
+      const baseEl = (tgt instanceof Element) ? tgt : (tgt && tgt.parentElement);
+      if (!baseEl) return;
 
       const sheetModal = document.getElementById('sheet-modal');
-      if (!sheetModal || !sheetModal.contains(tgt)) return;
+      if (!sheetModal || !sheetModal.contains(baseEl)) return;
 
       // Поддержка:
       // 1) обычные <a href="...">
       // 2) наши RTE-ссылки: <span class="rte-link" data-href="...">...
-      const linkEl = tgt.closest('a[href], .rte-link[data-href]');
+      const linkEl = baseEl.closest('a[href], .rte-link[data-href]');
       if (!linkEl) return;
 
       const rawHref = linkEl.matches('a[href]') ? linkEl.getAttribute('href') : linkEl.getAttribute('data-href');
