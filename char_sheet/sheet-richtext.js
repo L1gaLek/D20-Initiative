@@ -365,12 +365,17 @@
     ta.style.display = 'none';
     ta.parentNode.insertBefore(wrap, ta);
 
-    // open on click / focus
+    // Open editor ONLY on double click (per UX request)
     const open = () => {
       if (ta.disabled) return;
       openPopup(ta, prev);
     };
-    prev.addEventListener('click', open);
+    prev.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      open();
+    });
+
+    // Accessibility: allow Enter/Space to open when focused
     prev.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
