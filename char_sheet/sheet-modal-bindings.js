@@ -725,6 +725,19 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               try { ch.classList.add('rte-link'); } catch {}
               const st = String(ch.getAttribute('style') || '').trim();
               if (!/color\s*:/i.test(st)) ch.setAttribute('style', `color:${LINK_COLOR}`);
+              // Make pasted/loaded links visually consistent: bold + underline.
+              try {
+                const hasU = ch.querySelector && (ch.querySelector('u') || ch.querySelector('U'));
+                const hasB = ch.querySelector && (ch.querySelector('b') || ch.querySelector('B') || ch.querySelector('strong') || ch.querySelector('STRONG'));
+                if (!hasU || !hasB) {
+                  const b = document.createElement('b');
+                  const u = document.createElement('u');
+                  while (ch.firstChild) u.appendChild(ch.firstChild);
+                  b.appendChild(u);
+                  ch.appendChild(b);
+                }
+              } catch {}
+
             }
           }
 
@@ -961,15 +974,29 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       applyFontSize(fontSel.value);
     });
 
-    editor.addEventListener('paste', (e) => {
+        editor.addEventListener('paste', (e) => {
       try {
         e.preventDefault();
         const cd = e.clipboardData;
         const html = cd?.getData?.('text/html');
         const text = cd?.getData?.('text/plain');
-        const incoming = (html && html.trim())
-          ? sanitizeHtml(html)
-          : linkifyPlain(String(text || ''));
+        const uriList = cd?.getData?.('text/uri-list') || cd?.getData?.('text/x-moz-url') || '';
+        const uri = String(uriList || '').split(/\r?\n/).find(x => x && !x.startsWith('#')) || '';
+
+        let incoming = '';
+        if (html && String(html).trim()) {
+          incoming = sanitizeHtml(html);
+          if (uri && !/<a\b/i.test(incoming)) {
+            const href = normalizeHref(uri);
+            if (href) incoming = makeLinkHTML(href, String(text || uri).trim() || href);
+          }
+        } else if (uri && String(uri).trim()) {
+          const href = normalizeHref(uri);
+          incoming = href ? makeLinkHTML(href, String(text || uri).trim() || href) : linkifyPlain(String(text || ''));
+        } else {
+          incoming = linkifyPlain(String(text || ''));
+        }
+
         document.execCommand('insertHTML', false, incoming);
       } catch {}
     });
@@ -1042,17 +1069,32 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
 
-    editor.addEventListener('paste', (e) => {
+        editor.addEventListener('paste', (e) => {
       if (!canEdit) return;
       try {
         e.preventDefault();
         const cd = e.clipboardData;
         const html = cd?.getData?.('text/html');
         const text = cd?.getData?.('text/plain');
-        const incoming = (html && html.trim())
-          ? sanitizeHtml(html)
-          : linkifyPlain(String(text || ''));
+        const uriList = cd?.getData?.('text/uri-list') || cd?.getData?.('text/x-moz-url') || '';
+        const uri = String(uriList || '').split(/\r?\n/).find(x => x && !x.startsWith('#')) || '';
+
+        let incoming = '';
+        if (html && String(html).trim()) {
+          incoming = sanitizeHtml(html);
+          if (uri && !/<a\b/i.test(incoming)) {
+            const href = normalizeHref(uri);
+            if (href) incoming = makeLinkHTML(href, String(text || uri).trim() || href);
+          }
+        } else if (uri && String(uri).trim()) {
+          const href = normalizeHref(uri);
+          incoming = href ? makeLinkHTML(href, String(text || uri).trim() || href) : linkifyPlain(String(text || ''));
+        } else {
+          incoming = linkifyPlain(String(text || ''));
+        }
+
         document.execCommand('insertHTML', false, incoming);
+        // mirror into hidden textarea so existing save/bindings see it
         // mirror into hidden textarea so existing save/bindings see it
         try { ta.value = sanitizeHtml(editor.innerHTML || ''); } catch {}
         try {
@@ -1060,8 +1102,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           ta.dispatchEvent(new Event('change', { bubbles: true }));
         } catch {}
       } catch {}
-    });
-
+    
     editor.addEventListener('dblclick', (e) => {
       e.preventDefault();
       const key = path || ta.id || ta.name || '';
