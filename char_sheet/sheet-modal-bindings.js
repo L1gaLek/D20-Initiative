@@ -726,14 +726,263 @@ if (path === "proficiency" || path === "proficiencyCustom") {
 // ================== RICH TEXT (lightweight) ==================
 // Converts selected textareas into a simple rich-text editor using contenteditable + execCommand.
 // Stored value is HTML string in the same data-sheet-path.
+
+/* -----------------------------
+ * RTE popup editor (modal)
+ * ----------------------------- */
+let __rteModal = null;
+
+function ensureRteModal() {
+  if (__rteModal && document.body.contains(__rteModal.overlay)) return __rteModal;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'rte-modal-overlay';
+  overlay.innerHTML = `
+    <div class="rte-modal" role="dialog" aria-modal="true">
+      <div class="rte-modal-header">
+        <div class="rte-modal-title">Редактор текста</div>
+        <button type="button" class="rte-modal-close" aria-label="Закрыть">✕</button>
+      </div>
+      <div class="rte-toolbar rte-toolbar--modal">
+        <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
+        <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+        <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
+        <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
+        <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
+        <select class="rte-select" data-rte-fontsize title="Размер текста">
+          <option value="2">S</option>
+          <option value="3" selected>M</option>
+          <option value="5">L</option>
+          <option value="6">XL</option>
+        </select>
+        <div class="rte-spacer"></div>
+        <label class="rte-modal-height">
+          Высота
+          <input type="number" min="80" step="10" value="180" data-rte-height />
+        </label>
+        <button type="button" class="rte-btn rte-btn--primary" data-rte-apply>Применить</button>
+      </div>
+      <div class="rte-modal-body">
+        <div class="rte-editor rte-editor--modal" contenteditable="true"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const modal = overlay.querySelector('.rte-modal');
+  const closeBtn = overlay.querySelector('.rte-modal-close');
+  const applyBtn = overlay.querySelector('[data-rte-apply]');
+  const toolbar = overlay.querySelector('.rte-toolbar');
+  const editor = overlay.querySelector('.rte-editor');
+
+  const api = {
+    overlay, modal, toolbar, editor,
+    _targetEditor: null,
+    open(targetEditor, meta = {}) {
+      this._targetEditor = targetEditor;
+      // copy content
+      editor.innerHTML = targetEditor.innerHTML || '';
+      // apply current font size from meta
+      const fs = Number(meta.fontSize || 3);
+      const sel = toolbar.querySelector('[data-rte-fontsize]');
+      if (sel) sel.value = String(fs);
+      // apply height
+      const h = Number(meta.minHeight || targetEditor.style.minHeight || 180);
+      const hInput = toolbar.querySelector('[data-rte-height]');
+      if (hInput) hInput.value = String(Math.max(80, h));
+      editor.style.minHeight = `${Math.max(80, h)}px`;
+      overlay.classList.add('is-open');
+      editor.focus();
+    },
+    close(apply = false) {
+      if (apply && this._targetEditor) {
+        this._targetEditor.innerHTML = editor.innerHTML || '';
+        // fire input so existing persistence picks it up
+        try {
+          this._targetEditor.dispatchEvent(new Event('input', { bubbles: true }));
+          this._targetEditor.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch {}
+      }
+      overlay.classList.remove('is-open');
+      this._targetEditor = null;
+    }
+  };
+
+  // Close events
+  closeBtn.addEventListener('click', () => api.close(true));
+  overlay.addEventListener('mousedown', (e) => {
+    if (e.target === overlay) api.close(true);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!overlay.classList.contains('is-open')) return;
+    if (e.key === 'Escape') api.close(true);
+  });
+
+  // Toolbar: prevent blur
+  toolbar.addEventListener('mousedown', (e) => e.preventDefault());
+
+  // Toolbar actions
+  toolbar.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('button');
+    if (!btn) return;
+    editor.focus();
+    if (btn.hasAttribute('data-rte-link')) {
+      const url = prompt('Ссылка (URL):', 'https://');
+      if (url && url.trim()) {
+        try { document.execCommand('createLink', false, normalizeUrl(url.trim())); } catch {}
+      }
+      return;
+    }
+    if (btn.hasAttribute('data-rte-apply')) {
+      // apply height to target too
+      const hInput = toolbar.querySelector('[data-rte-height]');
+      const h = Number(hInput?.value || 180);
+      editor.style.minHeight = `${Math.max(80, h)}px`;
+      if (api._targetEditor) api._targetEditor.style.minHeight = `${Math.max(80, h)}px`;
+      // also store meta on target so bindings can persist it
+      if (api._targetEditor) api._targetEditor.setAttribute('data-rte-minheight', String(Math.max(80, h)));
+      api.close(true);
+      return;
+    }
+    const cmd = btn.getAttribute('data-rte-cmd');
+    if (!cmd) return;
+    try { document.execCommand(cmd, false, null); } catch {}
+  });
+  const sizeSel = toolbar.querySelector('[data-rte-fontsize]');
+  sizeSel?.addEventListener('change', () => {
+    editor.focus();
+    const v = String(sizeSel.value || '3');
+    try { document.execCommand('fontSize', false, v); } catch {}
+    // store on target for persistence
+    if (api._targetEditor) api._targetEditor.setAttribute('data-rte-fontsize', v);
+  });
+
+  // Link click handling inside modal editor
+  editor.addEventListener('click', (e) => {
+    const a = e.target?.closest?.('a');
+    if (!a) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation?.();
+    const href = a.getAttribute('href');
+    if (href) window.open(href, '_blank', 'noopener,noreferrer');
+  }, true);
+
+  // Paste handling
+  editor.addEventListener('paste', (e) => handleRtePaste(e, editor), true);
+
+  __rteModal = api;
+  return api;
+}
+
+function normalizeUrl(url) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  if (/^https?:\/\//i.test(u)) return u;
+  if (/^\/\//.test(u)) return 'https:' + u;
+  if (/^www\./i.test(u)) return 'https://' + u;
+  // simple email
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u)) return 'mailto:' + u;
+  return 'https://' + u;
+}
+
+// Convert plain text to HTML preserving line breaks and auto-linking URLs.
+function plainTextToHtmlWithLinks(text) {
+  const esc = (s) => String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  const t = String(text || '');
+  // Replace URLs (very simple)
+  const urlRe = /((https?:\/\/|www\.)[^\s<]+[^\s<\.)\]])/gi;
+  let out = '';
+  let last = 0;
+  for (const m of t.matchAll(urlRe)) {
+    const start = m.index ?? 0;
+    out += esc(t.slice(last, start));
+    const raw = m[0];
+    const href = normalizeUrl(raw);
+    out += `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(raw)}</a>`;
+    last = start + raw.length;
+  }
+  out += esc(t.slice(last));
+  return out.replace(/\r\n|\r|\n/g, '<br>');
+}
+
+// Sanitize pasted HTML: keep structure/semantics, drop styling.
+function sanitizePastedHtml(inputHtml) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = String(inputHtml || '');
+  const allowed = new Set(['B','STRONG','U','UL','OL','LI','BR','A','P','DIV','SPAN']);
+  const walk = (node) => {
+    const children = Array.from(node.childNodes);
+    for (const ch of children) {
+      if (ch.nodeType === 1) { // element
+        const tag = ch.tagName.toUpperCase();
+        if (!allowed.has(tag)) {
+          // unwrap
+          const frag = document.createDocumentFragment();
+          while (ch.firstChild) frag.appendChild(ch.firstChild);
+          ch.replaceWith(frag);
+          continue;
+        }
+        // strip attributes except href for A
+        const attrs = Array.from(ch.attributes || []);
+        for (const a of attrs) {
+          const name = a.name.toLowerCase();
+          if (tag === 'A' && name === 'href') continue;
+          ch.removeAttribute(a.name);
+        }
+        if (tag === 'A') {
+          const href = ch.getAttribute('href') || '';
+          ch.setAttribute('href', normalizeUrl(href));
+          ch.setAttribute('target', '_blank');
+          ch.setAttribute('rel', 'noopener noreferrer');
+        }
+        walk(ch);
+      }
+    }
+  };
+  walk(tmp);
+  // normalize block tags -> keep but no margins via CSS
+  return tmp.innerHTML;
+}
+
+function handleRtePaste(e, editorEl) {
+  try {
+    const cd = e.clipboardData;
+    if (!cd) return;
+    const html = cd.getData('text/html');
+    const text = cd.getData('text/plain');
+    let toInsert = '';
+    if (html && html.trim()) {
+      toInsert = sanitizePastedHtml(html);
+      // also auto-link plain URLs inside text nodes if source had no <a>
+      if (!/<a[\s>]/i.test(toInsert) && text) {
+        toInsert = plainTextToHtmlWithLinks(text);
+      }
+    } else {
+      toInsert = plainTextToHtmlWithLinks(text || '');
+    }
+    e.preventDefault();
+    editorEl.focus();
+    document.execCommand('insertHTML', false, toInsert);
+  } catch {}
+}
+
+
 function upgradeSheetTextareasToRte(root, canEdit) {
   if (!root) return;
+
   const htmlEscape = (s) => String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+
   const selector = [
     'textarea.sheet-textarea',
     'textarea.note-text',
@@ -746,8 +995,8 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
   const textareas = Array.from(root.querySelectorAll(selector));
   textareas.forEach((ta) => {
-    // don't upgrade twice
     if (ta.closest('[data-rte]')) return;
+
     const path = ta.getAttribute('data-sheet-path');
     if (!path) return;
 
@@ -755,84 +1004,80 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     wrap.className = 'rte';
     wrap.setAttribute('data-rte', '');
 
-    const toolbar = document.createElement('div');
-    toolbar.className = 'rte-toolbar';
-    toolbar.innerHTML = `
-      <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
-      <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
-      <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
-      <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
-      <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
-      <select class="rte-select" data-rte-fontsize title="Размер текста">
-        <option value="2">S</option>
-        <option value="3" selected>M</option>
-        <option value="5">L</option>
-        <option value="6">XL</option>
-      </select>
-    `;
-
     const editor = document.createElement('div');
     editor.className = 'rte-editor';
     editor.setAttribute('contenteditable', canEdit ? 'true' : 'false');
     editor.setAttribute('data-sheet-path', path);
     editor.setAttribute('data-rte-editor', '');
 
-    // preserve placeholder via CSS
     const ph = ta.getAttribute('placeholder');
     if (ph) editor.setAttribute('data-placeholder', ph);
 
-    // Copy initial value as HTML.
-    // If it looks like plain text, keep line breaks.
     const raw = String(ta.value || '');
     editor.innerHTML = raw
-      ? (raw.includes('<') ? raw : htmlEscape(raw).replace(/\n/g, '<br>'))
+      ? (raw.includes('<') ? sanitizePastedHtml(raw) : htmlEscape(raw).replace(/\n/g, '<br>'))
       : '';
 
-    // Mirror style hints from textarea
-    try {
+    // Apply editor defaults (so it never "switches" on focus)
+    const defaultFontSize = ta.getAttribute('data-rte-fontsize') || '3';
+    editor.setAttribute('data-rte-fontsize', defaultFontSize);
+
+    // min-height: prefer saved, else textarea rows, else CSS default
+    let minH = Number(ta.getAttribute('data-rte-minheight') || 0);
+    if (!minH) {
       const rows = Number(ta.getAttribute('rows') || 0);
-      if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
-    } catch {}
+      if (rows) minH = Math.max(80, Math.max(3, rows) * 18);
+    }
+    if (minH) editor.style.minHeight = `${minH}px`;
 
-    wrap.appendChild(toolbar);
+    // Footer with popup button
+    const footer = document.createElement('div');
+    footer.className = 'rte-footer';
+    footer.innerHTML = `<button type="button" class="rte-open">Редактор</button>`;
+
     wrap.appendChild(editor);
+    wrap.appendChild(footer);
 
-    // Replace in DOM
     ta.replaceWith(wrap);
 
-    // Wire toolbar actions
     if (!canEdit) {
       wrap.classList.add('rte--disabled');
+      footer.style.display = 'none';
       return;
     }
 
-    toolbar.addEventListener('mousedown', (e) => {
-      // prevent editor blur when clicking toolbar
+    // Paste: preserve structure but strip external style, keep links
+    editor.addEventListener('paste', (e) => handleRtePaste(e, editor), true);
+
+    // Clickable links without breaking sheet
+    editor.addEventListener('click', (e) => {
+      const a = e.target?.closest?.('a');
+      if (!a) return;
       e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation?.();
+      const href = a.getAttribute('href');
+      if (href) window.open(href, '_blank', 'noopener,noreferrer');
+    }, true);
+
+    // Open popup
+    footer.querySelector('.rte-open')?.addEventListener('click', () => {
+      const meta = {
+        fontSize: Number(editor.getAttribute('data-rte-fontsize') || 3),
+        minHeight: Number(editor.getAttribute('data-rte-minheight') || editor.style.minHeight || 0)
+      };
+      ensureRteModal().open(editor, meta);
     });
-    toolbar.addEventListener('click', (e) => {
-      const btn = e.target?.closest?.('button');
-      if (!btn) return;
-      editor.focus();
-      if (btn.hasAttribute('data-rte-link')) {
-        const url = prompt('Ссылка (URL):', 'https://');
-        if (url && url.trim()) {
-          try { document.execCommand('createLink', false, url.trim()); } catch {}
-        }
-        return;
-      }
-      const cmd = btn.getAttribute('data-rte-cmd');
-      if (!cmd) return;
-      try { document.execCommand(cmd, false, null); } catch {}
-    });
-    const sizeSel = toolbar.querySelector('[data-rte-fontsize]');
-    sizeSel?.addEventListener('change', () => {
-      editor.focus();
-      const v = String(sizeSel.value || '3');
-      try { document.execCommand('fontSize', false, v); } catch {}
+
+    // Track changes -> store meta attrs so they persist via your existing save pipeline
+    editor.addEventListener('input', () => {
+      // Ensure meta attrs exist
+      if (!editor.getAttribute('data-rte-fontsize')) editor.setAttribute('data-rte-fontsize', defaultFontSize);
+      if (editor.style.minHeight) editor.setAttribute('data-rte-minheight', String(parseInt(editor.style.minHeight, 10) || 0));
     });
   });
 }
+
         if (path === "vitality.ac.value" || path === "vitality.hp-max.value" || path === "vitality.hp-current.value" || path === "vitality.speed.value") {
           updateHeroChips(root, player.sheet.parsed);
         }
