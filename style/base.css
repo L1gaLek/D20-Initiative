@@ -1252,8 +1252,12 @@ button:hover {
   font-size: 15px;
   line-height: 20px;
   min-height: 120px;
-  white-space: normal;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+  overflow: auto;
+  resize: vertical;
 }
 
 .rte-surface:focus{
@@ -1262,8 +1266,10 @@ button:hover {
 }
 
 .rte-surface a{
-  color: #8ab4ff;
+  color: inherit;
+  font-weight: 800;
   text-decoration: underline;
+  cursor: pointer;
 }
 
 .rte{
@@ -1314,7 +1320,16 @@ button:hover {
   font-size: 15px;
   line-height: 20px;
   outline: none;
-  white-space: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rte-editor a{
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* ===== Rich Text Popup (sheet) ===== */
