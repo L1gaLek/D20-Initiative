@@ -598,11 +598,67 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
   const LINK_COLOR = 'rgb(204,130,36)';
 
+  // =============== Global link interception ===============
+  // The project has global click routing that can intercept <a href> inside the sheet
+  // and navigate within the app (resetting the sheet). To make links reliably open
+  // in a new browser tab, we intercept at the document CAPTURE phase and open via
+  // window.open. We also avoid real <a href> inside editors by using .rte-link spans.
+  function installGlobalLinkInterceptor() {
+    if (window.__rteLinkInterceptorInstalled) return;
+    window.__rteLinkInterceptorInstalled = true;
+
+    const inSheetUi = (node) => {
+      try {
+        return !!node?.closest?.('#sheet-content, .rte-modal-overlay, .sheet-modal, #sheet-modal, #sheetModal');
+      } catch { return false; }
+    };
+
+    const open = (href) => {
+      const safe = normalizeHref(href);
+      if (!safe) return false;
+      try { window.open(safe, '_blank', 'noopener,noreferrer'); } catch {}
+      return true;
+    };
+
+    const handler = (e) => {
+      const t = e.target;
+      if (!t || !inSheetUi(t)) return;
+
+      // Prefer our safe link spans
+      const span = t.closest?.('.rte-link');
+      if (span) {
+        const href = span.getAttribute('data-href');
+        if (!href) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try { e.stopImmediatePropagation?.(); } catch {}
+        open(href);
+        return;
+      }
+
+      // Fallback: any <a href> that survived older saves/pastes
+      const a = t.closest?.('a[href]');
+      if (a) {
+        const href = a.getAttribute('href');
+        if (!href) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try { e.stopImmediatePropagation?.(); } catch {}
+        open(href);
+      }
+    };
+
+    // pointerdown is earlier than click; we listen to both to beat any router.
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('click', handler, true);
+  }
+
   const makeLinkSpanHTML = (href, label) => {
     const safeHref = htmlEscape(String(href || ''));
     const safeLabel = htmlEscape(String(label || ''));
     // Keep link styling consistent with the UI (bold + underline + custom color).
-    return `<span class="rte-link" data-href="${safeHref}" style="color:${LINK_COLOR}"><b><u>${safeLabel}</u></b></span>`;
+    // contenteditable=false makes the element reliably clickable inside contenteditable editors.
+    return `<span class="rte-link" data-href="${safeHref}" contenteditable="false" style="color:${LINK_COLOR};cursor:pointer"><b><u>${safeLabel}</u></b></span>`;
   };
 
   const linkifyPlain = (plain) => {
@@ -695,7 +751,8 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               const span = document.createElement('span');
               span.className = 'rte-link';
               span.setAttribute('data-href', href);
-              span.setAttribute('style', `color:${LINK_COLOR}`);
+              span.setAttribute('contenteditable', 'false');
+              span.setAttribute('style', `color:${LINK_COLOR};cursor:pointer`);
 
               const frag = document.createDocumentFragment();
               while (ch.firstChild) frag.appendChild(ch.firstChild);
@@ -1073,6 +1130,9 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
 function bindEditableInputs(root, player, canEdit) {
     if (!root || !player?.sheet?.parsed) return;
+
+    // Ensure link clicks inside sheet UI always open in a new tab and never trigger app routing.
+    try { installGlobalLinkInterceptor(); } catch {}
 
     // "Владение" toggle for armor: enabled only when some armor is selected.
     // If armor is cleared, we force toggle off.
