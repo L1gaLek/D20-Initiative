@@ -199,8 +199,18 @@ function bindRichTextPopups(root, player, canEdit) {
     return (tmp.innerText || '').replace(/\r/g, '');
   }
 
+  function normalizeHref(href) {
+    let h = String(href || '').trim();
+    if (!h) return '';
+    // protocol-relative
+    if (h.startsWith('//')) h = 'https:' + h;
+    // bare www
+    if (/^www\./i.test(h)) h = 'https://' + h;
+    return h;
+  }
+
   function isSafeHref(href) {
-    const h = String(href || '').trim();
+    const h = normalizeHref(href);
     if (!h) return false;
     // allow http(s) and mailto only
     return /^https?:\/\//i.test(h) || /^mailto:/i.test(h);
@@ -210,8 +220,8 @@ function bindRichTextPopups(root, player, canEdit) {
     const safe = escapeHtmlLocal(String(text || ''));
     // Convert raw URLs into links (keep surrounding text intact)
     return safe.replace(/(https?:\/\/[^\s)\]]+)/g, (m) => {
-      const url = m;
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+      const url = normalizeHref(m);
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtmlLocal(url)}</a>`;
     }).replace(/\n/g, '<br>');
   }
 
@@ -242,12 +252,14 @@ function bindRichTextPopups(root, player, canEdit) {
       // normalize tags
       let out;
       if (tag === 'STRONG') out = document.createElement('b');
-      else if (tag === 'DIV' || tag === 'SPAN') out = document.createElement('div');
+      else if (tag === 'DIV') out = document.createElement('div');
+      else if (tag === 'SPAN') out = document.createElement('span');
       else out = document.createElement(tag.toLowerCase());
 
       // strip ALL attributes except safe href on anchors
       if (out.tagName.toUpperCase() === 'A') {
-        const href = node.getAttribute('href') || '';
+        const hrefRaw = node.getAttribute('href') || '';
+        const href = normalizeHref(hrefRaw);
         if (isSafeHref(href)) {
           out.setAttribute('href', href);
           out.setAttribute('target', '_blank');
@@ -331,11 +343,12 @@ function bindRichTextPopups(root, player, canEdit) {
       surface.style.minHeight = `${Math.max(60, Math.min(1200, mh))}px`;
     } catch {}
 
-    // Mirror some sizing from textarea
+    // Mirror some sizing from textarea only if we do NOT have saved preferences.
     try {
+      const hasMetaH = !!ta.dataset.rteSurfaceMinHeight;
       const cs = getComputedStyle(ta);
-      if (cs.minHeight) surface.style.minHeight = cs.minHeight;
-      if (cs.height && cs.height !== 'auto') surface.style.height = cs.height;
+      if (!hasMetaH && cs.minHeight) surface.style.minHeight = cs.minHeight;
+      // Do not force height from textarea: surface is resizable and uses saved min-height.
     } catch {}
 
     // Keep textarea in DOM for existing save logic, but hide it.
@@ -392,11 +405,13 @@ function bindRichTextPopups(root, player, canEdit) {
         if (!(t instanceof Element)) return;
         const a = t.closest('a[href]');
         if (!a) return;
-        const href = a.getAttribute('href') || '';
+        const href = normalizeHref(a.getAttribute('href') || '');
         if (!isSafeHref(href)) return;
         e.preventDefault();
-        e.stopPropagation();
-        window.open(href, '_blank', 'noopener');
+        // Prevent any other listeners (including capture-phase sheet handlers)
+        // from treating this click as an interaction that re-renders/resets the modal.
+        e.stopImmediatePropagation();
+        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch { window.open(href, '_blank'); }
       } catch {}
     }, true);
 
@@ -577,6 +592,18 @@ function bindRichTextPopups(root, player, canEdit) {
     // apply current selects
     try { sizeSel?.dispatchEvent(new Event('change')); } catch {}
     try { heightSel?.dispatchEvent(new Event('change')); } catch {}
+
+    // Apply meta to surface right away (so the description always matches editor settings)
+    try {
+      const surf = ta.__rteSurface;
+      if (surf) {
+        const fsNow = Number(ta.dataset.rteFontSize || '') || 15;
+        const mhNow = Number(ta.dataset.rteSurfaceMinHeight || '') || 180;
+        surf.style.fontSize = `${Math.max(12, Math.min(24, fsNow))}px`;
+        surf.style.lineHeight = `${Math.round(Math.max(12, Math.min(24, fsNow)) * 1.35)}px`;
+        surf.style.minHeight = `${Math.max(60, Math.min(1200, mhNow))}px`;
+      }
+    } catch {}
 
     overlay.classList.remove('hidden');
     setTimeout(() => { try { editorEl?.focus(); } catch {} }, 0);
