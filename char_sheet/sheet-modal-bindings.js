@@ -3620,66 +3620,108 @@ function bindSpellAddAndDesc(root, player, canEdit) {
     }
   }
 
-// ================== FIX LINKS IN CHARACTER SHEET ==================
 
-// 1. Принудительное открытие всех ссылок в новом окне
-document.addEventListener('click', function (e) {
-  const a = e.target.closest('a');
-  if (!a) return;
+// ================== SHEET MODAL: HARD LINK FIX ==================
+// Fixes two issues reported in this project:
+// 1) Clicking external links inside "Лист персонажа" opens a blank/reset in-app page instead of the URL.
+// 2) Pasting text that contains links (incl. links embedded into words) should keep links clickable.
+//
+// Strategy:
+// - Intercept <a href> clicks inside #sheet-modal in capture phase and open via window.open.
+// - Also intercept our internal rich-text link spans (.rte-link) everywhere inside #sheet-modal.
+// - Add a conservative paste linkifier for contenteditable elements inside #sheet-modal.
+(function installSheetModalLinkFix() {
+  try {
+    if (window.__sheetModalLinkFixInstalled) return;
+    window.__sheetModalLinkFixInstalled = true;
 
-  // Проверяем, что клик внутри модалки листа
-  const modal = document.getElementById('sheet-modal');
-  if (!modal || !modal.contains(a)) return;
+    const LINK_COLOR = 'rgb(204,130,36)';
 
-  const href = a.getAttribute('href');
-  if (!href) return;
+    function inSheetModal(node) {
+      try {
+        const modal = document.getElementById('sheet-modal');
+        return !!(modal && node && modal.contains(node));
+      } catch { return false; }
+    }
 
-  // Останавливаем все перехваты
-  e.preventDefault();
-  e.stopPropagation();
-  e.stopImmediatePropagation();
+    function stopEvt(e) {
+      try { e.preventDefault(); } catch {}
+      try { e.stopPropagation(); } catch {}
+      try { e.stopImmediatePropagation?.(); } catch {}
+    }
 
-  window.open(href, '_blank', 'noopener,noreferrer');
-}, true);
+    function openHref(hrefRaw) {
+      const href = normalizeHref(hrefRaw);
+      if (!href) return;
+      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+    }
 
+    // 1) Intercept normal anchors anywhere inside the character sheet modal.
+    document.addEventListener('click', (e) => {
+      const a = e.target?.closest?.('a[href]');
+      if (!a) return;
+      if (!inSheetModal(a)) return;
+      const hrefRaw = a.getAttribute('href');
+      if (!hrefRaw) return;
+      stopEvt(e);
+      openHref(hrefRaw);
+    }, true);
 
-// 2. Авто-превращение вставленного URL в ссылку
-document.addEventListener('paste', function (e) {
-  const active = document.activeElement;
-  if (!active) return;
+    // 2) Intercept our safe link spans anywhere inside the character sheet modal.
+    document.addEventListener('click', (e) => {
+      const el = e.target?.closest?.('.rte-link');
+      if (!el) return;
+      if (!inSheetModal(el)) return;
+      const hrefRaw = el.getAttribute('data-href');
+      if (!hrefRaw) return;
+      stopEvt(e);
+      openHref(hrefRaw);
+    }, true);
 
-  // Только внутри модалки листа
-  const modal = document.getElementById('sheet-modal');
-  if (!modal || !modal.contains(active)) return;
+    // 3) Paste linkifier for any contenteditable element inside #sheet-modal.
+    //    Keeps original styling and makes detected URLs clickable.
+    document.addEventListener('paste', (e) => {
+      const active = document.activeElement;
+      if (!active) return;
+      if (!inSheetModal(active)) return;
 
-  const text = (e.clipboardData || window.clipboardData).getData('text');
-  if (!text) return;
+      // Only for contenteditable areas (we do NOT touch normal inputs/textarea paste here).
+      const isCE = (active instanceof HTMLElement) && (active.isContentEditable || active.getAttribute('contenteditable') === 'true');
+      if (!isCE) return;
 
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  if (!urlRegex.test(text)) return;
+      const cd = e.clipboardData;
+      if (!cd) return;
 
-  e.preventDefault();
+      const html = cd.getData('text/html');
+      const text = cd.getData('text/plain');
+      const hasUrl = /(https?:\/\/|www\.)\S+/i.test(text || '') || /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/.test(text || '');
+      if (!hasUrl) return;
 
-  const html = text.replace(urlRegex, function (url) {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer"
-              style="font-weight:bold;text-decoration:underline;color:rgb(204,130,36);">
-              ${url}
-            </a>`;
-  });
+      // If HTML is provided, let existing sanitizers handle it.
+      if (html && html.trim()) return;
 
-  document.execCommand('insertHTML', false, html);
-});
+      try {
+        e.preventDefault();
+        const t = String(text || '');
+        const esc = t
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\"/g, '&quot;')
+          .replace(/'/g, '&#39;');
 
+        const urlRe = /((https?:\/\/|www\.)[^\s<]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+        const out = esc.replace(urlRe, (m) => {
+          let href = '';
+          if (m.includes('@') && !m.startsWith('http')) href = 'mailto:' + m;
+          else href = normalizeHref(m);
+          const safeHref = String(href).replace(/\"/g, '&quot;');
+          const safeLabel = String(m);
+          return `<a href=\"${safeHref}\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"font-weight:bold;text-decoration:underline;color:${LINK_COLOR};\">${safeLabel}</a>`;
+        }).replace(/\n/g, '<br>');
 
-// 3. Защита от SPA перехвата ссылок
-(function preventSpaInterception() {
-  const modal = document.getElementById('sheet-modal');
-  if (!modal) return;
-
-  modal.addEventListener('click', function (e) {
-    const a = e.target.closest('a');
-    if (!a) return;
-
-    e.stopPropagation();
-  }, true);
+        document.execCommand('insertHTML', false, out);
+      } catch {}
+    }, true);
+  } catch {}
 })();
