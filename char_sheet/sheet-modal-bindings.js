@@ -578,6 +578,7 @@ function bindEditableInputs(root, player, canEdit) {
               updateHeroChips(root, player.sheet.parsed);
             } catch {}
             try { scheduleSheetSave(player); } catch {}
+        try { window.updatePlayerList?.(); } catch {}
           }
         }
         // interactive only if canEdit and armor selected
@@ -2366,7 +2367,7 @@ function rteEnsureModal() {
       </div>
       <div class="rte-editor" contenteditable="true" data-rte-editor></div>
       <div class="rte-actions">
-        <button type="button" class="rte-btn-secondary" data-rte-close>Отмена</button>
+        <button type="button" class="rte-btn-secondary" data-rte-cancel>Отмена</button>
         <button type="button" class="rte-btn-primary" data-rte-save>Сохранить</button>
       </div>
     </div>
@@ -2419,15 +2420,8 @@ function rteSanitizeHtml(htmlStr) {
         if (tag === "A") {
           let href = child.getAttribute("href") || "";
           // block javascript:
-          if (/^\s*javascript:/i.test(href)) href = "";
-          href = (function(h){
-            const hh = String(h||'').trim();
-            if (!hh) return '';
-            if (/^(https?:|mailto:|tel:)/i.test(hh)) return hh;
-            if (/^[\w-]+\.[\w.-]+/i.test(hh)) return `https://${hh}`;
-            return hh;
-          })(href);
-          child.setAttribute("href", href || "#");
+          if (/^\s*javascript:/i.test(href)) href = "#";
+          child.setAttribute("href", href);
           child.setAttribute("target", "_blank");
           child.setAttribute("rel", "noopener noreferrer");
         }
@@ -2459,84 +2453,7 @@ function bindRichTextEditors(root, player, canEdit) {
   const heightRange = modal.querySelector("[data-rte-height]");
   const fontSizeSel = modal.querySelector("[data-rte-fontsize]");
 
-  const shared = (modal.__rteShared = modal.__rteShared || {});
   let current = null; // { wrap, view, src, player }
-  shared.current = null;
-
-// Normalize href so pasted "example.com" opens as https://example.com
-const normalizeHref = (href) => {
-  const h = String(href || '').trim();
-  if (!h) return '';
-  if (/^(https?:|mailto:|tel:)/i.test(h)) return h;
-  // protocol-relative
-  if (/^\/\//.test(h)) return `https:${h}`;
-  // plain domain or domain/path
-  if (/^[\w-]+\.[\w.-]+/i.test(h)) return `https://${h}`;
-  return h; // may be relative; we'll still open in new tab/window
-};
-
-// Update *all* rte-view instances that correspond to the same underlying src field.
-// This avoids delays when another "preview" view depends on a later rerender.
-const updateViewsForSrc = (srcEl, finalHtml) => {
-  try {
-    if (!srcEl) return;
-    const doc = srcEl.ownerDocument || document;
-
-    const sp = srcEl.getAttribute?.('data-sheet-path');
-    const noteIdx = srcEl.hasAttribute?.('data-note-text') ? srcEl.getAttribute('data-note-text') : null;
-    const isSpell = srcEl.hasAttribute?.('data-spell-desc-editor') ? true : false;
-    let spellHref = '';
-    if (isSpell) {
-      const item = srcEl.closest?.('.spell-item[data-spell-url]');
-      spellHref = item?.getAttribute?.('data-spell-url') || '';
-    }
-
-    const match = (el) => {
-      if (sp && el.getAttribute?.('data-sheet-path') === sp) return true;
-      if (noteIdx !== null && el.hasAttribute?.('data-note-text') && el.getAttribute('data-note-text') === noteIdx) return true;
-      if (isSpell && el.hasAttribute?.('data-spell-desc-editor')) {
-        const it = el.closest?.('.spell-item[data-spell-url]');
-        const h = it?.getAttribute?.('data-spell-url') || '';
-        return h && h === spellHref;
-      }
-      return false;
-    };
-
-    const allSrc = Array.from(doc.querySelectorAll('textarea.rte-src'));
-    for (const ta of allSrc) {
-      if (!match(ta)) continue;
-      ta.value = finalHtml;
-      const wrap = ta.closest?.('.rte-wrap');
-      const view = wrap?.querySelector?.('.rte-view');
-      if (view) {
-        view.innerHTML = rteValueToDisplayHtml(finalHtml);
-        view.classList.toggle('is-empty', !finalHtml);
-      }
-    }
-  } catch {}
-};
-
-// Force ALL clicks on links inside rte views/editor to open in a new browser window/tab
-// and never navigate the current page (even if other handlers exist).
-if (!modal.__rteLinkCaptureBound) {
-  modal.__rteLinkCaptureBound = true;
-  document.addEventListener('click', (ev) => {
-    const a = ev.target?.closest?.('a[href]');
-    if (!a) return;
-    const inRte = a.closest?.('#rte-modal [data-rte-editor]') || a.closest?.('.rte-view');
-    if (!inRte) return;
-
-    let href = a.getAttribute('href') || a.href || '';
-    href = normalizeHref(href) || href;
-    if (!href || href === '#') return;
-
-    ev.preventDefault();
-    ev.stopPropagation();
-    try { window.open(href, '_blank', 'noopener,noreferrer,popup'); }
-    catch { try { window.open(href, '_blank'); } catch {} }
-  }, true); // capture
-}
-
 
   // Commit value to underlying sheet model (in case some listeners don't fire)
   // and then schedule a save. We still dispatch input/change events for existing
@@ -2551,6 +2468,7 @@ if (!modal.__rteLinkCaptureBound) {
       if (sp) {
         try { setByPath(sheet, sp, htmlValue); } catch {}
         try { scheduleSheetSave(player); } catch {}
+        try { window.updatePlayerList?.(); } catch {}
         return;
       }
 
@@ -2560,6 +2478,7 @@ if (!modal.__rteLinkCaptureBound) {
         if (Number.isFinite(idx) && sheet?.notes?.entries?.[idx]) {
           sheet.notes.entries[idx].text = String(htmlValue || '');
           try { scheduleSheetSave(player); } catch {}
+        try { window.updatePlayerList?.(); } catch {}
         }
         return;
       }
@@ -2574,6 +2493,7 @@ if (!modal.__rteLinkCaptureBound) {
         if (!sheet.text[key] || typeof sheet.text[key] !== 'object') sheet.text[key] = { value: '' };
         sheet.text[key].value = cleanupSpellDesc(String(htmlValue || ''));
         try { scheduleSheetSave(player); } catch {}
+        try { window.updatePlayerList?.(); } catch {}
         return;
       }
     } catch {}
@@ -2628,22 +2548,56 @@ if (!modal.__rteLinkCaptureBound) {
       try { wrap.__rteInlineBackup = null; } catch {}
     }
   };
-  const close = () => {
-    modal.classList.add("hidden");
-    current = null;
-    shared.current = null;
-  };
+  const close = ({ save = false } = {}) => {
+  try {
+    if (save && current) {
+      const cleaned = rteSanitizeHtml(editor.innerHTML);
+      const finalHtml = cleaned && cleaned.trim() ? cleaned : "";
+
+      // persist editor height for this field
+      try {
+        const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
+        current.src.style.height = `${h}px`;
+      } catch {}
+
+      current.src.value = finalHtml;
+
+      // ensure model updated even for custom fields
+      commitToModel(current.src, finalHtml);
+      try { scheduleSheetSave(current.player); } catch {}
+        try { window.updatePlayerList?.(); } catch {}
+
+      // dispatch input so existing bindings save it
+      try {
+        current.src.dispatchEvent(new Event("input", { bubbles: true }));
+        current.src.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch {}
+
+      // update view instantly
+      try {
+        const liveWrap = current.src?.closest?.('.rte-wrap') || current.wrap;
+        const liveView = liveWrap?.querySelector?.('.rte-view') || current.view;
+        if (liveView) {
+          liveView.innerHTML = rteValueToDisplayHtml(finalHtml);
+          liveView.classList.toggle("is-empty", !finalHtml);
+        }
+      } catch {}
+
+      // instant sidebar/title refresh (if exists globally)
+      try { window.updatePlayerList?.(); } catch {}
+    }
+  } catch {}
+
+  modal.classList.add("hidden");
+  current = null;
+};
+
 
   const open = (wrap, view, src) => {
     if (!canEdit && (src.disabled || src.hasAttribute("disabled"))) return;
 
     // keep player reference for reliable save
     current = { wrap, view, src, player };
-    shared.current = current;
-    shared.commitToModel = commitToModel;
-    shared.updateViewsForSrc = updateViewsForSrc;
-    shared.normalizeHref = normalizeHref;
-
     const html = rteValueToDisplayHtml(src.value);
     editor.innerHTML = html || "";
     const h = Math.max(160, Math.min(720, parseInt(src.style.height || "320", 10) || 320));
@@ -2662,32 +2616,43 @@ if (!modal.__rteLinkCaptureBound) {
     modal.__rteBound = true;
 
     modal.addEventListener("click", (e) => {
+      const btnCancel = e.target.closest("[data-rte-cancel]");
+      if (btnCancel) { e.preventDefault(); close({ save: false }); return; }
+
       const btnClose = e.target.closest("[data-rte-close]");
-      if (btnClose) { e.preventDefault(); close(); return; }
+      if (btnClose) { e.preventDefault(); close({ save: true }); return; }
 
       const btnSave = e.target.closest("[data-rte-save]");
       if (btnSave) {
         e.preventDefault();
-        const cur = shared.current;
-        if (!cur) return;
+        if (!current) return;
         const cleaned = rteSanitizeHtml(editor.innerHTML);
         const finalHtml = cleaned && cleaned.trim() ? cleaned : "";
-        cur.src.value = finalHtml;
+        current.src.value = finalHtml;
         // ensure model updated even for custom fields
-        try { (shared.commitToModel || commitToModel)(cur.src, finalHtml); } catch {}
+        commitToModel(current.src, finalHtml);
         // and force schedule save (some fields are not bound via data-sheet-path)
-        try { scheduleSheetSave(cur.player); } catch {}
+        try { scheduleSheetSave(current.player); } catch {}
+        try { window.updatePlayerList?.(); } catch {}
         // persist editor height
         try {
           const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
-          cur.src.style.height = `${h}px`;
+          current.src.style.height = `${h}px`;
         } catch {}
         // dispatch input so existing bindings save it
-        cur.src.dispatchEvent(new Event("input", { bubbles: true }));
-        cur.src.dispatchEvent(new Event("change", { bubbles: true }));
-        // Update all visible bound fields IMMEDIATELY (preview/title + tab content)
-        try { (shared.updateViewsForSrc || updateViewsForSrc)(cur.src, finalHtml); } catch {}
-        close();
+        current.src.dispatchEvent(new Event("input", { bubbles: true }));
+        current.src.dispatchEvent(new Event("change", { bubbles: true }));
+        // Update the visible field IMMEDIATELY (some sheets re-render on a debounce,
+        // so we also re-find the live wrapper/view in the DOM to avoid stale refs).
+        try {
+          const liveWrap = current.src?.closest?.('.rte-wrap') || current.wrap;
+          const liveView = liveWrap?.querySelector?.('.rte-view') || current.view;
+          if (liveView) {
+            liveView.innerHTML = rteValueToDisplayHtml(finalHtml);
+            liveView.classList.toggle("is-empty", !finalHtml);
+          }
+        } catch {}
+        close({ save: false });
         return;
       }
 
@@ -2718,9 +2683,8 @@ if (!modal.__rteLinkCaptureBound) {
     editor.addEventListener('click', (e) => {
       const a = e.target?.closest?.('a[href]');
       if (!a) return;
-      let href = a.getAttribute('href') || '';
-      href = (shared.normalizeHref || normalizeHref)(href) || a.href || href;
-      if (!href || href === '#') return;
+      const href = a.getAttribute('href');
+      if (!href) return;
       e.preventDefault();
       e.stopPropagation();
       try {
@@ -2796,9 +2760,8 @@ if (!modal.__rteLinkCaptureBound) {
       const a = e.target?.closest?.('a');
       if (a) {
         // Always open links in a new browser window/tab (not in the current page)
-        let href = a.href || a.getAttribute?.('href') || '';
-        href = (shared.normalizeHref || normalizeHref)(href) || href;
-        if (!href || href === '#') return;
+        const href = a.getAttribute?.('href');
+        if (!href) return;
         e.preventDefault();
         e.stopPropagation();
         try { window.open(href, '_blank', 'noopener,noreferrer,popup'); }
