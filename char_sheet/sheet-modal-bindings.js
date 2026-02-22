@@ -570,23 +570,37 @@ function upgradeSheetTextareasToRte(root, canEdit) {
   if (!root) return;
 
   // Global link interceptor for rich-text areas.
-  // Some parts of the app may have delegated click handlers that hijack <a> navigation.
-  // We intercept in capture phase and force opening links in a new browser tab.
+  // IMPORTANT:
+  // - Links in rich text MUST be real <a href> so the browser recognizes them
+  //   (right-click -> "Open in new tab", ctrl/cmd click, etc.).
+  // - Some parts of the app may have delegated click handlers that hijack <a> navigation.
+  //   We intercept in CAPTURE phase and STOP propagation so native link behavior survives.
   if (!window.__rteLinkInterceptorInstalled) {
     window.__rteLinkInterceptorInstalled = true;
-    document.addEventListener('click', (e) => {
+    const stopHijack = (e) => {
       try {
         const a = e.target?.closest?.('a[href]');
         if (!a) return;
         if (!a.closest('.rte-editor') && !a.closest('.rte-modal')) return;
         const href = normalizeHref(a.getAttribute('href'));
         if (!href) return;
-        e.preventDefault();
+
+        // Stop in-app routers from hijacking. Do NOT preventDefault —
+        // we want native link behavior (context menu etc.).
         e.stopPropagation();
         try { e.stopImmediatePropagation?.(); } catch {}
-        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+
+        // If target was stripped, force new tab only for a normal left click.
+        const target = String(a.getAttribute('target') || '').toLowerCase();
+        if (target !== '_blank' && e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+          e.preventDefault();
+          try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+        }
       } catch {}
-    }, true);
+    };
+
+    document.addEventListener('pointerdown', stopHijack, true);
+    document.addEventListener('click', stopHijack, true);
   }
 
   const htmlEscape = (s) => String(s ?? '')
@@ -598,9 +612,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
   const LINK_COLOR = 'rgb(204,130,36)';
 
-  // IMPORTANT: links must be real <a> elements so the browser recognizes them as links
-  // (right-click "open in new tab", status bar preview, etc.).
-  const makeLinkHTML = (href, label) => {
+  const makeLinkAnchorHTML = (href, label) => {
     const safeHref = htmlEscape(String(href || ''));
     const safeLabel = htmlEscape(String(label || ''));
     // Keep link styling consistent with the UI (bold + underline + custom color).
@@ -614,10 +626,10 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     return esc.replace(urlRe, (m) => {
       if (m.includes('@') && !m.startsWith('http')) {
         const href = 'mailto:' + m;
-        return makeLinkHTML(href, m);
+        return makeLinkAnchorHTML(href, m);
       }
       const href = normalizeHref(m);
-      return makeLinkHTML(href, m);
+      return makeLinkAnchorHTML(href, m);
     }).replace(/\n/g, '<br>');
   };
 
@@ -655,9 +667,8 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           // strip style/class/etc
           for (const attr of Array.from(ch.attributes || [])) {
             const n = attr.name.toLowerCase();
-            // Allow safe attrs for <a>
+            // For <a> we keep only safe attributes we will normalize below.
             if (tag === 'A' && (n === 'href' || n === 'title' || n === 'target' || n === 'rel' || n === 'class' || n === 'style')) continue;
-            // Legacy spans (older saves) may store link in data-href; keep for migration.
             if (tag === 'SPAN' && (n === 'style' || n === 'data-href' || n === 'class')) continue;
             ch.removeAttribute(attr.name);
           }
@@ -686,13 +697,13 @@ function upgradeSheetTextareasToRte(root, canEdit) {
             if (out.length) ch.setAttribute('style', out.join(';'));
             else ch.removeAttribute('style');
 
-            // Legacy: convert <span class="rte-link" data-href="..."> into real <a href="...">
-            // so browser recognizes it as a link (context menu, etc.).
+            // Backward compatibility: old rich-text stored links as <span class="rte-link" data-href="...">.
+            // Convert them to real <a href> so browser recognizes them as links.
             try {
               if (ch.classList?.contains?.('rte-link')) {
-                const dh = String(ch.getAttribute('data-href') || '').trim();
-                const href = normalizeHref(dh);
-                if (href && !/^\s*javascript:/i.test(href)) {
+                const hrefRaw = String(ch.getAttribute('data-href') || '').trim();
+                const href = normalizeHref(hrefRaw);
+                if (href) {
                   const a = document.createElement('a');
                   a.className = 'rte-link';
                   a.setAttribute('href', href);
@@ -701,43 +712,39 @@ function upgradeSheetTextareasToRte(root, canEdit) {
                   a.setAttribute('style', `color:${LINK_COLOR}`);
                   while (ch.firstChild) a.appendChild(ch.firstChild);
                   ch.replaceWith(a);
-                  // continue walking inside the new node
-                  walk(a);
                   continue;
                 }
               }
             } catch {}
           }
 
-          // Sanitize <a>: normalize href and force safe target/rel.
+          // Keep any pasted <a> as a real anchor (so browser recognizes it as a link).
+          // Normalize href, force target="_blank" and apply our styling.
           if (tag === 'A') {
             const hrefRaw = String(ch.getAttribute('href') || '').trim();
             const href = normalizeHref(hrefRaw);
-            // Block javascript:/empty href
-            if (!href || /^\s*javascript:/i.test(href)) {
+            if (!href) {
               const frag = document.createDocumentFragment();
               while (ch.firstChild) frag.appendChild(ch.firstChild);
               ch.replaceWith(frag);
             } else {
               ch.setAttribute('href', href);
+              ch.classList.add('rte-link');
               ch.setAttribute('target', '_blank');
               ch.setAttribute('rel', 'noopener noreferrer');
-              try { ch.classList.add('rte-link'); } catch {}
-              const st = String(ch.getAttribute('style') || '').trim();
-              if (!/color\s*:/i.test(st)) ch.setAttribute('style', `color:${LINK_COLOR}`);
-              // Make pasted/loaded links visually consistent: bold + underline.
-              try {
-                const hasU = ch.querySelector && (ch.querySelector('u') || ch.querySelector('U'));
-                const hasB = ch.querySelector && (ch.querySelector('b') || ch.querySelector('B') || ch.querySelector('strong') || ch.querySelector('STRONG'));
-                if (!hasU || !hasB) {
-                  const b = document.createElement('b');
-                  const u = document.createElement('u');
-                  while (ch.firstChild) u.appendChild(ch.firstChild);
-                  b.appendChild(u);
-                  ch.appendChild(b);
-                }
-              } catch {}
+              ch.setAttribute('style', `color:${LINK_COLOR}`);
 
+              // Ensure underline exists (and usually bold) for visual consistency.
+              const hasU = !!ch.querySelector('u');
+              if (!hasU) {
+                const frag = document.createDocumentFragment();
+                while (ch.firstChild) frag.appendChild(ch.firstChild);
+                const b = document.createElement('b');
+                const u = document.createElement('u');
+                u.appendChild(frag);
+                b.appendChild(u);
+                ch.appendChild(b);
+              }
             }
           }
 
@@ -753,7 +760,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       // Linkify plain URLs that survived as text (basic)
       htmlOut = htmlOut.replace(/(^|[\s>])((https?:\/\/|www\.)[^\s<]+)/gi, (m, p1, url) => {
         const href = url.startsWith('http') ? url : ('https://' + url);
-        return `${p1}${makeLinkHTML(href, url)}`;
+        return `${p1}${makeLinkAnchorHTML(href, url)}`;
       });
 
       return htmlOut;
@@ -910,10 +917,10 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       return esc.replace(urlRe, (m) => {
         if (m.includes('@') && !m.startsWith('http')) {
           const href = 'mailto:' + m;
-          return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
+        return `<a class="rte-link" href="${href}" target="_blank" rel="noopener noreferrer" style="color:${LINK_COLOR}"><b><u>${m}</u></b></a>`;
         }
         const href = normalizeHref(m);
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
+      return `<a class="rte-link" href="${href}" target="_blank" rel="noopener noreferrer" style="color:${LINK_COLOR}"><b><u>${m}</u></b></a>`;
       }).replace(/\n/g, '<br>');
     };
 
@@ -974,49 +981,30 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       applyFontSize(fontSel.value);
     });
 
-        editor.addEventListener('paste', (e) => {
+    editor.addEventListener('paste', (e) => {
       try {
         e.preventDefault();
         const cd = e.clipboardData;
         const html = cd?.getData?.('text/html');
         const text = cd?.getData?.('text/plain');
-        const uriList = cd?.getData?.('text/uri-list') || cd?.getData?.('text/x-moz-url') || '';
-        const uri = String(uriList || '').split(/\r?\n/).find(x => x && !x.startsWith('#')) || '';
-
-        let incoming = '';
-        if (html && String(html).trim()) {
-          incoming = sanitizeHtml(html);
-          if (uri && !/<a\b/i.test(incoming)) {
-            const href = normalizeHref(uri);
-            if (href) incoming = makeLinkHTML(href, String(text || uri).trim() || href);
-          }
-        } else if (uri && String(uri).trim()) {
-          const href = normalizeHref(uri);
-          incoming = href ? makeLinkHTML(href, String(text || uri).trim() || href) : linkifyPlain(String(text || ''));
-        } else {
-          incoming = linkifyPlain(String(text || ''));
-        }
-
+        const incoming = (html && html.trim())
+          ? sanitizeHtml(html)
+          : linkifyPlain(String(text || ''));
         document.execCommand('insertHTML', false, incoming);
       } catch {}
     });
 
-    const openLinkFromEvent = (e) => {
-      const el = e.target?.closest?.('.rte-link');
-      if (!el) return;
-      // Support both new (<a href>) and legacy (<span data-href>) formats.
-      const rawHref = (el.tagName === 'A') ? el.getAttribute('href') : el.getAttribute('data-href');
-      const href = normalizeHref(rawHref);
-      if (!href) return;
-      e.preventDefault();
+    // Links are real <a>, so just stop bubbling to avoid any global click routers.
+    const stopLinkBubble = (e) => {
+      const a = e.target?.closest?.('a[href].rte-link');
+      if (!a) return;
       e.stopPropagation();
       try { e.stopImmediatePropagation?.(); } catch {}
-      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
     };
 
-    // Use pointerdown capture to stop any global click routers BEFORE they fire.
-    editor.addEventListener('pointerdown', openLinkFromEvent, true);
-    editor.addEventListener('click', openLinkFromEvent, true);
+    // Use capture to beat any global click routers.
+    editor.addEventListener('pointerdown', stopLinkBubble, true);
+    editor.addEventListener('click', stopLinkBubble, true);
 
     const close = () => { try { overlay.remove(); } catch {} };
 
@@ -1069,32 +1057,17 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
 
-        editor.addEventListener('paste', (e) => {
+    editor.addEventListener('paste', (e) => {
       if (!canEdit) return;
       try {
         e.preventDefault();
         const cd = e.clipboardData;
         const html = cd?.getData?.('text/html');
         const text = cd?.getData?.('text/plain');
-        const uriList = cd?.getData?.('text/uri-list') || cd?.getData?.('text/x-moz-url') || '';
-        const uri = String(uriList || '').split(/\r?\n/).find(x => x && !x.startsWith('#')) || '';
-
-        let incoming = '';
-        if (html && String(html).trim()) {
-          incoming = sanitizeHtml(html);
-          if (uri && !/<a\b/i.test(incoming)) {
-            const href = normalizeHref(uri);
-            if (href) incoming = makeLinkHTML(href, String(text || uri).trim() || href);
-          }
-        } else if (uri && String(uri).trim()) {
-          const href = normalizeHref(uri);
-          incoming = href ? makeLinkHTML(href, String(text || uri).trim() || href) : linkifyPlain(String(text || ''));
-        } else {
-          incoming = linkifyPlain(String(text || ''));
-        }
-
+        const incoming = (html && html.trim())
+          ? sanitizeHtml(html)
+          : linkifyPlain(String(text || ''));
         document.execCommand('insertHTML', false, incoming);
-        // mirror into hidden textarea so existing save/bindings see it
         // mirror into hidden textarea so existing save/bindings see it
         try { ta.value = sanitizeHtml(editor.innerHTML || ''); } catch {}
         try {
@@ -1102,27 +1075,23 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           ta.dispatchEvent(new Event('change', { bubbles: true }));
         } catch {}
       } catch {}
-    
+    });
+
     editor.addEventListener('dblclick', (e) => {
       e.preventDefault();
       const key = path || ta.id || ta.name || '';
       openModal(ta, editor, key || path);
     });
 
-    const openInlineLinkFromEvent = (e) => {
-      const el = e.target?.closest?.('.rte-link');
-      if (!el) return;
-      const rawHref = (el.tagName === 'A') ? el.getAttribute('href') : el.getAttribute('data-href');
-      const href = normalizeHref(rawHref);
-      if (!href) return;
-      e.preventDefault();
+    const stopInlineLinkBubble = (e) => {
+      const a = e.target?.closest?.('a[href].rte-link');
+      if (!a) return;
       e.stopPropagation();
       try { e.stopImmediatePropagation?.(); } catch {}
-      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
     };
 
-    editor.addEventListener('pointerdown', openInlineLinkFromEvent, true);
-    editor.addEventListener('click', openInlineLinkFromEvent, true);
+    editor.addEventListener('pointerdown', stopInlineLinkBubble, true);
+    editor.addEventListener('click', stopInlineLinkBubble, true);
 
     try { ta.style.display = 'none'; } catch {}
     wrap.appendChild(editor);
