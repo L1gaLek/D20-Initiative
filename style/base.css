@@ -1272,6 +1272,16 @@ button:hover {
   cursor: pointer;
 }
 
+
+.rte-surface p,
+.rte-surface div{
+  margin: 0;
+}
+.rte-surface ul,
+.rte-surface ol{
+  margin: 0 0 0 18px;
+  padding: 0;
+}
 .rte{
   width: 100%;
   border: 1px solid #666;
@@ -1332,6 +1342,16 @@ button:hover {
   cursor: pointer;
 }
 
+
+.rte-editor p,
+.rte-editor div{
+  margin: 0;
+}
+.rte-editor ul,
+.rte-editor ol{
+  margin: 0 0 0 18px;
+  padding: 0;
+}
 /* ===== Rich Text Popup (sheet) ===== */
 .rte-popup{
   width: min(920px, calc(100vw - 32px));
