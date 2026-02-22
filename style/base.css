@@ -1305,105 +1305,6 @@ button:hover {
   pointer-events: none;
 }
 
-/* ================== RTE popup wrappers (double click) ================== */
-.rte-wrap{display:block;}
-.rte-src-hidden{display:none !important;}
-.rte-view{
-  border: 1px solid #666;
-  border-radius: 10px;
-  background: #111;
-  padding: 8px 10px;
-  min-height: 90px;
-  color: #eee;
-  font-size: 13px;
-  line-height: 16px;
-  white-space: normal;
-  overflow: auto;
-  outline: none;
-}
-.rte-view:focus{
-  box-shadow: 0 0 0 2px rgba(255,255,255,0.10);
-}
-.rte-view.is-empty:before{
-  content: attr(data-placeholder);
-  opacity: 0.55;
-}
-.rte-view a{font-weight:700; text-decoration: underline;}
-
-.rte-modal.hidden{display:none;}
-.rte-modal{
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.rte-modal__backdrop{
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-}
-.rte-modal__panel{
-  position: relative;
-  z-index: 2;
-  width: min(980px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
-  background: #111;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 14px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.rte-modal__head{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.04);
-}
-.rte-modal__title{font-weight: 700;}
-.rte-modal__x{
-  background: transparent;
-  border: 0;
-  color: #eee;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 10px;
-}
-.rte-modal__x:hover{background: rgba(255,255,255,0.08);}
-.rte-modal__toolbar{
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.03);
-  flex-wrap: wrap;
-}
-.rte-modal__spacer{flex: 1;}
-.rte-modal__height{display:flex; gap:8px; align-items:center; font-size:12px; opacity:0.9;}
-.rte-modal__save{
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.14);
-  color: #eee;
-  padding: 6px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-}
-.rte-modal__save:hover{background: rgba(255,255,255,0.18);}
-.rte-modal__body{padding: 12px; overflow: auto;}
-.rte-modal .rte-editor{
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 12px;
-  padding: 12px;
-}
-
 
 .note-add-btn{
   padding: 5px 10px;
@@ -2725,3 +2626,139 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .equip-row__details{margin-top:6px; opacity:.92; line-height:1.25;}
 .equip-row__desc.collapsed{display:none;}
 .equip-row__details.collapsed{display:none;}
+
+
+/* ===== Rich text modal editor ===== */
+.rte {
+  width: 100%;
+}
+
+.rte-editor {
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(0,0,0,0.18);
+  color: inherit;
+  overflow: auto;
+  line-height: 1.35;
+  font-size: 13px;
+}
+
+.rte-editor:empty::before {
+  content: attr(data-placeholder);
+  opacity: 0.45;
+}
+
+.rte-editor a {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.rte-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
+
+.rte-modal {
+  width: min(860px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(20,20,22,0.98);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.55);
+}
+
+.rte-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+
+.rte-modal-title {
+  font-weight: 700;
+}
+
+.rte-modal-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 8px;
+  opacity: 0.85;
+}
+
+.rte-modal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+
+.rte-btn {
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: inherit;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.rte-btn:hover {
+  background: rgba(255,255,255,0.09);
+}
+
+.rte-grow {
+  flex: 1;
+}
+
+.rte-height {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.9;
+  font-size: 12px;
+}
+
+.rte-modal-body {
+  padding: 12px;
+  overflow: auto;
+}
+
+.rte-editor--modal {
+  min-height: 220px;
+}
+
+.rte-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+}
+
+.rte-action {
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  border-radius: 12px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.rte-action:hover {
+  background: rgba(255,255,255,0.10);
+}
