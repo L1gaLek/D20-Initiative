@@ -179,6 +179,7 @@ function bindRichTextPopups(root, player, canEdit) {
   let sizeSel = null;
   let heightSel = null;
   let activeTa = null;
+  let activeSurface = null;
 
   function escapeHtmlLocal(s) {
     return String(s ?? '').replace(/[&<>\"']/g, (m) => ({
@@ -213,6 +214,109 @@ function bindRichTextPopups(root, player, canEdit) {
     // fallback per DOM location
     const ph = ta.getAttribute('placeholder') || '';
     return `free:${ph}:${Math.random().toString(16).slice(2)}`;
+  }
+
+  function ensureSurfaceForTextarea(ta) {
+    if (!ta || ta.__rteSurface) return ta?.__rteSurface || null;
+
+    const surface = document.createElement('div');
+    surface.className = 'rte-surface';
+    surface.setAttribute('contenteditable', 'true');
+    surface.setAttribute('spellcheck', 'true');
+    surface.tabIndex = 0;
+
+    // Initial content
+    let html = String(ta.dataset.rteHtml || '');
+    try {
+      const { player: curPlayer } = getState();
+      const sheet = curPlayer?.sheet?.parsed;
+      const key = bestKeyForTextarea(ta);
+      if (!html && sheet && sheet.textHtml && typeof sheet.textHtml === 'object') {
+        html = String(sheet.textHtml[key] || '');
+      }
+    } catch {}
+    if (!html) html = toHtmlFromPlain(ta.value || '');
+    surface.innerHTML = html;
+
+    // Mirror some sizing from textarea
+    try {
+      const cs = getComputedStyle(ta);
+      if (cs.minHeight) surface.style.minHeight = cs.minHeight;
+      if (cs.height && cs.height !== 'auto') surface.style.height = cs.height;
+    } catch {}
+
+    // Keep textarea in DOM for existing save logic, but hide it.
+    ta.style.display = 'none';
+
+    // Insert surface where textarea was
+    ta.insertAdjacentElement('afterend', surface);
+    ta.__rteSurface = surface;
+    surface.__rteTextarea = ta;
+
+    // Add a dedicated "Редактор" button right under the surface (always visible)
+    try {
+      if (!ta.__rteBtn) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'popup-btn';
+        btn.textContent = 'Редактор';
+        btn.style.marginTop = '6px';
+        btn.style.marginBottom = '6px';
+        btn.style.alignSelf = 'flex-start';
+        btn.addEventListener('click', () => showForTextarea(ta));
+        surface.insertAdjacentElement('afterend', btn);
+        ta.__rteBtn = btn;
+      }
+    } catch {}
+
+    // Open the popup editor (tools) on double click.
+    surface.addEventListener('dblclick', () => showForTextarea(ta));
+
+    // Paste: keep HTML if available (anchors etc). Fallback: auto-linkify plain URLs.
+    surface.addEventListener('paste', (e) => {
+      try {
+        const dt = e.clipboardData;
+        if (!dt) return;
+        const htmlClip = dt.getData('text/html');
+        const text = dt.getData('text/plain');
+        if (htmlClip) {
+          e.preventDefault();
+          document.execCommand('insertHTML', false, htmlClip);
+          return;
+        }
+        if (text) {
+          const linked = String(text).replace(/(https?:\/\/[^\s)\]]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+          e.preventDefault();
+          document.execCommand('insertHTML', false, escapeHtmlLocal(linked).replace(/&lt;a /g, '<a ').replace(/&lt;\/a&gt;/g, '</a>').replace(/&gt;/g,'>'));
+        }
+      } catch {}
+    });
+
+    // Sync inline edits back to the hidden textarea + storage.
+    const sync = () => {
+      try {
+        const htmlNow = String(surface.innerHTML || '');
+        const plain = plainFromHtml(htmlNow);
+        ta.value = plain;
+        ta.dataset.rteHtml = htmlNow;
+
+        const { player: curPlayer } = getState();
+        const sheet = curPlayer?.sheet?.parsed;
+        if (sheet && typeof sheet === 'object') {
+          if (!sheet.textHtml || typeof sheet.textHtml !== 'object') sheet.textHtml = {};
+          const key = bestKeyForTextarea(ta);
+          sheet.textHtml[key] = htmlNow;
+          markModalInteracted?.(curPlayer.id);
+          scheduleSheetSave?.(curPlayer);
+        }
+
+        try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
+      } catch {}
+    };
+    surface.addEventListener('input', sync);
+    surface.addEventListener('blur', sync);
+
+    return surface;
   }
 
   function ensureOverlay() {
@@ -341,6 +445,7 @@ function bindRichTextPopups(root, player, canEdit) {
 
     ensureOverlay();
     activeTa = ta;
+    activeSurface = ta.__rteSurface || null;
 
     // Load stored HTML if present
     const sheet = curPlayer?.sheet?.parsed;
@@ -367,6 +472,7 @@ function bindRichTextPopups(root, player, canEdit) {
     if (!overlay) return;
     overlay.classList.add('hidden');
     activeTa = null;
+    activeSurface = null;
   }
 
   function saveAndClose() {
@@ -377,6 +483,12 @@ function bindRichTextPopups(root, player, canEdit) {
     const plain = plainFromHtml(html);
     activeTa.value = plain;
     activeTa.dataset.rteHtml = html;
+
+    // Update inline surface (so the description shows formatted text like in the editor)
+    try {
+      const surf = activeTa.__rteSurface || activeSurface;
+      if (surf) surf.innerHTML = html;
+    } catch {}
 
     // persist html for fields that are stored via sheet paths (and spell desc)
     try {
@@ -402,6 +514,9 @@ function bindRichTextPopups(root, player, canEdit) {
     const { canEdit: curCanEdit } = getState();
     if (!curCanEdit) return;
 
+    // Ensure inline rich-text surface exists and is visible.
+    try { ensureSurfaceForTextarea(ta); } catch {}
+
     // Only for description-like fields (textareas)
     if (ta.__rteBtn) return;
     const btn = document.createElement('button');
@@ -422,6 +537,16 @@ function bindRichTextPopups(root, player, canEdit) {
       }
     } catch {}
   });
+
+  // Upgrade all current textareas right away (so they display formatted content)
+  try {
+    const { canEdit: curCanEdit } = getState();
+    if (curCanEdit) {
+      root.querySelectorAll('textarea').forEach(ta => {
+        try { ensureSurfaceForTextarea(ta); } catch {}
+      });
+    }
+  } catch {}
 }
 
 // ===== Appearance (Облик) =====
