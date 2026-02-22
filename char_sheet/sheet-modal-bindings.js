@@ -580,15 +580,18 @@ if (!window.__sheetExternalLinkInterceptorInstalled) {
 
   document.addEventListener('click', (e) => {
     try {
+      // NOTE: inside contenteditable the event target can be a Text node.
+      // In that case closest() is unavailable and we would miss the click.
       const tgt = e.target;
-      if (!tgt || !(tgt instanceof Element)) return;
+      const baseEl = (tgt instanceof Element) ? tgt : (tgt && tgt.parentElement);
+      if (!baseEl) return;
 
       // Only inside the sheet modal to avoid interfering with the rest of the UI.
       const sheetModal = document.getElementById('sheet-modal');
-      if (!sheetModal || !sheetModal.contains(tgt)) return;
+      if (!sheetModal || !sheetModal.contains(baseEl)) return;
 
       // Our rich-text stores links as either <a href> (rare) or <span.rte-link data-href>.
-      const linkEl = tgt.closest('a[href], .rte-link[data-href]');
+      const linkEl = baseEl.closest('a[href], .rte-link[data-href]');
       if (!linkEl) return;
 
       const rawHref = (linkEl.matches('a[href]'))
@@ -996,7 +999,9 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     });
 
     const openLinkFromEvent = (e) => {
-      const el = e.target?.closest?.('.rte-link');
+      const t = e.target;
+      const baseEl = (t instanceof Element) ? t : (t && t.parentElement);
+      const el = baseEl?.closest?.('.rte-link');
       if (!el) return;
       const href = normalizeHref(el.getAttribute('data-href'));
       if (!href) return;
@@ -1088,7 +1093,9 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     });
 
     const openInlineLinkFromEvent = (e) => {
-      const el = e.target?.closest?.('.rte-link');
+      const t = e.target;
+      const baseEl = (t instanceof Element) ? t : (t && t.parentElement);
+      const el = baseEl?.closest?.('.rte-link');
       if (!el) return;
       const href = normalizeHref(el.getAttribute('data-href'));
       if (!href) return;
