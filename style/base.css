@@ -1306,74 +1306,6 @@ button:hover {
 }
 
 
-/* RTE view (opens popup on double click) */
-.rte-view{
-  padding: 8px 10px;
-  min-height: 110px;
-  color: #eee;
-  font-size: 15px;
-  line-height: 20px;
-  outline: none;
-  white-space: normal;
-  cursor: text;
-}
-.rte-view:empty:before{
-  content: attr(data-placeholder);
-  opacity: 0.55;
-}
-
-/* links should look like links but in our style */
-.rte-view a,
-.rte-pop__editor a{
-  font-weight: 700;
-  text-decoration: underline;
-  color: inherit;
-  cursor: pointer;
-}
-
-/* Popup RTE */
-.rte-pop{
-  display:flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.rte-pop__toolbar{
-  display:flex;
-  align-items:center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.rte-pop__spacer{
-  flex: 1 1 auto;
-}
-.rte-pop__hlabel{
-  font-size: 12px;
-  opacity: 0.85;
-  margin-left: 8px;
-}
-.rte-pop__hval{
-  font-size: 12px;
-  opacity: 0.85;
-  min-width: 52px;
-  text-align: right;
-}
-.rte-pop__editor{
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 10px;
-  padding: 10px;
-  background: rgba(0,0,0,0.25);
-  min-height: 180px;
-  outline: none;
-  font-size: 15px;
-  line-height: 20px;
-}
-.rte-pop__actions{
-  display:flex;
-  justify-content:flex-end;
-  gap: 8px;
-}
-
-
 .note-add-btn{
   padding: 5px 10px;
   font-size: 12px;
@@ -2694,3 +2626,88 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .equip-row__details{margin-top:6px; opacity:.92; line-height:1.25;}
 .equip-row__desc.collapsed{display:none;}
 .equip-row__details.collapsed{display:none;}
+
+/* ================== Rich text popup editor ================== */
+.rte-preview-wrap{width:100%;}
+.rte-preview{
+  background: rgba(0,0,0,.14);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: rgba(255,255,255,.92);
+  overflow: auto;
+  cursor: text;
+  user-select: text;
+  white-space: normal;
+}
+.rte-preview:empty:before{
+  content: attr(data-placeholder);
+  opacity: .55;
+}
+
+.rte-popup.hidden{display:none;}
+.rte-popup{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+.rte-popup__backdrop{
+  position:absolute;
+  inset:0;
+  background: rgba(0,0,0,.65);
+}
+.rte-popup__panel{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform: translate(-50%,-50%);
+  width: min(860px, 92vw);
+  max-height: 88vh;
+  background: rgba(24,24,28,.98);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.55);
+  display:flex;
+  flex-direction: column;
+}
+.rte-popup__header{padding:10px 12px; border-bottom: 1px solid rgba(255,255,255,.10);}
+.rte-popup__body{padding:12px; overflow:auto;}
+.rte-popup__footer{padding:10px 12px; border-top: 1px solid rgba(255,255,255,.10); display:flex; justify-content:flex-end; gap:10px;}
+
+.rte-toolbar{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.rte-spacer{flex:1;}
+.rte-btn{
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14);
+  color: rgba(255,255,255,.92);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.rte-btn:hover{background: rgba(255,255,255,.14);}
+.rte-btn--primary{background: rgba(255,165,0,.20); border-color: rgba(255,165,0,.35);}
+
+.rte-height{display:flex; align-items:center; gap:10px; font-size: 13px; opacity:.9;}
+.rte-height input[type="range"]{width: 180px;}
+
+.rte-editor{
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 15px;
+  line-height: 1.38;
+  color: rgba(255,255,255,.92);
+  min-height: 220px;
+  outline: none;
+}
+
+/* Links: internal style (not source website style) */
+.rte-preview a, .rte-editor a{
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
