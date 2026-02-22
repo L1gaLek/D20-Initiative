@@ -565,15 +565,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-  const normalizeHref = (href) => {
-    const h = String(href || '').trim();
-    if (!h) return '';
-    if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
-    if (/^www\./i.test(h)) return 'https://' + h;
-    if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
-    return h;
-  };
-
   const linkifyPlain = (plain) => {
     const t = String(plain || '');
     const esc = htmlEscape(t);
@@ -825,7 +816,11 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       }).replace(/\n/g, '<br>');
     };
 
-    toolbar.addEventListener('mousedown', (e) => e.preventDefault());
+    toolbar.addEventListener('mousedown', (e) => {
+      // allow native <select> interaction (otherwise dropdown can't open)
+      if (e.target?.closest?.('select')) return;
+      e.preventDefault();
+    });
     toolbar.addEventListener('click', (e) => {
       const btn = e.target?.closest?.('button');
       if (!btn) return;
