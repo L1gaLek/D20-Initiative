@@ -158,559 +158,8 @@ function rerenderCombatTabInPlace(root, player, canEdit) {
   bindNotesEditors(root, player, canEdit);
   bindSlotEditors(root, player, canEdit);
   bindCombatEditors(root, player, canEdit);
-  try { if (typeof bindRichTextPopups === 'function') bindRichTextPopups(root, player, canEdit); } catch {}
 
   updateWeaponsBonuses(root, player.sheet?.parsed);
-}
-
-// ===== Rich text popup for all description fields =====
-// Uses a lightweight contenteditable editor with toolbar.
-// Opens via small "Редактор" button that appears near focused textarea.
-function bindRichTextPopups(root, player, canEdit) {
-  if (!root) return;
-  root.__rtePopupState = { player, canEdit };
-  const getState = () => root.__rtePopupState || { player, canEdit };
-
-  if (root.__rtePopupBound) return;
-  root.__rtePopupBound = true;
-
-  let overlay = null;
-  let editorEl = null;
-  let sizeSel = null;
-  let heightSel = null;
-  let activeTa = null;
-  let activeSurface = null;
-
-  function escapeHtmlLocal(s) {
-    return String(s ?? '').replace(/[&<>\"']/g, (m) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[m]));
-  }
-
-  function toHtmlFromPlain(text) {
-    const safe = escapeHtmlLocal(String(text || ''));
-    // preserve line breaks
-    return safe.replace(/\n/g, '<br>');
-  }
-
-  function plainFromHtml(html) {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = String(html || '');
-    return (tmp.innerText || '').replace(/\r/g, '');
-  }
-
-  function normalizeHref(href) {
-    let h = String(href || '').trim();
-    if (!h) return '';
-    // protocol-relative
-    if (h.startsWith('//')) h = 'https:' + h;
-    // bare www
-    if (/^www\./i.test(h)) h = 'https://' + h;
-    return h;
-  }
-
-  function isSafeHref(href) {
-    const h = normalizeHref(href);
-    if (!h) return false;
-    // allow http(s) and mailto only
-    return /^https?:\/\//i.test(h) || /^mailto:/i.test(h);
-  }
-
-  function linkifyPlainText(text) {
-    const safe = escapeHtmlLocal(String(text || ''));
-    // Convert raw URLs into links (keep surrounding text intact)
-    return safe.replace(/(https?:\/\/[^\s)\]]+)/g, (m) => {
-      const url = normalizeHref(m);
-      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtmlLocal(url)}</a>`;
-    }).replace(/\n/g, '<br>');
-  }
-
-  function sanitizePastedHtml(html) {
-    // Goal: keep semantic formatting (b/u/lists/links/line breaks) but
-    // drop ALL foreign styling (colors/fonts/sizes) so it matches server CSS.
-    const wrap = document.createElement('div');
-    wrap.innerHTML = String(html || '');
-
-    // Remove dangerous / unwanted nodes (keep <a> because we sanitize href below)
-    wrap.querySelectorAll('style,script,meta,link,svg,iframe,object,embed,img,video,audio,canvas').forEach(n => n.remove());
-
-    const ALLOWED = new Set(['A','B','STRONG','U','BR','UL','OL','LI','P','DIV','SPAN']);
-
-    const cleanNode = (node) => {
-      if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.nodeValue || '');
-      if (node.nodeType !== Node.ELEMENT_NODE) return document.createTextNode('');
-
-      const tag = node.tagName;
-
-      // unwrap any unsupported tags
-      if (!ALLOWED.has(tag)) {
-        const frag = document.createDocumentFragment();
-        Array.from(node.childNodes || []).forEach(ch => frag.appendChild(cleanNode(ch)));
-        return frag;
-      }
-
-      // normalize tags
-      let out;
-      if (tag === 'STRONG') out = document.createElement('b');
-      else if (tag === 'DIV') out = document.createElement('div');
-      else if (tag === 'SPAN') out = document.createElement('span');
-      else out = document.createElement(tag.toLowerCase());
-
-      // strip ALL attributes except safe href on anchors
-      if (out.tagName.toUpperCase() === 'A') {
-        const hrefRaw = node.getAttribute('href') || '';
-        const href = normalizeHref(hrefRaw);
-        if (isSafeHref(href)) {
-          out.setAttribute('href', href);
-          out.setAttribute('target', '_blank');
-          out.setAttribute('rel', 'noopener noreferrer');
-        } else {
-          // unsafe href => unwrap as text
-          const frag = document.createDocumentFragment();
-          Array.from(node.childNodes || []).forEach(ch => frag.appendChild(cleanNode(ch)));
-          return frag;
-        }
-      }
-
-      Array.from(node.childNodes || []).forEach(ch => out.appendChild(cleanNode(ch)));
-      return out;
-    };
-
-    const frag = document.createDocumentFragment();
-    Array.from(wrap.childNodes || []).forEach(n => frag.appendChild(cleanNode(n)));
-
-    const outWrap = document.createElement('div');
-    outWrap.appendChild(frag);
-
-    // If we ended up with a bunch of top-level divs, keep them; otherwise keep as-is.
-    return outWrap.innerHTML;
-  }
-
-  function bestKeyForTextarea(ta) {
-    if (!ta) return '';
-    const p = ta.getAttribute('data-sheet-path');
-    if (p) return `path:${p}`;
-    const k = ta.getAttribute('data-rte-key');
-    if (k) return `key:${k}`;
-    // spell desc editor (by url)
-    if (ta.hasAttribute('data-spell-desc-editor')) {
-      const item = ta.closest('.spell-item');
-      const href = item?.getAttribute?.('data-spell-url') || '';
-      if (href) return `spell:${href}`;
-    }
-    // fallback per DOM location
-    const ph = ta.getAttribute('placeholder') || '';
-    return `free:${ph}:${Math.random().toString(16).slice(2)}`;
-  }
-
-  function ensureSurfaceForTextarea(ta) {
-    if (!ta || ta.__rteSurface) return ta?.__rteSurface || null;
-
-    const surface = document.createElement('div');
-    surface.className = 'rte-surface';
-    surface.setAttribute('contenteditable', 'true');
-    surface.setAttribute('spellcheck', 'true');
-    surface.tabIndex = 0;
-
-    // Initial content
-    let html = String(ta.dataset.rteHtml || '');
-    try {
-      const { player: curPlayer } = getState();
-      const sheet = curPlayer?.sheet?.parsed;
-      const key = bestKeyForTextarea(ta);
-      if (!html && sheet && sheet.textHtml && typeof sheet.textHtml === 'object') {
-        html = String(sheet.textHtml[key] || '');
-      }
-
-      // Load saved presentation preferences (font size / surface height)
-      try {
-        const meta = sheet?.textHtmlMeta?.[key];
-        if (meta && typeof meta === 'object') {
-          if (meta.fontSize) ta.dataset.rteFontSize = String(meta.fontSize);
-          if (meta.surfaceMinHeight) ta.dataset.rteSurfaceMinHeight = String(meta.surfaceMinHeight);
-        }
-      } catch {}
-    } catch {}
-    if (!html) html = toHtmlFromPlain(ta.value || '');
-    surface.innerHTML = html;
-
-    // Apply stored presentation preferences to the inline surface immediately.
-    try {
-      const fs = Number(ta.dataset.rteFontSize || '') || 15;
-      const mh = Number(ta.dataset.rteSurfaceMinHeight || '') || 120;
-      surface.style.fontSize = `${Math.max(12, Math.min(24, fs))}px`;
-      surface.style.lineHeight = `${Math.round(Math.max(12, Math.min(24, fs)) * 1.35)}px`;
-      surface.style.minHeight = `${Math.max(60, Math.min(1200, mh))}px`;
-    } catch {}
-
-    // Mirror some sizing from textarea only if we do NOT have saved preferences.
-    try {
-      const hasMetaH = !!ta.dataset.rteSurfaceMinHeight;
-      const cs = getComputedStyle(ta);
-      if (!hasMetaH && cs.minHeight) surface.style.minHeight = cs.minHeight;
-      // Do not force height from textarea: surface is resizable and uses saved min-height.
-    } catch {}
-
-    // Keep textarea in DOM for existing save logic, but hide it.
-    ta.style.display = 'none';
-
-    // Insert surface where textarea was
-    ta.insertAdjacentElement('afterend', surface);
-    ta.__rteSurface = surface;
-    surface.__rteTextarea = ta;
-
-    // Add a dedicated "Редактор" button right under the surface (always visible)
-    try {
-      if (!ta.__rteBtn) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'popup-btn';
-        btn.textContent = 'Редактор';
-        btn.style.marginTop = '6px';
-        btn.style.marginBottom = '6px';
-        btn.style.alignSelf = 'flex-start';
-        btn.addEventListener('click', () => showForTextarea(ta));
-        surface.insertAdjacentElement('afterend', btn);
-        ta.__rteBtn = btn;
-      }
-    } catch {}
-
-    // Open the popup editor (tools) on double click.
-    surface.addEventListener('dblclick', () => showForTextarea(ta));
-
-    // Paste: strip foreign styling. Keep semantic HTML (b/u/lists/links) only.
-    surface.addEventListener('paste', (e) => {
-      try {
-        const dt = e.clipboardData;
-        if (!dt) return;
-        const htmlClip = dt.getData('text/html');
-        const text = dt.getData('text/plain');
-        if (htmlClip) {
-          e.preventDefault();
-          document.execCommand('insertHTML', false, sanitizePastedHtml(htmlClip));
-          return;
-        }
-        if (text) {
-          e.preventDefault();
-          document.execCommand('insertHTML', false, linkifyPlainText(text));
-        }
-      } catch {}
-    });
-
-    // Make links clickable even inside contenteditable surface.
-    // (contenteditable normally moves caret instead of navigating)
-    surface.addEventListener('click', (e) => {
-      try {
-        const t = e.target;
-        if (!(t instanceof Element)) return;
-        const a = t.closest('a[href]');
-        if (!a) return;
-        const href = normalizeHref(a.getAttribute('href') || '');
-        if (!isSafeHref(href)) return;
-        e.preventDefault();
-        // Prevent any other listeners (including capture-phase sheet handlers)
-        // from treating this click as an interaction that re-renders/resets the modal.
-        e.stopImmediatePropagation();
-        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch { window.open(href, '_blank'); }
-      } catch {}
-    }, true);
-
-    // Sync inline edits back to the hidden textarea + storage.
-    const sync = () => {
-      try {
-        const htmlNow = String(surface.innerHTML || '');
-        const plain = plainFromHtml(htmlNow);
-        ta.value = plain;
-        ta.dataset.rteHtml = htmlNow;
-
-        const { player: curPlayer } = getState();
-        const sheet = curPlayer?.sheet?.parsed;
-        if (sheet && typeof sheet === 'object') {
-          if (!sheet.textHtml || typeof sheet.textHtml !== 'object') sheet.textHtml = {};
-          const key = bestKeyForTextarea(ta);
-          sheet.textHtml[key] = htmlNow;
-          markModalInteracted?.(curPlayer.id);
-          scheduleSheetSave?.(curPlayer);
-        }
-
-        try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
-      } catch {}
-    };
-    surface.addEventListener('input', sync);
-    surface.addEventListener('blur', sync);
-
-    return surface;
-  }
-
-  function ensureOverlay() {
-    if (overlay) return overlay;
-    overlay = document.createElement('div');
-    overlay.className = 'popup-overlay hidden';
-    overlay.innerHTML = `
-      <div class="sheet-card rte-popup" role="dialog" aria-modal="true">
-        <div class="popup-head">
-          <div style="font-weight:900;">Редактор текста</div>
-          <div class="popup-actions">
-            <button class="popup-btn" type="button" data-rte-cancel>Закрыть</button>
-            <button class="popup-btn primary" type="button" data-rte-save>Сохранить</button>
-          </div>
-        </div>
-
-        <div class="rte" data-rte>
-          <div class="rte-toolbar">
-            <button class="rte-btn" type="button" data-rte-cmd="bold"><b>B</b></button>
-            <button class="rte-btn" type="button" data-rte-cmd="underline"><u>U</u></button>
-            <button class="rte-btn" type="button" data-rte-cmd="insertUnorderedList">•</button>
-            <button class="rte-btn" type="button" data-rte-cmd="insertOrderedList">1.</button>
-            <button class="rte-btn" type="button" data-rte-link>Ссылка</button>
-
-            <select class="rte-select" data-rte-size title="Размер текста">
-              <option value="14">14px</option>
-              <option value="15" selected>15px</option>
-              <option value="16">16px</option>
-              <option value="18">18px</option>
-              <option value="20">20px</option>
-            </select>
-
-            <select class="rte-select" data-rte-height title="Высота редактора">
-              <option value="120">Низко</option>
-              <option value="180" selected>Обычная</option>
-              <option value="260">Высоко</option>
-              <option value="360">Очень высоко</option>
-              <option value="520">Максимум</option>
-            </select>
-          </div>
-          <div class="rte-editor" contenteditable="true" data-rte-editor data-placeholder="Введи текст..."></div>
-        </div>
-
-        <div class="rte-help">Подсказка: при вставке текста из браузера/документа ссылки сохраняются. Закрыть можно клавишей Esc.</div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    editorEl = overlay.querySelector('[data-rte-editor]');
-    sizeSel = overlay.querySelector('[data-rte-size]');
-    heightSel = overlay.querySelector('[data-rte-height]');
-
-    // styleWithCSS improves underline/bold consistency in some browsers
-    try { document.execCommand('styleWithCSS', false, true); } catch {}
-
-    overlay.addEventListener('click', (e) => {
-      const t = e.target;
-      if (!(t instanceof Element)) return;
-      if (t === overlay) { hide(); return; }
-      if (t.closest('[data-rte-cancel]')) { hide(); return; }
-      if (t.closest('[data-rte-save]')) { saveAndClose(); return; }
-      const cmdBtn = t.closest('[data-rte-cmd]');
-      if (cmdBtn) {
-        const cmd = cmdBtn.getAttribute('data-rte-cmd');
-        if (cmd) {
-          try { document.execCommand(cmd, false, null); } catch {}
-          editorEl?.focus();
-        }
-        return;
-      }
-      if (t.closest('[data-rte-link]')) {
-        const url = prompt('Вставь ссылку (https://...)');
-        if (url) {
-          try { document.execCommand('createLink', false, url.trim()); } catch {}
-        }
-        editorEl?.focus();
-        return;
-      }
-    });
-
-    overlay.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') hide();
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        saveAndClose();
-      }
-    });
-
-    sizeSel?.addEventListener('change', () => {
-      const px = Math.max(12, Math.min(24, Number(sizeSel.value) || 15));
-      if (editorEl) editorEl.style.fontSize = `${px}px`;
-    });
-    heightSel?.addEventListener('change', () => {
-      const h = Math.max(90, Math.min(900, Number(heightSel.value) || 180));
-      if (editorEl) editorEl.style.minHeight = `${h}px`;
-    });
-
-    // Paste: strip foreign styling. Keep semantic HTML (b/u/lists/links) only.
-    editorEl?.addEventListener('paste', (e) => {
-      try {
-        const dt = e.clipboardData;
-        if (!dt) return;
-        const html = dt.getData('text/html');
-        const text = dt.getData('text/plain');
-        if (html) {
-          e.preventDefault();
-          document.execCommand('insertHTML', false, sanitizePastedHtml(html));
-          return;
-        }
-        if (text) {
-          e.preventDefault();
-          document.execCommand('insertHTML', false, linkifyPlainText(text));
-        }
-      } catch {}
-    });
-
-    return overlay;
-  }
-
-  function showForTextarea(ta) {
-    const { player: curPlayer, canEdit: curCanEdit } = getState();
-    if (!ta || !curPlayer) return;
-    if (!curCanEdit) return;
-
-    ensureOverlay();
-    activeTa = ta;
-    activeSurface = ta.__rteSurface || null;
-
-    // Load stored HTML if present
-    const sheet = curPlayer?.sheet?.parsed;
-    const key = bestKeyForTextarea(ta);
-    let html = String(ta.dataset.rteHtml || '');
-    try {
-      if (!html && sheet && sheet.textHtml && typeof sheet.textHtml === 'object') {
-        html = String(sheet.textHtml[key] || '');
-      }
-    } catch {}
-
-    if (!html) html = toHtmlFromPlain(ta.value || '');
-    if (editorEl) editorEl.innerHTML = html;
-
-    // Restore presentation settings into the editor selects.
-    try {
-      const fs = Number(ta.dataset.rteFontSize || '') || 15;
-      const mh = Number(ta.dataset.rteSurfaceMinHeight || '') || 180;
-      if (sizeSel) sizeSel.value = String(fs);
-      if (heightSel) heightSel.value = String(mh);
-    } catch {}
-
-    // apply current selects
-    try { sizeSel?.dispatchEvent(new Event('change')); } catch {}
-    try { heightSel?.dispatchEvent(new Event('change')); } catch {}
-
-    // Apply meta to surface right away (so the description always matches editor settings)
-    try {
-      const surf = ta.__rteSurface;
-      if (surf) {
-        const fsNow = Number(ta.dataset.rteFontSize || '') || 15;
-        const mhNow = Number(ta.dataset.rteSurfaceMinHeight || '') || 180;
-        surf.style.fontSize = `${Math.max(12, Math.min(24, fsNow))}px`;
-        surf.style.lineHeight = `${Math.round(Math.max(12, Math.min(24, fsNow)) * 1.35)}px`;
-        surf.style.minHeight = `${Math.max(60, Math.min(1200, mhNow))}px`;
-      }
-    } catch {}
-
-    overlay.classList.remove('hidden');
-    setTimeout(() => { try { editorEl?.focus(); } catch {} }, 0);
-  }
-
-  function hide() {
-    if (!overlay) return;
-    overlay.classList.add('hidden');
-    activeTa = null;
-    activeSurface = null;
-  }
-
-  function saveAndClose() {
-    const { player: curPlayer, canEdit: curCanEdit } = getState();
-    if (!curCanEdit || !curPlayer || !activeTa || !editorEl) { hide(); return; }
-
-    const html = String(editorEl.innerHTML || '');
-    const plain = plainFromHtml(html);
-    activeTa.value = plain;
-    activeTa.dataset.rteHtml = html;
-
-    // Persist presentation settings (font size + inline surface height)
-    try {
-      const fs = Math.max(12, Math.min(24, Number(sizeSel?.value) || 15));
-      const mh = Math.max(60, Math.min(1200, Number(heightSel?.value) || 180));
-      activeTa.dataset.rteFontSize = String(fs);
-      activeTa.dataset.rteSurfaceMinHeight = String(mh);
-    } catch {}
-
-    // Update inline surface (so the description shows formatted text like in the editor)
-    try {
-      const surf = activeTa.__rteSurface || activeSurface;
-      if (surf) {
-        surf.innerHTML = html;
-        // Apply presentation settings immediately (so it NEVER flashes old sizing)
-        const fs = Number(activeTa.dataset.rteFontSize || '') || 15;
-        const mh = Number(activeTa.dataset.rteSurfaceMinHeight || '') || 120;
-        surf.style.fontSize = `${Math.max(12, Math.min(24, fs))}px`;
-        surf.style.lineHeight = `${Math.round(Math.max(12, Math.min(24, fs)) * 1.35)}px`;
-        surf.style.minHeight = `${Math.max(60, Math.min(1200, mh))}px`;
-      }
-    } catch {}
-
-    // persist html for fields that are stored via sheet paths (and spell desc)
-    try {
-      const sheet = curPlayer.sheet?.parsed;
-      if (sheet && typeof sheet === 'object') {
-        if (!sheet.textHtml || typeof sheet.textHtml !== 'object') sheet.textHtml = {};
-        const key = bestKeyForTextarea(activeTa);
-        sheet.textHtml[key] = html;
-
-        // Save meta so sizing survives reload.
-        if (!sheet.textHtmlMeta || typeof sheet.textHtmlMeta !== 'object') sheet.textHtmlMeta = {};
-        sheet.textHtmlMeta[key] = {
-          fontSize: Number(activeTa.dataset.rteFontSize || 15),
-          surfaceMinHeight: Number(activeTa.dataset.rteSurfaceMinHeight || 120),
-        };
-        markModalInteracted?.(curPlayer.id);
-        scheduleSheetSave?.(curPlayer);
-      }
-    } catch {}
-
-    // trigger existing bindings to save plain text to its original place
-    try { activeTa.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
-    hide();
-  }
-
-  // Add an "Редактор" button near focused textarea.
-  root.addEventListener('focusin', (e) => {
-    const ta = e.target?.closest?.('textarea');
-    if (!ta) return;
-    const { canEdit: curCanEdit } = getState();
-    if (!curCanEdit) return;
-
-    // Ensure inline rich-text surface exists and is visible.
-    try { ensureSurfaceForTextarea(ta); } catch {}
-
-    // Only for description-like fields (textareas)
-    if (ta.__rteBtn) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'popup-btn';
-    btn.textContent = 'Редактор';
-    btn.style.marginTop = '6px';
-    btn.style.marginBottom = '6px';
-    btn.style.alignSelf = 'flex-start';
-    btn.addEventListener('click', () => showForTextarea(ta));
-
-    // insert after textarea
-    try {
-      const parent = ta.parentElement;
-      if (parent) {
-        parent.appendChild(btn);
-        ta.__rteBtn = btn;
-      }
-    } catch {}
-  });
-
-  // Upgrade all current textareas right away (so they display formatted content)
-  try {
-    const { canEdit: curCanEdit } = getState();
-    if (curCanEdit) {
-      root.querySelectorAll('textarea').forEach(ta => {
-        try { ensureSurfaceForTextarea(ta); } catch {}
-      });
-    }
-  } catch {}
 }
 
 // ===== Appearance (Облик) =====
@@ -1139,6 +588,9 @@ function bindEditableInputs(root, player, canEdit) {
     // Upgrade large textareas to a lightweight rich-text editor (toolbar + contenteditable).
     // This is used for backstory/notes/descriptions etc.
     try { upgradeSheetTextareasToRte(root, canEdit); } catch {}
+    // Spell description editor is a special textarea (stored under sheet.text[spell-desc:href])
+    // — keep its saving logic, but provide the same popup editor UX.
+    try { upgradeSpellDescTextareasToPopup(root, canEdit); } catch {}
 
     const inputs = root.querySelectorAll("[data-sheet-path]");
     inputs.forEach(inp => {
@@ -1276,6 +728,177 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     'textarea.spell-desc-editor'
   ].join(',');
 
+  // ===== RTE popup modal (singleton) =====
+  let modalOverlay = document.querySelector('.rte-modal-overlay');
+  let modalEditor = modalOverlay?.querySelector?.('.rte-modal-editor');
+  let modalTitle = modalOverlay?.querySelector?.('.rte-modal-title');
+  let modalSizeSel = modalOverlay?.querySelector?.('[data-rte-fontsize]');
+  let activePreviewEl = null;
+
+  function ensureModal() {
+    if (modalOverlay && modalEditor) return;
+    modalOverlay = document.createElement('div');
+    modalOverlay.className = 'rte-modal-overlay hidden';
+    modalOverlay.setAttribute('aria-hidden', 'true');
+    modalOverlay.innerHTML = `
+      <div class="rte-modal" role="dialog" aria-label="Редактор текста" aria-modal="true">
+        <div class="rte-modal-head">
+          <div class="rte-modal-title">Редактор текста</div>
+          <button type="button" class="rte-modal-close" data-rte-close title="Закрыть">✕</button>
+        </div>
+        <div class="rte-modal-toolbar">
+          <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
+          <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+          <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркеры">•</button>
+          <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
+          <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
+          <select class="rte-select" data-rte-fontsize title="Размер текста">
+            <option value="2">S</option>
+            <option value="3">M</option>
+            <option value="5" selected>L</option>
+            <option value="6">XL</option>
+          </select>
+          <div style="flex:1"></div>
+          <button type="button" class="rte-btn" data-rte-done title="Готово">Готово</button>
+        </div>
+        <div class="rte-modal-body">
+          <div class="rte-modal-editor-wrap">
+            <div class="rte-modal-editor" contenteditable="true"></div>
+          </div>
+          <div class="rte-modal-hint">Подсказка: ссылки при вставке распознаются автоматически и будут кликабельными.</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modalOverlay);
+
+    modalEditor = modalOverlay.querySelector('.rte-modal-editor');
+    modalTitle = modalOverlay.querySelector('.rte-modal-title');
+    modalSizeSel = modalOverlay.querySelector('[data-rte-fontsize]');
+
+    const close = () => {
+      if (!modalOverlay) return;
+      modalOverlay.classList.add('hidden');
+      modalOverlay.setAttribute('aria-hidden', 'true');
+      activePreviewEl = null;
+      try { if (window.__sheetRtePopup) window.__sheetRtePopup.__onInput = null; } catch {}
+    };
+
+    modalOverlay.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      if (t === modalOverlay) { close(); return; }
+      if (t.closest('[data-rte-close]')) { close(); return; }
+      if (t.closest('[data-rte-done]')) { close(); return; }
+
+      const btn = t.closest('button');
+      if (btn && btn.hasAttribute('data-rte-link')) {
+        modalEditor?.focus();
+        const url = prompt('Ссылка (URL):', 'https://');
+        if (url && url.trim()) {
+          try { document.execCommand('createLink', false, url.trim()); } catch {}
+        }
+        return;
+      }
+      if (btn) {
+        const cmd = btn.getAttribute('data-rte-cmd');
+        if (cmd) {
+          modalEditor?.focus();
+          try { document.execCommand(cmd, false, null); } catch {}
+        }
+      }
+    });
+
+    modalSizeSel?.addEventListener('change', () => {
+      modalEditor?.focus();
+      const v = String(modalSizeSel.value || '3');
+      try { document.execCommand('fontSize', false, v); } catch {}
+    });
+
+    // Auto-linkify on paste (plain text) and keep <a> from rich paste.
+    modalEditor?.addEventListener('paste', (e) => {
+      try {
+        const cd = e.clipboardData;
+        if (!cd) return;
+        const html = cd.getData('text/html');
+        const text = cd.getData('text/plain');
+        // If HTML paste already contains anchors, let browser handle it.
+        if (html && /<a\s/i.test(html)) return;
+        if (!text) return;
+        // If there are URLs in plain text — wrap them.
+        const urlRe = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+        if (!urlRe.test(text)) return;
+        e.preventDefault();
+        const safe = htmlEscape(text).replace(/\n/g, '<br>');
+        const linked = safe.replace(urlRe, (m) => {
+          const href = m.startsWith('http') ? m : `https://${m}`;
+          return `<a href="${href}" target="_blank" rel="noopener noreferrer">${m}</a>`;
+        });
+        try { document.execCommand('insertHTML', false, linked); } catch {}
+      } catch {}
+    });
+
+    // Live-sync modal -> preview -> sheet model
+    modalEditor?.addEventListener('input', () => {
+      // 1) normal path: sync into preview element (data-sheet-path binding)
+      if (activePreviewEl) {
+        try {
+          activePreviewEl.innerHTML = modalEditor.innerHTML;
+          activePreviewEl.dispatchEvent(new Event('input', { bubbles: true }));
+        } catch {}
+        return;
+      }
+      // 2) external usage (e.g. spell-desc textarea): provide callback
+      try {
+        const cb = window.__sheetRtePopup?.__onInput;
+        if (typeof cb === 'function') cb(String(modalEditor.innerHTML || ''));
+      } catch {}
+    });
+
+    // Close on ESC
+    window.addEventListener('keydown', (e) => {
+      if (!modalOverlay || modalOverlay.classList.contains('hidden')) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
+    });
+  }
+
+  function openModalForPreview(previewEl) {
+    if (!canEdit) return;
+    if (!previewEl) return;
+    ensureModal();
+    activePreviewEl = previewEl;
+    try {
+      const ph = previewEl.getAttribute('data-placeholder') || '';
+      if (modalTitle) modalTitle.textContent = ph ? `Редактор: ${ph}` : 'Редактор текста';
+    } catch {}
+    try { modalEditor.innerHTML = previewEl.innerHTML || ''; } catch {}
+    try {
+      modalOverlay.classList.remove('hidden');
+      modalOverlay.setAttribute('aria-hidden', 'false');
+      // focus after open
+      setTimeout(() => { try { modalEditor.focus(); } catch {} }, 0);
+    } catch {}
+  }
+
+  // Expose generic opener (used by other editors like spell description textarea)
+  try {
+    if (!window.__sheetRtePopup) window.__sheetRtePopup = {};
+    window.__sheetRtePopup.open = ({ title = 'Редактор текста', html = '', onInput = null } = {}) => {
+      ensureModal();
+      activePreviewEl = null;
+      try { window.__sheetRtePopup.__onInput = (typeof onInput === 'function') ? onInput : null; } catch {}
+      try { if (modalTitle) modalTitle.textContent = String(title || 'Редактор текста'); } catch {}
+      try { modalEditor.innerHTML = String(html || ''); } catch {}
+      try {
+        modalOverlay.classList.remove('hidden');
+        modalOverlay.setAttribute('aria-hidden', 'false');
+        setTimeout(() => { try { modalEditor.focus(); } catch {} }, 0);
+      } catch {}
+    };
+  } catch {}
+
   const textareas = Array.from(root.querySelectorAll(selector));
   textareas.forEach((ta) => {
     // don't upgrade twice
@@ -1284,27 +907,14 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     if (!path) return;
 
     const wrap = document.createElement('div');
-    wrap.className = 'rte';
+    // preview-only wrapper; actual editing happens in popup
+    wrap.className = 'rte rte--preview';
     wrap.setAttribute('data-rte', '');
-
-    const toolbar = document.createElement('div');
-    toolbar.className = 'rte-toolbar';
-    toolbar.innerHTML = `
-      <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
-      <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
-      <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
-      <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
-      <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
-      <select class="rte-select" data-rte-fontsize title="Размер текста">
-        <option value="2">S</option>
-        <option value="3" selected>M</option>
-        <option value="5">L</option>
-        <option value="6">XL</option>
-      </select>
-    `;
 
     const editor = document.createElement('div');
     editor.className = 'rte-editor';
+    // keep contenteditable="true" so the sheet binder treats it as RTE;
+    // but we prevent in-place editing and open the popup instead.
     editor.setAttribute('contenteditable', canEdit ? 'true' : 'false');
     editor.setAttribute('data-sheet-path', path);
     editor.setAttribute('data-rte-editor', '');
@@ -1326,42 +936,82 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
 
-    wrap.appendChild(toolbar);
     wrap.appendChild(editor);
 
     // Replace in DOM
     ta.replaceWith(wrap);
 
-    // Wire toolbar actions
+    // Wire preview interactions -> open popup editor
     if (!canEdit) {
       wrap.classList.add('rte--disabled');
       return;
     }
 
-    toolbar.addEventListener('mousedown', (e) => {
-      // prevent editor blur when clicking toolbar
-      e.preventDefault();
+    // Open modal on click/focus/typing attempts
+    editor.addEventListener('focus', () => openModalForPreview(editor));
+    editor.addEventListener('mousedown', (e) => {
+      // Allow clicking links without opening the modal.
+      const a = e.target?.closest?.('a');
+      if (a && a.getAttribute) return;
+      // let focus happen, then modal opens in focus handler
+      try { editor.focus(); } catch {}
     });
-    toolbar.addEventListener('click', (e) => {
-      const btn = e.target?.closest?.('button');
-      if (!btn) return;
-      editor.focus();
-      if (btn.hasAttribute('data-rte-link')) {
-        const url = prompt('Ссылка (URL):', 'https://');
-        if (url && url.trim()) {
-          try { document.execCommand('createLink', false, url.trim()); } catch {}
-        }
-        return;
+    editor.addEventListener('click', (e) => {
+      const a = e.target?.closest?.('a');
+      const href = a?.getAttribute?.('href');
+      if (href) {
+        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+        e.preventDefault();
+        e.stopPropagation();
       }
-      const cmd = btn.getAttribute('data-rte-cmd');
-      if (!cmd) return;
-      try { document.execCommand(cmd, false, null); } catch {}
     });
-    const sizeSel = toolbar.querySelector('[data-rte-fontsize]');
-    sizeSel?.addEventListener('change', () => {
-      editor.focus();
-      const v = String(sizeSel.value || '3');
-      try { document.execCommand('fontSize', false, v); } catch {}
+    editor.addEventListener('keydown', (e) => {
+      // prevent in-place editing; route into modal
+      if (e.key === 'Tab') return; // allow focus nav
+      e.preventDefault();
+      openModalForPreview(editor);
+    });
+    editor.addEventListener('paste', (e) => {
+      e.preventDefault();
+      openModalForPreview(editor);
+    });
+  });
+}
+
+// Popup editor for spell description textareas (they are not bound via data-sheet-path).
+function upgradeSpellDescTextareasToPopup(root, canEdit) {
+  if (!root || !canEdit) return;
+  const list = Array.from(root.querySelectorAll('textarea.spell-desc-editor[data-spell-desc-editor]'));
+  list.forEach((ta) => {
+    if (ta.__rtePopupBound) return;
+    ta.__rtePopupBound = true;
+
+    ta.addEventListener('focus', () => {
+      try {
+        const item = ta.closest?.('.spell-item');
+        const href = item?.getAttribute?.('data-spell-url') || '';
+        const title = href ? `Описание заклинания` : 'Описание заклинания';
+        const html = String(ta.value || '');
+        // Convert plain text to simple HTML for the editor.
+        const html2 = html
+          ? (html.includes('<') ? html : String(html)
+              .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/\n/g,'<br>'))
+          : '';
+
+        window.__sheetRtePopup?.open?.({
+          title,
+          html: html2,
+          onInput: (newHtml) => {
+            // Back to plain text (preserve line breaks)
+            const tmp = document.createElement('div');
+            tmp.innerHTML = String(newHtml || '');
+            const text = tmp.innerText || tmp.textContent || '';
+            ta.value = text;
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        });
+      } catch {}
     });
   });
 }

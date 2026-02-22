@@ -317,7 +317,7 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    // Было в 2 колонки, но для читабельности заклинаний удобнее один столбец.
+    // Single column for better readability (user request)
     return `<div class="sheet-grid-1">${blocks}</div>`;
   }
 
@@ -1454,7 +1454,6 @@ function renderShopTab(vm, canEdit) {
     bindInventoryEditors(sheetContent, player, canEdit);
     bindEquipmentUi(sheetContent, player, canEdit);
     bindAppearanceUi(sheetContent, player, canEdit);
-    try { if (typeof bindRichTextPopups === 'function') bindRichTextPopups(sheetContent, player, canEdit); } catch {}
     updateCoinsTotal(sheetContent, player.sheet?.parsed);
     // Авто-открытие магазина поверх листа при выборе вкладки
     // (раньше тут по ошибке использовался tabId вне области видимости)
@@ -1498,7 +1497,6 @@ function renderShopTab(vm, canEdit) {
           bindInventoryEditors(sheetContent, player, canEdit);
           bindEquipmentUi(sheetContent, player, canEdit);
           bindLanguagesUi(sheetContent, player, canEdit);
-          try { if (typeof bindRichTextPopups === 'function') bindRichTextPopups(sheetContent, player, canEdit); } catch {}
           updateCoinsTotal(sheetContent, player.sheet?.parsed);
     // Авто-открытие магазина поверх листа при выборе вкладки
     // (раньше тут по ошибке использовался tabId вне области видимости)
