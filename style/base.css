@@ -1274,12 +1274,29 @@ button:hover {
 
 .rte-select{
   margin-left: auto;
-  background: rgba(255,255,255,0.06);
+  /* darker dropdown, so it doesn't look washed out */
+  background: rgba(0,0,0,0.45);
   color: #eee;
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 8px;
   padding: 2px 6px;
   font-size: 12px;
+}
+
+/* Links: bold + underlined and keep site color (not browser blue) */
+.rte-view a,
+.rte-editor a{
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* Inline edit mode hint */
+.rte-view[contenteditable="true"]{
+  cursor: text;
+  outline: 1px solid rgba(255,255,255,0.16);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .rte-editor{
