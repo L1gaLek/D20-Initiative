@@ -221,7 +221,7 @@ function bindRichTextPopups(root, player, canEdit) {
     const wrap = document.createElement('div');
     wrap.innerHTML = String(html || '');
 
-    // Remove dangerous / unwanted nodes
+    // Remove dangerous / unwanted nodes (keep <a> because we sanitize href below)
     wrap.querySelectorAll('style,script,meta,link,svg,iframe,object,embed,img,video,audio,canvas').forEach(n => n.remove());
 
     const ALLOWED = new Set(['A','B','STRONG','U','BR','UL','OL','LI','P','DIV','SPAN']);
@@ -309,9 +309,27 @@ function bindRichTextPopups(root, player, canEdit) {
       if (!html && sheet && sheet.textHtml && typeof sheet.textHtml === 'object') {
         html = String(sheet.textHtml[key] || '');
       }
+
+      // Load saved presentation preferences (font size / surface height)
+      try {
+        const meta = sheet?.textHtmlMeta?.[key];
+        if (meta && typeof meta === 'object') {
+          if (meta.fontSize) ta.dataset.rteFontSize = String(meta.fontSize);
+          if (meta.surfaceMinHeight) ta.dataset.rteSurfaceMinHeight = String(meta.surfaceMinHeight);
+        }
+      } catch {}
     } catch {}
     if (!html) html = toHtmlFromPlain(ta.value || '');
     surface.innerHTML = html;
+
+    // Apply stored presentation preferences to the inline surface immediately.
+    try {
+      const fs = Number(ta.dataset.rteFontSize || '') || 15;
+      const mh = Number(ta.dataset.rteSurfaceMinHeight || '') || 120;
+      surface.style.fontSize = `${Math.max(12, Math.min(24, fs))}px`;
+      surface.style.lineHeight = `${Math.round(Math.max(12, Math.min(24, fs)) * 1.35)}px`;
+      surface.style.minHeight = `${Math.max(60, Math.min(1200, mh))}px`;
+    } catch {}
 
     // Mirror some sizing from textarea
     try {
@@ -365,6 +383,22 @@ function bindRichTextPopups(root, player, canEdit) {
         }
       } catch {}
     });
+
+    // Make links clickable even inside contenteditable surface.
+    // (contenteditable normally moves caret instead of navigating)
+    surface.addEventListener('click', (e) => {
+      try {
+        const t = e.target;
+        if (!(t instanceof Element)) return;
+        const a = t.closest('a[href]');
+        if (!a) return;
+        const href = a.getAttribute('href') || '';
+        if (!isSafeHref(href)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(href, '_blank', 'noopener');
+      } catch {}
+    }, true);
 
     // Sync inline edits back to the hidden textarea + storage.
     const sync = () => {
@@ -532,6 +566,14 @@ function bindRichTextPopups(root, player, canEdit) {
     if (!html) html = toHtmlFromPlain(ta.value || '');
     if (editorEl) editorEl.innerHTML = html;
 
+    // Restore presentation settings into the editor selects.
+    try {
+      const fs = Number(ta.dataset.rteFontSize || '') || 15;
+      const mh = Number(ta.dataset.rteSurfaceMinHeight || '') || 180;
+      if (sizeSel) sizeSel.value = String(fs);
+      if (heightSel) heightSel.value = String(mh);
+    } catch {}
+
     // apply current selects
     try { sizeSel?.dispatchEvent(new Event('change')); } catch {}
     try { heightSel?.dispatchEvent(new Event('change')); } catch {}
@@ -556,10 +598,26 @@ function bindRichTextPopups(root, player, canEdit) {
     activeTa.value = plain;
     activeTa.dataset.rteHtml = html;
 
+    // Persist presentation settings (font size + inline surface height)
+    try {
+      const fs = Math.max(12, Math.min(24, Number(sizeSel?.value) || 15));
+      const mh = Math.max(60, Math.min(1200, Number(heightSel?.value) || 180));
+      activeTa.dataset.rteFontSize = String(fs);
+      activeTa.dataset.rteSurfaceMinHeight = String(mh);
+    } catch {}
+
     // Update inline surface (so the description shows formatted text like in the editor)
     try {
       const surf = activeTa.__rteSurface || activeSurface;
-      if (surf) surf.innerHTML = html;
+      if (surf) {
+        surf.innerHTML = html;
+        // Apply presentation settings immediately (so it NEVER flashes old sizing)
+        const fs = Number(activeTa.dataset.rteFontSize || '') || 15;
+        const mh = Number(activeTa.dataset.rteSurfaceMinHeight || '') || 120;
+        surf.style.fontSize = `${Math.max(12, Math.min(24, fs))}px`;
+        surf.style.lineHeight = `${Math.round(Math.max(12, Math.min(24, fs)) * 1.35)}px`;
+        surf.style.minHeight = `${Math.max(60, Math.min(1200, mh))}px`;
+      }
     } catch {}
 
     // persist html for fields that are stored via sheet paths (and spell desc)
@@ -569,6 +627,13 @@ function bindRichTextPopups(root, player, canEdit) {
         if (!sheet.textHtml || typeof sheet.textHtml !== 'object') sheet.textHtml = {};
         const key = bestKeyForTextarea(activeTa);
         sheet.textHtml[key] = html;
+
+        // Save meta so sizing survives reload.
+        if (!sheet.textHtmlMeta || typeof sheet.textHtmlMeta !== 'object') sheet.textHtmlMeta = {};
+        sheet.textHtmlMeta[key] = {
+          fontSize: Number(activeTa.dataset.rteFontSize || 15),
+          surfaceMinHeight: Number(activeTa.dataset.rteSurfaceMinHeight || 120),
+        };
         markModalInteracted?.(curPlayer.id);
         scheduleSheetSave?.(curPlayer);
       }
