@@ -127,7 +127,7 @@
       </div>
 
       <!-- Прочие владения/заклинания: тоже на всю ширину -->
-      <textarea data-rtf="1" class="lss-prof-text lss-prof-text--full" rows="8" data-sheet-path="text.profPlain.value"
+      <textarea class="lss-prof-text lss-prof-text--full" rows="8" data-sheet-path="text.profPlain.value"
         placeholder="Например: владения, инструменты, языки, заклинания...">${escapeHtml(vm.profText || "")}</textarea>
     </div>
   `;
@@ -230,7 +230,7 @@ function renderSpellCard({ level, name, href, desc }) {
           </div>
         </div>
         <div class="spell-item-desc hidden">
-          <textarea data-rtf="1" class="spell-desc-editor" data-spell-desc-editor rows="6" placeholder="Описание (можно редактировать)…">${escapeHtml(text)}</textarea>
+          <textarea class="spell-desc-editor" data-spell-desc-editor rows="6" placeholder="Описание (можно редактировать)…">${escapeHtml(text)}</textarea>
           <div class="sheet-note" style="margin-top:6px;">Сохраняется автоматически.</div>
         </div>
       </div>
@@ -317,7 +317,8 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    return `<div class="sheet-grid-1">${blocks}</div>`;
+    // По запросу: блоки "Заговоры" и "Заклинания" должны идти в один столбец.
+    return `<div class="sheet-grid-2 sheet-grid-1col">${blocks}</div>`;
   }
 
   function renderSpellsTab(vm) {
@@ -539,7 +540,7 @@ function renderCombatTab(vm) {
               </div>
 
               <div class="weapon-desc">
-                <textarea data-rtf="1" class="sheet-textarea weapon-desc-text" rows="4"
+                <textarea class="sheet-textarea weapon-desc-text" rows="4"
                           placeholder="Описание оружия..."
                           data-weapon-field="desc">${escapeHtml(String(w.desc || ""))}</textarea>
               </div>
@@ -585,7 +586,7 @@ function renderCombatTab(vm) {
                     </div>
                   </div>
                   <div class="combat-ability-body ${collapsed ? "collapsed" : ""}">
-                    <textarea data-rtf="1" class="sheet-textarea combat-ability-text" rows="4"
+                    <textarea class="sheet-textarea combat-ability-text" rows="4"
                               placeholder="Описание..."
                               data-combat-ability-text>${text}</textarea>
                   </div>
@@ -696,7 +697,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   ` : "";
 
   const descBlock = canEdit
-    ? `<textarea data-rtf="1" class="sheet-textarea equip-descedit ${descCollapsed ? "collapsed" : ""}" rows="3" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.description_ru"
+    ? `<textarea class="sheet-textarea equip-descedit ${descCollapsed ? "collapsed" : ""}" rows="3" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.description_ru"
          placeholder="Описание...">${escapeHtml(desc)}</textarea>`
     : `<div class="equip-desc ${descCollapsed ? "collapsed" : ""}">${desc ? escapeHtml(desc) : `<span class="equip-desc--empty">—</span>`}</div>`;
 
@@ -894,8 +895,8 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
             Legacy-поля ниже оставлены для совместимости старых сохранений (можно не использовать).
           </div>
           <div class="equip-legacy">
-            <div class="kv" style="margin-top:8px"><div class="k">Предметы (legacy)</div><div class="v" style="width:100%"><textarea data-rtf="1" class="sheet-textarea" rows="4" data-sheet-path="text.inventoryItems.value" placeholder="Список предметов..."></textarea></div></div>
-            <div class="kv" style="margin-top:8px"><div class="k">Сокровища (legacy)</div><div class="v" style="width:100%"><textarea data-rtf="1" class="sheet-textarea" rows="4" data-sheet-path="text.inventoryTreasures.value" placeholder="Сокровища..."></textarea></div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Предметы (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="text.inventoryItems.value" placeholder="Список предметов..."></textarea></div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Сокровища (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="text.inventoryTreasures.value" placeholder="Сокровища..."></textarea></div></div>
           </div>
         </div>
       </div>
@@ -950,32 +951,32 @@ function renderShopTab(vm, canEdit) {
 
           <div class="sheet-card">
             <h4>Предыстория персонажа</h4>
-            <textarea data-rtf="1" class="sheet-textarea" rows="6" data-sheet-path="personality.backstory.value" placeholder="Кратко опиши предысторию..."></textarea>
+            <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.backstory.value" placeholder="Кратко опиши предысторию..."></textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Союзники и организации</h4>
-            <textarea data-rtf="1" class="sheet-textarea" rows="6" data-sheet-path="personality.allies.value" placeholder="Союзники, контакты, гильдии..."></textarea>
+            <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.allies.value" placeholder="Союзники, контакты, гильдии..."></textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Черты характера</h4>
-            <textarea data-rtf="1" class="sheet-textarea" rows="5" data-sheet-path="personality.traits.value"></textarea>
+            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.traits.value"></textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Идеалы</h4>
-            <textarea data-rtf="1" class="sheet-textarea" rows="5" data-sheet-path="personality.ideals.value"></textarea>
+            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.ideals.value"></textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Привязанности</h4>
-            <textarea data-rtf="1" class="sheet-textarea" rows="5" data-sheet-path="personality.bonds.value"></textarea>
+            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.bonds.value"></textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Слабости</h4>
-            <textarea data-rtf="1" class="sheet-textarea" rows="5" data-sheet-path="personality.flaws.value"></textarea>
+            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.flaws.value"></textarea>
           </div>
         </div>
       </div>
@@ -998,7 +999,7 @@ function renderShopTab(vm, canEdit) {
             </div>
           </div>
           <div class="note-body ${collapsed ? "collapsed" : ""}">
-            <textarea data-rtf="1" class="sheet-textarea note-text" rows="6" data-note-text="${idx}" placeholder="Текст заметки...">${escapeHtml(text)}</textarea>
+            <textarea class="sheet-textarea note-text" rows="6" data-note-text="${idx}" placeholder="Текст заметки...">${escapeHtml(text)}</textarea>
           </div>
         </div>
       `;

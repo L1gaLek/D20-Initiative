@@ -159,8 +159,6 @@ function rerenderCombatTabInPlace(root, player, canEdit) {
   bindSlotEditors(root, player, canEdit);
   bindCombatEditors(root, player, canEdit);
 
-  try { window.SheetRichText?.enhance(root); } catch {}
-
   updateWeaponsBonuses(root, player.sheet?.parsed);
 }
 
@@ -2563,8 +2561,6 @@ function rerenderSpellsTabInPlace(root, player, sheet, canEdit) {
   bindSlotEditors(root, player, canEdit);
   bindSpellAddAndDesc(root, player, canEdit);
   bindCombatEditors(root, player, canEdit);
-
-  try { window.SheetRichText?.enhance(root); } catch {}
 
   main.scrollTop = scrollTop;
 }
