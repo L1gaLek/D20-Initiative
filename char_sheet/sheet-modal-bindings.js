@@ -3619,3 +3619,67 @@ function bindSpellAddAndDesc(root, player, canEdit) {
       scoreEl.value = String(sheet.stats[statKey].score);
     }
   }
+
+// ================== FIX LINKS IN CHARACTER SHEET ==================
+
+// 1. Принудительное открытие всех ссылок в новом окне
+document.addEventListener('click', function (e) {
+  const a = e.target.closest('a');
+  if (!a) return;
+
+  // Проверяем, что клик внутри модалки листа
+  const modal = document.getElementById('sheet-modal');
+  if (!modal || !modal.contains(a)) return;
+
+  const href = a.getAttribute('href');
+  if (!href) return;
+
+  // Останавливаем все перехваты
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+
+  window.open(href, '_blank', 'noopener,noreferrer');
+}, true);
+
+
+// 2. Авто-превращение вставленного URL в ссылку
+document.addEventListener('paste', function (e) {
+  const active = document.activeElement;
+  if (!active) return;
+
+  // Только внутри модалки листа
+  const modal = document.getElementById('sheet-modal');
+  if (!modal || !modal.contains(active)) return;
+
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text) return;
+
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  if (!urlRegex.test(text)) return;
+
+  e.preventDefault();
+
+  const html = text.replace(urlRegex, function (url) {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer"
+              style="font-weight:bold;text-decoration:underline;color:rgb(204,130,36);">
+              ${url}
+            </a>`;
+  });
+
+  document.execCommand('insertHTML', false, html);
+});
+
+
+// 3. Защита от SPA перехвата ссылок
+(function preventSpaInterception() {
+  const modal = document.getElementById('sheet-modal');
+  if (!modal) return;
+
+  modal.addEventListener('click', function (e) {
+    const a = e.target.closest('a');
+    if (!a) return;
+
+    e.stopPropagation();
+  }, true);
+})();
