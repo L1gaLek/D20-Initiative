@@ -1236,12 +1236,13 @@ button:hover {
   padding: 6px 8px;
   box-sizing: border-box;
   resize: vertical;
+  /* larger text for readability */
   font-size: 15px;
-  line-height: 20px;
+  line-height: 19px;
 }
 
-/* ===== Rich Text Editor (sheet) ===== */
-.rte-surface{
+/* Spell description textarea (inside spells tab) — match sheet textarea readability */
+.spell-desc-editor{
   width: 100%;
   background: #111;
   color: #eee;
@@ -1249,39 +1250,12 @@ button:hover {
   border-radius: 8px;
   padding: 6px 8px;
   box-sizing: border-box;
-  font-size: 15px;
-  line-height: 20px;
-  min-height: 120px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  max-width: 100%;
-  overflow: auto;
   resize: vertical;
+  font-size: 15px;
+  line-height: 19px;
 }
 
-.rte-surface:focus{
-  outline: 2px solid rgba(255, 165, 0, 0.35);
-  outline-offset: 1px;
-}
-
-.rte-surface a{
-  color: inherit;
-  font-weight: 800;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-
-.rte-surface p,
-.rte-surface div{
-  margin: 0;
-}
-.rte-surface ul,
-.rte-surface ol{
-  margin: 0 0 0 18px;
-  padding: 0;
-}
+/* ===== Rich Text Editor (sheet) ===== */
 .rte{
   width: 100%;
   border: 1px solid #666;
@@ -1327,49 +1301,102 @@ button:hover {
   padding: 6px 8px;
   min-height: 90px;
   color: #eee;
+  /* larger text for readability */
   font-size: 15px;
-  line-height: 20px;
+  line-height: 19px;
   outline: none;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  white-space: normal;
 }
 
-.rte-editor a{
-  color: inherit;
+/* Links inside rich text: bold + underline + clickable */
+.rte-editor a,
+.rte-modal-editor a{
   font-weight: 800;
   text-decoration: underline;
-  cursor: pointer;
 }
 
+/* ===== Rich Text Editor: popup modal ===== */
+.rte-modal-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  background: rgba(0,0,0,0.68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+}
 
-.rte-editor p,
-.rte-editor div{
-  margin: 0;
-}
-.rte-editor ul,
-.rte-editor ol{
-  margin: 0 0 0 18px;
-  padding: 0;
-}
-/* ===== Rich Text Popup (sheet) ===== */
-.rte-popup{
-  width: min(920px, calc(100vw - 32px));
-  max-height: calc(100vh - 64px);
+.rte-modal{
+  width: min(980px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 14px;
+  background: rgba(18,18,18,0.98);
+  box-shadow: 0 14px 48px rgba(0,0,0,0.55);
   overflow: hidden;
 }
 
-.rte-popup .popup-head{ margin-bottom: 8px; }
+.rte-modal-head{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
 
-.rte-popup .rte-editor{
-  max-height: calc(100vh - 220px);
+.rte-modal-title{
+  font-weight: 900;
+  font-size: 13px;
+  opacity: 0.92;
+}
+
+.rte-modal-close{
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+.rte-modal-toolbar{
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  display:flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rte-modal-body{
+  padding: 10px;
   overflow: auto;
 }
 
-.rte-help{
+.rte-modal-editor-wrap{
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 12px;
+  background: #111;
+  overflow: auto;
+  resize: vertical;
+  min-height: 220px;
+  max-height: 70vh;
+}
+
+.rte-modal-editor{
+  padding: 12px 12px;
+  min-height: 220px;
+  outline: none;
+  color: #eee;
+  font-size: 16px;
+  line-height: 21px;
+}
+
+.rte-modal-hint{
   font-size: 12px;
   opacity: 0.75;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .rte-editor:empty:before{
