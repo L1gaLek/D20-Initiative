@@ -47,37 +47,20 @@
 // ================== MODAL HELPERS ==================
   function openModal() {
     if (!sheetModal) return;
-    // make interactive for a11y
-    try { sheetModal.inert = false; } catch {}
     sheetModal.classList.remove('hidden');
     sheetModal.setAttribute('aria-hidden', 'false');
-    // focus close button so focus is INSIDE modal when opened
-    try { sheetClose?.focus?.(); } catch {}
   }
 
   function closeModal() {
     if (!sheetModal) return;
-
-    // If some element inside the modal has focus, blur it BEFORE hiding.
-    // This prevents Chrome warning: "Blocked aria-hidden on an element because its descendant retained focus"
-    try {
-      const ae = document.activeElement;
-      if (ae && sheetModal.contains(ae)) {
-        try { ae.blur?.(); } catch {}
-        try { document.body?.focus?.(); } catch {}
-      }
-    } catch {}
-
     hideHpPopup();
     hideExhPopup();
     hideCondPopup();
-
-    // inert prevents focus + interaction while hidden (better than aria-hidden only)
-    try { sheetModal.inert = true; } catch {}
     sheetModal.classList.add('hidden');
     sheetModal.setAttribute('aria-hidden', 'true');
     openedSheetPlayerId = null;
-if (sheetTitle) sheetTitle.textContent = "Информация о персонаже";
+
+    if (sheetTitle) sheetTitle.textContent = "Информация о персонаже";
     if (sheetSubtitle) sheetSubtitle.textContent = "";
     if (sheetActions) sheetActions.innerHTML = "";
     if (sheetContent) sheetContent.innerHTML = "";
