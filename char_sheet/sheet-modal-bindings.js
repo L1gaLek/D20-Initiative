@@ -596,10 +596,13 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+  const LINK_COLOR = 'rgb(204,130,36)';
+
   const makeLinkSpanHTML = (href, label) => {
     const safeHref = htmlEscape(String(href || ''));
     const safeLabel = htmlEscape(String(label || ''));
-    return `<span class="rte-link" data-href="${safeHref}"><b><u>${safeLabel}</u></b></span>`;
+    // Keep link styling consistent with the UI (bold + underline + custom color).
+    return `<span class="rte-link" data-href="${safeHref}" style="color:${LINK_COLOR}"><b><u>${safeLabel}</u></b></span>`;
   };
 
   const linkifyPlain = (plain) => {
@@ -657,14 +660,27 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
 
           if (tag === 'SPAN') {
+            // Allow only a very small safe subset of inline styles.
+            // - font-size: 12..30px
+            // - color: rgb(204,130,36) for our link spans
             const st = String(ch.getAttribute('style') || '');
-            const m = st.match(/font-size\s*:\s*([0-9]+)px/i);
-            if (m) {
-              const px = Math.max(12, Math.min(30, Number(m[1])));
-              ch.setAttribute('style', `font-size:${px}px`);
-            } else {
-              ch.removeAttribute('style');
+            const sizeM = st.match(/font-size\s*:\s*([0-9]+)px/i);
+            const colorM = st.match(/color\s*:\s*([^;]+)/i);
+
+            const out = [];
+            if (sizeM) {
+              const px = Math.max(12, Math.min(30, Number(sizeM[1])));
+              out.push(`font-size:${px}px`);
             }
+            if (ch.classList?.contains?.('rte-link') && colorM) {
+              // normalize whitespace/case
+              const c = String(colorM[1] || '').trim().toLowerCase().replace(/\s+/g, '');
+              const allow = LINK_COLOR.toLowerCase().replace(/\s+/g, '');
+              if (c === allow) out.push(`color:${LINK_COLOR}`);
+            }
+
+            if (out.length) ch.setAttribute('style', out.join(';'));
+            else ch.removeAttribute('style');
           }
 
           // Convert any pasted <a> into our safe span link format.
@@ -679,6 +695,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               const span = document.createElement('span');
               span.className = 'rte-link';
               span.setAttribute('data-href', href);
+              span.setAttribute('style', `color:${LINK_COLOR}`);
 
               const frag = document.createDocumentFragment();
               while (ch.firstChild) frag.appendChild(ch.firstChild);
