@@ -565,6 +565,29 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+  const normalizeHref = (href) => {
+    const h = String(href || '').trim();
+    if (!h) return '';
+    if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
+    if (/^www\./i.test(h)) return 'https://' + h;
+    if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
+    return h;
+  };
+
+  const linkifyPlain = (plain) => {
+    const t = String(plain || '');
+    const esc = htmlEscape(t);
+    const urlRe = /((https?:\/\/|www\.)[^\s<]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+    return esc.replace(urlRe, (m) => {
+      if (m.includes('@') && !m.startsWith('http')) {
+        const href = 'mailto:' + m;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
+      }
+      const href = normalizeHref(m);
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
+    }).replace(/\n/g, '<br>');
+  };
+
   const ALLOWED_TAGS = new Set(['B','STRONG','U','BR','UL','OL','LI','A','P','DIV','SPAN']);
   const sanitizeHtml = (html) => {
     try {
@@ -600,11 +623,33 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           for (const attr of Array.from(ch.attributes || [])) {
             const n = attr.name.toLowerCase();
             if (tag === 'A' && (n === 'href' || n === 'title')) continue;
+            if (tag === 'SPAN' && n === 'style') continue;
             ch.removeAttribute(attr.name);
           }
 
+
+          if (tag === 'SPAN') {
+            const st = String(ch.getAttribute('style') || '');
+            const m = st.match(/font-size\s*:\s*([0-9]+)px/i);
+            if (m) {
+              const px = Math.max(10, Math.min(48, Number(m[1])));
+              ch.setAttribute('style', `font-size:${px}px`);
+            } else {
+              ch.removeAttribute('style');
+            }
+          }
+
           if (tag === 'A') {
-            const href = String(ch.getAttribute('href') || '').trim();
+            const hrefRaw = String(ch.getAttribute('href') || '').trim();
+            const href = (function normalizeHrefLocal(href){
+              const h = String(href || '').trim();
+              if (!h) return '';
+              if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
+              if (/^www\./i.test(h)) return 'https://' + h;
+              if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
+              return h;
+            })(hrefRaw);
+
             if (!href) {
               const frag = document.createDocumentFragment();
               while (ch.firstChild) frag.appendChild(ch.firstChild);
@@ -613,8 +658,23 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               ch.setAttribute('href', href);
               ch.setAttribute('target', '_blank');
               ch.setAttribute('rel', 'noopener noreferrer');
+              try {
+                // enforce bold + underline appearance
+                const hasBold = !!ch.querySelector('b,strong');
+                const hasU = !!ch.querySelector('u');
+                if (!(hasBold && hasU)) {
+                  const frag = document.createDocumentFragment();
+                  while (ch.firstChild) frag.appendChild(ch.firstChild);
+                  const b = document.createElement('b');
+                  const u = document.createElement('u');
+                  u.appendChild(frag);
+                  b.appendChild(u);
+                  ch.appendChild(b);
+                }
+              } catch {}
             }
           }
+
 
           walk(ch);
         }
@@ -667,12 +727,21 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
           <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
 
-          <div class="rte-grow"></div>
-
-          <label class="rte-height">
-            <span>Высота</span>
-            <input type="range" min="140" max="700" step="10" data-rte-height-range>
+          <label class="rte-fontsize" title="Размер текста">
+            <span>Aa</span>
+            <select data-rte-fontsize>
+              <option value="12">12</option>
+              <option value="14">14</option>
+              <option value="16" selected>16</option>
+              <option value="18">18</option>
+              <option value="20">20</option>
+              <option value="24">24</option>
+              <option value="28">28</option>
+              <option value="32">32</option>
+            </select>
           </label>
+
+          <div class="rte-grow"></div>
         </div>
 
         <div class="rte-modal-body">
@@ -689,29 +758,72 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     document.body.appendChild(overlay);
 
     const editor = overlay.querySelector('[data-rte-modal-editor]');
-    const range = overlay.querySelector('[data-rte-height-range]');
     const btnClose = overlay.querySelector('.rte-modal-close');
     const btnCancel = overlay.querySelector('.rte-cancel');
     const btnSave = overlay.querySelector('.rte-save');
     const toolbar = overlay.querySelector('.rte-modal-toolbar');
+    const fontSel = overlay.querySelector('[data-rte-fontsize]');
 
     editor.innerHTML = inlineEditor.innerHTML || '';
     editor.focus();
 
-    const H_KEY = 'dnd_sheet_rte_heights_v1';
-    const loadH = () => {
-      try { return JSON.parse(localStorage.getItem(H_KEY) || '{}') || {}; } catch { return {}; }
+    const normalizeHref = (href) => {
+      const h = String(href || '').trim();
+      if (!h) return '';
+      if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
+      if (/^www\./i.test(h)) return 'https://' + h;
+      // bare domain or path-like: treat as https
+      if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
+      return h;
     };
-    const saveH = (obj) => { try { localStorage.setItem(H_KEY, JSON.stringify(obj || {})); } catch {} };
 
-    const store = loadH();
-    const savedH = Number(store[path]);
-    const baseH = Number.isFinite(savedH) ? savedH : Math.max(180, inlineEditor.getBoundingClientRect().height || 220);
-    editor.style.minHeight = `${baseH}px`;
-    if (range) range.value = String(Math.max(140, Math.min(700, baseH)));
+    const ensureLinkLooksLikeLink = (a) => {
+      try {
+        // force bold + underline by wrapping contents if not already
+        const hasBold = !!a.querySelector('b,strong');
+        const hasU = !!a.querySelector('u');
+        if (hasBold && hasU) return;
+        const frag = document.createDocumentFragment();
+        while (a.firstChild) frag.appendChild(a.firstChild);
+        const b = document.createElement('b');
+        const u = document.createElement('u');
+        u.appendChild(frag);
+        b.appendChild(u);
+        a.appendChild(b);
+      } catch {}
+    };
 
-    range?.addEventListener('input', () => {
-      const v = Number(range.value || 220);
+    const applyFontSize = (px) => {
+      const v = String(px || '').trim();
+      if (!/^\d+$/.test(v)) return;
+      const n = Math.max(10, Math.min(48, Number(v)));
+      try { document.execCommand('styleWithCSS', false, true); } catch {}
+      // execCommand fontSize uses 1-7; we use 7 then replace
+      try { document.execCommand('fontSize', false, '7'); } catch {}
+      try {
+        editor.querySelectorAll('font[size="7"]').forEach(f => {
+          const span = document.createElement('span');
+          span.style.fontSize = n + 'px';
+          while (f.firstChild) span.appendChild(f.firstChild);
+          f.replaceWith(span);
+        });
+      } catch {}
+    };
+
+    const linkifyPlain = (plain) => {
+      const t = String(plain || '');
+      const esc = htmlEscape(t);
+      // Linkify URLs and emails in escaped text
+      const urlRe = /((https?:\/\/|www\.)[^\s<]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+      return esc.replace(urlRe, (m) => {
+        if (m.includes('@') && !m.startsWith('http')) {
+          const href = 'mailto:' + m;
+          return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
+        }
+        const href = normalizeHref(m);
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
+      }).replace(/\n/g, '<br>');
+    };
       editor.style.minHeight = `${v}px`;
     });
 
@@ -723,12 +835,15 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
       if (btn.hasAttribute('data-rte-link')) {
         const url = prompt('Ссылка (URL):', 'https://');
-        if (url && url.trim()) {
-          try { document.execCommand('createLink', false, url.trim()); } catch {}
+        const href = normalizeHref(url);
+        if (href) {
+          try { document.execCommand('createLink', false, href); } catch {}
           try {
             editor.querySelectorAll('a').forEach(a => {
+              a.setAttribute('href', normalizeHref(a.getAttribute('href')));
               a.setAttribute('target', '_blank');
               a.setAttribute('rel', 'noopener noreferrer');
+              ensureLinkLooksLikeLink(a);
             });
           } catch {}
         }
@@ -740,6 +855,11 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       try { document.execCommand(cmd, false, null); } catch {}
     });
 
+    fontSel?.addEventListener('change', () => {
+      try { editor.focus(); } catch {}
+      applyFontSize(fontSel.value);
+    });
+
     editor.addEventListener('paste', (e) => {
       try {
         e.preventDefault();
@@ -748,7 +868,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         const text = cd?.getData?.('text/plain');
         const incoming = (html && html.trim())
           ? sanitizeHtml(html)
-          : htmlEscape(String(text || '')).replace(/\n/g, '<br>');
+          : linkifyPlain(String(text || ''));
         document.execCommand('insertHTML', false, incoming);
       } catch {}
     });
@@ -756,10 +876,11 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     editor.addEventListener('click', (e) => {
       const a = e.target?.closest?.('a');
       if (!a) return;
-      const href = a.getAttribute('href');
+      const href = normalizeHref(a.getAttribute('href'));
       if (!href) return;
       e.preventDefault();
-      try { window.open(href, '_blank', 'noopener'); } catch {}
+      e.stopPropagation();
+      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
     });
 
     const close = () => { try { overlay.remove(); } catch {} };
@@ -772,14 +893,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       const html = sanitizeHtml(editor.innerHTML || '');
       inlineEditor.innerHTML = html;
       try { if (ta) ta.value = html; } catch {}
-
-      try {
-        const v = Number(range?.value || baseH);
-        const cur = loadH();
-        cur[path] = Math.max(140, Math.min(700, v));
-        saveH(cur);
-        inlineEditor.style.minHeight = `${cur[path]}px`;
-      } catch {}
 
       try {
         if (ta) {
@@ -830,7 +943,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         const text = cd?.getData?.('text/plain');
         const incoming = (html && html.trim())
           ? sanitizeHtml(html)
-          : htmlEscape(String(text || '')).replace(/\n/g, '<br>');
+          : linkifyPlain(String(text || ''));
         document.execCommand('insertHTML', false, incoming);
         // mirror into hidden textarea so existing save/bindings see it
         try { ta.value = sanitizeHtml(editor.innerHTML || ''); } catch {}
@@ -850,10 +963,11 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     editor.addEventListener('click', (e) => {
       const a = e.target?.closest?.('a');
       if (!a) return;
-      const href = a.getAttribute('href');
+      const href = normalizeHref(a.getAttribute('href'));
       if (!href) return;
       e.preventDefault();
-      try { window.open(href, '_blank', 'noopener'); } catch {}
+      e.stopPropagation();
+      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
     });
 
     try { ta.style.display = 'none'; } catch {}
