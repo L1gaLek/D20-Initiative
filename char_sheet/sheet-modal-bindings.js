@@ -1689,54 +1689,7 @@ function bindTextareaHeightPersistence(root, player) {
       `;
       document.body.appendChild(wrap);
 
-    
-  const normalizeHref = (href) => {
-    const h = String(href || '').trim();
-    if (!h) return '';
-    if (/^(https?:|mailto:|tel:)/i.test(h)) return h;
-    if (/^[\w-]+\.[\w.-]+/i.test(h)) return `https://${h}`;
-    return h;
-  };
-
-  const updateViewsForSrc = (srcEl, finalHtml) => {
-    try {
-      if (!srcEl) return;
-      const doc = srcEl.ownerDocument || document;
-
-      const sp = srcEl.getAttribute?.('data-sheet-path');
-      const noteIdx = srcEl.hasAttribute?.('data-note-text') ? srcEl.getAttribute('data-note-text') : null;
-      const isSpell = srcEl.hasAttribute?.('data-spell-desc-editor') ? true : false;
-      let spellHref = '';
-      if (isSpell) {
-        const item = srcEl.closest?.('.spell-item[data-spell-url]');
-        spellHref = item?.getAttribute?.('data-spell-url') || '';
-      }
-
-      const match = (el) => {
-        if (sp && el.getAttribute?.('data-sheet-path') === sp) return true;
-        if (noteIdx !== null && el.hasAttribute?.('data-note-text') && el.getAttribute('data-note-text') === noteIdx) return true;
-        if (isSpell && el.hasAttribute?.('data-spell-desc-editor')) {
-          const it = el.closest?.('.spell-item[data-spell-url]');
-          const h = it?.getAttribute?.('data-spell-url') || '';
-          return h && h === spellHref;
-        }
-        return false;
-      };
-
-      const allSrc = Array.from(doc.querySelectorAll('textarea.rte-src'));
-      for (const ta of allSrc) {
-        if (!match(ta)) continue;
-        ta.value = finalHtml;
-        const wrap = ta.closest?.('.rte-wrap');
-        const view = wrap?.querySelector?.('.rte-view');
-        if (view) {
-          view.innerHTML = rteValueToDisplayHtml(finalHtml);
-          view.classList.toggle('is-empty', !finalHtml);
-        }
-      }
-    } catch {}
-  };
-  const close = () => {
+      const close = () => {
         wrap.remove();
       };
 
@@ -2509,6 +2462,81 @@ function bindRichTextEditors(root, player, canEdit) {
   const shared = (modal.__rteShared = modal.__rteShared || {});
   let current = null; // { wrap, view, src, player }
   shared.current = null;
+
+// Normalize href so pasted "example.com" opens as https://example.com
+const normalizeHref = (href) => {
+  const h = String(href || '').trim();
+  if (!h) return '';
+  if (/^(https?:|mailto:|tel:)/i.test(h)) return h;
+  // protocol-relative
+  if (/^\/\//.test(h)) return `https:${h}`;
+  // plain domain or domain/path
+  if (/^[\w-]+\.[\w.-]+/i.test(h)) return `https://${h}`;
+  return h; // may be relative; we'll still open in new tab/window
+};
+
+// Update *all* rte-view instances that correspond to the same underlying src field.
+// This avoids delays when another "preview" view depends on a later rerender.
+const updateViewsForSrc = (srcEl, finalHtml) => {
+  try {
+    if (!srcEl) return;
+    const doc = srcEl.ownerDocument || document;
+
+    const sp = srcEl.getAttribute?.('data-sheet-path');
+    const noteIdx = srcEl.hasAttribute?.('data-note-text') ? srcEl.getAttribute('data-note-text') : null;
+    const isSpell = srcEl.hasAttribute?.('data-spell-desc-editor') ? true : false;
+    let spellHref = '';
+    if (isSpell) {
+      const item = srcEl.closest?.('.spell-item[data-spell-url]');
+      spellHref = item?.getAttribute?.('data-spell-url') || '';
+    }
+
+    const match = (el) => {
+      if (sp && el.getAttribute?.('data-sheet-path') === sp) return true;
+      if (noteIdx !== null && el.hasAttribute?.('data-note-text') && el.getAttribute('data-note-text') === noteIdx) return true;
+      if (isSpell && el.hasAttribute?.('data-spell-desc-editor')) {
+        const it = el.closest?.('.spell-item[data-spell-url]');
+        const h = it?.getAttribute?.('data-spell-url') || '';
+        return h && h === spellHref;
+      }
+      return false;
+    };
+
+    const allSrc = Array.from(doc.querySelectorAll('textarea.rte-src'));
+    for (const ta of allSrc) {
+      if (!match(ta)) continue;
+      ta.value = finalHtml;
+      const wrap = ta.closest?.('.rte-wrap');
+      const view = wrap?.querySelector?.('.rte-view');
+      if (view) {
+        view.innerHTML = rteValueToDisplayHtml(finalHtml);
+        view.classList.toggle('is-empty', !finalHtml);
+      }
+    }
+  } catch {}
+};
+
+// Force ALL clicks on links inside rte views/editor to open in a new browser window/tab
+// and never navigate the current page (even if other handlers exist).
+if (!modal.__rteLinkCaptureBound) {
+  modal.__rteLinkCaptureBound = true;
+  document.addEventListener('click', (ev) => {
+    const a = ev.target?.closest?.('a[href]');
+    if (!a) return;
+    const inRte = a.closest?.('#rte-modal [data-rte-editor]') || a.closest?.('.rte-view');
+    if (!inRte) return;
+
+    let href = a.getAttribute('href') || a.href || '';
+    href = normalizeHref(href) || href;
+    if (!href || href === '#') return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
+    try { window.open(href, '_blank', 'noopener,noreferrer,popup'); }
+    catch { try { window.open(href, '_blank'); } catch {} }
+  }, true); // capture
+}
+
 
   // Commit value to underlying sheet model (in case some listeners don't fire)
   // and then schedule a save. We still dispatch input/change events for existing
