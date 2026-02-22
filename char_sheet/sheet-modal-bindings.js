@@ -824,8 +824,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
       }).replace(/\n/g, '<br>');
     };
-      editor.style.minHeight = `${v}px`;
-    });
 
     toolbar.addEventListener('mousedown', (e) => e.preventDefault());
     toolbar.addEventListener('click', (e) => {
