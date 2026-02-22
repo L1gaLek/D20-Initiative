@@ -2547,6 +2547,10 @@ function bindRichTextEditors(root, player, canEdit) {
   const close = () => {
     modal.classList.add("hidden");
     current = null;
+    try {
+      if (!modal.__rteShared) modal.__rteShared = {};
+      modal.__rteShared.current = null;
+    } catch {}
   };
 
   const open = (wrap, view, src) => {
@@ -2554,6 +2558,13 @@ function bindRichTextEditors(root, player, canEdit) {
 
     // keep player reference for reliable save
     current = { wrap, view, src, player };
+    try {
+      if (!modal.__rteShared) modal.__rteShared = {};
+      // Store live references on the modal so the (single) modal handlers
+      // always work after re-binding / re-rendering the sheet.
+      modal.__rteShared.current = current;
+      modal.__rteShared.commitToModel = commitToModel;
+    } catch {}
     const html = rteValueToDisplayHtml(src.value);
     editor.innerHTML = html || "";
     const h = Math.max(160, Math.min(720, parseInt(src.style.height || "320", 10) || 320));
@@ -2578,24 +2589,33 @@ function bindRichTextEditors(root, player, canEdit) {
       const btnSave = e.target.closest("[data-rte-save]");
       if (btnSave) {
         e.preventDefault();
-        if (!current) return;
+        const st = modal.__rteShared || {};
+        const cur = st.current;
+        if (!cur) return;
+
         const cleaned = rteSanitizeHtml(editor.innerHTML);
         const finalHtml = cleaned && cleaned.trim() ? cleaned : "";
-        current.src.value = finalHtml;
-        // ensure model updated even for custom fields
-        commitToModel(current.src, finalHtml);
+        cur.src.value = finalHtml;
+
+        // ensure model updated even for custom fields (use latest commit fn)
+        try { (st.commitToModel || (()=>{}))(cur.src, finalHtml); } catch {}
         // and force schedule save (some fields are not bound via data-sheet-path)
-        try { scheduleSheetSave(current.player); } catch {}
+        try { scheduleSheetSave(cur.player); } catch {}
+
         // persist editor height
         try {
           const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
-          current.src.style.height = `${h}px`;
+          cur.src.style.height = `${h}px`;
         } catch {}
+
         // dispatch input so existing bindings save it
-        current.src.dispatchEvent(new Event("input", { bubbles: true }));
-        current.src.dispatchEvent(new Event("change", { bubbles: true }));
-        current.view.innerHTML = rteValueToDisplayHtml(finalHtml);
-        current.view.classList.toggle("is-empty", !finalHtml);
+        try {
+          cur.src.dispatchEvent(new Event("input", { bubbles: true }));
+          cur.src.dispatchEvent(new Event("change", { bubbles: true }));
+        } catch {}
+
+        cur.view.innerHTML = rteValueToDisplayHtml(finalHtml);
+        cur.view.classList.toggle("is-empty", !finalHtml);
         close();
         return;
       }
@@ -2626,7 +2646,7 @@ function bindRichTextEditors(root, player, canEdit) {
       const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
       editor.style.minHeight = `${h}px`;
       // live persist to current src so next open keeps it
-      try { if (current?.src) current.src.style.height = `${h}px`; } catch {}
+      try { const cur = modal.__rteShared?.current; if (cur?.src) cur.src.style.height = `${h}px`; } catch {}
     });
 
     fontSizeSel?.addEventListener('change', () => {
@@ -2654,6 +2674,17 @@ function bindRichTextEditors(root, player, canEdit) {
         // fallback default
       }
     });
+    // Links inside contenteditable aren't reliably clickable; open them explicitly.
+    editor.addEventListener("click", (e) => {
+      const a = e.target?.closest?.('a[href]');
+      if (!a) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const href = a.getAttribute('href') || a.href;
+      if (!href) return;
+      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+    });
+
   }
 
   // upgrade all wrappers
@@ -2683,8 +2714,19 @@ function bindRichTextEditors(root, player, canEdit) {
     // Single click: enable inline editing (add/remove text) without opening popup.
     // Click on a link should still open the link.
     view.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      if (a) return; // keep native link behavior
+      const a = e.target?.closest?.('a[href]');
+      if (a) {
+        // Always open links in a new tab/window
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        } catch {}
+        const href = a.getAttribute('href') || a.href;
+        if (href) { try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {} }
+        return;
+      }
       if (!canEdit) return;
       if (view.isContentEditable) return;
       e.preventDefault();
