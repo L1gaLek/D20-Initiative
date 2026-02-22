@@ -1246,6 +1246,28 @@ function renderShopTab(vm, canEdit) {
     if (!sheetTitle || !sheetSubtitle || !sheetActions || !sheetContent) return;
     if (!ctx) return;
 
+
+    // Open any external links inside the sheet in a NEW browser tab/window.
+    // This prevents the SPA from hijacking navigation to an empty "sheet" page.
+    if (!sheetContent.__extLinksBound) {
+      sheetContent.__extLinksBound = true;
+      sheetContent.addEventListener('click', (e) => {
+        const a = e.target?.closest?.('a[href]');
+        if (!a) return;
+        const raw = a.getAttribute('href') || a.href || '';
+        if (!raw || raw === '#') return;
+        let url = '';
+        try { url = new URL(raw, window.location.href).href; } catch { url = raw; }
+        // Only for http(s) links
+        if (!/^https?:\/\//i.test(url)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try { window.open(url, '_blank', 'noopener,noreferrer,popup'); }
+        catch { try { window.open(url, '_blank'); } catch {} }
+      }, true);
+    }
+
+
     const force = !!opts.force;
     // Если пользователь сейчас редактирует что-то внутри модалки — не перерисовываем, чтобы не прыгал скролл/вкладка.
     if (!force && player?.id && isModalBusy(player.id)) {

@@ -1091,7 +1091,7 @@ function bindTextareaHeightPersistence(root, player) {
 
         // обновить значение спасброска в UI
         const ability = dot.closest('.lss-ability');
-        const saveInp = ability?.querySelector(`.lss-pill-val[data-kind="save"][data-stat-key="${CSS.escape(statKey)}"]`);
+        const saveInp = ability?.querySelector(`.lss-pill-val[data-kind="save"][data-stat-key="${String(statKey)}"]`);
         if (saveInp) {
           const v = formatMod(calcSaveBonus(sheet, statKey));
           if (saveInp.tagName === 'INPUT' || saveInp.tagName === 'TEXTAREA') saveInp.value = v;
@@ -2547,6 +2547,38 @@ function bindRichTextEditors(root, player, canEdit) {
         sheet.text[key].value = cleanupSpellDesc(String(htmlValue || ''));
         try { scheduleSheetSave(player); } catch {}
         return;
+      }
+    } catch {}
+  };
+
+  // Update the corresponding .rte-view(s) for a given hidden textarea source.
+  // This prevents stale previews/titles until next full rerender.
+  const updateViewsForSrc = (srcEl, htmlValue) => {
+    try {
+      if (!srcEl) return;
+      const v = String(htmlValue ?? srcEl.value ?? "");
+      // 1) Update the paired view inside the same wrapper
+      const wrap = srcEl.closest?.('.rte-wrap');
+      if (wrap) {
+        const view = wrap.querySelector?.('.rte-view');
+        if (view) {
+          view.innerHTML = rteValueToDisplayHtml(v) || "";
+          view.classList.toggle('is-empty', !v);
+        }
+      }
+      // 2) Update any other views bound to the same data-sheet-path (rare, but safe)
+      const sp = srcEl.getAttribute?.('data-sheet-path');
+      if (sp && root) {
+        const others = root.querySelectorAll?.(`textarea.rte-src[data-sheet-path="${String(sp).replace(/"/g, '\\\"' )}"]`) || [];
+        others.forEach((ta) => {
+          if (ta === srcEl) return;
+          const w = ta.closest?.('.rte-wrap');
+          const vw = w?.querySelector?.('.rte-view');
+          if (vw) {
+            vw.innerHTML = rteValueToDisplayHtml(v) || "";
+            vw.classList.toggle('is-empty', !v);
+          }
+        });
       }
     } catch {}
   };
