@@ -18,6 +18,8 @@
     h = h.replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*\/\s*>/gi, "");
     h = h.replace(/\son\w+\s*=\s*(\".*?\"|'.*?'|[^\s>]+)/gi, "");
     h = h.replace(/href\s*=\s*(\"|\')\s*javascript:[\s\S]*?\1/gi, 'href="#"');
+    // Drop external styling from pasted HTML.
+    h = h.replace(/\s(?:style|class|id)\s*=\s*(\"[^\"]*\"|'[^']*')/gi, "");
     return h;
   }
 
@@ -31,10 +33,22 @@
   function renderRteWrap({ value, textareaAttrs = "", placeholder = "", rows = 5, wrapClass = "", viewClass = "" }) {
     const displayHtml = rteValueToDisplayHtml(value);
     const ph = escapeHtml(String(placeholder || ""));
+
+    // IMPORTANT: many call-sites pass class="..." inside textareaAttrs.
+    // If we output two class attributes (class="rte-src" + class="...")
+    // browsers may override one, breaking popup editor + saving bindings.
+    let attrs = String(textareaAttrs || "");
+    let extraClass = "";
+    attrs = attrs
+      .replace(/\bclass\s*=\s*"([^"]*)"/i, (_m, g1) => { extraClass = String(g1 || ""); return ""; })
+      .replace(/\bclass\s*=\s*'([^']*)'/i, (_m, g1) => { extraClass = String(g1 || ""); return ""; })
+      .trim();
+    const clsSrc = `rte-src${extraClass ? ` ${escapeHtml(extraClass)}` : ""}`;
+
     return `
       <div class="rte-wrap ${wrapClass}">
         <div class="rte-view ${viewClass}" data-rte-open tabindex="0" data-rte-placeholder="${ph}">${displayHtml || ""}</div>
-        <textarea class="rte-src" rows="${escapeHtml(String(rows))}" ${textareaAttrs}>${escapeHtml(String(value || ""))}</textarea>
+        <textarea class="${clsSrc}" rows="${escapeHtml(String(rows))}" ${attrs}>${escapeHtml(String(value || ""))}</textarea>
       </div>
     `;
   }
