@@ -391,9 +391,8 @@
   box-shadow: 0 0 0 2px rgba(255,165,0,0.18);
 }
 
-/* ================== Sheet Rich Text Editor ==================
-   (встроенный превью + всплывающий редактор) */
-.rte{
+/* ================== Sheet Rich Text Editor ================== */
+.rte {
   width: 100%;
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 10px;
@@ -401,18 +400,16 @@
   overflow: hidden;
 }
 
-.rte-head{
-  display:flex;
-  align-items:center;
-  gap: 8px;
-  padding: 6px 8px;
+.rte-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
   border-bottom: 1px solid rgba(255,255,255,0.12);
   background: rgba(0,0,0,0.22);
 }
 
-.rte-head__title{ font-size: 12px; opacity: 0.85; font-weight: 700; }
-
-.rte-open{
+.rte-btn {
   border: 1px solid rgba(255,255,255,0.16);
   background: rgba(255,255,255,0.06);
   color: inherit;
@@ -420,30 +417,34 @@
   border-radius: 8px;
   cursor: pointer;
 }
+.rte-btn:active { transform: translateY(1px); }
 
-.rte-toolbar{ display:flex; gap:6px; align-items:center; padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.22); }
+.rte-select {
+  margin-left: auto;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
 
-.rte-btn{ border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06); color: inherit; padding: 4px 8px; border-radius: 8px; cursor: pointer; }
-.rte-btn:active{ transform: translateY(1px); }
-
-.rte-select{ margin-left: auto; border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06); color: inherit; padding: 4px 8px; border-radius: 8px; }
-
-.rte-editor{
+.rte-editor {
   padding: 10px;
   min-height: 90px;
   outline: none;
   white-space: normal;
-  font-size: 15px;
-  line-height: 20px;
 }
 
-.rte-editor--preview{ cursor: pointer; }
+.rte-editor:empty:before {
+  content: attr(data-placeholder);
+  color: rgba(255,255,255,0.45);
+}
 
-.rte-editor:empty:before{ content: attr(data-placeholder); color: rgba(255,255,255,0.45); }
-
-.rte-editor a{ font-weight: 800; text-decoration: underline; color: #7fd1ff; }
-
-.rte--disabled{ opacity: 0.65; }
+.rte--disabled {
+  opacity: 0.65;
+}
 .rte--disabled .rte-btn,
-.rte--disabled .rte-select,
-.rte--disabled .rte-open{ pointer-events: none; opacity: 0.7; }
+.rte--disabled .rte-select {
+  pointer-events: none;
+  opacity: 0.7;
+}

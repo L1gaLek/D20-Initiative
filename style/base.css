@@ -1236,9 +1236,8 @@ button:hover {
   padding: 6px 8px;
   box-sizing: border-box;
   resize: vertical;
-  /* Больше текст для читабельности */
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 16px;
 }
 
 /* ===== Rich Text Editor (sheet) ===== */
@@ -1248,31 +1247,6 @@ button:hover {
   border-radius: 10px;
   background: #111;
   overflow: hidden;
-}
-
-.rte-head{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding: 6px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.04);
-}
-
-.rte-head__title{
-  font-size: 12px;
-  opacity: 0.85;
-  font-weight: 700;
-}
-
-.rte-open{
-  padding: 2px 8px;
-  font-size: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 8px;
-  background: rgba(255,255,255,0.06);
-  color: #eee;
-  cursor: pointer;
 }
 
 .rte-toolbar{
@@ -1312,23 +1286,10 @@ button:hover {
   padding: 6px 8px;
   min-height: 90px;
   color: #eee;
-  font-size: 16px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 16px;
   outline: none;
   white-space: normal;
-}
-
-/* Preview in sheet (editing happens in popup) */
-.rte-editor--preview{
-  cursor: pointer;
-}
-
-/* Links: bold + underline + clickable */
-.rte-editor a,
-.sheet-textarea a{
-  font-weight: 800;
-  text-decoration: underline;
-  color: #7fd1ff;
 }
 
 .rte-editor:empty:before{
@@ -1342,92 +1303,6 @@ button:hover {
 
 .rte--disabled .rte-editor{
   pointer-events: none;
-}
-
-/* ===== Rich Text Popup (sheet) ===== */
-.rte-popover{
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-}
-
-.rte-popover.hidden{ display:none; }
-
-.rte-popover__backdrop{
-  position:absolute;
-  inset:0;
-  background: rgba(0,0,0,0.65);
-}
-
-.rte-popover__panel{
-  position: relative;
-  width: min(900px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
-  margin: 12px auto;
-  background: rgba(18,18,18,0.98);
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 14px;
-  overflow: hidden;
-  display:flex;
-  flex-direction: column;
-}
-
-.rte-popover__head{
-  display:flex;
-  align-items:center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-}
-
-.rte-popover__title{
-  font-weight: 900;
-}
-
-.rte-popover__x{
-  padding: 4px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
-  color: #eee;
-  cursor: pointer;
-}
-
-.rte-popover__height{
-  display:flex;
-  align-items:center;
-  gap: 8px;
-}
-
-.rte-popover__height-label{
-  font-size: 12px;
-  opacity: 0.85;
-}
-
-.rte-popover__height-range{ width: 160px; }
-.rte-popover__height-num{
-  width: 78px;
-  padding: 4px 6px;
-  border-radius: 10px;
-}
-
-.rte-popover__body{
-  padding: 10px 12px 12px;
-  overflow: auto;
-}
-
-.rte-editor--popup{
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 12px;
-  background: #111;
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-.rte-popover__hint{
-  margin-top: 8px;
-  font-size: 12px;
-  opacity: 0.75;
 }
 
 
@@ -2751,3 +2626,97 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .equip-row__details{margin-top:6px; opacity:.92; line-height:1.25;}
 .equip-row__desc.collapsed{display:none;}
 .equip-row__details.collapsed{display:none;}
+
+
+/* ================= Rich Text Editor (Sheet) ================= */
+.rte-wrap { position: relative; width: 100%; }
+.rte-src-hidden { display: none !important; }
+
+.rte-view {
+  width: 100%;
+  min-height: 120px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.18);
+  border-radius: 10px;
+  font-size: 16px;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.92);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.rte-view:focus { outline: 2px solid rgba(255,140,0,0.45); outline-offset: 2px; }
+
+.rte-view:empty::before,
+.rte-view.is-empty::before {
+  content: attr(data-rte-placeholder);
+  color: rgba(255,255,255,0.35);
+}
+
+.rte-view a {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.rte-modal.hidden { display: none; }
+.rte-modal { position: fixed; inset: 0; z-index: 99999; }
+.rte-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.55); }
+.rte-modal-card {
+  position: relative;
+  width: min(900px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  margin: 12px auto;
+  background: rgba(18,18,18,0.98);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+}
+
+.rte-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+}
+.rte-spacer { flex: 1; }
+
+.rte-btn, .rte-btn-secondary, .rte-btn-primary {
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.9);
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.rte-btn:hover, .rte-btn-secondary:hover { background: rgba(255,255,255,0.08); }
+.rte-btn-primary { background: rgba(255,140,0,0.20); border-color: rgba(255,140,0,0.35); }
+.rte-btn-primary:hover { background: rgba(255,140,0,0.28); }
+
+.rte-height { display: flex; gap: 8px; align-items: center; color: rgba(255,255,255,0.75); font-size: 13px; }
+.rte-height input { width: 170px; }
+
+.rte-editor {
+  padding: 12px;
+  overflow: auto;
+  font-size: 16px;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.92);
+}
+.rte-editor:focus { outline: none; }
+.rte-editor a { font-weight: 700; text-decoration: underline; }
+
+.rte-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+}

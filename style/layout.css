@@ -455,16 +455,15 @@
   flex-wrap: wrap;
 }
 
-.sheet-grid-2 {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
-  gap: 10px;
-}
-
-/* Один столбец (например: вкладка "Заклинания" — уровни по вертикали) */
 .sheet-grid-1 {
   display: grid;
   grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.sheet-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
   gap: 10px;
 }
 
