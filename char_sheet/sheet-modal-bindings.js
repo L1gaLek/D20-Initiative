@@ -2452,7 +2452,7 @@ function bindRichTextEditors(root, player, canEdit) {
   const heightRange = modal.querySelector("[data-rte-height]");
   const fontSizeSel = modal.querySelector("[data-rte-fontsize]");
 
-  let current = null; // { wrap, view, src }
+  let current = null; // { wrap, view, src, player }
 
   // Commit value to underlying sheet model (in case some listeners don't fire)
   // and then schedule a save. We still dispatch input/change events for existing
@@ -2552,7 +2552,8 @@ function bindRichTextEditors(root, player, canEdit) {
   const open = (wrap, view, src) => {
     if (!canEdit && (src.disabled || src.hasAttribute("disabled"))) return;
 
-    current = { wrap, view, src };
+    // keep player reference for reliable save
+    current = { wrap, view, src, player };
     const html = rteValueToDisplayHtml(src.value);
     editor.innerHTML = html || "";
     const h = Math.max(160, Math.min(720, parseInt(src.style.height || "320", 10) || 320));
@@ -2583,6 +2584,8 @@ function bindRichTextEditors(root, player, canEdit) {
         current.src.value = finalHtml;
         // ensure model updated even for custom fields
         commitToModel(current.src, finalHtml);
+        // and force schedule save (some fields are not bound via data-sheet-path)
+        try { scheduleSheetSave(current.player); } catch {}
         // persist editor height
         try {
           const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
@@ -2724,9 +2727,8 @@ function bindRichTextEditors(root, player, canEdit) {
       e.preventDefault();
       openHandler();
     });
-    view.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openHandler(); }
-    });
+    // IMPORTANT: do not open popup on Space/Enter. Inline editing must allow
+    // spaces and paragraphs without forcing the popup editor.
   });
 }
 
