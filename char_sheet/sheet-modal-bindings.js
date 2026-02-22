@@ -727,8 +727,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
   const textareas = Array.from(root.querySelectorAll(selector));
   textareas.forEach((ta) => {
-    // Popup-RTE uses its own wrapper (rte-wrap + textarea.rte-src). Don't convert those.
-    if (ta.classList.contains('rte-src') || ta.closest('.rte-wrap')) return;
     // don't upgrade twice
     if (ta.closest('[data-rte]')) return;
     const path = ta.getAttribute('data-sheet-path');
@@ -2352,12 +2350,6 @@ function rteEnsureModal() {
         <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркеры">• list</button>
         <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1. list</button>
         <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
-        <select class="rte-select" data-rte-fontsize title="Размер текста">
-          <option value="2">S</option>
-          <option value="3" selected>M</option>
-          <option value="5">L</option>
-          <option value="6">XL</option>
-        </select>
         <div class="rte-spacer"></div>
         <label class="rte-height">
           <span>Высота</span>
@@ -2450,118 +2442,25 @@ function bindRichTextEditors(root, player, canEdit) {
   const modal = document.getElementById("rte-modal");
   const editor = modal.querySelector("[data-rte-editor]");
   const heightRange = modal.querySelector("[data-rte-height]");
-  const fontSizeSel = modal.querySelector("[data-rte-fontsize]");
 
-  let current = null; // { wrap, view, src, player }
+  // Store state on the modal itself so handlers (bound once) always see the latest field.
+  if (!modal.__rteState) modal.__rteState = { current: null };
 
-  // Commit value to underlying sheet model (in case some listeners don't fire)
-  // and then schedule a save. We still dispatch input/change events for existing
-  // bindings, but this makes "Сохранить" reliable for custom fields too.
-  const commitToModel = (srcEl, htmlValue) => {
-    try {
-      const sheet = player?.sheet?.parsed;
-      if (!sheet || !srcEl) return;
-
-      // 1) Standard binding path
-      const sp = srcEl.getAttribute?.('data-sheet-path');
-      if (sp) {
-        try { setByPath(sheet, sp, htmlValue); } catch {}
-        try { scheduleSheetSave(player); } catch {}
-        return;
-      }
-
-      // 2) Notes
-      if (srcEl.hasAttribute?.('data-note-text')) {
-        const idx = parseInt(srcEl.getAttribute('data-note-text') || '', 10);
-        if (Number.isFinite(idx) && sheet?.notes?.entries?.[idx]) {
-          sheet.notes.entries[idx].text = String(htmlValue || '');
-          try { scheduleSheetSave(player); } catch {}
-        }
-        return;
-      }
-
-      // 3) Spell description (stored in sheet.text[spell-desc:<href>].value)
-      if (srcEl.hasAttribute?.('data-spell-desc-editor')) {
-        const item = srcEl.closest?.('.spell-item[data-spell-url]');
-        const href = item?.getAttribute?.('data-spell-url') || '';
-        if (!href) return;
-        if (!sheet.text || typeof sheet.text !== 'object') sheet.text = {};
-        const key = `spell-desc:${href}`;
-        if (!sheet.text[key] || typeof sheet.text[key] !== 'object') sheet.text[key] = { value: '' };
-        sheet.text[key].value = cleanupSpellDesc(String(htmlValue || ''));
-        try { scheduleSheetSave(player); } catch {}
-        return;
-      }
-    } catch {}
-  };
-
-  const setCaretToEnd = (el) => {
-    try {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } catch {}
-  };
-
-  const startInlineEdit = (wrap, view, src) => {
-    try {
-      if (!canEdit || !view || !src) return;
-      if (view.isContentEditable) return;
-      wrap.__rteInlineBackup = src.value;
-      view.setAttribute('contenteditable', 'true');
-      wrap.classList.add('rte-inline-editing');
-      view.focus();
-      setCaretToEnd(view);
-    } catch {}
-  };
-
-  const finishInlineEdit = (wrap, view, src, { cancel = false } = {}) => {
-    try {
-      if (!view?.isContentEditable) return;
-      const prev = String(wrap.__rteInlineBackup ?? '');
-      const nextRaw = cancel ? prev : String(view.innerHTML || '');
-      const cleaned = rteSanitizeHtml(nextRaw);
-      const finalHtml = cleaned && cleaned.trim() ? cleaned : '';
-
-      // exit edit mode
-      view.setAttribute('contenteditable', 'false');
-      wrap.classList.remove('rte-inline-editing');
-
-      // restore view html (sanitized) and commit
-      view.innerHTML = rteValueToDisplayHtml(finalHtml);
-      view.classList.toggle('is-empty', !finalHtml);
-      src.value = finalHtml;
-      commitToModel(src, finalHtml);
-      try {
-        src.dispatchEvent(new Event('input', { bubbles: true }));
-        src.dispatchEvent(new Event('change', { bubbles: true }));
-      } catch {}
-    } catch {}
-    finally {
-      try { wrap.__rteInlineBackup = null; } catch {}
-    }
-  };
   const close = () => {
     modal.classList.add("hidden");
-    current = null;
+    if (modal.__rteState) modal.__rteState.current = null;
   };
 
   const open = (wrap, view, src) => {
     if (!canEdit && (src.disabled || src.hasAttribute("disabled"))) return;
 
-    // keep player reference for reliable save
-    current = { wrap, view, src, player };
+    if (!modal.__rteState) modal.__rteState = { current: null };
+    modal.__rteState.current = { wrap, view, src, player };
     const html = rteValueToDisplayHtml(src.value);
     editor.innerHTML = html || "";
     const h = Math.max(160, Math.min(720, parseInt(src.style.height || "320", 10) || 320));
     heightRange.value = String(h);
     editor.style.minHeight = `${h}px`;
-
-    // reset font size selector to default each open (execCommand doesn't expose current size reliably)
-    try { if (fontSizeSel) fontSizeSel.value = '3'; } catch {}
 
     modal.classList.remove("hidden");
     setTimeout(() => editor.focus(), 0);
@@ -2578,25 +2477,49 @@ function bindRichTextEditors(root, player, canEdit) {
       const btnSave = e.target.closest("[data-rte-save]");
       if (btnSave) {
         e.preventDefault();
-        if (!current) return;
-        const cleaned = rteSanitizeHtml(editor.innerHTML);
+        const cur = modal.__rteState?.current;
+        if (!cur) return;
+
+        const ed = modal.querySelector("[data-rte-editor]");
+        const hr = modal.querySelector("[data-rte-height]");
+        const cleaned = rteSanitizeHtml(ed ? ed.innerHTML : "");
         const finalHtml = cleaned && cleaned.trim() ? cleaned : "";
-        current.src.value = finalHtml;
+
+        cur.src.value = finalHtml;
+
         // ensure model updated even for custom fields
-        commitToModel(current.src, finalHtml);
-        // and force schedule save (some fields are not bound via data-sheet-path)
-        try { scheduleSheetSave(current.player); } catch {}
+        commitToModel(cur.src, finalHtml);
+
+        // force schedule save (some fields are not bound via data-sheet-path)
+        try { scheduleSheetSave(cur.player || player); } catch {}
+
         // persist editor height
         try {
-          const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
-          current.src.style.height = `${h}px`;
+          const h = Math.max(160, Math.min(720, parseInt((hr?.value) || "320", 10) || 320));
+          cur.src.style.height = `${h}px`;
         } catch {}
+
         // dispatch input so existing bindings save it
-        current.src.dispatchEvent(new Event("input", { bubbles: true }));
-        current.src.dispatchEvent(new Event("change", { bubbles: true }));
-        current.view.innerHTML = rteValueToDisplayHtml(finalHtml);
-        current.view.classList.toggle("is-empty", !finalHtml);
+        try {
+          cur.src.dispatchEvent(new Event("input", { bubbles: true }));
+          cur.src.dispatchEvent(new Event("change", { bubbles: true }));
+        } catch {}
+
+        cur.view.innerHTML = rteValueToDisplayHtml(finalHtml);
+        cur.view.classList.toggle("is-empty", !finalHtml);
         close();
+        return;
+      }
+
+      // Make links clickable inside the popup editor: open in a new tab on click.
+      const linkInEditor = e.target.closest('a');
+      if (linkInEditor && e.target.closest('[data-rte-editor]')) {
+        const href = linkInEditor.getAttribute('href');
+        if (href) {
+          e.preventDefault();
+          e.stopPropagation();
+          try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+        }
         return;
       }
 
@@ -2625,19 +2548,9 @@ function bindRichTextEditors(root, player, canEdit) {
     heightRange.addEventListener("input", () => {
       const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
       editor.style.minHeight = `${h}px`;
-      // live persist to current src so next open keeps it
-      try { if (current?.src) current.src.style.height = `${h}px`; } catch {}
     });
 
-    fontSizeSel?.addEventListener('change', () => {
-      try {
-        editor.focus();
-        const v = String(fontSizeSel.value || '3');
-        document.execCommand('fontSize', false, v);
-      } catch {}
-    });
-
-    // Paste: strip external styles/classes, keep basic tags + links.
+    // smart paste: preserve links if clipboard has HTML, otherwise linkify URLs
     editor.addEventListener("paste", (e) => {
       try {
         const cd = e.clipboardData;
@@ -2647,8 +2560,11 @@ function bindRichTextEditors(root, player, canEdit) {
         e.preventDefault();
 
         let insertHtml = "";
-        if (html) insertHtml = rteSanitizeHtml(html);
-        else insertHtml = rteLinkifyPlainText(plain || "");
+        if (html && /<a\b/i.test(html)) {
+          insertHtml = rteSanitizeHtml(html);
+        } else {
+          insertHtml = rteLinkifyPlainText(plain || "");
+        }
         document.execCommand("insertHTML", false, insertHtml);
       } catch {
         // fallback default
@@ -2674,61 +2590,11 @@ function bindRichTextEditors(root, player, canEdit) {
     if (wrap.__rteUpgraded) return;
     wrap.__rteUpgraded = true;
 
-    const openHandler = () => {
-      // If inline edit is active, finish it first (commit current edits)
-      try { finishInlineEdit(wrap, view, src, { cancel: false }); } catch {}
-      open(wrap, view, src);
-    };
-
-    // Single click: enable inline editing (add/remove text) without opening popup.
-    // Click on a link should still open the link.
-    view.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      if (a) return; // keep native link behavior
-      if (!canEdit) return;
-      if (view.isContentEditable) return;
-      e.preventDefault();
-      startInlineEdit(wrap, view, src);
+    const openHandler = () => open(wrap, view, src);
+    view.addEventListener("click", openHandler);
+    view.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openHandler(); }
     });
-
-    // Save inline edits on blur
-    view.addEventListener('blur', () => {
-      if (!view.isContentEditable) return;
-      finishInlineEdit(wrap, view, src, { cancel: false });
-    });
-
-    // Esc cancels inline edits
-    view.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && view.isContentEditable) {
-        e.preventDefault();
-        finishInlineEdit(wrap, view, src, { cancel: true });
-      }
-    });
-
-    // Inline paste: strip external styles, keep links/lists.
-    view.addEventListener('paste', (e) => {
-      if (!view.isContentEditable) return;
-      try {
-        const cd = e.clipboardData;
-        if (!cd) return;
-        const html = cd.getData('text/html');
-        const plain = cd.getData('text/plain');
-        e.preventDefault();
-        const insertHtml = html ? rteSanitizeHtml(html) : rteLinkifyPlainText(plain || '');
-        document.execCommand('insertHTML', false, insertHtml);
-      } catch {}
-    });
-
-    // Open popup editor only on DOUBLE click.
-    view.addEventListener("dblclick", (e) => {
-      // if user double-clicks a link, don't swallow: let browser open it on click
-      const a = e.target?.closest?.('a');
-      if (a) return;
-      e.preventDefault();
-      openHandler();
-    });
-    // IMPORTANT: do not open popup on Space/Enter. Inline editing must allow
-    // spaces and paragraphs without forcing the popup editor.
   });
 }
 
