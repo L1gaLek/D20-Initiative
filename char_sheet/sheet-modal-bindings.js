@@ -578,7 +578,6 @@ function bindEditableInputs(root, player, canEdit) {
               updateHeroChips(root, player.sheet.parsed);
             } catch {}
             try { scheduleSheetSave(player); } catch {}
-        try { window.updatePlayerList?.(); } catch {}
           }
         }
         // interactive only if canEdit and armor selected
@@ -2367,7 +2366,7 @@ function rteEnsureModal() {
       </div>
       <div class="rte-editor" contenteditable="true" data-rte-editor></div>
       <div class="rte-actions">
-        <button type="button" class="rte-btn-secondary" data-rte-cancel>Отмена</button>
+        <button type="button" class="rte-btn-secondary" data-rte-close>Отмена</button>
         <button type="button" class="rte-btn-primary" data-rte-save>Сохранить</button>
       </div>
     </div>
@@ -2468,7 +2467,6 @@ function bindRichTextEditors(root, player, canEdit) {
       if (sp) {
         try { setByPath(sheet, sp, htmlValue); } catch {}
         try { scheduleSheetSave(player); } catch {}
-        try { window.updatePlayerList?.(); } catch {}
         return;
       }
 
@@ -2478,7 +2476,6 @@ function bindRichTextEditors(root, player, canEdit) {
         if (Number.isFinite(idx) && sheet?.notes?.entries?.[idx]) {
           sheet.notes.entries[idx].text = String(htmlValue || '');
           try { scheduleSheetSave(player); } catch {}
-        try { window.updatePlayerList?.(); } catch {}
         }
         return;
       }
@@ -2493,7 +2490,6 @@ function bindRichTextEditors(root, player, canEdit) {
         if (!sheet.text[key] || typeof sheet.text[key] !== 'object') sheet.text[key] = { value: '' };
         sheet.text[key].value = cleanupSpellDesc(String(htmlValue || ''));
         try { scheduleSheetSave(player); } catch {}
-        try { window.updatePlayerList?.(); } catch {}
         return;
       }
     } catch {}
@@ -2548,50 +2544,10 @@ function bindRichTextEditors(root, player, canEdit) {
       try { wrap.__rteInlineBackup = null; } catch {}
     }
   };
-  const close = ({ save = false } = {}) => {
-  try {
-    if (save && current) {
-      const cleaned = rteSanitizeHtml(editor.innerHTML);
-      const finalHtml = cleaned && cleaned.trim() ? cleaned : "";
-
-      // persist editor height for this field
-      try {
-        const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
-        current.src.style.height = `${h}px`;
-      } catch {}
-
-      current.src.value = finalHtml;
-
-      // ensure model updated even for custom fields
-      commitToModel(current.src, finalHtml);
-      try { scheduleSheetSave(current.player); } catch {}
-        try { window.updatePlayerList?.(); } catch {}
-
-      // dispatch input so existing bindings save it
-      try {
-        current.src.dispatchEvent(new Event("input", { bubbles: true }));
-        current.src.dispatchEvent(new Event("change", { bubbles: true }));
-      } catch {}
-
-      // update view instantly
-      try {
-        const liveWrap = current.src?.closest?.('.rte-wrap') || current.wrap;
-        const liveView = liveWrap?.querySelector?.('.rte-view') || current.view;
-        if (liveView) {
-          liveView.innerHTML = rteValueToDisplayHtml(finalHtml);
-          liveView.classList.toggle("is-empty", !finalHtml);
-        }
-      } catch {}
-
-      // instant sidebar/title refresh (if exists globally)
-      try { window.updatePlayerList?.(); } catch {}
-    }
-  } catch {}
-
-  modal.classList.add("hidden");
-  current = null;
-};
-
+  const close = () => {
+    modal.classList.add("hidden");
+    current = null;
+  };
 
   const open = (wrap, view, src) => {
     if (!canEdit && (src.disabled || src.hasAttribute("disabled"))) return;
@@ -2616,11 +2572,8 @@ function bindRichTextEditors(root, player, canEdit) {
     modal.__rteBound = true;
 
     modal.addEventListener("click", (e) => {
-      const btnCancel = e.target.closest("[data-rte-cancel]");
-      if (btnCancel) { e.preventDefault(); close({ save: false }); return; }
-
       const btnClose = e.target.closest("[data-rte-close]");
-      if (btnClose) { e.preventDefault(); close({ save: true }); return; }
+      if (btnClose) { e.preventDefault(); close(); return; }
 
       const btnSave = e.target.closest("[data-rte-save]");
       if (btnSave) {
@@ -2633,7 +2586,6 @@ function bindRichTextEditors(root, player, canEdit) {
         commitToModel(current.src, finalHtml);
         // and force schedule save (some fields are not bound via data-sheet-path)
         try { scheduleSheetSave(current.player); } catch {}
-        try { window.updatePlayerList?.(); } catch {}
         // persist editor height
         try {
           const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
@@ -2652,7 +2604,7 @@ function bindRichTextEditors(root, player, canEdit) {
             liveView.classList.toggle("is-empty", !finalHtml);
           }
         } catch {}
-        close({ save: false });
+        close();
         return;
       }
 
