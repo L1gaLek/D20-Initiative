@@ -715,309 +715,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-
-  // --- Helpers: sanitize + auto-link ---
-  function normalizeUrl(u) {
-    const t = String(u || '').trim();
-    if (!t) return '';
-    if (/^https?:\/\//i.test(t)) return t;
-    if (/^www\./i.test(t)) return 'https://' + t;
-    return t;
-  }
-
-  function stripUnsafeTags(html) {
-    // Keep only basic formatting + links + lists + breaks.
-    // Note: this is not a full HTML sanitizer, but it blocks scripts/styles and unknown tags.
-    const allowed = new Set(['B','STRONG','I','EM','U','A','P','BR','DIV','UL','OL','LI','SPAN']);
-    try {
-      const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
-      const body = doc.body;
-      const walk = (node) => {
-        if (!node) return;
-        const kids = Array.from(node.childNodes || []);
-        for (const ch of kids) {
-          if (ch.nodeType === 1) {
-            const tag = ch.tagName;
-            if (!allowed.has(tag)) {
-              // unwrap unknown tags
-              const frag = doc.createDocumentFragment();
-              while (ch.firstChild) frag.appendChild(ch.firstChild);
-              ch.replaceWith(frag);
-              continue;
-            }
-            // clean attributes
-            if (tag === 'A') {
-              const href = normalizeUrl(ch.getAttribute('href') || '');
-              if (!href) {
-                // unwrap invalid links
-                const frag = doc.createDocumentFragment();
-                while (ch.firstChild) frag.appendChild(ch.firstChild);
-                ch.replaceWith(frag);
-                continue;
-              }
-              ch.setAttribute('href', href);
-              ch.setAttribute('target', '_blank');
-              ch.setAttribute('rel', 'noopener noreferrer');
-            }
-            // remove event handlers/styles
-            Array.from(ch.attributes || []).forEach(a => {
-              const n = String(a.name || '').toLowerCase();
-              if (n.startsWith('on')) ch.removeAttribute(a.name);
-              if (n === 'style') ch.removeAttribute(a.name);
-              if (tag !== 'A' && (n === 'href' || n === 'target' || n === 'rel')) ch.removeAttribute(a.name);
-            });
-            walk(ch);
-          }
-        }
-      };
-      walk(body);
-      return body.innerHTML;
-    } catch {
-      return String(html || '');
-    }
-  }
-
-  function autoLinkHtml(html) {
-    try {
-      const doc = new DOMParser().parseFromString(`<div>${String(html || '')}</div>`, 'text/html');
-      const rootEl = doc.body.firstChild;
-      const urlRe = /((https?:\/\/|www\.)[^\s<]+[^<\s\.)\],;:'"!?])/ig;
-      const walk = (node) => {
-        if (!node) return;
-        // don't touch existing links
-        if (node.nodeType === 1 && node.tagName === 'A') return;
-
-        if (node.nodeType === 3) {
-          const txt = node.nodeValue || '';
-          if (!urlRe.test(txt)) return;
-          urlRe.lastIndex = 0;
-          const frag = doc.createDocumentFragment();
-          let last = 0;
-          txt.replace(urlRe, (m, _g1, _g2, off) => {
-            const s = off;
-            const e = off + m.length;
-            if (s > last) frag.appendChild(doc.createTextNode(txt.slice(last, s)));
-            const a = doc.createElement('a');
-            const href = normalizeUrl(m);
-            a.setAttribute('href', href);
-            a.setAttribute('target', '_blank');
-            a.setAttribute('rel', 'noopener noreferrer');
-            a.textContent = m;
-            frag.appendChild(a);
-            last = e;
-            return m;
-          });
-          if (last < txt.length) frag.appendChild(doc.createTextNode(txt.slice(last)));
-          node.replaceWith(frag);
-          return;
-        }
-        if (node.nodeType === 1) {
-          Array.from(node.childNodes || []).forEach(walk);
-        }
-      };
-      walk(rootEl);
-      return rootEl.innerHTML;
-    } catch {
-      return String(html || '');
-    }
-  }
-
-  function normalizeRichHtml(html) {
-    // 1) sanitize basic tags/attrs
-    // 2) autolink plain URLs
-    const safe = stripUnsafeTags(String(html || ''));
-    return autoLinkHtml(safe);
-  }
-
-  // --- Popup editor (singleton per page) ---
-  function ensureRtePopup() {
-    if (window.__sheetRtePopup) return window.__sheetRtePopup;
-    const host = document.body;
-    const overlay = document.createElement('div');
-    overlay.className = 'rte-popover hidden';
-    overlay.setAttribute('aria-hidden', 'true');
-    overlay.innerHTML = `
-      <div class="rte-popover__backdrop" data-rte-close></div>
-      <div class="rte-popover__panel" role="dialog" aria-label="Редактор текста" aria-modal="false">
-        <div class="rte-popover__head">
-          <div class="rte-popover__title">Редактор текста</div>
-          <div style="flex:1"></div>
-          <div class="rte-popover__height">
-            <span class="rte-popover__height-label">Высота</span>
-            <input class="rte-popover__height-range" type="range" min="180" max="760" step="10" value="320">
-            <input class="rte-popover__height-num" type="number" min="180" max="760" step="10" value="320">
-          </div>
-          <button class="rte-popover__x" type="button" data-rte-close title="Закрыть">✕</button>
-        </div>
-
-        <div class="rte-toolbar rte-toolbar--popup">
-          <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
-          <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
-          <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
-          <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
-          <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
-          <select class="rte-select" data-rte-fontsize title="Размер текста">
-            <option value="2">S</option>
-            <option value="3" selected>M</option>
-            <option value="5">L</option>
-            <option value="6">XL</option>
-          </select>
-          <div style="flex:1"></div>
-          <button type="button" class="rte-btn" data-rte-apply title="Применить">Готово</button>
-        </div>
-
-        <div class="rte-popover__body">
-          <div class="rte-editor rte-editor--popup" contenteditable="true" data-rte-popup-editor></div>
-          <div class="rte-popover__hint">Подсказка: ссылки кликабельны. В редакторе можно нажать Ctrl/⌘ и кликнуть по ссылке, чтобы открыть.</div>
-        </div>
-      </div>
-    `;
-    host.appendChild(overlay);
-
-    const popupEditor = overlay.querySelector('[data-rte-popup-editor]');
-    const sizeSel = overlay.querySelector('[data-rte-fontsize]');
-    const range = overlay.querySelector('.rte-popover__height-range');
-    const num = overlay.querySelector('.rte-popover__height-num');
-    let currentTargetEditor = null;
-    let currentKey = '';
-
-    function closePopup(apply = false) {
-      if (!overlay) return;
-      if (apply && currentTargetEditor && popupEditor) {
-        const html = normalizeRichHtml(popupEditor.innerHTML);
-        try { currentTargetEditor.innerHTML = html; } catch {}
-        try {
-          // trigger saving via existing sheet bindings
-          currentTargetEditor.dispatchEvent(new Event('input', { bubbles: true }));
-        } catch {}
-      }
-      overlay.classList.add('hidden');
-      overlay.setAttribute('aria-hidden', 'true');
-      currentTargetEditor = null;
-      currentKey = '';
-    }
-
-    function openPopupFor(targetEditor, titleText) {
-      if (!targetEditor || !popupEditor) return;
-      currentTargetEditor = targetEditor;
-
-      // restore per-field height
-      try {
-        currentKey = String(targetEditor.getAttribute('data-rte-key') || '');
-        const savedH = Number(localStorage.getItem('dnd_rte_h_' + currentKey) || 0);
-        const h = (savedH && Number.isFinite(savedH)) ? savedH : 320;
-        if (range) range.value = String(h);
-        if (num) num.value = String(h);
-        popupEditor.style.minHeight = `${h}px`;
-      } catch {}
-
-      // set title
-      try {
-        const t = overlay.querySelector('.rte-popover__title');
-        if (t) t.textContent = String(titleText || 'Редактор текста');
-      } catch {}
-
-      const srcHtml = String(targetEditor.innerHTML || '');
-      popupEditor.innerHTML = srcHtml;
-      overlay.classList.remove('hidden');
-      overlay.setAttribute('aria-hidden', 'false');
-
-      setTimeout(() => { try { popupEditor.focus(); } catch {} }, 0);
-    }
-
-    // close clicks
-    overlay.addEventListener('click', (e) => {
-      const t = e.target;
-      if (!(t instanceof Element)) return;
-      if (t.closest('[data-rte-close]')) {
-        closePopup(false);
-      } else if (t.closest('[data-rte-apply]')) {
-        closePopup(true);
-      }
-    });
-
-    // toolbar commands
-    overlay.querySelector('.rte-toolbar')?.addEventListener('mousedown', (e) => e.preventDefault());
-    overlay.querySelector('.rte-toolbar')?.addEventListener('click', (e) => {
-      const btn = e.target?.closest?.('button');
-      if (!btn) return;
-      if (!popupEditor) return;
-      popupEditor.focus();
-      if (btn.hasAttribute('data-rte-link')) {
-        const url = prompt('Ссылка (URL):', 'https://');
-        const nurl = normalizeUrl(url);
-        if (nurl) {
-          try { document.execCommand('createLink', false, nurl); } catch {}
-        }
-        return;
-      }
-      const cmd = btn.getAttribute('data-rte-cmd');
-      if (!cmd) return;
-      try { document.execCommand(cmd, false, null); } catch {}
-    });
-    sizeSel?.addEventListener('change', () => {
-      if (!popupEditor) return;
-      popupEditor.focus();
-      const v = String(sizeSel.value || '3');
-      try { document.execCommand('fontSize', false, v); } catch {}
-    });
-
-    // height controls
-    function setH(v) {
-      const n = Math.max(180, Math.min(760, Number(v) || 320));
-      if (range) range.value = String(n);
-      if (num) num.value = String(n);
-      if (popupEditor) popupEditor.style.minHeight = `${n}px`;
-      try {
-        if (currentKey) localStorage.setItem('dnd_rte_h_' + currentKey, String(n));
-      } catch {}
-    }
-    range?.addEventListener('input', () => setH(range.value));
-    num?.addEventListener('change', () => setH(num.value));
-
-    // paste: keep links, autolink plain text
-    popupEditor?.addEventListener('paste', (e) => {
-      try {
-        if (!e.clipboardData) return;
-        const html = e.clipboardData.getData('text/html');
-        const text = e.clipboardData.getData('text/plain');
-        // If we have real HTML, sanitize and insert.
-        if (html && html.trim()) {
-          e.preventDefault();
-          const safe = normalizeRichHtml(html);
-          try { document.execCommand('insertHTML', false, safe); } catch {
-            popupEditor.innerHTML += safe;
-          }
-          return;
-        }
-        if (text && text.trim()) {
-          // plain text: escape + keep newlines + autolink
-          e.preventDefault();
-          const safeTxt = htmlEscape(text).replace(/\n/g, '<br>');
-          const linked = normalizeRichHtml(safeTxt);
-          try { document.execCommand('insertHTML', false, linked); } catch {
-            popupEditor.innerHTML += linked;
-          }
-        }
-      } catch {}
-    });
-
-    // Ctrl/⌘+Click on links inside popup
-    popupEditor?.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      if (!a) return;
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        try { window.open(a.href, '_blank', 'noopener'); } catch {}
-      } else {
-        // avoid navigating while editing
-        e.preventDefault();
-      }
-    });
-
-    window.__sheetRtePopup = { overlay, openPopupFor, closePopup };
-    return window.__sheetRtePopup;
-  }
   const selector = [
     'textarea.sheet-textarea',
     'textarea.note-text',
@@ -1032,105 +729,88 @@ function upgradeSheetTextareasToRte(root, canEdit) {
   textareas.forEach((ta) => {
     // don't upgrade twice
     if (ta.closest('[data-rte]')) return;
+    const path = ta.getAttribute('data-sheet-path');
+    if (!path) return;
 
-    const path = ta.getAttribute('data-sheet-path') || '';
-    const ph = ta.getAttribute('placeholder') || '';
-
-    // Wrap (keep original textarea inside for existing bindings!)
     const wrap = document.createElement('div');
     wrap.className = 'rte';
     wrap.setAttribute('data-rte', '');
-    try { wrap.setAttribute('tabindex', canEdit ? '0' : '-1'); } catch {}
 
-    const head = document.createElement('div');
-    head.className = 'rte-head';
-    head.innerHTML = `
-      <div class="rte-head__title">${ph ? htmlEscape(ph) : 'Текст'}</div>
-      <div style="flex:1"></div>
-      <button type="button" class="rte-open" title="Открыть редактор" aria-label="Открыть редактор">✎</button>
+    const toolbar = document.createElement('div');
+    toolbar.className = 'rte-toolbar';
+    toolbar.innerHTML = `
+      <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
+      <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+      <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
+      <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
+      <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
+      <select class="rte-select" data-rte-fontsize title="Размер текста">
+        <option value="2">S</option>
+        <option value="3" selected>M</option>
+        <option value="5">L</option>
+        <option value="6">XL</option>
+      </select>
     `;
 
-    const preview = document.createElement('div');
-    preview.className = 'rte-editor rte-editor--preview';
-    preview.setAttribute('data-rte-editor', '');
-    preview.setAttribute('contenteditable', 'false');
-    if (ph) preview.setAttribute('data-placeholder', ph);
+    const editor = document.createElement('div');
+    editor.className = 'rte-editor';
+    editor.setAttribute('contenteditable', canEdit ? 'true' : 'false');
+    editor.setAttribute('data-sheet-path', path);
+    editor.setAttribute('data-rte-editor', '');
 
-    // Initial content from textarea
+    // preserve placeholder via CSS
+    const ph = ta.getAttribute('placeholder');
+    if (ph) editor.setAttribute('data-placeholder', ph);
+
+    // Copy initial value as HTML.
+    // If it looks like plain text, keep line breaks.
     const raw = String(ta.value || '');
-    const initial = raw
+    editor.innerHTML = raw
       ? (raw.includes('<') ? raw : htmlEscape(raw).replace(/\n/g, '<br>'))
       : '';
-    preview.innerHTML = normalizeRichHtml(initial);
 
-    // Insert wrapper before textarea, then move textarea inside and hide it.
-    const parent = ta.parentNode;
-    if (!parent) return;
-    parent.insertBefore(wrap, ta);
-    wrap.appendChild(head);
-    wrap.appendChild(preview);
-    wrap.appendChild(ta);
-    ta.style.display = 'none';
-
-    // For consistent sizing
+    // Mirror style hints from textarea
     try {
       const rows = Number(ta.getAttribute('rows') || 0);
-      if (rows) preview.style.minHeight = `${Math.max(3, rows) * 18}px`;
+      if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
 
+    wrap.appendChild(toolbar);
+    wrap.appendChild(editor);
+
+    // Replace in DOM
+    ta.replaceWith(wrap);
+
+    // Wire toolbar actions
     if (!canEdit) {
       wrap.classList.add('rte--disabled');
       return;
     }
 
-    // key for per-field height (path if present, else fallback)
-    try {
-      const pid = String(player?.id || '');
-      const key = path || (ta.getAttribute('data-note-text') ? `note:${ta.getAttribute('data-note-text')}` : (ta.className || 'ta'));
-      preview.setAttribute('data-rte-key', `${pid}::${key}`);
-    } catch {}
-
-    const popup = ensureRtePopup();
-    const openBtn = wrap.querySelector('.rte-open');
-    const open = () => {
-      try { preview.innerHTML = normalizeRichHtml(preview.innerHTML); } catch {}
-      popup?.openPopupFor?.(preview, ph || 'Редактор текста');
-    };
-
-    // Open popup immediately when user clicks the field ("вводишь текст" => popup)
-    preview.addEventListener('mousedown', (e) => {
+    toolbar.addEventListener('mousedown', (e) => {
+      // prevent editor blur when clicking toolbar
       e.preventDefault();
-      open();
     });
-    openBtn?.addEventListener('click', (e) => { e.preventDefault(); open(); });
-    wrap.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        open();
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target?.closest?.('button');
+      if (!btn) return;
+      editor.focus();
+      if (btn.hasAttribute('data-rte-link')) {
+        const url = prompt('Ссылка (URL):', 'https://');
+        if (url && url.trim()) {
+          try { document.execCommand('createLink', false, url.trim()); } catch {}
+        }
+        return;
       }
+      const cmd = btn.getAttribute('data-rte-cmd');
+      if (!cmd) return;
+      try { document.execCommand(cmd, false, null); } catch {}
     });
-
-    // When popup applies -> it updates preview.innerHTML and dispatches input on preview.
-    // Mirror that into the hidden textarea so existing sheet bindings save it.
-    preview.addEventListener('input', () => {
-      try {
-        const html = normalizeRichHtml(preview.innerHTML);
-        ta.value = html;
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
-        ta.dispatchEvent(new Event('change', { bubbles: true }));
-      } catch {}
-    });
-
-    // Keep links clickable in preview (Ctrl/⌘+Click)
-    preview.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      if (!a) return;
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        try { window.open(a.href, '_blank', 'noopener'); } catch {}
-      } else {
-        e.preventDefault();
-      }
+    const sizeSel = toolbar.querySelector('[data-rte-fontsize]');
+    sizeSel?.addEventListener('change', () => {
+      editor.focus();
+      const v = String(sizeSel.value || '3');
+      try { document.execCommand('fontSize', false, v); } catch {}
     });
   });
 }
@@ -1167,6 +847,13 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       bindTextareaHeightPersistence(root, player);
     } catch (e) {
       console.warn('bindTextareaHeightPersistence failed', e);
+    }
+
+    // ===== Rich text editor (popup) =====
+    try {
+      bindRichTextEditors(root, player, canEdit);
+    } catch (e) {
+      console.warn('bindRichTextEditors failed', e);
     }
   }
 
@@ -2643,6 +2330,235 @@ function bindSlotEditors(root, player, canEdit) {
       scheduleSheetSave(curPlayer);
     });
   }
+}
+
+
+// ===================== Rich Text Editor (popup) =====================
+
+function rteEnsureModal() {
+  if (document.getElementById("rte-modal")) return;
+
+  const modal = document.createElement("div");
+  modal.id = "rte-modal";
+  modal.className = "rte-modal hidden";
+  modal.innerHTML = `
+    <div class="rte-modal-backdrop" data-rte-close></div>
+    <div class="rte-modal-card" role="dialog" aria-modal="true">
+      <div class="rte-toolbar">
+        <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
+        <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчёркнутый"><u>U</u></button>
+        <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркеры">• list</button>
+        <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1. list</button>
+        <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
+        <div class="rte-spacer"></div>
+        <label class="rte-height">
+          <span>Высота</span>
+          <input type="range" min="160" max="720" value="320" data-rte-height>
+        </label>
+      </div>
+      <div class="rte-editor" contenteditable="true" data-rte-editor></div>
+      <div class="rte-actions">
+        <button type="button" class="rte-btn-secondary" data-rte-close>Отмена</button>
+        <button type="button" class="rte-btn-primary" data-rte-save>Сохранить</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function rteLinkifyPlainText(text) {
+  const s = String(text || "");
+  const esc = s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+  const withLinks = esc.replace(/(https?:\/\/[^\s<>"']+)/g, (m) => {
+    const href = m.replace(/&amp;/g, "&");
+    const safeHref = href.replace(/"/g, "%22");
+    return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${m}</a>`;
+  });
+  return withLinks.replace(/\n/g, "<br>");
+}
+
+function rteSanitizeHtml(htmlStr) {
+  // Allowlist tags: a, b/strong, u, ul, ol, li, br, p, div, span
+  const allowed = new Set(["A","B","STRONG","U","UL","OL","LI","BR","P","DIV","SPAN"]);
+  const doc = new DOMParser().parseFromString(`<div>${String(htmlStr || "")}</div>`, "text/html");
+  const root = doc.body.firstElementChild;
+
+  const walk = (node) => {
+    const kids = Array.from(node.childNodes || []);
+    for (const child of kids) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const tag = child.tagName;
+        if (!allowed.has(tag)) {
+          // unwrap unknown tag (keep its children)
+          const frag = doc.createDocumentFragment();
+          while (child.firstChild) frag.appendChild(child.firstChild);
+          child.replaceWith(frag);
+          continue;
+        }
+
+        // strip attributes
+        const attrs = Array.from(child.attributes || []);
+        for (const a of attrs) {
+          const n = a.name.toLowerCase();
+          if (tag === "A" && (n === "href" || n === "target" || n === "rel")) continue;
+          child.removeAttribute(a.name);
+        }
+
+        if (tag === "A") {
+          let href = child.getAttribute("href") || "";
+          // block javascript:
+          if (/^\s*javascript:/i.test(href)) href = "#";
+          child.setAttribute("href", href);
+          child.setAttribute("target", "_blank");
+          child.setAttribute("rel", "noopener noreferrer");
+        }
+
+        walk(child);
+      } else if (child.nodeType === Node.COMMENT_NODE) {
+        child.remove();
+      }
+    }
+  };
+
+  walk(root);
+  return root.innerHTML;
+}
+
+function rteValueToDisplayHtml(value) {
+  const s = String(value || "");
+  const looksHtml = /<\s*(a|b|strong|u|ul|ol|li|br|p|div|span)\b/i.test(s);
+  if (looksHtml) return rteSanitizeHtml(s);
+  return rteLinkifyPlainText(s);
+}
+
+function bindRichTextEditors(root, player, canEdit) {
+  if (!root) return;
+  rteEnsureModal();
+
+  const modal = document.getElementById("rte-modal");
+  const editor = modal.querySelector("[data-rte-editor]");
+  const heightRange = modal.querySelector("[data-rte-height]");
+
+  let current = null; // { wrap, view, src }
+  const close = () => {
+    modal.classList.add("hidden");
+    current = null;
+  };
+
+  const open = (wrap, view, src) => {
+    if (!canEdit && (src.disabled || src.hasAttribute("disabled"))) return;
+
+    current = { wrap, view, src };
+    const html = rteValueToDisplayHtml(src.value);
+    editor.innerHTML = html || "";
+    const h = Math.max(160, Math.min(720, parseInt(src.style.height || "320", 10) || 320));
+    heightRange.value = String(h);
+    editor.style.minHeight = `${h}px`;
+
+    modal.classList.remove("hidden");
+    setTimeout(() => editor.focus(), 0);
+  };
+
+  // global modal handlers (once)
+  if (!modal.__rteBound) {
+    modal.__rteBound = true;
+
+    modal.addEventListener("click", (e) => {
+      const btnClose = e.target.closest("[data-rte-close]");
+      if (btnClose) { e.preventDefault(); close(); return; }
+
+      const btnSave = e.target.closest("[data-rte-save]");
+      if (btnSave) {
+        e.preventDefault();
+        if (!current) return;
+        const cleaned = rteSanitizeHtml(editor.innerHTML);
+        const finalHtml = cleaned && cleaned.trim() ? cleaned : "";
+        current.src.value = finalHtml;
+        // dispatch input so existing bindings save it
+        current.src.dispatchEvent(new Event("input", { bubbles: true }));
+        current.src.dispatchEvent(new Event("change", { bubbles: true }));
+        current.view.innerHTML = rteValueToDisplayHtml(finalHtml);
+        close();
+        return;
+      }
+
+      const cmdBtn = e.target.closest("[data-rte-cmd]");
+      if (cmdBtn) {
+        e.preventDefault();
+        const cmd = cmdBtn.getAttribute("data-rte-cmd");
+        try { document.execCommand(cmd, false, null); } catch {}
+        editor.focus();
+        return;
+      }
+
+      const linkBtn = e.target.closest("[data-rte-link]");
+      if (linkBtn) {
+        e.preventDefault();
+        const url = prompt("Вставь ссылку (https://...):");
+        if (!url) return;
+        try {
+          document.execCommand("createLink", false, url);
+        } catch {}
+        editor.focus();
+        return;
+      }
+    });
+
+    heightRange.addEventListener("input", () => {
+      const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
+      editor.style.minHeight = `${h}px`;
+    });
+
+    // smart paste: preserve links if clipboard has HTML, otherwise linkify URLs
+    editor.addEventListener("paste", (e) => {
+      try {
+        const cd = e.clipboardData;
+        if (!cd) return;
+        const html = cd.getData("text/html");
+        const plain = cd.getData("text/plain");
+        e.preventDefault();
+
+        let insertHtml = "";
+        if (html && /<a\b/i.test(html)) {
+          insertHtml = rteSanitizeHtml(html);
+        } else {
+          insertHtml = rteLinkifyPlainText(plain || "");
+        }
+        document.execCommand("insertHTML", false, insertHtml);
+      } catch {
+        // fallback default
+      }
+    });
+  }
+
+  // upgrade all wrappers
+  const wraps = Array.from(root.querySelectorAll(".rte-wrap"));
+  wraps.forEach((wrap) => {
+    const view = wrap.querySelector(".rte-view[data-rte-open]");
+    const src = wrap.querySelector("textarea.rte-src");
+    if (!view || !src) return;
+
+    // hide source textarea (keep it in DOM for existing bindings)
+    src.classList.add("rte-src-hidden");
+
+    // sync view from current src value (after bindEditableInputs filled it)
+    const html = rteValueToDisplayHtml(src.value);
+    view.innerHTML = html || "";
+    view.classList.toggle("is-empty", !src.value);
+
+    if (wrap.__rteUpgraded) return;
+    wrap.__rteUpgraded = true;
+
+    const openHandler = () => open(wrap, view, src);
+    view.addEventListener("click", openHandler);
+    view.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openHandler(); }
+    });
+  });
 }
 
 // ===== add spells by URL + toggle descriptions =====

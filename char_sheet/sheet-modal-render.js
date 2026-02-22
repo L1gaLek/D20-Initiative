@@ -1,5 +1,44 @@
   // ================== RENDER
   // ================== RENDER ==================
+
+  // ================== Rich Text (popup editor) helpers ==================
+  function rteLinkifyTextToHtml(text) {
+    const s = String(text || "");
+    const esc = escapeHtml(s);
+    return esc.replace(/(https?:\/\/[^\s<>\"']+)/g, (m) => {
+      const href = m.replace(/&amp;/g, "&");
+      const safeHref = escapeHtml(href);
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">${m}</a>`;
+    }).replace(/\n/g, "<br>");
+  }
+
+  function rteSanitizeHtml(htmlStr) {
+    let h = String(htmlStr || "");
+    h = h.replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
+    h = h.replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*\/\s*>/gi, "");
+    h = h.replace(/\son\w+\s*=\s*(\".*?\"|'.*?'|[^\s>]+)/gi, "");
+    h = h.replace(/href\s*=\s*(\"|\')\s*javascript:[\s\S]*?\1/gi, 'href="#"');
+    return h;
+  }
+
+  function rteValueToDisplayHtml(value) {
+    const s = String(value || "");
+    const looksHtml = /<\s*(a|b|strong|u|ul|ol|li|br|p|div|span)\b/i.test(s);
+    if (looksHtml) return rteSanitizeHtml(s);
+    return rteLinkifyTextToHtml(s);
+  }
+
+  function renderRteWrap({ value, textareaAttrs = "", placeholder = "", rows = 5, wrapClass = "", viewClass = "" }) {
+    const displayHtml = rteValueToDisplayHtml(value);
+    const ph = escapeHtml(String(placeholder || ""));
+    return `
+      <div class="rte-wrap ${wrapClass}">
+        <div class="rte-view ${viewClass}" data-rte-open tabindex="0" data-rte-placeholder="${ph}">${displayHtml || ""}</div>
+        <textarea class="rte-src" rows="${escapeHtml(String(rows))}" ${textareaAttrs}>${escapeHtml(String(value || ""))}</textarea>
+      </div>
+    `;
+  }
+
   function renderAbilitiesGrid(vm) {
     const d20SvgMini = `
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -127,8 +166,7 @@
       </div>
 
       <!-- Прочие владения/заклинания: тоже на всю ширину -->
-      <textarea class="lss-prof-text lss-prof-text--full" rows="8" data-sheet-path="text.profPlain.value"
-        placeholder="Например: владения, инструменты, языки, заклинания...">${escapeHtml(vm.profText || "")}</textarea>
+      ${renderRteWrap({ value: (vm.profText || ""), rows: 8, textareaAttrs: `data-sheet-path="text.profPlain.value" placeholder="Например: владения, инструменты, языки, заклинания..."`, wrapClass: "lss-prof-text--full", viewClass: "lss-prof-text lss-prof-text--full" })}
     </div>
   `;
 }
@@ -230,7 +268,7 @@ function renderSpellCard({ level, name, href, desc }) {
           </div>
         </div>
         <div class="spell-item-desc hidden">
-          <textarea class="spell-desc-editor" data-spell-desc-editor rows="6" placeholder="Описание (можно редактировать)…">${escapeHtml(text)}</textarea>
+          ${renderRteWrap({ value: text, rows: 6, textareaAttrs: `class="spell-desc-editor" data-spell-desc-editor placeholder="Описание (можно редактировать)…"`, wrapClass: "spell-desc-wrap", viewClass: "spell-desc-view" })}
           <div class="sheet-note" style="margin-top:6px;">Сохраняется автоматически.</div>
         </div>
       </div>
@@ -317,7 +355,6 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    // Вкладка "Заклинания": по запросу — одним столбцом (без разделения на 2 колонки)
     return `<div class="sheet-grid-1">${blocks}</div>`;
   }
 
@@ -540,9 +577,8 @@ function renderCombatTab(vm) {
               </div>
 
               <div class="weapon-desc">
-                <textarea class="sheet-textarea weapon-desc-text" rows="4"
-                          placeholder="Описание оружия..."
-                          data-weapon-field="desc">${escapeHtml(String(w.desc || ""))}</textarea>
+                ${renderRteWrap({ value: String(w.desc || ""), rows: 4, textareaAttrs: `class="sheet-textarea weapon-desc-text" rows="4" placeholder="Описание оружия..."
+                          data-weapon-field="desc"`, wrapClass:"", viewClass:"sheet-textarea" })}
               </div>
             </div>
           </div>
@@ -586,9 +622,7 @@ function renderCombatTab(vm) {
                     </div>
                   </div>
                   <div class="combat-ability-body ${collapsed ? "collapsed" : ""}">
-                    <textarea class="sheet-textarea combat-ability-text" rows="4"
-                              placeholder="Описание..."
-                              data-combat-ability-text>${text}</textarea>
+                    ${renderRteWrap({ value: String(e?.text || ""), rows: 4, textareaAttrs: `class="sheet-textarea combat-ability-text" placeholder="Описание..." data-combat-ability-text`, viewClass:"sheet-textarea" })}
                   </div>
                 </div>
               `;
@@ -895,8 +929,8 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
             Legacy-поля ниже оставлены для совместимости старых сохранений (можно не использовать).
           </div>
           <div class="equip-legacy">
-            <div class="kv" style="margin-top:8px"><div class="k">Предметы (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="text.inventoryItems.value" placeholder="Список предметов..."></textarea></div></div>
-            <div class="kv" style="margin-top:8px"><div class="k">Сокровища (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="text.inventoryTreasures.value" placeholder="Сокровища..."></textarea></div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Предметы (legacy)</div><div class="v" style="width:100%">${renderRteWrap({ value: (vm.inventoryItems || ""), rows: 4, textareaAttrs: `class="sheet-textarea" data-sheet-path="text.inventoryItems.value" placeholder="Список предметов..."`, viewClass:"sheet-textarea" })}</div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Сокровища (legacy)</div><div class="v" style="width:100%">${renderRteWrap({ value: (vm.inventoryTreasures || ""), rows: 4, textareaAttrs: `class="sheet-textarea" data-sheet-path="text.inventoryTreasures.value" placeholder="Сокровища..."`, viewClass:"sheet-textarea" })}</div></div>
           </div>
         </div>
       </div>
@@ -951,32 +985,32 @@ function renderShopTab(vm, canEdit) {
 
           <div class="sheet-card">
             <h4>Предыстория персонажа</h4>
-            <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.backstory.value" placeholder="Кратко опиши предысторию..."></textarea>
+            ${renderRteWrap({ value: (vm.backstory || ""), rows: 6, textareaAttrs: `class="sheet-textarea" data-sheet-path="personality.backstory.value" placeholder="Кратко опиши предысторию..."`, viewClass:"sheet-textarea" })}
           </div>
 
           <div class="sheet-card">
             <h4>Союзники и организации</h4>
-            <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.allies.value" placeholder="Союзники, контакты, гильдии..."></textarea>
+            ${renderRteWrap({ value: (vm.allies || ""), rows: 6, textareaAttrs: `class="sheet-textarea" data-sheet-path="personality.allies.value" placeholder="Союзники, контакты, гильдии..."`, viewClass:"sheet-textarea" })}
           </div>
 
           <div class="sheet-card">
             <h4>Черты характера</h4>
-            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.traits.value"></textarea>
+            ${renderRteWrap({ value: (vm.traits || ""), rows: 5, textareaAttrs: `class="sheet-textarea" data-sheet-path="personality.traits.value"`, viewClass:"sheet-textarea" })}
           </div>
 
           <div class="sheet-card">
             <h4>Идеалы</h4>
-            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.ideals.value"></textarea>
+            ${renderRteWrap({ value: (vm.ideals || ""), rows: 5, textareaAttrs: `class="sheet-textarea" data-sheet-path="personality.ideals.value"`, viewClass:"sheet-textarea" })}
           </div>
 
           <div class="sheet-card">
             <h4>Привязанности</h4>
-            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.bonds.value"></textarea>
+            ${renderRteWrap({ value: (vm.bonds || ""), rows: 5, textareaAttrs: `class="sheet-textarea" data-sheet-path="personality.bonds.value"`, viewClass:"sheet-textarea" })}
           </div>
 
           <div class="sheet-card">
             <h4>Слабости</h4>
-            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.flaws.value"></textarea>
+            ${renderRteWrap({ value: (vm.flaws || ""), rows: 5, textareaAttrs: `class="sheet-textarea" data-sheet-path="personality.flaws.value"`, viewClass:"sheet-textarea" })}
           </div>
         </div>
       </div>
@@ -999,7 +1033,7 @@ function renderShopTab(vm, canEdit) {
             </div>
           </div>
           <div class="note-body ${collapsed ? "collapsed" : ""}">
-            <textarea class="sheet-textarea note-text" rows="6" data-note-text="${idx}" placeholder="Текст заметки...">${escapeHtml(text)}</textarea>
+            ${renderRteWrap({ value: text, rows: 6, textareaAttrs: `class="sheet-textarea note-text" data-note-text="${idx}" placeholder="Текст заметки..."`, viewClass:"sheet-textarea" })}
           </div>
         </div>
       `;
