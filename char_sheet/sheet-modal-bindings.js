@@ -566,31 +566,34 @@ function normalizeHref(href) {
   return h;
 }
 // ================== LINKS (global interceptor for sheet) ==================
-// Prevent app reset when clicking external links inside the character sheet.
-// We intercept in capture phase and always open external links in a new tab.
+// Prevent app reset when clicking links inside the character sheet.
+// We intercept on WINDOW in capture phase to beat any in-app delegated routers.
 if (!window.__sheetExternalLinkInterceptorInstalled) {
   window.__sheetExternalLinkInterceptorInstalled = true;
 
-  const isExternalHref = (href) => {
+  const shouldOpenInNewTab = (href) => {
     const h = String(href || "").trim();
     if (!h) return false;
-    // Only treat real external protocols/domains as "external".
+    if (h.startsWith('#')) return false;
+    if (/^(javascript:|data:|file:)/i.test(h)) return false;
     return /^(https?:\/\/|mailto:|tel:)/i.test(h) || /^www\./i.test(h) || /^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h);
   };
 
-  document.addEventListener('click', (e) => {
+  const getEventTargetElement = (e) => {
+    const path = (typeof e.composedPath === 'function') ? e.composedPath() : null;
+    const first = path && path.length ? path[0] : e.target;
+    if (first instanceof Element) return first;
+    return first && first.parentElement ? first.parentElement : null;
+  };
+
+  const handle = (e) => {
     try {
-      // NOTE: inside contenteditable the event target can be a Text node.
-      // In that case closest() is unavailable and we would miss the click.
-      const tgt = e.target;
-      const baseEl = (tgt instanceof Element) ? tgt : (tgt && tgt.parentElement);
+      const baseEl = getEventTargetElement(e);
       if (!baseEl) return;
 
-      // Only inside the sheet modal to avoid interfering with the rest of the UI.
       const sheetModal = document.getElementById('sheet-modal');
       if (!sheetModal || !sheetModal.contains(baseEl)) return;
 
-      // Our rich-text stores links as either <a href> (rare) or <span.rte-link data-href>.
       const linkEl = baseEl.closest('a[href], .rte-link[data-href]');
       if (!linkEl) return;
 
@@ -599,19 +602,29 @@ if (!window.__sheetExternalLinkInterceptorInstalled) {
         : linkEl.getAttribute('data-href');
 
       const href = normalizeHref(rawHref);
-      if (!href) return;
-      if (!isExternalHref(href)) return;
+      if (!shouldOpenInNewTab(href)) return;
 
-      // Force open in new tab and prevent any in-app routers/default navigation.
       e.preventDefault();
       e.stopPropagation();
       try { e.stopImmediatePropagation?.(); } catch {}
+
+      if (linkEl.matches && linkEl.matches('a[href]')) {
+        try { linkEl.setAttribute('target', '_blank'); } catch {}
+        try { linkEl.setAttribute('rel', 'noopener noreferrer'); } catch {}
+      }
+
       try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
     } catch {}
-  }, true);
+  };
+
+  window.addEventListener('pointerdown', handle, true);
+  window.addEventListener('mousedown', handle, true);
+  window.addEventListener('click', handle, true);
+  window.addEventListener('auxclick', handle, true);
 }
 
 // ================== RICH TEXT (modal editor) ==================
+
 function upgradeSheetTextareasToRte(root, canEdit) {
   if (!root) return;
 
@@ -999,9 +1012,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     });
 
     const openLinkFromEvent = (e) => {
-      const t = e.target;
-      const baseEl = (t instanceof Element) ? t : (t && t.parentElement);
-      const el = baseEl?.closest?.('.rte-link');
+      const el = e.target?.closest?.('.rte-link');
       if (!el) return;
       const href = normalizeHref(el.getAttribute('data-href'));
       if (!href) return;
@@ -1093,9 +1104,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     });
 
     const openInlineLinkFromEvent = (e) => {
-      const t = e.target;
-      const baseEl = (t instanceof Element) ? t : (t && t.parentElement);
-      const el = baseEl?.closest?.('.rte-link');
+      const el = e.target?.closest?.('.rte-link');
       if (!el) return;
       const href = normalizeHref(el.getAttribute('data-href'));
       if (!href) return;
