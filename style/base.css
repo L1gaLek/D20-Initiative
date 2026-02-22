@@ -1274,29 +1274,12 @@ button:hover {
 
 .rte-select{
   margin-left: auto;
-  /* darker dropdown, so it doesn't look washed out */
-  background: rgba(0,0,0,0.45);
+  background: rgba(255,255,255,0.06);
   color: #eee;
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 8px;
   padding: 2px 6px;
   font-size: 12px;
-}
-
-/* Links: bold + underlined and keep site color (not browser blue) */
-.rte-view a,
-.rte-editor a{
-  color: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-}
-
-/* Inline edit mode hint */
-.rte-view[contenteditable="true"]{
-  cursor: text;
-  outline: 1px solid rgba(255,255,255,0.16);
-  outline-offset: 2px;
-  border-radius: 8px;
 }
 
 .rte-editor{
@@ -2644,96 +2627,130 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .equip-row__desc.collapsed{display:none;}
 .equip-row__details.collapsed{display:none;}
 
+/* ================== RICH TEXT (Sheet descriptions) ================== */
+:root{
+  --rtf-font-size-default: 18px;
+}
 
-/* ================= Rich Text Editor (Sheet) ================= */
-.rte-wrap { position: relative; width: 100%; }
-.rte-src-hidden { display: none !important; }
+.rtf-wrap{ width:100%; }
 
-.rte-view {
-  width: 100%;
+.rtf-preview{
+  width:100%;
   min-height: 120px;
-  padding: 8px 10px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(0,0,0,0.18);
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.14);
   border-radius: 10px;
-  font-size: 16px;
+  background: rgba(0,0,0,0.18);
+  color: #eee;
+  font-size: var(--rtf-font-size, var(--rtf-font-size-default));
   line-height: 1.35;
-  color: rgba(255,255,255,0.92);
-  white-space: normal;
-  overflow-wrap: anywhere;
+  overflow: auto;
   cursor: text;
 }
-.rte-view:focus { outline: 2px solid rgba(255,140,0,0.45); outline-offset: 2px; }
 
-.rte-view:empty::before,
-.rte-view.is-empty::before {
-  content: attr(data-rte-placeholder);
-  color: rgba(255,255,255,0.35);
+.rtf-preview:focus{
+  outline: 2px solid rgba(255,153,51,0.45);
+  outline-offset: 2px;
 }
 
-.rte-view a {
-  font-weight: 700;
-  text-decoration: underline;
-}
+.rtf-preview p{ margin: 0 0 8px 0; }
+.rtf-preview p:last-child{ margin-bottom: 0; }
 
-.rte-modal.hidden { display: none; }
-.rte-modal { position: fixed; inset: 0; z-index: 99999; }
-.rte-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.55); }
-.rte-modal-card {
-  position: relative;
-  width: min(900px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
-  margin: 12px auto;
-  background: rgba(18,18,18,0.98);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 16px;
-  overflow: hidden;
+.rtf-preview ul, .rtf-preview ol{ margin: 8px 0 8px 20px; }
+.rtf-preview li{ margin: 4px 0; }
+
+.rtf-placeholder{ color: rgba(255,255,255,0.45); }
+
+.rtf-link{ font-weight: 700; text-decoration: underline; }
+.rtf-preview a{ color: inherit; }
+
+/* Popup editor */
+.rtf-overlay.hidden{ display:none; }
+.rtf-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+.rtf-backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+}
+.rtf-panel{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(980px, calc(100vw - 24px));
+  max-height: min(80vh, 820px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(20,20,20,0.95);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.55);
 }
+.rtf-head{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+.rtf-title{ font-weight: 800; letter-spacing: 0.2px; }
+.rtf-head-actions{ display:flex; gap: 8px; }
 
-.rte-toolbar {
-  display: flex;
+.rtf-toolbar{
+  display:flex;
+  align-items:center;
+  flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
-  padding: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.02);
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
 }
-.rte-spacer { flex: 1; }
+.rtf-tool{ display:flex; align-items:center; gap: 8px; }
+.rtf-tool-lbl{ font-size: 12px; opacity: 0.75; }
 
-.rte-btn, .rte-btn-secondary, .rte-btn-primary {
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.04);
-  color: rgba(255,255,255,0.9);
+.rtf-btn{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.25);
+  color: #eee;
   padding: 6px 10px;
   border-radius: 10px;
   cursor: pointer;
-  user-select: none;
 }
-.rte-btn:hover, .rte-btn-secondary:hover { background: rgba(255,255,255,0.08); }
-.rte-btn-primary { background: rgba(255,140,0,0.20); border-color: rgba(255,140,0,0.35); }
-.rte-btn-primary:hover { background: rgba(255,140,0,0.28); }
+.rtf-btn:hover{ background: rgba(255,255,255,0.06); }
+.rtf-btn.danger{ border-color: rgba(255,80,80,0.35); }
 
-.rte-height { display: flex; gap: 8px; align-items: center; color: rgba(255,255,255,0.75); font-size: 13px; }
-.rte-height input { width: 170px; }
+.rtf-font{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.25);
+  color: #eee;
+  padding: 6px 10px;
+  border-radius: 10px;
+}
 
-.rte-editor {
-  padding: 12px;
+.rtf-editor{
+  flex: 1;
+  margin: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.18);
   overflow: auto;
-  font-size: 16px;
+  color: #eee;
+  font-size: var(--rtf-font-size, var(--rtf-font-size-default));
   line-height: 1.35;
-  color: rgba(255,255,255,0.92);
 }
-.rte-editor:focus { outline: none; }
-.rte-editor a { font-weight: 700; text-decoration: underline; }
+.rtf-editor:focus{ outline: 2px solid rgba(255,153,51,0.35); outline-offset: 2px; }
 
-.rte-actions {
-  display: flex;
-  justify-content: flex-end;
+.rtf-foot{ padding: 0 14px 12px 14px; }
+.rtf-hint{ font-size: 12px; opacity: 0.7; }
+
+/* One-column grid for spells */
+.sheet-grid-1{
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 10px;
-  padding: 10px;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.02);
 }
