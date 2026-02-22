@@ -554,8 +554,21 @@ function bindCombatEditors(root, player, canEdit) {
 }
 
    
+// Normalize external links so they don't turn into relative navigation inside the app.
+function normalizeHref(href) {
+  const h = String(href || '').trim();
+  if (!h) return '';
+  if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
+  if (/^www\./i.test(h)) return 'https://' + h;
+  // bare domain or domain+path: treat as https
+  if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
+  return h;
+}
+
 // ================== RICH TEXT (modal editor) ==================
 function upgradeSheetTextareasToRte(root, canEdit) {
+  // Normalize external links so they don't turn into relative navigation inside the app.
+
   if (!root) return;
 
   const htmlEscape = (s) => String(s ?? '')
@@ -721,14 +734,15 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           <label class="rte-fontsize" title="Размер текста">
             <span>Aa</span>
             <select data-rte-fontsize>
-              <option value="12">12</option>
-              <option value="14">14</option>
-              <option value="16" selected>16</option>
-              <option value="18">18</option>
-              <option value="20">20</option>
-              <option value="24">24</option>
-              <option value="28">28</option>
-              <option value="32">32</option>
+              
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
             </select>
           </label>
 
@@ -784,17 +798,21 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       } catch {}
     };
 
-    const applyFontSize = (px) => {
-      const v = String(px || '').trim();
+    const applyFontSize = (level) => {
+      const v = String(level || '').trim();
       if (!/^\d+$/.test(v)) return;
-      const n = Math.max(10, Math.min(48, Number(v)));
+      const n = Number(v);
+      const map = { 1: 10, 2: 12, 3: 14, 4: 16, 5: 18, 6: 20, 7: 24, 8: 28 };
+      const px = map[n];
+      if (!px) return;
+
       try { document.execCommand('styleWithCSS', false, true); } catch {}
-      // execCommand fontSize uses 1-7; we use 7 then replace
+      // execCommand fontSize uses 1-7; we use 7 then replace with our px
       try { document.execCommand('fontSize', false, '7'); } catch {}
       try {
         editor.querySelectorAll('font[size="7"]').forEach(f => {
           const span = document.createElement('span');
-          span.style.fontSize = n + 'px';
+          span.style.fontSize = px + 'px';
           while (f.firstChild) span.appendChild(f.firstChild);
           f.replaceWith(span);
         });
