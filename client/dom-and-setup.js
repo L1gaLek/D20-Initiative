@@ -1,11 +1,38 @@
+
+// ===== FORCE EXTERNAL LINKS IN CHARACTER SHEET TO OPEN IN NEW TAB =====
+window.addEventListener('click', function (e) {
+
+    const target = e.target instanceof Element ? e.target : e.target.parentElement;
+    if (!target) return;
+
+    const link = target.closest('#sheet-modal a, #sheet-modal .rte-link');
+    if (!link) return;
+
+    const href = link.getAttribute('href') || link.dataset.href;
+    if (!href) return;
+
+    // Stop ALL internal handlers
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    // Open in new browser tab
+    window.open(href, '_blank', 'noopener,noreferrer');
+
+    return false;
+
+}, true); // capture phase (CRITICAL)
+// =======================================================================
+
+
 // ================== GLOBAL LINK GUARD (Character Sheet) ==================
 // IMPORTANT:
 // В проекте есть глобальные делегированные обработчики кликов (роутер/перерисовка UI).
-// Из-за этого клик по ссылке внутри "Листа персонажа" может интерпретироваться
-// как внутренний переход и приводить к "обнулению" листа.
+// Из-за этого клик по внешней ссылке внутри "Листа персонажа" может интерпретироваться
+// как внутренний переход и приводить к сбросу состояния листа.
 //
-// Решение: перехватываем события *самым ранним* образом и *самым верхним* узлом (window)
-// в capture-фазе и принудительно открываем ссылки в НОВОЙ вкладке браузера.
+// Решение: перехватываем клик *самым ранним* скриптом (этот файл загружается одним из первых)
+// в capture-фазе и принудительно открываем внешние ссылки в НОВОЙ вкладке браузера.
 (function installSheetExternalLinkGuard() {
   if (window.__sheetExternalLinkGuardInstalled) return;
   window.__sheetExternalLinkGuardInstalled = true;
@@ -19,72 +46,45 @@
     return h;
   };
 
-  const shouldOpenInNewTab = (href) => {
+  const isExternalHref = (href) => {
     const h = String(href || '').trim();
     if (!h) return false;
-    // Не трогаем якоря и потенциально опасные схемы.
-    if (h.startsWith('#')) return false;
-    if (/^(javascript:|data:|file:)/i.test(h)) return false;
-
-    // Внешние ссылки (или "похожие на домен") открываем в новой вкладке.
     return /^(https?:\/\/|mailto:|tel:)/i.test(h) || /^www\./i.test(h) || /^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h);
-  };
-
-  const getEventTargetElement = (e) => {
-    // composedPath() помогает даже если клик ушёл в shadow DOM.
-    const path = (typeof e.composedPath === 'function') ? e.composedPath() : null;
-    const first = path && path.length ? path[0] : e.target;
-
-    if (first instanceof Element) return first;
-    // В contenteditable часто прилетает Text node
-    return first && first.parentElement ? first.parentElement : null;
   };
 
   const handle = (e) => {
     try {
-      const baseEl = getEventTargetElement(e);
-      if (!baseEl) return;
+      const tgt = e.target;
+      if (!tgt || !(tgt instanceof Element)) return;
 
       const sheetModal = document.getElementById('sheet-modal');
-      if (!sheetModal || !sheetModal.contains(baseEl)) return;
+      if (!sheetModal || !sheetModal.contains(tgt)) return;
 
       // Поддержка:
       // 1) обычные <a href="...">
       // 2) наши RTE-ссылки: <span class="rte-link" data-href="...">...
-      const linkEl = baseEl.closest('a[href], .rte-link[data-href]');
+      const linkEl = tgt.closest('a[href], .rte-link[data-href]');
       if (!linkEl) return;
 
-      const rawHref = linkEl.matches('a[href]')
-        ? linkEl.getAttribute('href')
-        : linkEl.getAttribute('data-href');
-
+      const rawHref = linkEl.matches('a[href]') ? linkEl.getAttribute('href') : linkEl.getAttribute('data-href');
       const href = normalizeHref(rawHref);
-      if (!shouldOpenInNewTab(href)) return;
+      if (!href || !isExternalHref(href)) return;
 
       // ВАЖНО: останавливаем *любые* другие делегированные обработчики, которые
-      // могут сбрасывать лист/страницу.
+      // могут сбрасывать страницу/лист персонажа.
       e.preventDefault();
       e.stopPropagation();
       try { e.stopImmediatePropagation?.(); } catch {}
 
-      // Если это <a>, дополнительно проставим атрибуты (на случай других обработчиков).
-      if (linkEl.matches && linkEl.matches('a[href]')) {
-        try { linkEl.setAttribute('target', '_blank'); } catch {}
-        try { linkEl.setAttribute('rel', 'noopener noreferrer'); } catch {}
-      }
-
       // Открываем в новой вкладке браузера.
-      // Делаем это прямо в событии (pointerdown/click), чтобы браузер не блокировал pop-up.
       try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
     } catch {}
   };
 
-  // КЛЮЧ: слушаем на window в capture-фазе — это раньше, чем document capture.
-  // Плюс добавляем pointerdown/mousedown, потому что некоторые "роутеры" сидят не на click.
-  window.addEventListener('pointerdown', handle, true);
-  window.addEventListener('mousedown', handle, true);
-  window.addEventListener('click', handle, true);
-  window.addEventListener('auxclick', handle, true);
+  // Перехватываем click в capture-фазе (самый надёжный вариант).
+  // Добавляем также auxclick (средняя кнопка), чтобы не было "внутреннего" перехода.
+  document.addEventListener('click', handle, true);
+  document.addEventListener('auxclick', handle, true);
 })();
 
 // ================== ELEMENTS ==================
