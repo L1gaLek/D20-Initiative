@@ -1236,8 +1236,8 @@ button:hover {
   padding: 6px 8px;
   box-sizing: border-box;
   resize: vertical;
-  font-size: 13px;
-  line-height: 16px;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 /* ===== Rich Text Editor (sheet) ===== */
@@ -1286,10 +1286,30 @@ button:hover {
   padding: 6px 8px;
   min-height: 90px;
   color: #eee;
-  font-size: 13px;
-  line-height: 16px;
+  font-size: 15px;
+  line-height: 20px;
   outline: none;
   white-space: normal;
+}
+
+/* ===== Rich Text Popup (sheet) ===== */
+.rte-popup{
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+.rte-popup .popup-head{ margin-bottom: 8px; }
+
+.rte-popup .rte-editor{
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+}
+
+.rte-help{
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 6px;
 }
 
 .rte-editor:empty:before{

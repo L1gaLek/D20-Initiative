@@ -461,6 +461,12 @@
   gap: 10px;
 }
 
+.sheet-grid-1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
 .sheet-grid-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(180px, 1fr));
