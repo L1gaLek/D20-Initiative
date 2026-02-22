@@ -199,6 +199,81 @@ function bindRichTextPopups(root, player, canEdit) {
     return (tmp.innerText || '').replace(/\r/g, '');
   }
 
+  function isSafeHref(href) {
+    const h = String(href || '').trim();
+    if (!h) return false;
+    // allow http(s) and mailto only
+    return /^https?:\/\//i.test(h) || /^mailto:/i.test(h);
+  }
+
+  function linkifyPlainText(text) {
+    const safe = escapeHtmlLocal(String(text || ''));
+    // Convert raw URLs into links (keep surrounding text intact)
+    return safe.replace(/(https?:\/\/[^\s)\]]+)/g, (m) => {
+      const url = m;
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    }).replace(/\n/g, '<br>');
+  }
+
+  function sanitizePastedHtml(html) {
+    // Goal: keep semantic formatting (b/u/lists/links/line breaks) but
+    // drop ALL foreign styling (colors/fonts/sizes) so it matches server CSS.
+    const wrap = document.createElement('div');
+    wrap.innerHTML = String(html || '');
+
+    // Remove dangerous / unwanted nodes
+    wrap.querySelectorAll('style,script,meta,link,svg,iframe,object,embed,img,video,audio,canvas').forEach(n => n.remove());
+
+    const ALLOWED = new Set(['A','B','STRONG','U','BR','UL','OL','LI','P','DIV','SPAN']);
+
+    const cleanNode = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.nodeValue || '');
+      if (node.nodeType !== Node.ELEMENT_NODE) return document.createTextNode('');
+
+      const tag = node.tagName;
+
+      // unwrap any unsupported tags
+      if (!ALLOWED.has(tag)) {
+        const frag = document.createDocumentFragment();
+        Array.from(node.childNodes || []).forEach(ch => frag.appendChild(cleanNode(ch)));
+        return frag;
+      }
+
+      // normalize tags
+      let out;
+      if (tag === 'STRONG') out = document.createElement('b');
+      else if (tag === 'DIV' || tag === 'SPAN') out = document.createElement('div');
+      else out = document.createElement(tag.toLowerCase());
+
+      // strip ALL attributes except safe href on anchors
+      if (out.tagName.toUpperCase() === 'A') {
+        const href = node.getAttribute('href') || '';
+        if (isSafeHref(href)) {
+          out.setAttribute('href', href);
+          out.setAttribute('target', '_blank');
+          out.setAttribute('rel', 'noopener noreferrer');
+        } else {
+          // unsafe href => unwrap as text
+          const frag = document.createDocumentFragment();
+          Array.from(node.childNodes || []).forEach(ch => frag.appendChild(cleanNode(ch)));
+          return frag;
+        }
+      }
+
+      Array.from(node.childNodes || []).forEach(ch => out.appendChild(cleanNode(ch)));
+      return out;
+    };
+
+    const frag = document.createDocumentFragment();
+    Array.from(wrap.childNodes || []).forEach(n => frag.appendChild(cleanNode(n)));
+
+    const outWrap = document.createElement('div');
+    outWrap.appendChild(frag);
+
+    // If we ended up with a bunch of top-level divs, keep them; otherwise keep as-is.
+    return outWrap.innerHTML;
+  }
+
   function bestKeyForTextarea(ta) {
     if (!ta) return '';
     const p = ta.getAttribute('data-sheet-path');
@@ -272,7 +347,7 @@ function bindRichTextPopups(root, player, canEdit) {
     // Open the popup editor (tools) on double click.
     surface.addEventListener('dblclick', () => showForTextarea(ta));
 
-    // Paste: keep HTML if available (anchors etc). Fallback: auto-linkify plain URLs.
+    // Paste: strip foreign styling. Keep semantic HTML (b/u/lists/links) only.
     surface.addEventListener('paste', (e) => {
       try {
         const dt = e.clipboardData;
@@ -281,13 +356,12 @@ function bindRichTextPopups(root, player, canEdit) {
         const text = dt.getData('text/plain');
         if (htmlClip) {
           e.preventDefault();
-          document.execCommand('insertHTML', false, htmlClip);
+          document.execCommand('insertHTML', false, sanitizePastedHtml(htmlClip));
           return;
         }
         if (text) {
-          const linked = String(text).replace(/(https?:\/\/[^\s)\]]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
           e.preventDefault();
-          document.execCommand('insertHTML', false, escapeHtmlLocal(linked).replace(/&lt;a /g, '<a ').replace(/&lt;\/a&gt;/g, '</a>').replace(/&gt;/g,'>'));
+          document.execCommand('insertHTML', false, linkifyPlainText(text));
         }
       } catch {}
     });
@@ -414,7 +488,7 @@ function bindRichTextPopups(root, player, canEdit) {
       if (editorEl) editorEl.style.minHeight = `${h}px`;
     });
 
-    // Paste: keep HTML if available (anchors etc). Fallback: auto-linkify plain URLs.
+    // Paste: strip foreign styling. Keep semantic HTML (b/u/lists/links) only.
     editorEl?.addEventListener('paste', (e) => {
       try {
         const dt = e.clipboardData;
@@ -423,14 +497,12 @@ function bindRichTextPopups(root, player, canEdit) {
         const text = dt.getData('text/plain');
         if (html) {
           e.preventDefault();
-          document.execCommand('insertHTML', false, html);
+          document.execCommand('insertHTML', false, sanitizePastedHtml(html));
           return;
         }
         if (text) {
-          // simple linkify for raw urls
-          const linked = String(text).replace(/(https?:\/\/[^\s)\]]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
           e.preventDefault();
-          document.execCommand('insertHTML', false, escapeHtmlLocal(linked).replace(/&lt;a /g, '<a ').replace(/&lt;\/a&gt;/g, '</a>').replace(/&gt;/g,'>'));
+          document.execCommand('insertHTML', false, linkifyPlainText(text));
         }
       } catch {}
     });
