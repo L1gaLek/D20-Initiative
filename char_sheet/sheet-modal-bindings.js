@@ -2547,10 +2547,6 @@ function bindRichTextEditors(root, player, canEdit) {
   const close = () => {
     modal.classList.add("hidden");
     current = null;
-    try {
-      if (!modal.__rteShared) modal.__rteShared = {};
-      modal.__rteShared.current = null;
-    } catch {}
   };
 
   const open = (wrap, view, src) => {
@@ -2558,13 +2554,6 @@ function bindRichTextEditors(root, player, canEdit) {
 
     // keep player reference for reliable save
     current = { wrap, view, src, player };
-    try {
-      if (!modal.__rteShared) modal.__rteShared = {};
-      // Store live references on the modal so the (single) modal handlers
-      // always work after re-binding / re-rendering the sheet.
-      modal.__rteShared.current = current;
-      modal.__rteShared.commitToModel = commitToModel;
-    } catch {}
     const html = rteValueToDisplayHtml(src.value);
     editor.innerHTML = html || "";
     const h = Math.max(160, Math.min(720, parseInt(src.style.height || "320", 10) || 320));
@@ -2589,33 +2578,32 @@ function bindRichTextEditors(root, player, canEdit) {
       const btnSave = e.target.closest("[data-rte-save]");
       if (btnSave) {
         e.preventDefault();
-        const st = modal.__rteShared || {};
-        const cur = st.current;
-        if (!cur) return;
-
+        if (!current) return;
         const cleaned = rteSanitizeHtml(editor.innerHTML);
         const finalHtml = cleaned && cleaned.trim() ? cleaned : "";
-        cur.src.value = finalHtml;
-
-        // ensure model updated even for custom fields (use latest commit fn)
-        try { (st.commitToModel || (()=>{}))(cur.src, finalHtml); } catch {}
+        current.src.value = finalHtml;
+        // ensure model updated even for custom fields
+        commitToModel(current.src, finalHtml);
         // and force schedule save (some fields are not bound via data-sheet-path)
-        try { scheduleSheetSave(cur.player); } catch {}
-
+        try { scheduleSheetSave(current.player); } catch {}
         // persist editor height
         try {
           const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
-          cur.src.style.height = `${h}px`;
+          current.src.style.height = `${h}px`;
         } catch {}
-
         // dispatch input so existing bindings save it
+        current.src.dispatchEvent(new Event("input", { bubbles: true }));
+        current.src.dispatchEvent(new Event("change", { bubbles: true }));
+        // Update the visible field IMMEDIATELY (some sheets re-render on a debounce,
+        // so we also re-find the live wrapper/view in the DOM to avoid stale refs).
         try {
-          cur.src.dispatchEvent(new Event("input", { bubbles: true }));
-          cur.src.dispatchEvent(new Event("change", { bubbles: true }));
+          const liveWrap = current.src?.closest?.('.rte-wrap') || current.wrap;
+          const liveView = liveWrap?.querySelector?.('.rte-view') || current.view;
+          if (liveView) {
+            liveView.innerHTML = rteValueToDisplayHtml(finalHtml);
+            liveView.classList.toggle("is-empty", !finalHtml);
+          }
         } catch {}
-
-        cur.view.innerHTML = rteValueToDisplayHtml(finalHtml);
-        cur.view.classList.toggle("is-empty", !finalHtml);
         close();
         return;
       }
@@ -2642,11 +2630,29 @@ function bindRichTextEditors(root, player, canEdit) {
       }
     });
 
+    // In contenteditable, plain click usually just places the caret.
+    // Make links actually open (in a new browser window/tab).
+    editor.addEventListener('click', (e) => {
+      const a = e.target?.closest?.('a[href]');
+      if (!a) return;
+      const href = a.getAttribute('href');
+      if (!href) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        // NOTE: Browsers may choose tab vs window; providing features strongly
+        // hints "new window" where popups are allowed.
+        window.open(href, '_blank', 'noopener,noreferrer,popup');
+      } catch {
+        try { window.open(href, '_blank'); } catch {}
+      }
+    });
+
     heightRange.addEventListener("input", () => {
       const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
       editor.style.minHeight = `${h}px`;
       // live persist to current src so next open keeps it
-      try { const cur = modal.__rteShared?.current; if (cur?.src) cur.src.style.height = `${h}px`; } catch {}
+      try { if (current?.src) current.src.style.height = `${h}px`; } catch {}
     });
 
     fontSizeSel?.addEventListener('change', () => {
@@ -2674,17 +2680,6 @@ function bindRichTextEditors(root, player, canEdit) {
         // fallback default
       }
     });
-    // Links inside contenteditable aren't reliably clickable; open them explicitly.
-    editor.addEventListener("click", (e) => {
-      const a = e.target?.closest?.('a[href]');
-      if (!a) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const href = a.getAttribute('href') || a.href;
-      if (!href) return;
-      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
-    });
-
   }
 
   // upgrade all wrappers
@@ -2714,17 +2709,15 @@ function bindRichTextEditors(root, player, canEdit) {
     // Single click: enable inline editing (add/remove text) without opening popup.
     // Click on a link should still open the link.
     view.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a[href]');
+      const a = e.target?.closest?.('a');
       if (a) {
-        // Always open links in a new tab/window
+        // Always open links in a new browser window/tab (not in the current page)
+        const href = a.getAttribute?.('href');
+        if (!href) return;
         e.preventDefault();
         e.stopPropagation();
-        try {
-          a.setAttribute('target', '_blank');
-          a.setAttribute('rel', 'noopener noreferrer');
-        } catch {}
-        const href = a.getAttribute('href') || a.href;
-        if (href) { try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {} }
+        try { window.open(href, '_blank', 'noopener,noreferrer,popup'); }
+        catch { try { window.open(href, '_blank'); } catch {} }
         return;
       }
       if (!canEdit) return;
