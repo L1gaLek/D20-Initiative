@@ -596,6 +596,12 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+  const makeLinkSpanHTML = (href, label) => {
+    const safeHref = htmlEscape(String(href || ''));
+    const safeLabel = htmlEscape(String(label || ''));
+    return `<span class="rte-link" data-href="${safeHref}"><b><u>${safeLabel}</u></b></span>`;
+  };
+
   const linkifyPlain = (plain) => {
     const t = String(plain || '');
     const esc = htmlEscape(t);
@@ -603,10 +609,10 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     return esc.replace(urlRe, (m) => {
       if (m.includes('@') && !m.startsWith('http')) {
         const href = 'mailto:' + m;
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
+        return makeLinkSpanHTML(href, m);
       }
       const href = normalizeHref(m);
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer"><b><u>${m}</u></b></a>`;
+      return makeLinkSpanHTML(href, m);
     }).replace(/\n/g, '<br>');
   };
 
@@ -645,7 +651,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           for (const attr of Array.from(ch.attributes || [])) {
             const n = attr.name.toLowerCase();
             if (tag === 'A' && (n === 'href' || n === 'title')) continue;
-            if (tag === 'SPAN' && n === 'style') continue;
+            if (tag === 'SPAN' && (n === 'style' || n === 'data-href' || n === 'class')) continue;
             ch.removeAttribute(attr.name);
           }
 
@@ -661,32 +667,28 @@ function upgradeSheetTextareasToRte(root, canEdit) {
             }
           }
 
+          // Convert any pasted <a> into our safe span link format.
           if (tag === 'A') {
             const hrefRaw = String(ch.getAttribute('href') || '').trim();
             const href = normalizeHref(hrefRaw);
-
             if (!href) {
               const frag = document.createDocumentFragment();
               while (ch.firstChild) frag.appendChild(ch.firstChild);
               ch.replaceWith(frag);
             } else {
-              ch.setAttribute('href', href);
-              ch.setAttribute('target', '_blank');
-              ch.setAttribute('rel', 'noopener noreferrer');
-              try {
-                // enforce bold + underline appearance
-                const hasBold = !!ch.querySelector('b,strong');
-                const hasU = !!ch.querySelector('u');
-                if (!(hasBold && hasU)) {
-                  const frag = document.createDocumentFragment();
-                  while (ch.firstChild) frag.appendChild(ch.firstChild);
-                  const b = document.createElement('b');
-                  const u = document.createElement('u');
-                  u.appendChild(frag);
-                  b.appendChild(u);
-                  ch.appendChild(b);
-                }
-              } catch {}
+              const span = document.createElement('span');
+              span.className = 'rte-link';
+              span.setAttribute('data-href', href);
+
+              const frag = document.createDocumentFragment();
+              while (ch.firstChild) frag.appendChild(ch.firstChild);
+              const b = document.createElement('b');
+              const u = document.createElement('u');
+              u.appendChild(frag);
+              b.appendChild(u);
+              span.appendChild(b);
+
+              ch.replaceWith(span);
             }
           }
 
@@ -702,7 +704,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       // Linkify plain URLs that survived as text (basic)
       htmlOut = htmlOut.replace(/(^|[\s>])((https?:\/\/|www\.)[^\s<]+)/gi, (m, p1, url) => {
         const href = url.startsWith('http') ? url : ('https://' + url);
-        return `${p1}<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        return `${p1}${makeLinkSpanHTML(href, url)}`;
       });
 
       return htmlOut;
@@ -878,17 +880,35 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       if (btn.hasAttribute('data-rte-link')) {
         const url = prompt('Ссылка (URL):', 'https://');
         const href = normalizeHref(url);
-        if (href) {
-          try { document.execCommand('createLink', false, href); } catch {}
-          try {
-            editor.querySelectorAll('a').forEach(a => {
-              a.setAttribute('href', normalizeHref(a.getAttribute('href')));
-              a.setAttribute('target', '_blank');
-              a.setAttribute('rel', 'noopener noreferrer');
-              ensureLinkLooksLikeLink(a);
-            });
-          } catch {}
-        }
+        if (!href) return;
+
+        try {
+          const sel = window.getSelection();
+          if (!sel || sel.rangeCount === 0) return;
+          const range = sel.getRangeAt(0);
+          if (!editor.contains(range.commonAncestorContainer)) return;
+
+          const span = document.createElement('span');
+          span.className = 'rte-link';
+          span.setAttribute('data-href', href);
+          const b = document.createElement('b');
+          const u = document.createElement('u');
+          b.appendChild(u);
+
+          if (range.collapsed) {
+            u.textContent = href;
+            span.appendChild(b);
+            range.insertNode(span);
+            setCaretAfter(span);
+          } else {
+            const frag = range.extractContents();
+            u.appendChild(frag);
+            span.appendChild(b);
+            range.insertNode(span);
+            setCaretAfter(span);
+          }
+        } catch {}
+
         return;
       }
 
@@ -915,16 +935,20 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       } catch {}
     });
 
-    editor.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      if (!a) return;
-      const href = normalizeHref(a.getAttribute('href'));
+    const openLinkFromEvent = (e) => {
+      const el = e.target?.closest?.('.rte-link');
+      if (!el) return;
+      const href = normalizeHref(el.getAttribute('data-href'));
       if (!href) return;
       e.preventDefault();
       e.stopPropagation();
       try { e.stopImmediatePropagation?.(); } catch {}
       try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
-    }, true);
+    };
+
+    // Use pointerdown capture to stop any global click routers BEFORE they fire.
+    editor.addEventListener('pointerdown', openLinkFromEvent, true);
+    editor.addEventListener('click', openLinkFromEvent, true);
 
     const close = () => { try { overlay.remove(); } catch {} };
 
@@ -1003,16 +1027,19 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       openModal(ta, editor, key || path);
     });
 
-    editor.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      if (!a) return;
-      const href = normalizeHref(a.getAttribute('href'));
+    const openInlineLinkFromEvent = (e) => {
+      const el = e.target?.closest?.('.rte-link');
+      if (!el) return;
+      const href = normalizeHref(el.getAttribute('data-href'));
       if (!href) return;
       e.preventDefault();
       e.stopPropagation();
       try { e.stopImmediatePropagation?.(); } catch {}
       try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
-    }, true);
+    };
+
+    editor.addEventListener('pointerdown', openInlineLinkFromEvent, true);
+    editor.addEventListener('click', openInlineLinkFromEvent, true);
 
     try { ta.style.display = 'none'; } catch {}
     wrap.appendChild(editor);
