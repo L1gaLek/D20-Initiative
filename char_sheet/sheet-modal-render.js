@@ -317,8 +317,7 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    // По запросу: блоки "Заговоры" и "Заклинания" должны идти в один столбец.
-    return `<div class="sheet-grid-2 sheet-grid-1col">${blocks}</div>`;
+    return `<div class="sheet-grid-1">${blocks}</div>`;
   }
 
   function renderSpellsTab(vm) {
