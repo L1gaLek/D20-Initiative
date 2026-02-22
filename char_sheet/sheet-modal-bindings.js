@@ -565,66 +565,7 @@ function normalizeHref(href) {
   if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
   return h;
 }
-// ================== LINKS (global interceptor for sheet) ==================
-// Prevent app reset when clicking links inside the character sheet.
-// We intercept on WINDOW in capture phase to beat any in-app delegated routers.
-if (!window.__sheetExternalLinkInterceptorInstalled) {
-  window.__sheetExternalLinkInterceptorInstalled = true;
-
-  const shouldOpenInNewTab = (href) => {
-    const h = String(href || "").trim();
-    if (!h) return false;
-    if (h.startsWith('#')) return false;
-    if (/^(javascript:|data:|file:)/i.test(h)) return false;
-    return /^(https?:\/\/|mailto:|tel:)/i.test(h) || /^www\./i.test(h) || /^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h);
-  };
-
-  const getEventTargetElement = (e) => {
-    const path = (typeof e.composedPath === 'function') ? e.composedPath() : null;
-    const first = path && path.length ? path[0] : e.target;
-    if (first instanceof Element) return first;
-    return first && first.parentElement ? first.parentElement : null;
-  };
-
-  const handle = (e) => {
-    try {
-      const baseEl = getEventTargetElement(e);
-      if (!baseEl) return;
-
-      const sheetModal = document.getElementById('sheet-modal');
-      if (!sheetModal || !sheetModal.contains(baseEl)) return;
-
-      const linkEl = baseEl.closest('a[href], .rte-link[data-href]');
-      if (!linkEl) return;
-
-      const rawHref = (linkEl.matches('a[href]'))
-        ? linkEl.getAttribute('href')
-        : linkEl.getAttribute('data-href');
-
-      const href = normalizeHref(rawHref);
-      if (!shouldOpenInNewTab(href)) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-      try { e.stopImmediatePropagation?.(); } catch {}
-
-      if (linkEl.matches && linkEl.matches('a[href]')) {
-        try { linkEl.setAttribute('target', '_blank'); } catch {}
-        try { linkEl.setAttribute('rel', 'noopener noreferrer'); } catch {}
-      }
-
-      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
-    } catch {}
-  };
-
-  window.addEventListener('pointerdown', handle, true);
-  window.addEventListener('mousedown', handle, true);
-  window.addEventListener('click', handle, true);
-  window.addEventListener('auxclick', handle, true);
-}
-
 // ================== RICH TEXT (modal editor) ==================
-
 function upgradeSheetTextareasToRte(root, canEdit) {
   if (!root) return;
 
