@@ -1236,8 +1236,9 @@ button:hover {
   padding: 6px 8px;
   box-sizing: border-box;
   resize: vertical;
-  font-size: 16px;
-  line-height: 1.35;
+  /* Больше текст для читабельности */
+  font-size: 15px;
+  line-height: 20px;
 }
 
 /* ===== Rich Text Editor (sheet) ===== */
@@ -1247,6 +1248,31 @@ button:hover {
   border-radius: 10px;
   background: #111;
   overflow: hidden;
+}
+
+.rte-head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+}
+
+.rte-head__title{
+  font-size: 12px;
+  opacity: 0.85;
+  font-weight: 700;
+}
+
+.rte-open{
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  color: #eee;
+  cursor: pointer;
 }
 
 .rte-toolbar{
@@ -1286,27 +1312,23 @@ button:hover {
   padding: 6px 8px;
   min-height: 90px;
   color: #eee;
-  font-size: 16px;
-  line-height: 1.35;
+  font-size: 15px;
+  line-height: 20px;
   outline: none;
   white-space: normal;
-  overflow: auto;
-  resize: vertical;
-  overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
-/* keep pasted blocks compact (no giant gaps between paragraphs) */
-.rte-editor p,
-.rte-editor div{
-  margin: 0;
+/* Preview in sheet (editing happens in popup) */
+.rte-editor--preview{
+  cursor: pointer;
 }
 
-/* links: not blue, but bold + underlined and clickable */
-.rte-editor a{
-  color: inherit;
-  font-weight: 700;
+/* Links: bold + underline + clickable */
+.rte-editor a,
+.sheet-textarea a{
+  font-weight: 800;
   text-decoration: underline;
+  color: #7fd1ff;
 }
 
 .rte-editor:empty:before{
@@ -1320,6 +1342,90 @@ button:hover {
 
 .rte--disabled .rte-editor{
   pointer-events: none;
+}
+
+/* ===== Rich Text Popup (sheet) ===== */
+.rte-popover{
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+}
+
+.rte-popover.hidden{ display:none; }
+
+.rte-popover__backdrop{
+  position:absolute;
+  inset:0;
+  background: rgba(0,0,0,0.65);
+}
+
+.rte-popover__panel{
+  position: relative;
+  width: min(900px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  margin: 12px auto;
+  background: rgba(18,18,18,0.98);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 14px;
+  overflow: hidden;
+  display:flex;
+  flex-direction: column;
+}
+
+.rte-popover__head{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+
+.rte-popover__title{
+  font-weight: 900;
+}
+
+.rte-popover__x{
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #eee;
+  cursor: pointer;
+}
+
+.rte-popover__height{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+}
+
+.rte-popover__height-label{
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.rte-popover__height-range{ width: 160px; }
+.rte-popover__height-num{
+  width: 78px;
+  padding: 4px 6px;
+  border-radius: 10px;
+}
+
+.rte-popover__body{
+  padding: 10px 12px 12px;
+  overflow: auto;
+}
+
+.rte-editor--popup{
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 12px;
+  background: #111;
+}
+
+.rte-popover__hint{
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.75;
 }
 
 
@@ -2643,100 +2749,3 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .equip-row__details{margin-top:6px; opacity:.92; line-height:1.25;}
 .equip-row__desc.collapsed{display:none;}
 .equip-row__details.collapsed{display:none;}
-
-
-/* RTE footer + popup modal */
-.rte-footer{
-  display:flex;
-  justify-content:flex-end;
-  gap:8px;
-  padding: 6px 8px;
-  border-top: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.02);
-}
-.rte-open{
-  padding: 4px 10px;
-  font-size: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 10px;
-  background: rgba(255,255,255,0.06);
-  color: #eee;
-  cursor: pointer;
-}
-.rte-open:active{ transform: translateY(1px); }
-
-.rte-modal-overlay{
-  position: fixed;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,0.55);
-  z-index: 9999;
-  padding: 18px;
-}
-.rte-modal-overlay.is-open{ display:flex; }
-
-.rte-modal{
-  width: min(900px, 96vw);
-  max-height: 90vh;
-  background: #0f0f0f;
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 16px 40px rgba(0,0,0,0.6);
-  display:flex;
-  flex-direction: column;
-}
-.rte-modal-header{
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.04);
-}
-.rte-modal-title{
-  font-size: 14px;
-  font-weight: 700;
-  color: #eee;
-}
-.rte-modal-close{
-  padding: 2px 10px;
-  font-size: 14px;
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 10px;
-  background: rgba(255,255,255,0.06);
-  color: #eee;
-  cursor: pointer;
-}
-.rte-modal-body{
-  padding: 10px 12px 12px;
-  overflow:auto;
-}
-.rte-toolbar--modal{
-  border-bottom: 1px solid rgba(255,255,255,0.10);
-}
-.rte-spacer{ flex: 1 1 auto; }
-.rte-modal-height{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  color:#ddd;
-  font-size: 12px;
-}
-.rte-modal-height input{
-  width: 86px;
-  padding: 3px 6px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.06);
-  color:#eee;
-}
-.rte-btn--primary{
-  border-color: rgba(255,255,255,0.24);
-}
-.rte-editor--modal{
-  min-height: 180px;
-  resize: vertical;
-}
