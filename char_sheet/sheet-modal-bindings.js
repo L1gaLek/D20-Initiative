@@ -588,9 +588,6 @@ function bindEditableInputs(root, player, canEdit) {
     // Upgrade large textareas to a lightweight rich-text editor (toolbar + contenteditable).
     // This is used for backstory/notes/descriptions etc.
     try { upgradeSheetTextareasToRte(root, canEdit); } catch {}
-    // Spell description editor is a special textarea (stored under sheet.text[spell-desc:href])
-    // — keep its saving logic, but provide the same popup editor UX.
-    try { upgradeSpellDescTextareasToPopup(root, canEdit); } catch {}
 
     const inputs = root.querySelectorAll("[data-sheet-path]");
     inputs.forEach(inp => {
@@ -617,7 +614,26 @@ function bindEditableInputs(root, player, canEdit) {
       const isRte = (String(inp.getAttribute?.('contenteditable') || '') === 'true');
       if (inp.type === "checkbox") inp.checked = !!raw;
       else if (inp.type === "radio") inp.checked = (String(raw ?? '') === String(inp.value));
-      else if (isRte) inp.innerHTML = String(raw ?? "");
+      else if (isRte) {
+        const s = String(raw ?? "");
+        // If stored as plain text, keep line breaks and auto-link URLs.
+        if (!s) inp.innerHTML = '';
+        else if (s.includes('<')) inp.innerHTML = s;
+        else {
+          const esc = String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+          const withBr = esc.replace(/\r\n|\r|\n/g, '<br>');
+          inp.innerHTML = withBr.replace(/(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)(?![^<]*>)/gi, (m) => {
+            const href = (/^[a-z]+:\/\//i.test(m) ? m : ('https://' + m.replace(/^www\./i, 'www.')));
+            const label = m.replace(/</g, '');
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+          });
+        }
+      }
       else inp.value = (raw ?? "");
 
       if (!canEdit) {
@@ -728,177 +744,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     'textarea.spell-desc-editor'
   ].join(',');
 
-  // ===== RTE popup modal (singleton) =====
-  let modalOverlay = document.querySelector('.rte-modal-overlay');
-  let modalEditor = modalOverlay?.querySelector?.('.rte-modal-editor');
-  let modalTitle = modalOverlay?.querySelector?.('.rte-modal-title');
-  let modalSizeSel = modalOverlay?.querySelector?.('[data-rte-fontsize]');
-  let activePreviewEl = null;
-
-  function ensureModal() {
-    if (modalOverlay && modalEditor) return;
-    modalOverlay = document.createElement('div');
-    modalOverlay.className = 'rte-modal-overlay hidden';
-    modalOverlay.setAttribute('aria-hidden', 'true');
-    modalOverlay.innerHTML = `
-      <div class="rte-modal" role="dialog" aria-label="Редактор текста" aria-modal="true">
-        <div class="rte-modal-head">
-          <div class="rte-modal-title">Редактор текста</div>
-          <button type="button" class="rte-modal-close" data-rte-close title="Закрыть">✕</button>
-        </div>
-        <div class="rte-modal-toolbar">
-          <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
-          <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
-          <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркеры">•</button>
-          <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
-          <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
-          <select class="rte-select" data-rte-fontsize title="Размер текста">
-            <option value="2">S</option>
-            <option value="3">M</option>
-            <option value="5" selected>L</option>
-            <option value="6">XL</option>
-          </select>
-          <div style="flex:1"></div>
-          <button type="button" class="rte-btn" data-rte-done title="Готово">Готово</button>
-        </div>
-        <div class="rte-modal-body">
-          <div class="rte-modal-editor-wrap">
-            <div class="rte-modal-editor" contenteditable="true"></div>
-          </div>
-          <div class="rte-modal-hint">Подсказка: ссылки при вставке распознаются автоматически и будут кликабельными.</div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalOverlay);
-
-    modalEditor = modalOverlay.querySelector('.rte-modal-editor');
-    modalTitle = modalOverlay.querySelector('.rte-modal-title');
-    modalSizeSel = modalOverlay.querySelector('[data-rte-fontsize]');
-
-    const close = () => {
-      if (!modalOverlay) return;
-      modalOverlay.classList.add('hidden');
-      modalOverlay.setAttribute('aria-hidden', 'true');
-      activePreviewEl = null;
-      try { if (window.__sheetRtePopup) window.__sheetRtePopup.__onInput = null; } catch {}
-    };
-
-    modalOverlay.addEventListener('click', (e) => {
-      const t = e.target;
-      if (!(t instanceof Element)) return;
-      if (t === modalOverlay) { close(); return; }
-      if (t.closest('[data-rte-close]')) { close(); return; }
-      if (t.closest('[data-rte-done]')) { close(); return; }
-
-      const btn = t.closest('button');
-      if (btn && btn.hasAttribute('data-rte-link')) {
-        modalEditor?.focus();
-        const url = prompt('Ссылка (URL):', 'https://');
-        if (url && url.trim()) {
-          try { document.execCommand('createLink', false, url.trim()); } catch {}
-        }
-        return;
-      }
-      if (btn) {
-        const cmd = btn.getAttribute('data-rte-cmd');
-        if (cmd) {
-          modalEditor?.focus();
-          try { document.execCommand(cmd, false, null); } catch {}
-        }
-      }
-    });
-
-    modalSizeSel?.addEventListener('change', () => {
-      modalEditor?.focus();
-      const v = String(modalSizeSel.value || '3');
-      try { document.execCommand('fontSize', false, v); } catch {}
-    });
-
-    // Auto-linkify on paste (plain text) and keep <a> from rich paste.
-    modalEditor?.addEventListener('paste', (e) => {
-      try {
-        const cd = e.clipboardData;
-        if (!cd) return;
-        const html = cd.getData('text/html');
-        const text = cd.getData('text/plain');
-        // If HTML paste already contains anchors, let browser handle it.
-        if (html && /<a\s/i.test(html)) return;
-        if (!text) return;
-        // If there are URLs in plain text — wrap them.
-        const urlRe = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
-        if (!urlRe.test(text)) return;
-        e.preventDefault();
-        const safe = htmlEscape(text).replace(/\n/g, '<br>');
-        const linked = safe.replace(urlRe, (m) => {
-          const href = m.startsWith('http') ? m : `https://${m}`;
-          return `<a href="${href}" target="_blank" rel="noopener noreferrer">${m}</a>`;
-        });
-        try { document.execCommand('insertHTML', false, linked); } catch {}
-      } catch {}
-    });
-
-    // Live-sync modal -> preview -> sheet model
-    modalEditor?.addEventListener('input', () => {
-      // 1) normal path: sync into preview element (data-sheet-path binding)
-      if (activePreviewEl) {
-        try {
-          activePreviewEl.innerHTML = modalEditor.innerHTML;
-          activePreviewEl.dispatchEvent(new Event('input', { bubbles: true }));
-        } catch {}
-        return;
-      }
-      // 2) external usage (e.g. spell-desc textarea): provide callback
-      try {
-        const cb = window.__sheetRtePopup?.__onInput;
-        if (typeof cb === 'function') cb(String(modalEditor.innerHTML || ''));
-      } catch {}
-    });
-
-    // Close on ESC
-    window.addEventListener('keydown', (e) => {
-      if (!modalOverlay || modalOverlay.classList.contains('hidden')) return;
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        close();
-      }
-    });
-  }
-
-  function openModalForPreview(previewEl) {
-    if (!canEdit) return;
-    if (!previewEl) return;
-    ensureModal();
-    activePreviewEl = previewEl;
-    try {
-      const ph = previewEl.getAttribute('data-placeholder') || '';
-      if (modalTitle) modalTitle.textContent = ph ? `Редактор: ${ph}` : 'Редактор текста';
-    } catch {}
-    try { modalEditor.innerHTML = previewEl.innerHTML || ''; } catch {}
-    try {
-      modalOverlay.classList.remove('hidden');
-      modalOverlay.setAttribute('aria-hidden', 'false');
-      // focus after open
-      setTimeout(() => { try { modalEditor.focus(); } catch {} }, 0);
-    } catch {}
-  }
-
-  // Expose generic opener (used by other editors like spell description textarea)
-  try {
-    if (!window.__sheetRtePopup) window.__sheetRtePopup = {};
-    window.__sheetRtePopup.open = ({ title = 'Редактор текста', html = '', onInput = null } = {}) => {
-      ensureModal();
-      activePreviewEl = null;
-      try { window.__sheetRtePopup.__onInput = (typeof onInput === 'function') ? onInput : null; } catch {}
-      try { if (modalTitle) modalTitle.textContent = String(title || 'Редактор текста'); } catch {}
-      try { modalEditor.innerHTML = String(html || ''); } catch {}
-      try {
-        modalOverlay.classList.remove('hidden');
-        modalOverlay.setAttribute('aria-hidden', 'false');
-        setTimeout(() => { try { modalEditor.focus(); } catch {} }, 0);
-      } catch {}
-    };
-  } catch {}
-
   const textareas = Array.from(root.querySelectorAll(selector));
   textareas.forEach((ta) => {
     // don't upgrade twice
@@ -907,14 +752,27 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     if (!path) return;
 
     const wrap = document.createElement('div');
-    // preview-only wrapper; actual editing happens in popup
-    wrap.className = 'rte rte--preview';
+    wrap.className = 'rte';
     wrap.setAttribute('data-rte', '');
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'rte-toolbar';
+    toolbar.innerHTML = `
+      <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
+      <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+      <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
+      <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
+      <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
+      <select class="rte-select" data-rte-fontsize title="Размер текста">
+        <option value="2">S</option>
+        <option value="3" selected>M</option>
+        <option value="5">L</option>
+        <option value="6">XL</option>
+      </select>
+    `;
 
     const editor = document.createElement('div');
     editor.className = 'rte-editor';
-    // keep contenteditable="true" so the sheet binder treats it as RTE;
-    // but we prevent in-place editing and open the popup instead.
     editor.setAttribute('contenteditable', canEdit ? 'true' : 'false');
     editor.setAttribute('data-sheet-path', path);
     editor.setAttribute('data-rte-editor', '');
@@ -936,82 +794,42 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
 
+    wrap.appendChild(toolbar);
     wrap.appendChild(editor);
 
     // Replace in DOM
     ta.replaceWith(wrap);
 
-    // Wire preview interactions -> open popup editor
+    // Wire toolbar actions
     if (!canEdit) {
       wrap.classList.add('rte--disabled');
       return;
     }
 
-    // Open modal on click/focus/typing attempts
-    editor.addEventListener('focus', () => openModalForPreview(editor));
-    editor.addEventListener('mousedown', (e) => {
-      // Allow clicking links without opening the modal.
-      const a = e.target?.closest?.('a');
-      if (a && a.getAttribute) return;
-      // let focus happen, then modal opens in focus handler
-      try { editor.focus(); } catch {}
+    toolbar.addEventListener('mousedown', (e) => {
+      // prevent editor blur when clicking toolbar
+      e.preventDefault();
     });
-    editor.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      const href = a?.getAttribute?.('href');
-      if (href) {
-        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
-        e.preventDefault();
-        e.stopPropagation();
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target?.closest?.('button');
+      if (!btn) return;
+      editor.focus();
+      if (btn.hasAttribute('data-rte-link')) {
+        const url = prompt('Ссылка (URL):', 'https://');
+        if (url && url.trim()) {
+          try { document.execCommand('createLink', false, url.trim()); } catch {}
+        }
+        return;
       }
+      const cmd = btn.getAttribute('data-rte-cmd');
+      if (!cmd) return;
+      try { document.execCommand(cmd, false, null); } catch {}
     });
-    editor.addEventListener('keydown', (e) => {
-      // prevent in-place editing; route into modal
-      if (e.key === 'Tab') return; // allow focus nav
-      e.preventDefault();
-      openModalForPreview(editor);
-    });
-    editor.addEventListener('paste', (e) => {
-      e.preventDefault();
-      openModalForPreview(editor);
-    });
-  });
-}
-
-// Popup editor for spell description textareas (they are not bound via data-sheet-path).
-function upgradeSpellDescTextareasToPopup(root, canEdit) {
-  if (!root || !canEdit) return;
-  const list = Array.from(root.querySelectorAll('textarea.spell-desc-editor[data-spell-desc-editor]'));
-  list.forEach((ta) => {
-    if (ta.__rtePopupBound) return;
-    ta.__rtePopupBound = true;
-
-    ta.addEventListener('focus', () => {
-      try {
-        const item = ta.closest?.('.spell-item');
-        const href = item?.getAttribute?.('data-spell-url') || '';
-        const title = href ? `Описание заклинания` : 'Описание заклинания';
-        const html = String(ta.value || '');
-        // Convert plain text to simple HTML for the editor.
-        const html2 = html
-          ? (html.includes('<') ? html : String(html)
-              .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-              .replace(/\n/g,'<br>'))
-          : '';
-
-        window.__sheetRtePopup?.open?.({
-          title,
-          html: html2,
-          onInput: (newHtml) => {
-            // Back to plain text (preserve line breaks)
-            const tmp = document.createElement('div');
-            tmp.innerHTML = String(newHtml || '');
-            const text = tmp.innerText || tmp.textContent || '';
-            ta.value = text;
-            ta.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-        });
-      } catch {}
+    const sizeSel = toolbar.querySelector('[data-rte-fontsize]');
+    sizeSel?.addEventListener('change', () => {
+      editor.focus();
+      const v = String(sizeSel.value || '3');
+      try { document.execCommand('fontSize', false, v); } catch {}
     });
   });
 }
