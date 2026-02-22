@@ -554,21 +554,19 @@ function bindCombatEditors(root, player, canEdit) {
 }
 
    
-// Normalize external links so they don't turn into relative navigation inside the app.
+
+
+// Normalizes href to avoid in-app relative navigation (important for clickable links in rich text).
 function normalizeHref(href) {
   const h = String(href || '').trim();
   if (!h) return '';
   if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
   if (/^www\./i.test(h)) return 'https://' + h;
-  // bare domain or domain+path: treat as https
   if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
   return h;
 }
-
 // ================== RICH TEXT (modal editor) ==================
 function upgradeSheetTextareasToRte(root, canEdit) {
-  // Normalize external links so they don't turn into relative navigation inside the app.
-
   if (!root) return;
 
   const htmlEscape = (s) => String(s ?? '')
@@ -636,7 +634,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
             const st = String(ch.getAttribute('style') || '');
             const m = st.match(/font-size\s*:\s*([0-9]+)px/i);
             if (m) {
-              const px = Math.max(10, Math.min(48, Number(m[1])));
+              const px = Math.max(1, Math.min(10, Number(m[1])));
               ch.setAttribute('style', `font-size:${px}px`);
             } else {
               ch.removeAttribute('style');
@@ -645,14 +643,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           if (tag === 'A') {
             const hrefRaw = String(ch.getAttribute('href') || '').trim();
-            const href = (function normalizeHrefLocal(href){
-              const h = String(href || '').trim();
-              if (!h) return '';
-              if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
-              if (/^www\./i.test(h)) return 'https://' + h;
-              if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
-              return h;
-            })(hrefRaw);
+            const href = normalizeHref(hrefRaw);
 
             if (!href) {
               const frag = document.createDocumentFragment();
@@ -734,7 +725,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           <label class="rte-fontsize" title="Размер текста">
             <span>Aa</span>
             <select data-rte-fontsize>
-              
               <option value="1">1</option>
               <option value="2">2</option>
               <option value="3">3</option>
@@ -743,6 +733,8 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               <option value="6">6</option>
               <option value="7">7</option>
               <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
             </select>
           </label>
 
@@ -772,16 +764,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     editor.innerHTML = inlineEditor.innerHTML || '';
     editor.focus();
 
-    const normalizeHref = (href) => {
-      const h = String(href || '').trim();
-      if (!h) return '';
-      if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
-      if (/^www\./i.test(h)) return 'https://' + h;
-      // bare domain or path-like: treat as https
-      if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
-      return h;
-    };
-
     const ensureLinkLooksLikeLink = (a) => {
       try {
         // force bold + underline by wrapping contents if not already
@@ -797,25 +779,45 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         a.appendChild(b);
       } catch {}
     };
-
-    const applyFontSize = (level) => {
-      const v = String(level || '').trim();
+    const applyFontSize = (px) => {
+      const v = String(px || '').trim();
       if (!/^\d+$/.test(v)) return;
-      const n = Number(v);
-      const map = { 1: 10, 2: 12, 3: 14, 4: 16, 5: 18, 6: 20, 7: 24, 8: 28 };
-      const px = map[n];
-      if (!px) return;
+      const n = Math.max(1, Math.min(10, Number(v)));
 
-      try { document.execCommand('styleWithCSS', false, true); } catch {}
-      // execCommand fontSize uses 1-7; we use 7 then replace with our px
-      try { document.execCommand('fontSize', false, '7'); } catch {}
+      const sel = window.getSelection?.();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+
+      if (range.collapsed) {
+        let node = sel.anchorNode;
+        if (node && node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+        const span = node && node.closest ? node.closest('span') : null;
+        if (span && /font-size\s*:\s*\d+px/i.test(String(span.getAttribute('style') || ''))) {
+          span.style.fontSize = n + 'px';
+          return;
+        }
+        try {
+          document.execCommand('insertHTML', false, `<span style="font-size:${n}px">&#8203;</span>`);
+        } catch {}
+        return;
+      }
+
       try {
-        editor.querySelectorAll('font[size="7"]').forEach(f => {
-          const span = document.createElement('span');
-          span.style.fontSize = px + 'px';
-          while (f.firstChild) span.appendChild(f.firstChild);
-          f.replaceWith(span);
+        const span = document.createElement('span');
+        span.style.fontSize = n + 'px';
+        const frag = range.extractContents();
+        span.appendChild(frag);
+        range.insertNode(span);
+
+        span.querySelectorAll('span[style]').forEach(s => {
+          const st = String(s.getAttribute('style') || '');
+          if (/font-size\s*:\s*\d+px/i.test(st)) s.style.fontSize = n + 'px';
         });
+
+        sel.removeAllRanges();
+        const r = document.createRange();
+        r.selectNodeContents(span);
+        sel.addRange(r);
       } catch {}
     };
 
@@ -835,8 +837,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     };
 
     toolbar.addEventListener('mousedown', (e) => {
-      // allow native <select> interaction (otherwise dropdown can't open)
-      if (e.target?.closest?.('select')) return;
+      if (e.target && e.target.closest && e.target.closest('select')) return;
       e.preventDefault();
     });
     toolbar.addEventListener('click', (e) => {
@@ -891,8 +892,9 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       if (!href) return;
       e.preventDefault();
       e.stopPropagation();
+      try { e.stopImmediatePropagation?.(); } catch {}
       try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
-    });
+    }, true);
 
     const close = () => { try { overlay.remove(); } catch {} };
 
@@ -978,8 +980,9 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       if (!href) return;
       e.preventDefault();
       e.stopPropagation();
+      try { e.stopImmediatePropagation?.(); } catch {}
       try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
-    });
+    }, true);
 
     try { ta.style.display = 'none'; } catch {}
     wrap.appendChild(editor);
