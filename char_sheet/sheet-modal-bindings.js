@@ -1689,7 +1689,54 @@ function bindTextareaHeightPersistence(root, player) {
       `;
       document.body.appendChild(wrap);
 
-      const close = () => {
+    
+  const normalizeHref = (href) => {
+    const h = String(href || '').trim();
+    if (!h) return '';
+    if (/^(https?:|mailto:|tel:)/i.test(h)) return h;
+    if (/^[\w-]+\.[\w.-]+/i.test(h)) return `https://${h}`;
+    return h;
+  };
+
+  const updateViewsForSrc = (srcEl, finalHtml) => {
+    try {
+      if (!srcEl) return;
+      const doc = srcEl.ownerDocument || document;
+
+      const sp = srcEl.getAttribute?.('data-sheet-path');
+      const noteIdx = srcEl.hasAttribute?.('data-note-text') ? srcEl.getAttribute('data-note-text') : null;
+      const isSpell = srcEl.hasAttribute?.('data-spell-desc-editor') ? true : false;
+      let spellHref = '';
+      if (isSpell) {
+        const item = srcEl.closest?.('.spell-item[data-spell-url]');
+        spellHref = item?.getAttribute?.('data-spell-url') || '';
+      }
+
+      const match = (el) => {
+        if (sp && el.getAttribute?.('data-sheet-path') === sp) return true;
+        if (noteIdx !== null && el.hasAttribute?.('data-note-text') && el.getAttribute('data-note-text') === noteIdx) return true;
+        if (isSpell && el.hasAttribute?.('data-spell-desc-editor')) {
+          const it = el.closest?.('.spell-item[data-spell-url]');
+          const h = it?.getAttribute?.('data-spell-url') || '';
+          return h && h === spellHref;
+        }
+        return false;
+      };
+
+      const allSrc = Array.from(doc.querySelectorAll('textarea.rte-src'));
+      for (const ta of allSrc) {
+        if (!match(ta)) continue;
+        ta.value = finalHtml;
+        const wrap = ta.closest?.('.rte-wrap');
+        const view = wrap?.querySelector?.('.rte-view');
+        if (view) {
+          view.innerHTML = rteValueToDisplayHtml(finalHtml);
+          view.classList.toggle('is-empty', !finalHtml);
+        }
+      }
+    } catch {}
+  };
+  const close = () => {
         wrap.remove();
       };
 
@@ -2419,8 +2466,15 @@ function rteSanitizeHtml(htmlStr) {
         if (tag === "A") {
           let href = child.getAttribute("href") || "";
           // block javascript:
-          if (/^\s*javascript:/i.test(href)) href = "#";
-          child.setAttribute("href", href);
+          if (/^\s*javascript:/i.test(href)) href = "";
+          href = (function(h){
+            const hh = String(h||'').trim();
+            if (!hh) return '';
+            if (/^(https?:|mailto:|tel:)/i.test(hh)) return hh;
+            if (/^[\w-]+\.[\w.-]+/i.test(hh)) return `https://${hh}`;
+            return hh;
+          })(href);
+          child.setAttribute("href", href || "#");
           child.setAttribute("target", "_blank");
           child.setAttribute("rel", "noopener noreferrer");
         }
@@ -2452,7 +2506,9 @@ function bindRichTextEditors(root, player, canEdit) {
   const heightRange = modal.querySelector("[data-rte-height]");
   const fontSizeSel = modal.querySelector("[data-rte-fontsize]");
 
+  const shared = (modal.__rteShared = modal.__rteShared || {});
   let current = null; // { wrap, view, src, player }
+  shared.current = null;
 
   // Commit value to underlying sheet model (in case some listeners don't fire)
   // and then schedule a save. We still dispatch input/change events for existing
@@ -2547,6 +2603,7 @@ function bindRichTextEditors(root, player, canEdit) {
   const close = () => {
     modal.classList.add("hidden");
     current = null;
+    shared.current = null;
   };
 
   const open = (wrap, view, src) => {
@@ -2554,6 +2611,11 @@ function bindRichTextEditors(root, player, canEdit) {
 
     // keep player reference for reliable save
     current = { wrap, view, src, player };
+    shared.current = current;
+    shared.commitToModel = commitToModel;
+    shared.updateViewsForSrc = updateViewsForSrc;
+    shared.normalizeHref = normalizeHref;
+
     const html = rteValueToDisplayHtml(src.value);
     editor.innerHTML = html || "";
     const h = Math.max(160, Math.min(720, parseInt(src.style.height || "320", 10) || 320));
@@ -2578,32 +2640,25 @@ function bindRichTextEditors(root, player, canEdit) {
       const btnSave = e.target.closest("[data-rte-save]");
       if (btnSave) {
         e.preventDefault();
-        if (!current) return;
+        const cur = shared.current;
+        if (!cur) return;
         const cleaned = rteSanitizeHtml(editor.innerHTML);
         const finalHtml = cleaned && cleaned.trim() ? cleaned : "";
-        current.src.value = finalHtml;
+        cur.src.value = finalHtml;
         // ensure model updated even for custom fields
-        commitToModel(current.src, finalHtml);
+        try { (shared.commitToModel || commitToModel)(cur.src, finalHtml); } catch {}
         // and force schedule save (some fields are not bound via data-sheet-path)
-        try { scheduleSheetSave(current.player); } catch {}
+        try { scheduleSheetSave(cur.player); } catch {}
         // persist editor height
         try {
           const h = Math.max(160, Math.min(720, parseInt(heightRange.value || "320", 10) || 320));
-          current.src.style.height = `${h}px`;
+          cur.src.style.height = `${h}px`;
         } catch {}
         // dispatch input so existing bindings save it
-        current.src.dispatchEvent(new Event("input", { bubbles: true }));
-        current.src.dispatchEvent(new Event("change", { bubbles: true }));
-        // Update the visible field IMMEDIATELY (some sheets re-render on a debounce,
-        // so we also re-find the live wrapper/view in the DOM to avoid stale refs).
-        try {
-          const liveWrap = current.src?.closest?.('.rte-wrap') || current.wrap;
-          const liveView = liveWrap?.querySelector?.('.rte-view') || current.view;
-          if (liveView) {
-            liveView.innerHTML = rteValueToDisplayHtml(finalHtml);
-            liveView.classList.toggle("is-empty", !finalHtml);
-          }
-        } catch {}
+        cur.src.dispatchEvent(new Event("input", { bubbles: true }));
+        cur.src.dispatchEvent(new Event("change", { bubbles: true }));
+        // Update all visible bound fields IMMEDIATELY (preview/title + tab content)
+        try { (shared.updateViewsForSrc || updateViewsForSrc)(cur.src, finalHtml); } catch {}
         close();
         return;
       }
@@ -2635,8 +2690,9 @@ function bindRichTextEditors(root, player, canEdit) {
     editor.addEventListener('click', (e) => {
       const a = e.target?.closest?.('a[href]');
       if (!a) return;
-      const href = a.getAttribute('href');
-      if (!href) return;
+      let href = a.getAttribute('href') || '';
+      href = (shared.normalizeHref || normalizeHref)(href) || a.href || href;
+      if (!href || href === '#') return;
       e.preventDefault();
       e.stopPropagation();
       try {
@@ -2712,8 +2768,9 @@ function bindRichTextEditors(root, player, canEdit) {
       const a = e.target?.closest?.('a');
       if (a) {
         // Always open links in a new browser window/tab (not in the current page)
-        const href = a.getAttribute?.('href');
-        if (!href) return;
+        let href = a.href || a.getAttribute?.('href') || '';
+        href = (shared.normalizeHref || normalizeHref)(href) || href;
+        if (!href || href === '#') return;
         e.preventDefault();
         e.stopPropagation();
         try { window.open(href, '_blank', 'noopener,noreferrer,popup'); }
