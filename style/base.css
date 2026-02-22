@@ -1312,8 +1312,8 @@ button:hover {
   padding: 6px 8px;
   min-height: 90px;
   color: #eee;
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 16px;
+  line-height: 1.45;
   outline: none;
   white-space: normal;
 }
@@ -1420,6 +1420,8 @@ button:hover {
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 12px;
   background: #111;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .rte-popover__hint{
