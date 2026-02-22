@@ -455,16 +455,15 @@
   flex-wrap: wrap;
 }
 
-.sheet-grid-1 {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
 .sheet-grid-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
   gap: 10px;
+}
+
+/* Modifier: force 1 column (used in Spells tab on request) */
+.sheet-grid-2.sheet-grid-1col {
+  grid-template-columns: 1fr;
 }
 
 .sheet-grid-3 {
