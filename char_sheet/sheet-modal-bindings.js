@@ -1032,76 +1032,77 @@ function upgradeSheetTextareasToRte(root, canEdit) {
   textareas.forEach((ta) => {
     // don't upgrade twice
     if (ta.closest('[data-rte]')) return;
-    const path = ta.getAttribute('data-sheet-path');
-    if (!path) return;
 
+    const path = ta.getAttribute('data-sheet-path') || '';
+    const ph = ta.getAttribute('placeholder') || '';
+
+    // Wrap (keep original textarea inside for existing bindings!)
     const wrap = document.createElement('div');
     wrap.className = 'rte';
     wrap.setAttribute('data-rte', '');
-    // so Enter/Space can open popup even without mouse
     try { wrap.setAttribute('tabindex', canEdit ? '0' : '-1'); } catch {}
 
     const head = document.createElement('div');
     head.className = 'rte-head';
     head.innerHTML = `
-      <div class="rte-head__title">Текст</div>
+      <div class="rte-head__title">${ph ? htmlEscape(ph) : 'Текст'}</div>
       <div style="flex:1"></div>
       <button type="button" class="rte-open" title="Открыть редактор" aria-label="Открыть редактор">✎</button>
     `;
 
-    const editor = document.createElement('div');
-    editor.className = 'rte-editor rte-editor--preview';
-    // IMPORTANT: keep contenteditable='true' so existing sheet binding treats it as rich-text field.
-    // We block direct typing via CSS and open the popup instead.
-    editor.setAttribute('contenteditable', canEdit ? 'true' : 'false');
-    editor.setAttribute('data-sheet-path', path);
-    editor.setAttribute('data-rte-editor', '');
+    const preview = document.createElement('div');
+    preview.className = 'rte-editor rte-editor--preview';
+    preview.setAttribute('data-rte-editor', '');
+    preview.setAttribute('contenteditable', 'false');
+    if (ph) preview.setAttribute('data-placeholder', ph);
 
-    // preserve placeholder via CSS
-    const ph = ta.getAttribute('placeholder');
-    if (ph) editor.setAttribute('data-placeholder', ph);
-
-    // Copy initial value as HTML.
-    // If it looks like plain text, keep line breaks and autolink.
+    // Initial content from textarea
     const raw = String(ta.value || '');
     const initial = raw
       ? (raw.includes('<') ? raw : htmlEscape(raw).replace(/\n/g, '<br>'))
       : '';
-    editor.innerHTML = normalizeRichHtml(initial);
+    preview.innerHTML = normalizeRichHtml(initial);
 
-    // Mirror style hints from textarea
+    // Insert wrapper before textarea, then move textarea inside and hide it.
+    const parent = ta.parentNode;
+    if (!parent) return;
+    parent.insertBefore(wrap, ta);
+    wrap.appendChild(head);
+    wrap.appendChild(preview);
+    wrap.appendChild(ta);
+    ta.style.display = 'none';
+
+    // For consistent sizing
     try {
       const rows = Number(ta.getAttribute('rows') || 0);
-      if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
+      if (rows) preview.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
 
-    wrap.appendChild(head);
-    wrap.appendChild(editor);
-
-    // Replace in DOM
-    ta.replaceWith(wrap);
-
-    // Popup open (click / Enter)
     if (!canEdit) {
       wrap.classList.add('rte--disabled');
       return;
     }
 
-    // key for per-field height
+    // key for per-field height (path if present, else fallback)
     try {
       const pid = String(player?.id || '');
-      editor.setAttribute('data-rte-key', `${pid}::${path}`);
+      const key = path || (ta.getAttribute('data-note-text') ? `note:${ta.getAttribute('data-note-text')}` : (ta.className || 'ta'));
+      preview.setAttribute('data-rte-key', `${pid}::${key}`);
     } catch {}
 
     const popup = ensureRtePopup();
     const openBtn = wrap.querySelector('.rte-open');
     const open = () => {
-      // Normalize content before opening so pasted plain URLs become clickable.
-      try { editor.innerHTML = normalizeRichHtml(editor.innerHTML); } catch {}
-      popup?.openPopupFor?.(editor, ph || 'Редактор текста');
+      try { preview.innerHTML = normalizeRichHtml(preview.innerHTML); } catch {}
+      popup?.openPopupFor?.(preview, ph || 'Редактор текста');
     };
+
+    // Open popup immediately when user clicks the field ("вводишь текст" => popup)
+    preview.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      open();
+    });
     openBtn?.addEventListener('click', (e) => { e.preventDefault(); open(); });
-    wrap.addEventListener('dblclick', (e) => { e.preventDefault(); open(); });
     wrap.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -1109,8 +1110,19 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       }
     });
 
+    // When popup applies -> it updates preview.innerHTML and dispatches input on preview.
+    // Mirror that into the hidden textarea so existing sheet bindings save it.
+    preview.addEventListener('input', () => {
+      try {
+        const html = normalizeRichHtml(preview.innerHTML);
+        ta.value = html;
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        ta.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch {}
+    });
+
     // Keep links clickable in preview (Ctrl/⌘+Click)
-    editor.addEventListener('click', (e) => {
+    preview.addEventListener('click', (e) => {
       const a = e.target?.closest?.('a');
       if (!a) return;
       if (e.ctrlKey || e.metaKey) {
@@ -1119,20 +1131,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       } else {
         e.preventDefault();
       }
-    });
-
-    // Block direct typing in the preview area (editing happens in popup).
-    // Still allow selection/copy.
-    editor.addEventListener('beforeinput', (e) => {
-      try { e.preventDefault(); } catch {}
-    });
-    editor.addEventListener('keydown', (e) => {
-      // allow navigation keys for scrolling/selection
-      const allowed = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown','Tab','Escape','Control','Meta','Shift','Alt'];
-      if (allowed.includes(e.key)) return;
-      // allow Ctrl/⌘ combos (copy/select all)
-      if (e.ctrlKey || e.metaKey) return;
-      e.preventDefault();
     });
   });
 }
