@@ -1241,6 +1241,31 @@ button:hover {
 }
 
 /* ===== Rich Text Editor (sheet) ===== */
+.rte-surface{
+  width: 100%;
+  background: #111;
+  color: #eee;
+  border: 1px solid #666;
+  border-radius: 8px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  font-size: 15px;
+  line-height: 20px;
+  min-height: 120px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rte-surface:focus{
+  outline: 2px solid rgba(255, 165, 0, 0.35);
+  outline-offset: 1px;
+}
+
+.rte-surface a{
+  color: #8ab4ff;
+  text-decoration: underline;
+}
+
 .rte{
   width: 100%;
   border: 1px solid #666;
