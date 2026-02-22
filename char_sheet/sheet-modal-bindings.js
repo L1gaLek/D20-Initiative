@@ -994,17 +994,31 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       } catch {}
     });
 
-    // Links are real <a>, so just stop bubbling to avoid any global click routers.
-    const stopLinkBubble = (e) => {
-      const a = e.target?.closest?.('a[href].rte-link');
-      if (!a) return;
-      e.stopPropagation();
-      try { e.stopImmediatePropagation?.(); } catch {}
+    // In contenteditable, <a> clicks often don't navigate.
+    // We explicitly open links in a new tab on a normal left-click.
+    const openLinkFromEvent = (e) => {
+      try {
+        // Only primary button (ignore right click / wheel)
+        if (typeof e.button === 'number' && e.button !== 0) return;
+
+        const a = e.target?.closest?.('a[href].rte-link, a[href]');
+        const span = !a ? e.target?.closest?.('.rte-link[data-href]') : null;
+        const hrefRaw = a
+          ? a.getAttribute('href')
+          : (span ? span.getAttribute('data-href') : '');
+        const href = normalizeHref(hrefRaw);
+        if (!href) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        try { e.stopImmediatePropagation?.(); } catch {}
+        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+      } catch {}
     };
 
     // Use capture to beat any global click routers.
-    editor.addEventListener('pointerdown', stopLinkBubble, true);
-    editor.addEventListener('click', stopLinkBubble, true);
+    editor.addEventListener('pointerdown', openLinkFromEvent, true);
+    editor.addEventListener('click', openLinkFromEvent, true);
 
     const close = () => { try { overlay.remove(); } catch {} };
 
@@ -1083,15 +1097,27 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       openModal(ta, editor, key || path);
     });
 
-    const stopInlineLinkBubble = (e) => {
-      const a = e.target?.closest?.('a[href].rte-link');
-      if (!a) return;
-      e.stopPropagation();
-      try { e.stopImmediatePropagation?.(); } catch {}
+    // In contenteditable, links won't reliably navigate by default.
+    // Force open in new tab on left click.
+    const openInlineLinkFromEvent = (e) => {
+      try {
+        if (typeof e.button === 'number' && e.button !== 0) return;
+        const a = e.target?.closest?.('a[href].rte-link, a[href]');
+        const span = !a ? e.target?.closest?.('.rte-link[data-href]') : null;
+        const hrefRaw = a
+          ? a.getAttribute('href')
+          : (span ? span.getAttribute('data-href') : '');
+        const href = normalizeHref(hrefRaw);
+        if (!href) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try { e.stopImmediatePropagation?.(); } catch {}
+        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+      } catch {}
     };
 
-    editor.addEventListener('pointerdown', stopInlineLinkBubble, true);
-    editor.addEventListener('click', stopInlineLinkBubble, true);
+    editor.addEventListener('pointerdown', openInlineLinkFromEvent, true);
+    editor.addEventListener('click', openInlineLinkFromEvent, true);
 
     try { ta.style.display = 'none'; } catch {}
     wrap.appendChild(editor);
