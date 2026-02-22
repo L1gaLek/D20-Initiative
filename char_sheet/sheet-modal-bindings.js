@@ -554,6 +554,321 @@ function bindCombatEditors(root, player, canEdit) {
 }
 
    
+// ================== RICH TEXT (modal editor) ==================
+function upgradeSheetTextareasToRte(root, canEdit) {
+  if (!root) return;
+
+  const htmlEscape = (s) => String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const ALLOWED_TAGS = new Set(['B','STRONG','U','BR','UL','OL','LI','A','P','DIV','SPAN']);
+  const sanitizeHtml = (html) => {
+    try {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = String(html || '');
+
+      const walk = (node) => {
+        const children = Array.from(node.childNodes || []);
+        for (const ch of children) {
+          if (ch.nodeType === Node.TEXT_NODE) continue;
+          if (ch.nodeType !== Node.ELEMENT_NODE) { ch.remove(); continue; }
+
+          const tag = (ch.tagName || '').toUpperCase();
+
+          // Normalize block tags to <br> breaks
+          if (tag === 'P' || tag === 'DIV') {
+            const frag = document.createDocumentFragment();
+            while (ch.firstChild) frag.appendChild(ch.firstChild);
+            ch.replaceWith(frag);
+            node.insertBefore(document.createElement('br'), frag.nextSibling);
+            continue;
+          }
+
+          if (!ALLOWED_TAGS.has(tag)) {
+            const frag = document.createDocumentFragment();
+            while (ch.firstChild) frag.appendChild(ch.firstChild);
+            ch.replaceWith(frag);
+            walk(node);
+            continue;
+          }
+
+          // strip style/class/etc
+          for (const attr of Array.from(ch.attributes || [])) {
+            const n = attr.name.toLowerCase();
+            if (tag === 'A' && (n === 'href' || n === 'title')) continue;
+            ch.removeAttribute(attr.name);
+          }
+
+          if (tag === 'A') {
+            const href = String(ch.getAttribute('href') || '').trim();
+            if (!href) {
+              const frag = document.createDocumentFragment();
+              while (ch.firstChild) frag.appendChild(ch.firstChild);
+              ch.replaceWith(frag);
+            } else {
+              ch.setAttribute('href', href);
+              ch.setAttribute('target', '_blank');
+              ch.setAttribute('rel', 'noopener noreferrer');
+            }
+          }
+
+          walk(ch);
+        }
+      };
+
+      walk(tpl.content);
+
+      let htmlOut = tpl.innerHTML;
+
+      // Linkify plain URLs that survived as text (basic)
+      htmlOut = htmlOut.replace(/(^|[\s>])((https?:\/\/|www\.)[^\s<]+)/gi, (m, p1, url) => {
+        const href = url.startsWith('http') ? url : ('https://' + url);
+        return `${p1}<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+      });
+
+      return htmlOut;
+    } catch {
+      return '';
+    }
+  };
+
+  const selector = [
+    'textarea.sheet-textarea',
+    'textarea.note-text',
+    'textarea.weapon-desc-text',
+    'textarea.combat-ability-text',
+    'textarea.equip-descedit',
+    'textarea.lss-prof-text',
+    'textarea.spell-desc-editor'
+  ].join(',');
+
+  const openModal = (ta, inlineEditor, persistKey) => {
+    if (!inlineEditor) return;
+    if (!canEdit) return;
+    const path = persistKey || ta?.getAttribute?.('data-sheet-path') || '';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'rte-modal-overlay';
+    overlay.innerHTML = `
+      <div class="rte-modal" role="dialog" aria-modal="true">
+        <div class="rte-modal-head">
+          <div class="rte-modal-title">Редактор текста</div>
+          <button type="button" class="rte-modal-close" aria-label="Закрыть">✕</button>
+        </div>
+
+        <div class="rte-modal-toolbar">
+          <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
+          <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
+          <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
+          <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
+          <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
+
+          <div class="rte-grow"></div>
+
+          <label class="rte-height">
+            <span>Высота</span>
+            <input type="range" min="140" max="700" step="10" data-rte-height-range>
+          </label>
+        </div>
+
+        <div class="rte-modal-body">
+          <div class="rte-editor rte-editor--modal" contenteditable="true" data-rte-modal-editor></div>
+        </div>
+
+        <div class="rte-modal-actions">
+          <button type="button" class="rte-action rte-cancel">Отмена</button>
+          <button type="button" class="rte-action rte-save">Сохранить</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const editor = overlay.querySelector('[data-rte-modal-editor]');
+    const range = overlay.querySelector('[data-rte-height-range]');
+    const btnClose = overlay.querySelector('.rte-modal-close');
+    const btnCancel = overlay.querySelector('.rte-cancel');
+    const btnSave = overlay.querySelector('.rte-save');
+    const toolbar = overlay.querySelector('.rte-modal-toolbar');
+
+    editor.innerHTML = inlineEditor.innerHTML || '';
+    editor.focus();
+
+    const H_KEY = 'dnd_sheet_rte_heights_v1';
+    const loadH = () => {
+      try { return JSON.parse(localStorage.getItem(H_KEY) || '{}') || {}; } catch { return {}; }
+    };
+    const saveH = (obj) => { try { localStorage.setItem(H_KEY, JSON.stringify(obj || {})); } catch {} };
+
+    const store = loadH();
+    const savedH = Number(store[path]);
+    const baseH = Number.isFinite(savedH) ? savedH : Math.max(180, inlineEditor.getBoundingClientRect().height || 220);
+    editor.style.minHeight = `${baseH}px`;
+    if (range) range.value = String(Math.max(140, Math.min(700, baseH)));
+
+    range?.addEventListener('input', () => {
+      const v = Number(range.value || 220);
+      editor.style.minHeight = `${v}px`;
+    });
+
+    toolbar.addEventListener('mousedown', (e) => e.preventDefault());
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target?.closest?.('button');
+      if (!btn) return;
+      editor.focus();
+
+      if (btn.hasAttribute('data-rte-link')) {
+        const url = prompt('Ссылка (URL):', 'https://');
+        if (url && url.trim()) {
+          try { document.execCommand('createLink', false, url.trim()); } catch {}
+          try {
+            editor.querySelectorAll('a').forEach(a => {
+              a.setAttribute('target', '_blank');
+              a.setAttribute('rel', 'noopener noreferrer');
+            });
+          } catch {}
+        }
+        return;
+      }
+
+      const cmd = btn.getAttribute('data-rte-cmd');
+      if (!cmd) return;
+      try { document.execCommand(cmd, false, null); } catch {}
+    });
+
+    editor.addEventListener('paste', (e) => {
+      try {
+        e.preventDefault();
+        const cd = e.clipboardData;
+        const html = cd?.getData?.('text/html');
+        const text = cd?.getData?.('text/plain');
+        const incoming = (html && html.trim())
+          ? sanitizeHtml(html)
+          : htmlEscape(String(text || '')).replace(/\n/g, '<br>');
+        document.execCommand('insertHTML', false, incoming);
+      } catch {}
+    });
+
+    editor.addEventListener('click', (e) => {
+      const a = e.target?.closest?.('a');
+      if (!a) return;
+      const href = a.getAttribute('href');
+      if (!href) return;
+      e.preventDefault();
+      try { window.open(href, '_blank', 'noopener'); } catch {}
+    });
+
+    const close = () => { try { overlay.remove(); } catch {} };
+
+    btnClose?.addEventListener('click', close);
+    btnCancel?.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    btnSave?.addEventListener('click', () => {
+      const html = sanitizeHtml(editor.innerHTML || '');
+      inlineEditor.innerHTML = html;
+      try { if (ta) ta.value = html; } catch {}
+
+      try {
+        const v = Number(range?.value || baseH);
+        const cur = loadH();
+        cur[path] = Math.max(140, Math.min(700, v));
+        saveH(cur);
+        inlineEditor.style.minHeight = `${cur[path]}px`;
+      } catch {}
+
+      try {
+        if (ta) {
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ta.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      } catch {}
+
+      close();
+    });
+
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  };
+
+  const textareas = Array.from(root.querySelectorAll(selector));
+  textareas.forEach((ta) => {
+    if (ta.closest('[data-rte]')) return;
+    const path = ta.getAttribute('data-sheet-path') || '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'rte';
+    wrap.setAttribute('data-rte', '');
+
+    const editor = document.createElement('div');
+    editor.className = 'rte-editor';
+    editor.setAttribute('contenteditable', 'true');
+    editor.setAttribute('data-rte-editor', '');
+
+    const ph = ta.getAttribute('placeholder');
+    if (ph) editor.setAttribute('data-placeholder', ph);
+
+    const raw = String(ta.value || '');
+    editor.innerHTML = raw
+      ? (raw.includes('<') ? sanitizeHtml(raw) : htmlEscape(raw).replace(/\n/g, '<br>'))
+      : '';
+
+    try {
+      const rows = Number(ta.getAttribute('rows') || 0);
+      if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
+    } catch {}
+
+    editor.addEventListener('paste', (e) => {
+      if (!canEdit) return;
+      try {
+        e.preventDefault();
+        const cd = e.clipboardData;
+        const html = cd?.getData?.('text/html');
+        const text = cd?.getData?.('text/plain');
+        const incoming = (html && html.trim())
+          ? sanitizeHtml(html)
+          : htmlEscape(String(text || '')).replace(/\n/g, '<br>');
+        document.execCommand('insertHTML', false, incoming);
+        // mirror into hidden textarea so existing save/bindings see it
+        try { ta.value = sanitizeHtml(editor.innerHTML || ''); } catch {}
+        try {
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ta.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch {}
+      } catch {}
+    });
+
+    editor.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      const key = path || ta.id || ta.name || '';
+      openModal(ta, editor, key || path);
+    });
+
+    editor.addEventListener('click', (e) => {
+      const a = e.target?.closest?.('a');
+      if (!a) return;
+      const href = a.getAttribute('href');
+      if (!href) return;
+      e.preventDefault();
+      try { window.open(href, '_blank', 'noopener'); } catch {}
+    });
+
+    try { ta.style.display = 'none'; } catch {}
+    wrap.appendChild(editor);
+    // move textarea into wrapper (hidden) so existing bindings keep working
+    const parent = ta.parentNode;
+    if (parent) {
+      parent.replaceChild(wrap, ta);
+      wrap.appendChild(ta);
+    } else {
+      wrap.appendChild(ta);
+    }
+  });
+}
+
 function bindEditableInputs(root, player, canEdit) {
     if (!root || !player?.sheet?.parsed) return;
 
@@ -707,290 +1022,6 @@ if (path === "proficiency" || path === "proficiencyCustom") {
 // ================== RICH TEXT (lightweight) ==================
 // Converts selected textareas into a simple rich-text editor using contenteditable + execCommand.
 // Stored value is HTML string in the same data-sheet-path.
-function upgradeSheetTextareasToRte(root, canEdit) {
-  if (!root) return;
-
-  const htmlEscape = (s) => String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-  const ALLOWED_TAGS = new Set(['B','STRONG','U','BR','UL','OL','LI','A','P','DIV','SPAN']);
-  const sanitizeHtml = (html) => {
-    try {
-      const tpl = document.createElement('template');
-      tpl.innerHTML = String(html || '');
-
-      const walk = (node) => {
-        const children = Array.from(node.childNodes || []);
-        for (const ch of children) {
-          if (ch.nodeType === Node.TEXT_NODE) continue;
-          if (ch.nodeType !== Node.ELEMENT_NODE) { ch.remove(); continue; }
-
-          const tag = (ch.tagName || '').toUpperCase();
-
-          // Normalize block tags to <br> breaks
-          if (tag === 'P' || tag === 'DIV') {
-            const frag = document.createDocumentFragment();
-            while (ch.firstChild) frag.appendChild(ch.firstChild);
-            ch.replaceWith(frag);
-            node.insertBefore(document.createElement('br'), frag.nextSibling);
-            continue;
-          }
-
-          if (!ALLOWED_TAGS.has(tag)) {
-            const frag = document.createDocumentFragment();
-            while (ch.firstChild) frag.appendChild(ch.firstChild);
-            ch.replaceWith(frag);
-            walk(node);
-            continue;
-          }
-
-          // strip style/class/etc
-          for (const attr of Array.from(ch.attributes || [])) {
-            const n = attr.name.toLowerCase();
-            if (tag === 'A' && (n === 'href' || n === 'title')) continue;
-            ch.removeAttribute(attr.name);
-          }
-
-          if (tag === 'A') {
-            const href = String(ch.getAttribute('href') || '').trim();
-            if (!href) {
-              const frag = document.createDocumentFragment();
-              while (ch.firstChild) frag.appendChild(ch.firstChild);
-              ch.replaceWith(frag);
-            } else {
-              ch.setAttribute('href', href);
-              ch.setAttribute('target', '_blank');
-              ch.setAttribute('rel', 'noopener noreferrer');
-            }
-          }
-
-          walk(ch);
-        }
-      };
-
-      walk(tpl.content);
-
-      let htmlOut = tpl.innerHTML;
-
-      // Linkify plain URLs that survived as text (basic)
-      htmlOut = htmlOut.replace(/(^|[\s>])((https?:\/\/|www\.)[^\s<]+)/gi, (m, p1, url) => {
-        const href = url.startsWith('http') ? url : ('https://' + url);
-        return `${p1}<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-      });
-
-      return htmlOut;
-    } catch {
-      return '';
-    }
-  };
-
-  const selector = [
-    'textarea.sheet-textarea',
-    'textarea.note-text',
-    'textarea.weapon-desc-text',
-    'textarea.combat-ability-text',
-    'textarea.equip-descedit',
-    'textarea.lss-prof-text',
-    'textarea.spell-desc-editor'
-  ].join(',');
-
-  const openModal = (inlineEditor) => {
-    if (!inlineEditor || !canEdit) return;
-
-    const path = inlineEditor.getAttribute('data-sheet-path');
-    if (!path) return;
-
-    const overlay = document.createElement('div');
-    overlay.className = 'rte-modal-overlay';
-    overlay.innerHTML = `
-      <div class="rte-modal" role="dialog" aria-modal="true">
-        <div class="rte-modal-head">
-          <div class="rte-modal-title">Редактор текста</div>
-          <button type="button" class="rte-modal-close" aria-label="Закрыть">✕</button>
-        </div>
-
-        <div class="rte-modal-toolbar">
-          <button type="button" class="rte-btn" data-rte-cmd="bold" title="Жирный"><b>B</b></button>
-          <button type="button" class="rte-btn" data-rte-cmd="underline" title="Подчеркнуть"><u>U</u></button>
-          <button type="button" class="rte-btn" data-rte-cmd="insertUnorderedList" title="Маркированный список">•</button>
-          <button type="button" class="rte-btn" data-rte-cmd="insertOrderedList" title="Нумерация">1.</button>
-          <button type="button" class="rte-btn" data-rte-link title="Ссылка">🔗</button>
-
-          <div class="rte-grow"></div>
-
-          <label class="rte-height">
-            <span>Высота</span>
-            <input type="range" min="140" max="700" step="10" data-rte-height-range>
-          </label>
-        </div>
-
-        <div class="rte-modal-body">
-          <div class="rte-editor rte-editor--modal" contenteditable="true" data-rte-modal-editor></div>
-        </div>
-
-        <div class="rte-modal-actions">
-          <button type="button" class="rte-action rte-cancel">Отмена</button>
-          <button type="button" class="rte-action rte-save">Сохранить</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    const editor = overlay.querySelector('[data-rte-modal-editor]');
-    const range = overlay.querySelector('[data-rte-height-range]');
-    const btnClose = overlay.querySelector('.rte-modal-close');
-    const btnCancel = overlay.querySelector('.rte-cancel');
-    const btnSave = overlay.querySelector('.rte-save');
-    const toolbar = overlay.querySelector('.rte-modal-toolbar');
-
-    editor.innerHTML = inlineEditor.innerHTML || '';
-    editor.focus();
-
-    const H_KEY = 'dnd_sheet_rte_heights_v1';
-    const loadH = () => {
-      try { return JSON.parse(localStorage.getItem(H_KEY) || '{}') || {}; } catch { return {}; }
-    };
-    const saveH = (obj) => { try { localStorage.setItem(H_KEY, JSON.stringify(obj || {})); } catch {} };
-
-    const store = loadH();
-    const savedH = Number(store[path]);
-    const baseH = Number.isFinite(savedH) ? savedH : Math.max(180, inlineEditor.getBoundingClientRect().height || 220);
-    editor.style.minHeight = `${baseH}px`;
-    if (range) range.value = String(Math.max(140, Math.min(700, baseH)));
-
-    range?.addEventListener('input', () => {
-      const v = Number(range.value || 220);
-      editor.style.minHeight = `${v}px`;
-    });
-
-    toolbar.addEventListener('mousedown', (e) => e.preventDefault());
-    toolbar.addEventListener('click', (e) => {
-      const btn = e.target?.closest?.('button');
-      if (!btn) return;
-      editor.focus();
-
-      if (btn.hasAttribute('data-rte-link')) {
-        const url = prompt('Ссылка (URL):', 'https://');
-        if (url && url.trim()) {
-          try { document.execCommand('createLink', false, url.trim()); } catch {}
-          try {
-            editor.querySelectorAll('a').forEach(a => {
-              a.setAttribute('target', '_blank');
-              a.setAttribute('rel', 'noopener noreferrer');
-            });
-          } catch {}
-        }
-        return;
-      }
-
-      const cmd = btn.getAttribute('data-rte-cmd');
-      if (!cmd) return;
-      try { document.execCommand(cmd, false, null); } catch {}
-    });
-
-    editor.addEventListener('paste', (e) => {
-      try {
-        e.preventDefault();
-        const cd = e.clipboardData;
-        const html = cd?.getData?.('text/html');
-        const text = cd?.getData?.('text/plain');
-        const incoming = (html && html.trim())
-          ? sanitizeHtml(html)
-          : htmlEscape(String(text || '')).replace(/\n/g, '<br>');
-        document.execCommand('insertHTML', false, incoming);
-      } catch {}
-    });
-
-    editor.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      if (!a) return;
-      const href = a.getAttribute('href');
-      if (!href) return;
-      e.preventDefault();
-      try { window.open(href, '_blank', 'noopener'); } catch {}
-    });
-
-    const close = () => { try { overlay.remove(); } catch {} };
-
-    btnClose?.addEventListener('click', close);
-    btnCancel?.addEventListener('click', close);
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-
-    btnSave?.addEventListener('click', () => {
-      const html = sanitizeHtml(editor.innerHTML || '');
-      inlineEditor.innerHTML = html;
-
-      try {
-        const v = Number(range?.value || baseH);
-        const cur = loadH();
-        cur[path] = Math.max(140, Math.min(700, v));
-        saveH(cur);
-        inlineEditor.style.minHeight = `${cur[path]}px`;
-      } catch {}
-
-      try {
-        inlineEditor.dispatchEvent(new Event('input', { bubbles: true }));
-        inlineEditor.dispatchEvent(new Event('change', { bubbles: true }));
-      } catch {}
-
-      close();
-    });
-
-    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-  };
-
-  const textareas = Array.from(root.querySelectorAll(selector));
-  textareas.forEach((ta) => {
-    if (ta.closest('[data-rte]')) return;
-    const path = ta.getAttribute('data-sheet-path');
-    if (!path) return;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'rte';
-    wrap.setAttribute('data-rte', '');
-
-    const editor = document.createElement('div');
-    editor.className = 'rte-editor';
-    editor.setAttribute('contenteditable', 'false');
-    editor.setAttribute('data-sheet-path', path);
-    editor.setAttribute('data-rte-editor', '');
-
-    const ph = ta.getAttribute('placeholder');
-    if (ph) editor.setAttribute('data-placeholder', ph);
-
-    const raw = String(ta.value || '');
-    editor.innerHTML = raw
-      ? (raw.includes('<') ? sanitizeHtml(raw) : htmlEscape(raw).replace(/\n/g, '<br>'))
-      : '';
-
-    try {
-      const rows = Number(ta.getAttribute('rows') || 0);
-      if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
-    } catch {}
-
-    editor.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      openModal(editor);
-    });
-
-    editor.addEventListener('click', (e) => {
-      const a = e.target?.closest?.('a');
-      if (!a) return;
-      const href = a.getAttribute('href');
-      if (!href) return;
-      e.preventDefault();
-      try { window.open(href, '_blank', 'noopener'); } catch {}
-    });
-
-    wrap.appendChild(editor);
-    ta.replaceWith(wrap);
-  });
-}
         if (path === "vitality.ac.value" || path === "vitality.hp-max.value" || path === "vitality.hp-current.value" || path === "vitality.speed.value") {
           updateHeroChips(root, player.sheet.parsed);
         }
