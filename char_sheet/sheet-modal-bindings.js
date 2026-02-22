@@ -1091,7 +1091,7 @@ function bindTextareaHeightPersistence(root, player) {
 
         // обновить значение спасброска в UI
         const ability = dot.closest('.lss-ability');
-        const saveInp = ability?.querySelector(`.lss-pill-val[data-kind="save"][data-stat-key="${String(statKey)}"]`);
+        const saveInp = ability?.querySelector(`.lss-pill-val[data-kind="save"][data-stat-key="${CSS.escape(statKey)}"]`);
         if (saveInp) {
           const v = formatMod(calcSaveBonus(sheet, statKey));
           if (saveInp.tagName === 'INPUT' || saveInp.tagName === 'TEXTAREA') saveInp.value = v;
@@ -1688,40 +1688,6 @@ function bindTextareaHeightPersistence(root, player) {
         </div>
       `;
       document.body.appendChild(wrap);
-
-    
-  const normalizeHref = (href) => {
-    const h = String(href || '').trim();
-    if (!h) return '';
-    if (/^(https?:|mailto:|tel:)/i.test(h)) return h;
-    if (/^[\w-]+\.[\w.-]+/i.test(h)) return `https://${h}`;
-    return h;
-  };
-
-  const updateViewsForSrc = (srcEl, finalHtml) => {
-    try {
-      if (!srcEl) return;
-      const doc = srcEl.ownerDocument || document;
-
-      const sp = srcEl.getAttribute?.('data-sheet-path');
-      const noteIdx = srcEl.hasAttribute?.('data-note-text') ? srcEl.getAttribute('data-note-text') : null;
-      const isSpell = srcEl.hasAttribute?.('data-spell-desc-editor') ? true : false;
-      let spellHref = '';
-      if (isSpell) {
-        const item = srcEl.closest?.('.spell-item[data-spell-url]');
-        spellHref = item?.getAttribute?.('data-spell-url') || '';
-      }
-
-      const match = (el) => {
-        if (sp && el.getAttribute?.('data-sheet-path') === sp) return true;
-        if (noteIdx !== null && el.hasAttribute?.('data-note-text') && el.getAttribute('data-note-text') === noteIdx) return true;
-        if (isSpell && el.hasAttribute?.('data-spell-desc-editor')) {
-          const it = el.closest?.('.spell-item[data-spell-url]');
-          const h = it?.getAttribute?.('data-spell-url') || '';
-          return h && h === spellHref;
-        }
-        return false;
-      };
 
       const allSrc = Array.from(doc.querySelectorAll('textarea.rte-src'));
       for (const ta of allSrc) {
@@ -2497,6 +2463,68 @@ function rteValueToDisplayHtml(value) {
   return rteLinkifyPlainText(s);
 }
 
+
+// ===== RTE helpers: normalize href + sync all views for a source textarea =====
+function normalizeHref(href) {
+  const h = String(href || '').trim();
+  if (!h) return '';
+  if (/^(https?:|mailto:|tel:)/i.test(h)) return h;
+  // handle "example.com" / "www.example.com"
+  if (/^[\w-]+\.[\w.-]+/i.test(h)) return `https://${h}`;
+  return h;
+}
+
+/**
+ * When we save a rich text field (notes / sheet path / spell desc),
+ * update ALL matching .rte-view blocks in the currently opened modal,
+ * so the preview updates immediately without waiting for rerender.
+ */
+function updateViewsForSrc(srcEl, finalHtml) {
+  try {
+    if (!srcEl) return;
+    const doc = srcEl.ownerDocument || document;
+
+    const sp = srcEl.getAttribute?.('data-sheet-path');
+    const noteIdx = srcEl.hasAttribute?.('data-note-text') ? srcEl.getAttribute('data-note-text') : null;
+    const isSpell = srcEl.hasAttribute?.('data-spell-desc-editor') ? true : false;
+
+    let spellHref = '';
+    if (isSpell) {
+      const item = srcEl.closest?.('.spell-item[data-spell-url]');
+      spellHref = item?.getAttribute?.('data-spell-url') || '';
+    }
+
+    const match = (el) => {
+      if (sp && el.getAttribute?.('data-sheet-path') === sp) return true;
+      if (noteIdx !== null && el.hasAttribute?.('data-note-text') && el.getAttribute('data-note-text') === noteIdx) return true;
+      if (isSpell && el.hasAttribute?.('data-spell-desc-editor')) {
+        const it = el.closest?.('.spell-item[data-spell-url]');
+        const h = it?.getAttribute?.('data-spell-url') || '';
+        return h && h === spellHref;
+      }
+      return false;
+    };
+
+    const allSrc = Array.from(doc.querySelectorAll('textarea.rte-src'));
+    for (const ta of allSrc) {
+      if (!match(ta)) continue;
+      ta.value = finalHtml;
+
+      const wrap = ta.closest?.('.rte-wrap');
+      const view = wrap?.querySelector?.('.rte-view');
+      if (view) {
+        try {
+          view.innerHTML = (typeof rteValueToDisplayHtml === 'function') ? rteValueToDisplayHtml(finalHtml) : String(finalHtml || '');
+        } catch {
+          view.textContent = String(finalHtml || '');
+        }
+        view.classList.toggle('is-empty', !finalHtml);
+      }
+    }
+  } catch {}
+}
+
+
 function bindRichTextEditors(root, player, canEdit) {
   if (!root) return;
   rteEnsureModal();
@@ -2547,38 +2575,6 @@ function bindRichTextEditors(root, player, canEdit) {
         sheet.text[key].value = cleanupSpellDesc(String(htmlValue || ''));
         try { scheduleSheetSave(player); } catch {}
         return;
-      }
-    } catch {}
-  };
-
-  // Update the corresponding .rte-view(s) for a given hidden textarea source.
-  // This prevents stale previews/titles until next full rerender.
-  const updateViewsForSrc = (srcEl, htmlValue) => {
-    try {
-      if (!srcEl) return;
-      const v = String(htmlValue ?? srcEl.value ?? "");
-      // 1) Update the paired view inside the same wrapper
-      const wrap = srcEl.closest?.('.rte-wrap');
-      if (wrap) {
-        const view = wrap.querySelector?.('.rte-view');
-        if (view) {
-          view.innerHTML = rteValueToDisplayHtml(v) || "";
-          view.classList.toggle('is-empty', !v);
-        }
-      }
-      // 2) Update any other views bound to the same data-sheet-path (rare, but safe)
-      const sp = srcEl.getAttribute?.('data-sheet-path');
-      if (sp && root) {
-        const others = root.querySelectorAll?.(`textarea.rte-src[data-sheet-path="${String(sp).replace(/"/g, '\\\"' )}"]`) || [];
-        others.forEach((ta) => {
-          if (ta === srcEl) return;
-          const w = ta.closest?.('.rte-wrap');
-          const vw = w?.querySelector?.('.rte-view');
-          if (vw) {
-            vw.innerHTML = rteValueToDisplayHtml(v) || "";
-            vw.classList.toggle('is-empty', !v);
-          }
-        });
       }
     } catch {}
   };
@@ -2800,8 +2796,11 @@ function bindRichTextEditors(root, player, canEdit) {
       const a = e.target?.closest?.('a');
       if (a) {
         // Always open links in a new browser window/tab (not in the current page)
-        let href = a.href || a.getAttribute?.('href') || '';
-        href = (shared.normalizeHref || normalizeHref)(href) || href;
+        // IMPORTANT: use raw attribute first, because for "example.com" browser resolves a.href to our domain.
+        const rawHref = a.getAttribute?.('href') || '';
+        let href = rawHref || a.href || '';
+        href = (shared.normalizeHref || normalizeHref)(rawHref || href) || href;
+        // If still empty / hash, do nothing (prevents opening our own sheet page).
         if (!href || href === '#') return;
         e.preventDefault();
         e.stopPropagation();
