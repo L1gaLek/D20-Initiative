@@ -569,6 +569,26 @@ function normalizeHref(href) {
 function upgradeSheetTextareasToRte(root, canEdit) {
   if (!root) return;
 
+  // Global link interceptor for rich-text areas.
+  // Some parts of the app may have delegated click handlers that hijack <a> navigation.
+  // We intercept in capture phase and force opening links in a new browser tab.
+  if (!window.__rteLinkInterceptorInstalled) {
+    window.__rteLinkInterceptorInstalled = true;
+    document.addEventListener('click', (e) => {
+      try {
+        const a = e.target?.closest?.('a[href]');
+        if (!a) return;
+        if (!a.closest('.rte-editor') && !a.closest('.rte-modal')) return;
+        const href = normalizeHref(a.getAttribute('href'));
+        if (!href) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try { e.stopImmediatePropagation?.(); } catch {}
+        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+      } catch {}
+    }, true);
+  }
+
   const htmlEscape = (s) => String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -634,7 +654,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
             const st = String(ch.getAttribute('style') || '');
             const m = st.match(/font-size\s*:\s*([0-9]+)px/i);
             if (m) {
-              const px = Math.max(1, Math.min(10, Number(m[1])));
+              const px = Math.max(12, Math.min(30, Number(m[1])));
               ch.setAttribute('style', `font-size:${px}px`);
             } else {
               ch.removeAttribute('style');
@@ -725,16 +745,16 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           <label class="rte-fontsize" title="Размер текста">
             <span>Aa</span>
             <select data-rte-fontsize>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4" selected>4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-              <option value="7">7</option>
-              <option value="8">8</option>
-              <option value="9">9</option>
-              <option value="10">10</option>
+              <option value="12">12</option>
+              <option value="14">14</option>
+              <option value="16" selected>16</option>
+              <option value="18">18</option>
+              <option value="20">20</option>
+              <option value="22">22</option>
+              <option value="24">24</option>
+              <option value="26">26</option>
+              <option value="28">28</option>
+              <option value="30">30</option>
             </select>
           </label>
 
@@ -782,42 +802,52 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     const applyFontSize = (px) => {
       const v = String(px || '').trim();
       if (!/^\d+$/.test(v)) return;
-      const n = Math.max(1, Math.min(10, Number(v)));
+      const n = Math.max(12, Math.min(30, Number(v)));
 
       const sel = window.getSelection?.();
       if (!sel || sel.rangeCount === 0) return;
       const range = sel.getRangeAt(0);
 
+      const setCaretAfter = (node) => {
+        try {
+          const r = document.createRange();
+          r.setStartAfter(node);
+          r.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        } catch {}
+      };
+
       if (range.collapsed) {
         let node = sel.anchorNode;
         if (node && node.nodeType === Node.TEXT_NODE) node = node.parentNode;
-        const span = node && node.closest ? node.closest('span') : null;
-        if (span && /font-size\s*:\s*\d+px/i.test(String(span.getAttribute('style') || ''))) {
-          span.style.fontSize = n + 'px';
+        const span0 = node && node.closest ? node.closest('span') : null;
+        if (span0 && /font-size\s*:\s*\d+px/i.test(String(span0.getAttribute('style') || ''))) {
+          span0.style.fontSize = n + 'px';
           return;
         }
-        try {
-          document.execCommand('insertHTML', false, `<span style="font-size:${n}px">&#8203;</span>`);
-        } catch {}
+        const span = document.createElement('span');
+        span.style.fontSize = n + 'px';
+        span.innerHTML = '&#8203;';
+        range.insertNode(span);
+        setCaretAfter(span);
         return;
       }
 
       try {
-        const span = document.createElement('span');
-        span.style.fontSize = n + 'px';
-        const frag = range.extractContents();
-        span.appendChild(frag);
-        range.insertNode(span);
+        const wrapper = document.createElement('span');
+        wrapper.style.fontSize = n + 'px';
 
-        span.querySelectorAll('span[style]').forEach(s => {
+        const frag = range.extractContents();
+        wrapper.appendChild(frag);
+
+        wrapper.querySelectorAll('span[style]').forEach(s => {
           const st = String(s.getAttribute('style') || '');
           if (/font-size\s*:\s*\d+px/i.test(st)) s.style.fontSize = n + 'px';
         });
 
-        sel.removeAllRanges();
-        const r = document.createRange();
-        r.selectNodeContents(span);
-        sel.addRange(r);
+        range.insertNode(wrapper);
+        setCaretAfter(wrapper);
       } catch {}
     };
 
