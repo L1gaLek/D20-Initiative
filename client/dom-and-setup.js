@@ -1,3 +1,65 @@
+// ================== GLOBAL LINK GUARD (Character Sheet) ==================
+// IMPORTANT:
+// В проекте есть глобальные делегированные обработчики кликов (роутер/перерисовка UI).
+// Из-за этого клик по внешней ссылке внутри "Листа персонажа" может интерпретироваться
+// как внутренний переход и приводить к сбросу состояния листа.
+//
+// Решение: перехватываем клик *самым ранним* скриптом (этот файл загружается одним из первых)
+// в capture-фазе и принудительно открываем внешние ссылки в НОВОЙ вкладке браузера.
+(function installSheetExternalLinkGuard() {
+  if (window.__sheetExternalLinkGuardInstalled) return;
+  window.__sheetExternalLinkGuardInstalled = true;
+
+  const normalizeHref = (href) => {
+    const h = String(href || '').trim();
+    if (!h) return '';
+    if (/^(https?:\/\/|mailto:|tel:)/i.test(h)) return h;
+    if (/^www\./i.test(h)) return 'https://' + h;
+    if (/^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h)) return 'https://' + h;
+    return h;
+  };
+
+  const isExternalHref = (href) => {
+    const h = String(href || '').trim();
+    if (!h) return false;
+    return /^(https?:\/\/|mailto:|tel:)/i.test(h) || /^www\./i.test(h) || /^[a-z0-9.-]+\.[a-z]{2,}([\/?#].*)?$/i.test(h);
+  };
+
+  const handle = (e) => {
+    try {
+      const tgt = e.target;
+      if (!tgt || !(tgt instanceof Element)) return;
+
+      const sheetModal = document.getElementById('sheet-modal');
+      if (!sheetModal || !sheetModal.contains(tgt)) return;
+
+      // Поддержка:
+      // 1) обычные <a href="...">
+      // 2) наши RTE-ссылки: <span class="rte-link" data-href="...">...
+      const linkEl = tgt.closest('a[href], .rte-link[data-href]');
+      if (!linkEl) return;
+
+      const rawHref = linkEl.matches('a[href]') ? linkEl.getAttribute('href') : linkEl.getAttribute('data-href');
+      const href = normalizeHref(rawHref);
+      if (!href || !isExternalHref(href)) return;
+
+      // ВАЖНО: останавливаем *любые* другие делегированные обработчики, которые
+      // могут сбрасывать страницу/лист персонажа.
+      e.preventDefault();
+      e.stopPropagation();
+      try { e.stopImmediatePropagation?.(); } catch {}
+
+      // Открываем в новой вкладке браузера.
+      try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+    } catch {}
+  };
+
+  // Перехватываем click в capture-фазе (самый надёжный вариант).
+  // Добавляем также auxclick (средняя кнопка), чтобы не было "внутреннего" перехода.
+  document.addEventListener('click', handle, true);
+  document.addEventListener('auxclick', handle, true);
+})();
+
 // ================== ELEMENTS ==================
 const loginDiv = document.getElementById('login-container');
 const joinBtn = document.getElementById('joinBtn');
