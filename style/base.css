@@ -1306,6 +1306,23 @@ button:hover {
   white-space: normal;
 }
 
+/* Force *project* typography/colors on pasted content.
+   Keep semantic emphasis (b/i/u) and list structure, but suppress
+   foreign fonts/colors/backgrounds coming from external sources. */
+.rte-editor *,
+.rte-editor *::before,
+.rte-editor *::after{
+  font-family: inherit !important;
+  font-size: inherit !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Keep link styling controlled by our .rte-link rules below */
+.rte-editor :not(a):not(a *){
+  color: inherit !important;
+}
+
 /* Preserve pasted structure (paragraphs/lists) while keeping site styling */
 .rte-editor p,
 .rte-editor div{
