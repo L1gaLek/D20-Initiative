@@ -2105,6 +2105,14 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .equip-row__desc{ margin-top:6px; font-size: 12px; opacity:0.92; white-space: pre-wrap; }
 .equip-row__right{ display:flex; align-items:flex-start; }
 
+/* Flash feedback for "Добавить/Купить" in SRD equipment overlay */
+.equip-action-flash-ok{
+  background: rgba(0, 160, 70, 0.92) !important;
+  border-color: rgba(0, 200, 90, 0.95) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(0, 200, 90, 0.20) inset;
+}
+
 .coin-box{
   border: 1px solid rgba(255,255,255,0.14);
   background: rgba(255,255,255,0.05);
