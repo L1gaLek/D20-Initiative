@@ -216,7 +216,8 @@ function syncArmorRulesFromEquipped(sheet) {
     ap.shieldRules.sourceId = '';
   } else {
     const src = String(shieldItem.id || '').trim();
-    if (String(ap.shieldRules.sourceId || '') !== src) {
+    const bonusEmpty = (ap.shieldRules.bonus === '' || ap.shieldRules.bonus === null || ap.shieldRules.bonus === undefined);
+    if (String(ap.shieldRules.sourceId || '') !== src || bonusEmpty) {
       const def = defaultShieldRulesFromItem(shieldItem);
       ap.shieldRules.kind = 'shield';
       ap.shieldRules.bonus = def.bonus;
@@ -246,8 +247,15 @@ function computeAutoAcFromEquipment(sheet) {
   let base = 10;
   let dexBonus = dexMod;
 
+  const ruleNum = (raw, fallback) => {
+    // IMPORTANT: empty string should mean "use fallback" (not 0)
+    if (raw === '' || raw === null || raw === undefined) return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
   if (hasArmor) {
-    const baseRule = safeInt(ap?.armorRules?.base, parseAcNumber(armorItem?.armor?.ac, 10));
+    const baseRule = ruleNum(ap?.armorRules?.base, parseAcNumber(armorItem?.armor?.ac, 10));
     base = baseRule || 10;
 
     const modStat = String(ap?.armorRules?.modStat || '-').trim();
@@ -257,21 +265,17 @@ function computeAutoAcFromEquipment(sheet) {
       const mod = safeInt(sheet?.stats?.[modStat]?.modifier, 0);
       const maxRaw = ap?.armorRules?.max;
       const hasMax = (maxRaw !== '' && maxRaw !== null && maxRaw !== undefined);
-      const max = hasMax ? safeInt(maxRaw, 0) : null;
+      const max = hasMax ? ruleNum(maxRaw, 0) : null;
       dexBonus = (max === null) ? mod : Math.min(mod, max);
     }
   }
 
   // shield bonus
-  const shieldBonus = hasShield ? safeInt(ap?.shieldRules?.bonus, parseAcNumber(shieldItem?.armor?.ac, 0)) : 0;
+  // Shield bonus must work even if bonus input is empty (''), so we treat '' as "use fallback".
+  const shieldBonus = hasShield ? ruleNum(ap?.shieldRules?.bonus, parseAcNumber(shieldItem?.armor?.ac, 2)) : 0;
 
-  // Optional: add proficiency bonus to AC when toggle is enabled (only when armor is worn)
-  let profBonus = 0;
-  try {
-    if (hasArmor && !!ap?.armorRules?.addProf) {
-      profBonus = (typeof getProfBonus === 'function') ? safeInt(getProfBonus(sheet), 0) : 0;
-    }
-  } catch { profBonus = 0; }
+  // Armor proficiency toggle removed from UI; keep this always 0 for backwards compatibility.
+  const profBonus = 0;
 
   const total = Math.max(0, Math.trunc(base + dexBonus + shieldBonus + profBonus));
   return total;

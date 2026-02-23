@@ -1454,33 +1454,7 @@ function upgradeSheetTextareasToRte(root, player, canEdit) {
 function bindEditableInputs(root, player, canEdit) {
     if (!root || !player?.sheet?.parsed) return;
 
-    // "Владение" toggle for armor: enabled only when some armor is selected.
-    // If armor is cleared, we force toggle off.
-    const syncArmorProfToggleUi = () => {
-      try {
-        const cb = root.querySelector('[data-armor-prof]');
-        if (!cb) return;
-        const armorSel = String(getByPath(player.sheet.parsed, 'appearance.slots.armor') || '').trim();
-        const hasArmor = !!armorSel;
-        if (!hasArmor) {
-          // force OFF when no armor is equipped
-          const wasOn = !!getByPath(player.sheet.parsed, 'appearance.armorRules.addProf');
-          try { cb.checked = false; } catch {}
-          try { setByPath(player.sheet.parsed, 'appearance.armorRules.addProf', false); } catch {}
-
-          // Persist and recompute AC immediately if state changed.
-          if (wasOn) {
-            try {
-              window.__equipAc?.applyAutoAcToSheet?.(player.sheet.parsed);
-              updateHeroChips(root, player.sheet.parsed);
-            } catch {}
-            try { scheduleSheetSave(player); } catch {}
-          }
-        }
-        // interactive only if canEdit and armor selected
-        try { cb.disabled = (!canEdit) || (!hasArmor); } catch {}
-      } catch {}
-    };
+    // NOTE: "Владение" toggle for armor was removed from UI (no longer needed).
 
     // Upgrade large textareas to a lightweight rich-text editor (toolbar + contenteditable).
     // This is used for backstory/notes/descriptions etc.
@@ -1544,10 +1518,24 @@ function bindEditableInputs(root, player, canEdit) {
 
         setByPath(player.sheet.parsed, path, val);
 
-        // Armor prof toggle state depends on whether armor is selected.
-        if (path === 'appearance.slots.armor') {
-          syncArmorProfToggleUi();
-        }
+        // If armor selection changes, sync meta inputs immediately (КД/Мод./Макс.).
+        const syncAppearanceArmorUi = () => {
+          try {
+            const sheet = player.sheet.parsed;
+            const baseInp = root.querySelector('[data-sheet-path="appearance.armorRules.base"]');
+            const modSel = root.querySelector('[data-sheet-path="appearance.armorRules.modStat"]');
+            const maxInp = root.querySelector('[data-sheet-path="appearance.armorRules.max"]');
+            const shieldBonusInp = root.querySelector('[data-sheet-path="appearance.shieldRules.bonus"]');
+
+            if (baseInp) baseInp.value = String(getByPath(sheet, 'appearance.armorRules.base') ?? '');
+            if (modSel) modSel.value = String(getByPath(sheet, 'appearance.armorRules.modStat') ?? '-');
+            if (maxInp) {
+              const v = getByPath(sheet, 'appearance.armorRules.max');
+              maxInp.value = (v === 0 ? '' : String(v ?? ''));
+            }
+            if (shieldBonusInp) shieldBonusInp.value = String(getByPath(sheet, 'appearance.shieldRules.bonus') ?? '');
+          } catch {}
+        };
 
         // ===== Auto AC from equipment =====
         // If user changes equipped armor/shield or edits armor params, recompute AC immediately.
@@ -1560,6 +1548,12 @@ function bindEditableInputs(root, player, canEdit) {
             window.__equipAc?.applyAutoAcToSheet?.(player.sheet.parsed);
             updateHeroChips(root, player.sheet.parsed);
           } catch {}
+
+          // After auto-syncing rules from equipped items, update meta inputs right away
+          // so user doesn't need to re-open the Appearance tab.
+          if (path.startsWith('appearance.slots.')) {
+            try { syncAppearanceArmorUi(); } catch {}
+          }
         }
 
         // Token preview refresh (mode/crop sliders)
@@ -1626,9 +1620,7 @@ if (path === "proficiency" || path === "proficiencyCustom") {
       inp.addEventListener("change", handler);
     });
 
-    // Initial sync: checkbox "Владение" must be disabled until a worn armor is selected.
-    // Also clears stale addProf if armor is not equipped.
-    try { syncArmorProfToggleUi(); } catch {}
+    // Initial sync for Appearance meta inputs is handled by applyAutoAcToSheet on render.
 
     // ===== Persist manual textarea resize (height) =====
     // Пользователь просил: если растянул textarea по высоте — высота должна сохраняться
@@ -2683,30 +2675,30 @@ function bindTextareaHeightPersistence(root, player) {
       const { player: curPlayer, canEdit: curCanEdit } = getState();
       if (!curPlayer) return;
 
-      // Toggle item description/details (works even in read-only: toggles only DOM).
+      // Toggle item description (Показать/Скрыть)
+      // IMPORTANT: do it in-place (DOM) to avoid any rerender side-effects.
       const toggleDescBtn = e.target?.closest?.('[data-inv-toggle-desc][data-tab][data-idx]');
       if (toggleDescBtn) {
         const tabId = String(toggleDescBtn.getAttribute('data-tab') || 'weapons');
         const idx = safeInt(toggleDescBtn.getAttribute('data-idx'), -1);
 
-        // read-only: just toggle DOM
-        if (!curCanEdit) {
-          const card = toggleDescBtn.closest('[data-inv-item]');
-          const descEl = card?.querySelector?.('.equip-desc, .equip-descedit');
-          if (descEl) {
-            descEl.classList.toggle('collapsed');
-            const collapsed = descEl.classList.contains('collapsed');
-            toggleDescBtn.textContent = collapsed ? 'Показать' : 'Скрыть';
-          }
-          return;
-        }
+        const card = toggleDescBtn.closest('[data-inv-item]');
+        const descEl = card?.querySelector?.('.equip-desc, .equip-descedit');
+        if (descEl) {
+          descEl.classList.toggle('collapsed');
+          const collapsed = descEl.classList.contains('collapsed');
+          toggleDescBtn.textContent = collapsed ? 'Показать' : 'Скрыть';
 
-        const sheet = curPlayer?.sheet?.parsed;
-        if (!sheet?.inventory || !Array.isArray(sheet.inventory[tabId]) || idx < 0 || idx >= sheet.inventory[tabId].length) return;
-        const it = sheet.inventory[tabId][idx];
-        if (it && typeof it === 'object') it.descCollapsed = !it.descCollapsed;
-        scheduleSheetSave(curPlayer);
-        rerenderActiveTab(curPlayer);
+          // persist state for editable sheets
+          if (curCanEdit) {
+            const sheet = curPlayer?.sheet?.parsed;
+            if (sheet?.inventory && Array.isArray(sheet.inventory[tabId]) && idx >= 0 && idx < sheet.inventory[tabId].length) {
+              const it = sheet.inventory[tabId][idx];
+              if (it && typeof it === 'object') it.descCollapsed = !!collapsed;
+              scheduleSheetSave(curPlayer);
+            }
+          }
+        }
         return;
       }
 
