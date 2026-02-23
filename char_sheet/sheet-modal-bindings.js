@@ -704,30 +704,24 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           const tag = (ch.tagName || '').toUpperCase();
 
-          // Block tags:
-          // - In paste mode we KEEP paragraphs so the user gets real paragraph/list structure.
-          // - In other modes we historically flattened blocks into <br> to keep saved data compact.
-          //   We keep that behavior for backward compatibility.
-          if (tag === 'P' || tag === 'DIV') {
-            if (mode === 'paste') {
-              // Normalize DIV -> P for consistent styling in our editor.
-              if (tag === 'DIV') {
-                const p = document.createElement('p');
-                while (ch.firstChild) p.appendChild(ch.firstChild);
-                ch.replaceWith(p);
-                walk(p, parentTag);
-              } else {
-                // keep <p>, just continue walking
-                walk(ch, tag);
-              }
-            } else {
-              const frag = document.createDocumentFragment();
-              while (ch.firstChild) frag.appendChild(ch.firstChild);
-              ch.replaceWith(frag);
-              if (parentTag !== 'TD' && parentTag !== 'TH') {
-                node.insertBefore(document.createElement('br'), frag.nextSibling);
-              }
+          // Normalize block tags to <br> breaks for legacy/plain storage.
+          // In 'store' mode we PRESERVE paragraphs/lists so formatting doesn't collapse after Save.
+          if ((tag === 'P' || tag === 'DIV') && mode !== 'store') {
+            const frag = document.createDocumentFragment();
+            while (ch.firstChild) frag.appendChild(ch.firstChild);
+            ch.replaceWith(frag);
+            if (parentTag !== 'TD' && parentTag !== 'TH') {
+              node.insertBefore(document.createElement('br'), frag.nextSibling);
             }
+            continue;
+          }
+
+          // In 'store' mode we keep block structure; normalize <div> to <p> for consistency.
+          if (mode === 'store' && tag === 'DIV') {
+            const p = document.createElement('p');
+            while (ch.firstChild) p.appendChild(ch.firstChild);
+            ch.replaceWith(p);
+            walk(p, 'P');
             continue;
           }
 
@@ -811,18 +805,12 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               }
             }
 
-            // font-size: keep only numeric sizes (px/pt) and clamp to a safe range.
-            const sizeM = st.match(/font-size\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*(px|pt)\b/i);
+            const sizeM = st.match(/font-size\s*:\s*([0-9]+)px/i);
             const colorM = st.match(/color\s*:\s*([^;]+)/i);
 
             const out = [];
-            // Keep font-size in both store mode (our editor feature) and paste mode ("по возможности").
-            // We clamp to a safe range so external huge fonts don't break layout.
-            if (sizeM) {
-              const num = Number(sizeM[1]);
-              const unit = String(sizeM[2] || 'px').toLowerCase();
-              const pxRaw = unit === 'pt' ? (num * 4 / 3) : num; // ~1pt = 1.333px
-              const px = Math.max(12, Math.min(30, Math.round(pxRaw)));
+            if (mode !== 'paste' && sizeM) {
+              const px = Math.max(12, Math.min(30, Number(sizeM[1])));
               out.push(`font-size:${px}px`);
             }
             if (ch.classList?.contains?.('rte-link') && colorM) {
@@ -1201,7 +1189,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     btnSave?.addEventListener('click', () => {
-      const html = sanitizeHtml(editor.innerHTML || '');
+      const html = sanitizeHtml(editor.innerHTML || '', { mode: 'store' });
       inlineEditor.innerHTML = html;
       try { if (ta) ta.value = html; } catch {}
 
@@ -1237,7 +1225,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
     const raw = String(ta.value || '');
     editor.innerHTML = raw
-      ? (raw.includes('<') ? sanitizeHtml(raw) : htmlEscape(raw).replace(/\n/g, '<br>'))
+      ? (raw.includes('<') ? sanitizeHtml(raw, { mode: 'store' }) : htmlEscape(raw).replace(/\n/g, '<br>'))
       : '';
 
     try {
@@ -1257,7 +1245,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           : linkifyPlain(String(text || ''));
         document.execCommand('insertHTML', false, incoming);
         // mirror into hidden textarea so existing save/bindings see it
-        try { ta.value = sanitizeHtml(editor.innerHTML || ''); } catch {}
+        try { ta.value = sanitizeHtml(editor.innerHTML || '', { mode: 'store' }); } catch {}
         try {
           ta.dispatchEvent(new Event('input', { bubbles: true }));
           ta.dispatchEvent(new Event('change', { bubbles: true }));
