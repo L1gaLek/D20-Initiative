@@ -317,7 +317,7 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    return `<div class="sheet-grid-1">${blocks}</div>`;
+    return `<div class="sheet-grid-2">${blocks}</div>`;
   }
 
   function renderSpellsTab(vm) {
@@ -1192,6 +1192,69 @@ function renderShopTab(vm, canEdit) {
     return `<div class="sheet-note">Раздел в разработке</div>`;
   }
 
+  // ================== RTE: persist manual height (per player + field) ==================
+  function wireRteHeightPersistence(root, playerId) {
+    if (!root || !playerId) return;
+    let ls;
+    try { ls = window.localStorage; } catch { ls = null; }
+    if (!ls) return;
+
+    const editors = Array.from(root.querySelectorAll('.rte-editor[data-rte-editor]'));
+    editors.forEach((ed) => {
+      if (!ed || ed.__rteHeightPersistBound) return;
+      ed.__rteHeightPersistBound = true;
+
+      const wrap = ed.closest('.rte');
+      const ta = wrap ? (wrap.querySelector('textarea[data-sheet-path]') || wrap.querySelector('textarea')) : null;
+      const fieldKey = String(
+        ta?.getAttribute?.('data-sheet-path') ||
+        ta?.id ||
+        ta?.name ||
+        ''
+      ).trim();
+      if (!fieldKey) return;
+
+      const lsKey = `sheet_rte_h:${String(playerId)}:${fieldKey}`;
+
+      // restore once
+      try {
+        const saved = String(ls.getItem(lsKey) || '').trim();
+        const h = Math.round(Number(saved));
+        if (Number.isFinite(h) && h >= 60 && h <= 1800) {
+          ed.style.height = `${h}px`;
+        }
+      } catch {}
+
+      // persist on resize (user dragging the resize handle)
+      let last = 0;
+      const getH = () => {
+        try { return Math.round(ed.getBoundingClientRect().height || 0); } catch { return 0; }
+      };
+      last = getH();
+
+      let t = null;
+      const scheduleSave = () => {
+        if (t) clearTimeout(t);
+        t = setTimeout(() => {
+          const h = getH();
+          if (!h || Math.abs(h - last) < 2) return;
+          last = h;
+          try { ls.setItem(lsKey, String(h)); } catch {}
+        }, 120);
+      };
+
+      try {
+        const ro = new ResizeObserver(() => scheduleSave());
+        ro.observe(ed);
+        ed.__rteHeightResizeObserver = ro;
+      } catch {
+        // fallback: save on mouseup/touchend
+        ed.addEventListener('mouseup', scheduleSave);
+        ed.addEventListener('touchend', scheduleSave, { passive: true });
+      }
+    });
+  }
+
   // ================== RENDER MODAL ==================
   function renderSheetModal(player, opts = {}) {
     if (!sheetTitle || !sheetSubtitle || !sheetActions || !sheetContent) return;
@@ -1441,6 +1504,8 @@ function renderShopTab(vm, canEdit) {
     sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
     bindEditableInputs(sheetContent, player, canEdit);
+    // after RTE upgrade: allow manual resize and persist chosen height
+    wireRteHeightPersistence(sheetContent, player.id);
     bindLanguagesUi(sheetContent, player, canEdit);
     bindSkillBoostDots(sheetContent, player, canEdit);
     bindSaveProfDots(sheetContent, player, canEdit);
@@ -1485,6 +1550,7 @@ function renderShopTab(vm, canEdit) {
           main.innerHTML = renderActiveTab(activeTab, freshVm, canEdit);
 
           bindEditableInputs(sheetContent, player, canEdit);
+          wireRteHeightPersistence(sheetContent, player.id);
           bindSkillBoostDots(sheetContent, player, canEdit);
           bindSaveProfDots(sheetContent, player, canEdit);
           bindStatRollButtons(sheetContent, player);
