@@ -317,7 +317,7 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    return `<div class="sheet-grid-2">${blocks}</div>`;
+    return `<div class="sheet-grid-1">${blocks}</div>`;
   }
 
   function renderSpellsTab(vm) {
@@ -641,7 +641,9 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   // Items from SRD DB / Shop: we keep UI simpler (no extra "Описание" button).
   const fromDb = !!it._fromDb || (String(it._source || '').toLowerCase() === 'db') || (String(it._source || '').toLowerCase() === 'shop');
 
-  const descCollapsed = !!it.descCollapsed;
+  // По умолчанию описание у предметов СВЁРНУТО.
+  // Если пользователь уже менял состояние — используем сохранённое значение.
+  const descCollapsed = (typeof it.descCollapsed === 'undefined') ? true : !!it.descCollapsed;
   const detailsOpen = !!it.detailsOpen;
 
   const extra = (() => {

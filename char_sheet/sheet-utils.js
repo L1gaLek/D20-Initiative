@@ -284,11 +284,85 @@ function computeAutoAcFromEquipment(sheet) {
 function applyAutoAcToSheet(sheet) {
   if (!sheet || typeof sheet !== 'object') return;
   syncArmorRulesFromEquipped(sheet);
-  const ac = computeAutoAcFromEquipment(sheet);
-  if (ac === null) return;
+
+  // Two AC flows:
+  // 1) Armor equipped -> compute full AC from armor rules + shield bonus.
+  // 2) Only shield equipped -> add/remove shield bonus to the EXISTING AC value (class/natural/etc.).
+  //    Must be idempotent: equip -> +bonus, unequip -> revert.
+  const ap = ensureAppearanceObj(sheet);
+  const invArmor = Array.isArray(sheet?.inventory?.armor) ? sheet.inventory.armor : [];
+
+  const armorSel = String(ap?.slots?.armor || '').trim();
+  const shieldSel = String(ap?.slots?.shield || '').trim();
+  const armorItem = invFindByIdOrName(invArmor, armorSel);
+  const shieldItem = invFindByIdOrName(invArmor, shieldSel);
+
+  const hasArmor = !!armorItem
+    && String(armorItem?.armor?.type || '').toLowerCase() !== 'shield'
+    && !/щит/i.test(String(armorItem?.name_ru || armorItem?.name || ''));
+  const hasShield = !!shieldItem
+    && (String(shieldItem?.armor?.type || '').toLowerCase() === 'shield'
+      || /щит/i.test(String(shieldItem?.name_ru || shieldItem?.name || '')));
+
   if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
   if (!sheet.vitality.ac || typeof sheet.vitality.ac !== 'object') sheet.vitality.ac = { value: 10 };
-  sheet.vitality.ac.value = ac;
+  if (!ap.shieldRules || typeof ap.shieldRules !== 'object') ap.shieldRules = {};
+
+  const curAcVal = safeInt(sheet?.vitality?.ac?.value, safeInt(sheet?.vitality?.ac, 10));
+
+  // Armor mode: recompute total AC (including shield bonus) and clear additive shield tracking.
+  if (hasArmor) {
+    const ac = computeAutoAcFromEquipment(sheet);
+    if (ac !== null) sheet.vitality.ac.value = ac;
+    ap.shieldRules._applied = false;
+    ap.shieldRules._baseAc = null;
+    ap.shieldRules._appliedSrc = '';
+    ap.shieldRules._appliedBonus = null;
+    return;
+  }
+
+  // Shield-only: add/remove from existing AC.
+  if (hasShield) {
+    const shieldSrc = String(ap?.shieldRules?.sourceId || shieldItem?.id || '').trim();
+    const shieldBonus = (() => {
+      const raw = ap?.shieldRules?.bonus;
+      if (raw === '' || raw === null || raw === undefined) return parseAcNumber(shieldItem?.armor?.ac, 2);
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : parseAcNumber(shieldItem?.armor?.ac, 2);
+    })();
+
+    const wasApplied = !!ap.shieldRules._applied;
+    const prevBonus = safeInt(ap.shieldRules._appliedBonus, 0);
+    const prevBaseRaw = ap.shieldRules._baseAc;
+    const prevBase = (prevBaseRaw === '' || prevBaseRaw === null || prevBaseRaw === undefined)
+      ? null
+      : safeInt(prevBaseRaw, null);
+
+    // Derive base AC (without shield) safely.
+    let baseAc = curAcVal;
+    if (wasApplied) {
+      // Current AC may already include previous bonus.
+      baseAc = (prevBase !== null) ? prevBase : (curAcVal - prevBonus);
+    }
+
+    sheet.vitality.ac.value = Math.max(0, Math.trunc(baseAc + shieldBonus));
+    ap.shieldRules._applied = true;
+    ap.shieldRules._baseAc = baseAc;
+    ap.shieldRules._appliedSrc = shieldSrc;
+    ap.shieldRules._appliedBonus = shieldBonus;
+    return;
+  }
+
+  // No armor & no shield: if we previously applied a shield, revert.
+  if (ap?.shieldRules?._applied) {
+    const baseAc = safeInt(ap.shieldRules._baseAc, curAcVal);
+    sheet.vitality.ac.value = Math.max(0, Math.trunc(baseAc));
+    ap.shieldRules._applied = false;
+    ap.shieldRules._baseAc = null;
+    ap.shieldRules._appliedSrc = '';
+    ap.shieldRules._appliedBonus = null;
+    return;
+  }
 }
 
 // expose for other modules
