@@ -566,7 +566,76 @@ function normalizeHref(href) {
   return h;
 }
 // ================== RICH TEXT (modal editor) ==================
-function upgradeSheetTextareasToRte(root, canEdit) {
+// ===================== RTE height persistence =====================
+// For the main "Описание" field (and some other large fields) the source textarea
+// often does NOT have data-sheet-path, so a key based only on data-sheet-path was empty
+// and height couldn't persist across tab switches (DOM is re-rendered).
+// Build a stable per-player key from data attributes / surrounding metadata.
+const RTE_HEIGHT_LS_KEY = 'dnd_sheet_rte_heights_v1';
+
+function loadRteHeights() {
+  try {
+    const raw = localStorage.getItem(RTE_HEIGHT_LS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return (obj && typeof obj === 'object') ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveRteHeights(obj) {
+  try {
+    localStorage.setItem(RTE_HEIGHT_LS_KEY, JSON.stringify(obj || {}));
+  } catch {}
+}
+
+function rtePersistKey(player, ta, fallbackIndex) {
+  const pid = String(player?.id || player?.name || 'unknown');
+  const prefix = `p:${pid}|`;
+
+  const sp = ta?.getAttribute?.('data-sheet-path');
+  if (sp) return prefix + `path:${sp}`;
+
+  // Main description on the sheet (often uses data-wm-desc)
+  if (ta?.hasAttribute?.('data-wm-desc')) return prefix + 'wmDesc:main';
+
+  // Notes / misc fields
+  if (ta?.hasAttribute?.('data-note-text')) return prefix + 'noteText:main';
+
+  // Popup manual description field
+  if (ta?.hasAttribute?.('data-manual-desc')) return prefix + 'manualDesc:main';
+
+  // Weapon fields with idx
+  const wf = ta?.getAttribute?.('data-weapon-field');
+  if (wf) {
+    const card = ta.closest?.('.weapon-card[data-weapon-idx]');
+    const idx = card?.getAttribute?.('data-weapon-idx') ?? '';
+    return prefix + `weapon:${idx}:${wf}`;
+  }
+
+  // Combat ability text
+  if (ta?.hasAttribute?.('data-combat-ability-text')) {
+    const item = ta.closest?.('.combat-ability-item[data-combat-ability-idx]');
+    const idx = item?.getAttribute?.('data-combat-ability-idx') ?? '';
+    return prefix + `combatAbility:${idx}:text`;
+  }
+
+  // Spell description editor
+  if (ta?.hasAttribute?.('data-spell-desc-editor')) {
+    const item = ta.closest?.('.spell-item[data-spell-url]');
+    const href = item?.getAttribute?.('data-spell-url') || '';
+    return prefix + `spellDesc:${href}`;
+  }
+
+  // id/name
+  if (ta?.id) return prefix + `id:${ta.id}`;
+  if (ta?.name) return prefix + `name:${ta.name}`;
+
+  // last resort
+  return prefix + `idx:${fallbackIndex}`;
+}
+
+function upgradeSheetTextareasToRte(root, player, canEdit) {
   if (!root) return;
 
   // Global link interceptor for rich-text areas.
@@ -1222,8 +1291,17 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   };
 
+  const rteStore = loadRteHeights();
+  let rteSaveTimer = null;
+  const scheduleRteSave = () => {
+    try {
+      if (rteSaveTimer) clearTimeout(rteSaveTimer);
+      rteSaveTimer = setTimeout(() => saveRteHeights(rteStore), 160);
+    } catch {}
+  };
+
   const textareas = Array.from(root.querySelectorAll(selector));
-  textareas.forEach((ta) => {
+  textareas.forEach((ta, idx) => {
     if (ta.closest('[data-rte]')) return;
     const path = ta.getAttribute('data-sheet-path') || '';
 
@@ -1251,27 +1329,27 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
     // Allow resizing the description frame by height and persist it.
     // (So it doesn't auto-grow strictly by text length.)
-    const heightKey = (() => {
-      const k = path || ta.id || ta.name || '';
-      return k ? `rte_height:${k}` : '';
-    })();
+    // Persist key MUST exist even when there is no data-sheet-path (main "Описание" field).
+    const heightKey = rtePersistKey(player, ta, idx);
 
     // Persist height helper (ResizeObserver doesn't reliably fire for CSS resize in some browsers).
     const persistEditorHeight = () => {
       try {
         if (!heightKey) return;
         const h = Math.round(editor.getBoundingClientRect().height || 0);
-        if (h > 0) localStorage.setItem(heightKey, String(h));
+        if (h >= 40) {
+          rteStore[heightKey] = h;
+          scheduleRteSave();
+        }
       } catch {}
     };
 
+    // Apply persisted height immediately after creation.
     try {
-      if (heightKey) {
-        const saved = Number(localStorage.getItem(heightKey) || 0);
-        if (saved && Number.isFinite(saved)) {
-          const h = Math.max(60, Math.min(900, saved));
-          editor.style.height = `${h}px`;
-        }
+      const saved = Number(rteStore[heightKey] || 0);
+      if (saved && Number.isFinite(saved)) {
+        const h = Math.max(60, Math.min(900, saved));
+        editor.style.height = `${h}px`;
       }
     } catch {}
 
@@ -1403,7 +1481,7 @@ function bindEditableInputs(root, player, canEdit) {
 
     // Upgrade large textareas to a lightweight rich-text editor (toolbar + contenteditable).
     // This is used for backstory/notes/descriptions etc.
-    try { upgradeSheetTextareasToRte(root, canEdit); } catch {}
+    try { upgradeSheetTextareasToRte(root, player, canEdit); } catch {}
 
     const inputs = root.querySelectorAll("[data-sheet-path]");
     inputs.forEach(inp => {
