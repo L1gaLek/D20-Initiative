@@ -1304,24 +1304,16 @@ button:hover {
   line-height: 16px;
   outline: none;
   white-space: normal;
+  overflow: auto;
+  resize: vertical;
 }
 
-/* ===== Rich Text Editor: block formatting (project style) ===== */
-.rte-editor p{
-  margin: 0 0 8px 0;
-}
-.rte-editor p:last-child{
-  margin-bottom: 0;
-}
+/* Preserve readable structure for pasted/stored content (paragraphs + lists) */
+.rte-editor p{ margin: 0 0 10px 0; }
+.rte-editor p:last-child{ margin-bottom: 0; }
 .rte-editor ul,
-.rte-editor ol{
-  margin: 0 0 8px 18px;
-  padding: 0;
-}
-.rte-editor li{
-  margin: 2px 0;
-}
-
+.rte-editor ol{ margin: 0 0 10px 18px; padding: 0; }
+.rte-editor li{ margin: 4px 0; }
 
 .rte-editor:empty:before{
   content: attr(data-placeholder);
