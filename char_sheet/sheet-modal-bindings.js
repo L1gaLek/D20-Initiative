@@ -581,7 +581,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       try {
         const a = e.target?.closest?.('a[href]');
         if (!a) return;
-        if (!a.closest('.rte-editor') && !a.closest('.rte-modal')) return;
+        if (!a.closest('#sheet-modal') && !a.closest('.rte-editor') && !a.closest('.rte-modal')) return;
         const href = normalizeHref(a.getAttribute('href'));
         if (!href) return;
 
@@ -590,14 +590,13 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         e.stopPropagation();
         try { e.stopImmediatePropagation?.(); } catch {}
 
-                // In contenteditable browsers usually DO NOT navigate on <a> click.
-        // So for a normal left click we always open in a new tab/window.
-        if (e.type === 'click' && e.button === 0 && !e.shiftKey && !e.altKey) {
-          // prevent any in-app handlers and prevent "place caret" behavior
+        // If target was stripped, force new tab only for a normal left click.
+        const target = String(a.getAttribute('target') || '').toLowerCase();
+        if (target !== '_blank' && e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
           e.preventDefault();
           try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
         }
-} catch {}
+      } catch {}
     };
 
     document.addEventListener('pointerdown', stopHijack, true);
