@@ -1202,6 +1202,52 @@
   min-height: 54px;
 }
 
+/* ===== Rest chip (Short/Long) ===== */
+.sheet-chip--rest{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  user-select:none;
+  min-width: 104px;
+  min-height: 54px;
+}
+
+.rest-pills{
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.rest-sep{
+  opacity: .7;
+  font-weight: 700;
+}
+
+.rest-pill{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+  color: rgba(255,255,255,0.88);
+}
+
+.rest-pill:hover{
+  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.26);
+}
+
+.rest-pill:active{
+  transform: translateY(1px);
+}
+
+.rest-pill svg{ width: 18px; height: 18px; }
+
 /* ===== Top line in Basic tab (Exhaustion + Conditions) ===== */
 .sheet-topline{
   display: grid;
