@@ -581,7 +581,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       try {
         const a = e.target?.closest?.('a[href]');
         if (!a) return;
-        if (!a.closest('.rte-editor') && !a.closest('.rte-modal')) return;
+        if (!a.closest('.rte-editor') && !a.closest('.rte-modal') && !a.closest('#sheet-modal') && !a.closest('.sheet-modal')) return;
         const href = normalizeHref(a.getAttribute('href'));
         if (!href) return;
 
@@ -590,16 +590,46 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         e.stopPropagation();
         try { e.stopImmediatePropagation?.(); } catch {}
 
-        // If target was stripped, force new tab only for a normal left click.
-        const target = String(a.getAttribute('target') || '').toLowerCase();
-        if (target !== '_blank' && e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        // Force-open on normal left click in a NEW TAB (even if target=_blank already).
+        const isEditable = !!a.closest('[contenteditable="true"]');
+        const isPlainLeftDown = ((e.type === 'pointerdown' || e.type === 'mousedown') && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey);
+        if (isPlainLeftDown && !isEditable) {
           e.preventDefault();
-          try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+          try {
+            const tmp = document.createElement('a');
+            tmp.href = href;
+            tmp.target = '_blank';
+            tmp.rel = 'noopener noreferrer';
+            tmp.style.position = 'fixed';
+            tmp.style.left = '-9999px';
+            document.body.appendChild(tmp);
+            tmp.click();
+            tmp.remove();
+          } catch {}
+          return;
+        }
+
+        const isPlainLeft = (e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey);
+        if (isPlainLeft) {
+          e.preventDefault();
+          try {
+            // Use a real <a target=_blank>.click() to mimic native "Open link in new tab".
+            const tmp = document.createElement('a');
+            tmp.href = href;
+            tmp.target = '_blank';
+            tmp.rel = 'noopener noreferrer';
+            tmp.style.position = 'fixed';
+            tmp.style.left = '-9999px';
+            document.body.appendChild(tmp);
+            tmp.click();
+            tmp.remove();
+          } catch {}
         }
       } catch {}
     };
 
     document.addEventListener('pointerdown', stopHijack, true);
+    document.addEventListener('mousedown', stopHijack, true);
     document.addEventListener('click', stopHijack, true);
   }
 
@@ -1055,14 +1085,44 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       // Let context menu / right click work normally.
       if (e.type === 'pointerdown' && (e.button !== 0)) return;
 
-      if (e.type === 'click') {
+      const isPlainLeft = (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey);
+
+      // Fallback: some routers cancel the final click; open early for non-editable areas.
+      if ((e.type === 'pointerdown' || e.type === 'mousedown') && isPlainLeft && !a.closest('[contenteditable="true"]')) {
         e.preventDefault();
-        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+        try {
+          const tmp = document.createElement('a');
+          tmp.href = href;
+          tmp.target = '_blank';
+          tmp.rel = 'noopener noreferrer';
+          tmp.style.position = 'fixed';
+          tmp.style.left = '-9999px';
+          document.body.appendChild(tmp);
+          tmp.click();
+          tmp.remove();
+        } catch {}
+        return;
+      }
+
+      if (e.type === 'click' && isPlainLeft) {
+        e.preventDefault();
+        try {
+          const tmp = document.createElement('a');
+          tmp.href = href;
+          tmp.target = '_blank';
+          tmp.rel = 'noopener noreferrer';
+          tmp.style.position = 'fixed';
+          tmp.style.left = '-9999px';
+          document.body.appendChild(tmp);
+          tmp.click();
+          tmp.remove();
+        } catch {}
       }
     };
 
     // Use capture to beat any global click routers.
     editor.addEventListener('pointerdown', stopLinkBubble, true);
+    editor.addEventListener('mousedown', stopLinkBubble, true);
     editor.addEventListener('click', stopLinkBubble, true);
 
     const close = () => { try { overlay.remove(); } catch {} };
