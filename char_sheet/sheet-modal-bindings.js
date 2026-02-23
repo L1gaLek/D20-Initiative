@@ -1518,6 +1518,15 @@ function bindEditableInputs(root, player, canEdit) {
 
         setByPath(player.sheet.parsed, path, val);
 
+        // Автосвязь: всего костей здоровья = уровень ("Основное" → "Уровень")
+        if (path === 'info.level.value') {
+          const sheet = player.sheet.parsed;
+          const lvl = Math.max(1, Math.min(20, safeInt(getByPath(sheet, 'info.level.value'), 1)));
+          if (!sheet.vitality) sheet.vitality = {};
+          if (!sheet.vitality['hit-dice-total']) sheet.vitality['hit-dice-total'] = { value: lvl };
+          sheet.vitality['hit-dice-total'].value = lvl;
+        }
+
         // If armor selection changes, sync meta inputs immediately (КД/Мод./Макс.).
         const syncAppearanceArmorUi = () => {
           try {
@@ -2256,10 +2265,6 @@ function bindTextareaHeightPersistence(root, player) {
       payload.qty = q;
       payload._tab = tabId;
 
-      // Inventory item description is collapsed by default.
-      // Keep explicit value if it exists on the incoming payload.
-      if (typeof payload.descCollapsed === 'undefined') payload.descCollapsed = true;
-
       // Mark items coming from SRD db/shop so inventory UI can hide redundant buttons.
       if (source) payload._source = String(source);
 
@@ -2890,7 +2895,6 @@ function bindTextareaHeightPersistence(root, player) {
           cost: { amount: 0, coin: 'gp', coin_ru: 'зм' },
           weight: { lb: 0, text: '' },
           description_ru: "",
-          descCollapsed: true,
           type: 'manual'
         });
         scheduleSheetSave(curPlayer);

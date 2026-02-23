@@ -60,7 +60,7 @@
 
               <div class="hp-hitdice-total">
                 <div class="hp-hitdice-total__label">Всего костей здоровья</div>
-                <input class="hp-input hp-input--small" type="number" min="0" max="99" step="1" data-hp-field="hdTotal">
+                <input class="hp-input hp-input--small" type="number" min="0" max="99" step="1" data-hp-field="hdTotal" readonly title="Авто: равно уровню персонажа">
               </div>
             </div>
           </div>
@@ -251,11 +251,19 @@
 
   function syncHpPopupInputs(sheet) {
     if (!hpPopupEl || !sheet) return;
+    // Всего костей здоровья = уровень (из вкладки "Основное")
+    const lvl = Math.max(1, Math.min(20, safeInt(sheet?.info?.level?.value, 1)));
+    if (!sheet.vitality) sheet.vitality = {};
+    if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: 0 };
+    if (Number(sheet.vitality["hit-dice-total"].value) !== lvl) {
+      sheet.vitality["hit-dice-total"].value = lvl;
+    }
+
     const max = Number(sheet?.vitality?.["hp-max"]?.value) || 0;
     const cur = Number(sheet?.vitality?.["hp-current"]?.value) || 0;
     const temp = Number(sheet?.vitality?.["hp-temp"]?.value) || 0;
     const hdSides = Number(sheet?.vitality?.["hit-die-sides"]?.value) || 8;
-    const hdTotal = Number(sheet?.vitality?.["hit-dice-total"]?.value) || 0;
+    const hdTotal = lvl;
 
     const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
     const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
@@ -278,6 +286,12 @@
     const inputs = hpPopupEl.querySelectorAll('input.hp-input');
     inputs.forEach(inp => {
       const isDelta = inp.getAttribute('data-hp-field') === 'delta';
+      const isHdTotal = inp.getAttribute('data-hp-field') === 'hdTotal';
+      // Всего костей здоровья всегда авто = уровень
+      if (isHdTotal) {
+        inp.setAttribute('disabled', 'disabled');
+        return;
+      }
       // delta input можно менять всем, но кнопки применения/изменения - только редактору
       if (!can && !isDelta) inp.setAttribute('disabled', 'disabled');
       else inp.removeAttribute('disabled');
@@ -308,6 +322,19 @@
     if (!player) return;
     const sheet = player.sheet?.parsed;
     if (!sheet) return;
+
+    // Всего костей здоровья = уровень
+    const lvl = Math.max(1, Math.min(20, safeInt(sheet?.info?.level?.value, 1)));
+    if (!sheet.vitality) sheet.vitality = {};
+    if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: lvl };
+    const prev = Number(sheet.vitality["hit-dice-total"].value) || 0;
+    if (prev !== lvl) {
+      sheet.vitality["hit-dice-total"].value = lvl;
+      if (canEditPlayer(player)) {
+        markModalInteracted(player.id);
+        scheduleSheetSave(player);
+      }
+    }
 
     if (!sheet.vitality) sheet.vitality = {};
     if (!sheet.vitality["hp-max"]) sheet.vitality["hp-max"] = { value: 0 };
@@ -818,6 +845,27 @@ function ensureWiredCloseHandlers() {
   function wireQuickBasicInteractions(root) {
     if (!root || root.__basicQuickWired) return;
     root.__basicQuickWired = true;
+
+    // Отдых (пока только кликабельные кнопки + событие)
+    const restBox = root.querySelector('[data-hero="rest"]');
+    if (restBox) {
+      const restBtns = restBox.querySelectorAll('[data-rest-btn]');
+      restBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const player = getOpenedPlayerSafe();
+          if (!player) return;
+          const type = String(btn.getAttribute('data-rest-btn') || '');
+          try {
+            window.dispatchEvent(new CustomEvent('sheet:rest', {
+              detail: { playerId: player.id, type }
+            }));
+          } catch {}
+          markModalInteracted(player.id);
+        });
+      });
+    }
 
     // Вдохновение (звезда)
     const inspChip = root.querySelector('[data-hero="insp"]');
