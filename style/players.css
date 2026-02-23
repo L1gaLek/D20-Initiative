@@ -397,7 +397,12 @@
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 10px;
   background: rgba(0,0,0,0.18);
+  /* allow user to регулировать высоту "рамки описания" */
+  resize: vertical;
+  min-height: 120px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .rte-toolbar {
@@ -422,27 +427,15 @@
 .rte-select {
   margin-left: auto;
   border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(0,0,0,0.45);
+  background: rgba(255,255,255,0.06);
   color: inherit;
   padding: 4px 8px;
   border-radius: 8px;
 }
 
-.rte-view a,
-.rte-editor a {
-  color: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-}
-
-.rte-view[contenteditable="true"] {
-  cursor: text;
-  outline: 1px solid rgba(255,255,255,0.16);
-  outline-offset: 2px;
-  border-radius: 8px;
-}
-
-.rte-editor {
+.rte-editor{
+  flex: 1 1 auto;
+  overflow: auto;
   padding: 10px;
   min-height: 90px;
   outline: none;
