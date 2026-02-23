@@ -244,9 +244,6 @@ function computeAutoAcFromEquipment(sheet) {
   const dexMod = safeInt(sheet?.stats?.dex?.modifier, scoreToModifier(safeInt(sheet?.stats?.dex?.score, 10)));
 
   // base
-  // If only a shield is equipped (no armor selected), user expects the shield to add
-  // to whatever AC is already shown in the "Броня" frame (manual/previous value),
-  // rather than recomputing from 10 + Dex.
   let base = 10;
   let dexBonus = dexMod;
 
@@ -271,13 +268,6 @@ function computeAutoAcFromEquipment(sheet) {
       const max = hasMax ? ruleNum(maxRaw, 0) : null;
       dexBonus = (max === null) ? mod : Math.min(mod, max);
     }
-  }
-
-  // Shield without armor: add shield bonus on top of current AC value.
-  // (Dex bonus shouldn't be re-applied here; the user may have a manual AC setup.)
-  if (!hasArmor && hasShield) {
-    base = safeInt(sheet?.vitality?.ac?.value, 10);
-    dexBonus = 0;
   }
 
   // shield bonus
