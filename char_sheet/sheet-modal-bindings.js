@@ -567,45 +567,6 @@ function normalizeHref(href) {
 }
 // ================== RICH TEXT (modal editor) ==================
 function upgradeSheetTextareasToRte(root, canEdit) {
-
-  // ===== Persisted heights for description/notes editors =====
-  const __rteHeightKey = (k) => {
-    const key = String(k || '').trim();
-    return key ? (`dnd_rte_height:${key}`) : '';
-  };
-  const __applyPersistedHeight = (el, key) => {
-    try {
-      if (!el) return;
-      const hk = __rteHeightKey(key);
-      if (!hk) return;
-      const raw = localStorage.getItem(hk);
-      const n = raw ? Number(raw) : NaN;
-      if (Number.isFinite(n) && n >= 60 && n <= 2000) {
-        el.style.height = `${Math.round(n)}px`;
-      }
-    } catch {}
-  };
-  const __bindPersistedHeight = (el, key) => {
-    try {
-      if (!el) return;
-      const hk = __rteHeightKey(key);
-      if (!hk) return;
-      let last = 0;
-      const save = () => {
-        try {
-          const h = Math.round(el.getBoundingClientRect().height || el.offsetHeight || 0);
-          if (!h || h === last) return;
-          last = h;
-          if (h >= 60 && h <= 2000) localStorage.setItem(hk, String(h));
-        } catch {}
-      };
-      // save after resize (mouse/touch) + when leaving focus
-      el.addEventListener('pointerup', save);
-      el.addEventListener('mouseup', save);
-      el.addEventListener('touchend', save, { passive: true });
-      el.addEventListener('blur', save);
-    } catch {}
-  };
   if (!root) return;
 
   // Global link interceptor for rich-text areas.
@@ -915,17 +876,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     const toolbar = overlay.querySelector('.rte-modal-toolbar');
     const fontSel = overlay.querySelector('[data-rte-fontsize]');
 
-
-    // modal editor: allow resize + persist the chosen height (same key as inline)
-    try {
-      editor.style.resize = 'vertical';
-      editor.style.overflow = 'auto';
-      const persistKey = String(path || ta?.getAttribute?.('data-sheet-path') || ta?.id || ta?.name || '').trim();
-      __applyPersistedHeight(editor, persistKey);
-      __bindPersistedHeight(editor, persistKey);
-    } catch {}
-
-
     editor.innerHTML = inlineEditor.innerHTML || '';
     editor.focus();
 
@@ -1143,15 +1093,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       const rows = Number(ta.getAttribute('rows') || 0);
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
-    // allow user to resize description frame vertically (and persist height)
-    try {
-      editor.style.resize = 'vertical';
-      editor.style.overflow = 'auto';
-      const persistKey = String(ta?.getAttribute?.('data-sheet-path') || ta?.id || ta?.name || '').trim();
-      __applyPersistedHeight(editor, persistKey);
-      __bindPersistedHeight(editor, persistKey);
-    } catch {}
-
 
     editor.addEventListener('paste', (e) => {
       if (!canEdit) return;
@@ -1386,6 +1327,7 @@ if (path === "proficiency" || path === "proficiencyCustom") {
     // при переключении вкладок и повторном открытии «Листа персонажа».
     try {
       bindTextareaHeightPersistence(root, player);
+      try { bindRteHeightPersistence(root, player); } catch (e) { console.warn('bindRteHeightPersistence failed', e); }
     } catch (e) {
       console.warn('bindTextareaHeightPersistence failed', e);
     }
@@ -3750,3 +3692,85 @@ function bindSpellAddAndDesc(root, player, canEdit) {
       scoreEl.value = String(sheet.stats[statKey].score);
     }
   }
+
+// ===================== RTE (contenteditable) height persistence =====================
+// Важно: большая часть "описаний" в листе превращается в .rte (контент-эдитабл),
+// поэтому сохраняем высоту не textarea, а контейнера .rte (чтобы тянуть "рамку описания").
+function rtePersistKey(player, rte, fallbackIndex) {
+  const pid = String(player?.id || player?.name || 'unknown');
+  const prefix = `p:${pid}|`;
+
+  // Prefer inner editor's data-sheet-path
+  const ed = rte?.querySelector?.('.rte-editor[data-sheet-path]');
+  const sp = ed?.getAttribute?.('data-sheet-path');
+  if (sp) return prefix + `rte:path:${sp}`;
+
+  // Fallback: id/name on editor
+  const id = ed?.id || rte?.id;
+  if (id) return prefix + `rte:id:${id}`;
+  const nm = ed?.name || rte?.getAttribute?.('name');
+  if (nm) return prefix + `rte:name:${nm}`;
+
+  return prefix + `rte:idx:${fallbackIndex}`;
+}
+
+function bindRteHeightPersistence(root, player) {
+  if (!root || !player) return;
+
+  const store = loadTextareaHeights(); // reuse same localStorage bucket
+
+  // disconnect old observer
+  try {
+    if (root.__rteResizeObserver && typeof root.__rteResizeObserver.disconnect === 'function') {
+      root.__rteResizeObserver.disconnect();
+    }
+  } catch {}
+  root.__rteResizeObserver = null;
+
+  const allRtes = Array.from(root.querySelectorAll('.rte'));
+  // apply saved heights
+  allRtes.forEach((rte, i) => {
+    try {
+      const cs = window.getComputedStyle ? getComputedStyle(rte) : null;
+      // only if resizable (we enable via CSS, but keep this guard)
+      if (cs && cs.resize === 'none') return;
+      const key = rtePersistKey(player, rte, i);
+      const h = store[key];
+      if (Number.isFinite(h) && h >= 120) {
+        rte.style.height = `${Math.round(h)}px`;
+      }
+    } catch {}
+  });
+
+  let saveTimer = null;
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveTextareaHeights(store), 120);
+  };
+
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const el = entry?.target;
+        if (!el || !el.classList || !el.classList.contains('rte')) continue;
+        const i = allRtes.indexOf(el);
+        const key = rtePersistKey(player, el, i >= 0 ? i : 0);
+        const h = Math.round(el.getBoundingClientRect().height);
+        if (h >= 120) {
+          store[key] = h;
+          scheduleSave();
+        }
+      }
+    });
+
+    allRtes.forEach((rte) => {
+      try {
+        const cs = window.getComputedStyle ? getComputedStyle(rte) : null;
+        if (cs && cs.resize === 'none') return;
+        ro.observe(rte);
+      } catch {}
+    });
+
+    root.__rteResizeObserver = ro;
+  }
+}
