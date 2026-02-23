@@ -581,7 +581,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       try {
         const a = e.target?.closest?.('a[href]');
         if (!a) return;
-        if (!a.closest('#sheet-modal') && !a.closest('.rte-editor') && !a.closest('.rte-modal')) return;
+        if (!a.closest('.rte-editor') && !a.closest('.rte-modal')) return;
         const href = normalizeHref(a.getAttribute('href'));
         if (!href) return;
 
