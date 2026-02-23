@@ -2107,10 +2107,10 @@ textarea[data-sheet-path="text.profPlain.value"]{
 
 /* Flash feedback for "Добавить/Купить" in SRD equipment overlay */
 .equip-action-flash-ok{
-  background: rgba(0, 160, 70, 0.92) !important;
-  border-color: rgba(0, 200, 90, 0.95) !important;
+  background: rgba(0, 112, 0, 0.92) !important;
+  border-color: rgba(0, 112, 0, 0.95) !important;
   color: #fff !important;
-  box-shadow: 0 0 0 2px rgba(0, 200, 90, 0.20) inset;
+  box-shadow: 0 0 0 2px rgba(0, 112, 0, 0.20) inset;
 }
 
 .coin-box{
