@@ -1092,10 +1092,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     try {
       const rows = Number(ta.getAttribute('rows') || 0);
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
-      // важно: RTE не должен авто-расширяться под объем текста.
-      // Даем фиксированную стартовую высоту (потом пользователь может растянуть, и она сохранится).
-      const baseH = rows ? (Math.max(3, rows) * 18 + 38) : 140;
-      wrap.style.height = `${Math.max(90, baseH)}px`;
     } catch {}
 
     editor.addEventListener('paste', (e) => {
@@ -1421,24 +1417,6 @@ function bindTextareaHeightPersistence(root, player) {
     } catch {}
   });
 
-  // Также сохраняем высоты для Rich Text Editor контейнеров (.rte)
-  // (внутри них textarea скрыта, а видимый блок — div.contenteditable).
-  const allRtes = Array.from(root.querySelectorAll('.rte[data-rte]'));
-  allRtes.forEach((wrap, i) => {
-    try {
-      const cs = window.getComputedStyle ? getComputedStyle(wrap) : null;
-      if (cs && cs.resize === 'none') return; // если вдруг запретили resize
-
-      const ta = wrap.querySelector('textarea');
-      const keyBase = ta ? textareaPersistKey(player, ta, i) : (`p:${String(player?.id || player?.name || 'unknown')}|rteidx:${i}`);
-      const key = `${keyBase}|rte`;
-      const h = store[key];
-      if (Number.isFinite(h) && h >= 60) {
-        wrap.style.height = `${Math.round(h)}px`;
-      }
-    } catch {}
-  });
-
   let saveTimer = null;
   const scheduleSave = () => {
     if (saveTimer) clearTimeout(saveTimer);
@@ -1448,35 +1426,16 @@ function bindTextareaHeightPersistence(root, player) {
   if (typeof ResizeObserver === 'function') {
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const el = entry?.target;
-        if (!el) continue;
+        const ta = entry?.target;
+        if (!ta || ta.tagName !== 'TEXTAREA') continue;
 
-        // textarea
-        if (el.tagName === 'TEXTAREA') {
-          const ta = el;
-          const i = allTextareas.indexOf(ta);
-          const key = textareaPersistKey(player, ta, i >= 0 ? i : 0);
-          const h = Math.round(ta.getBoundingClientRect().height);
-          if (h >= 40) {
-            store[key] = h;
-            scheduleSave();
-          }
-          continue;
-        }
-
-        // .rte wrapper
-        if (el.classList?.contains?.('rte') && el.hasAttribute?.('data-rte')) {
-          const wrap = el;
-          const ta = wrap.querySelector('textarea');
-          const i = allRtes.indexOf(wrap);
-          const keyBase = ta ? textareaPersistKey(player, ta, i >= 0 ? i : 0) : (`p:${String(player?.id || player?.name || 'unknown')}|rteidx:${i >= 0 ? i : 0}`);
-          const key = `${keyBase}|rte`;
-          const h = Math.round(wrap.getBoundingClientRect().height);
-          if (h >= 60) {
-            store[key] = h;
-            scheduleSave();
-          }
-          continue;
+        // записываем реальную высоту textarea
+        const i = allTextareas.indexOf(ta);
+        const key = textareaPersistKey(player, ta, i >= 0 ? i : 0);
+        const h = Math.round(ta.getBoundingClientRect().height);
+        if (h >= 40) {
+          store[key] = h;
+          scheduleSave();
         }
       }
     });
@@ -1490,47 +1449,21 @@ function bindTextareaHeightPersistence(root, player) {
       } catch {}
     });
 
-    // наблюдаем за resizable .rte
-    allRtes.forEach((wrap) => {
-      try {
-        const cs = window.getComputedStyle ? getComputedStyle(wrap) : null;
-        if (cs && cs.resize === 'none') return;
-        ro.observe(wrap);
-      } catch {}
-    });
-
     root.__taResizeObserver = ro;
   } else {
     // Fallback (без ResizeObserver): сохраняем высоту по mouseup/touchend
     const handler = (e) => {
+      const ta = e.target?.closest?.('textarea');
+      if (!ta) return;
       try {
-        const ta = e.target?.closest?.('textarea');
-        if (ta) {
-          const cs = window.getComputedStyle ? getComputedStyle(ta) : null;
-          if (cs && cs.resize === 'none') return;
-          const i = allTextareas.indexOf(ta);
-          const key = textareaPersistKey(player, ta, i >= 0 ? i : 0);
-          const h = Math.round(ta.getBoundingClientRect().height);
-          if (h >= 40) {
-            store[key] = h;
-            scheduleSave();
-          }
-          return;
-        }
-
-        const wrap = e.target?.closest?.('.rte[data-rte]');
-        if (wrap) {
-          const cs = window.getComputedStyle ? getComputedStyle(wrap) : null;
-          if (cs && cs.resize === 'none') return;
-          const ta2 = wrap.querySelector('textarea');
-          const i2 = allRtes.indexOf(wrap);
-          const keyBase = ta2 ? textareaPersistKey(player, ta2, i2 >= 0 ? i2 : 0) : (`p:${String(player?.id || player?.name || 'unknown')}|rteidx:${i2 >= 0 ? i2 : 0}`);
-          const key = `${keyBase}|rte`;
-          const h2 = Math.round(wrap.getBoundingClientRect().height);
-          if (h2 >= 60) {
-            store[key] = h2;
-            scheduleSave();
-          }
+        const cs = window.getComputedStyle ? getComputedStyle(ta) : null;
+        if (cs && cs.resize === 'none') return;
+        const i = allTextareas.indexOf(ta);
+        const key = textareaPersistKey(player, ta, i >= 0 ? i : 0);
+        const h = Math.round(ta.getBoundingClientRect().height);
+        if (h >= 40) {
+          store[key] = h;
+          scheduleSave();
         }
       } catch {}
     };
