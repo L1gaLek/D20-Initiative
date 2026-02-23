@@ -596,60 +596,16 @@ function rtePersistKey(player, ta, fallbackIndex) {
   const sp = ta?.getAttribute?.('data-sheet-path');
   if (sp) return prefix + `path:${sp}`;
 
-  // Build a stable discriminator for fields that don't have data-sheet-path.
-  // We MUST keep each textarea independent (no shared "main" key),
-  // otherwise resizing one frame will resize all others.
-  const slug = (s) => String(s || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .slice(0, 80)
-    .replace(/[^a-z0-9а-яё _\-:|]/gi, '')
-    .replace(/\s/g, '_');
-
-  const getLabelKey = () => {
-    try {
-      const ph = ta?.getAttribute?.('placeholder');
-      if (ph) return `ph:${slug(ph)}`;
-
-      const aria = ta?.getAttribute?.('aria-label');
-      if (aria) return `aria:${slug(aria)}`;
-
-      const name = ta?.getAttribute?.('name');
-      if (name) return `name:${slug(name)}`;
-
-      const id = ta?.getAttribute?.('id');
-      if (id) return `id:${slug(id)}`;
-
-      // Try to find nearby visible label (best-effort, depends on markup).
-      const box = ta?.closest?.('.sheet-field,.sheet-fieldbox,.fieldbox,.weapon-fieldbox,.slot-box,label,div');
-      const lbl = box?.querySelector?.('.sheet-fieldlabel,.fieldlabel,label,.slot-label,.weapon-fieldlabel');
-      const txt = (lbl && lbl.textContent) ? lbl.textContent.trim() : '';
-      if (txt) return `lbl:${slug(txt)}`;
-    } catch {}
-    return '';
-  };
-
-  // Main "Описание" / weapon modal description (data-wm-desc)
-  if (ta?.hasAttribute?.('data-wm-desc')) {
-    const inSheet = !!ta?.closest?.('#sheet-modal,.sheet-modal,[data-sheet-modal]');
-    const lk = getLabelKey();
-    return prefix + `wmDesc:${inSheet ? 'sheet' : 'modal'}:${lk || `idx:${fallbackIndex}`}`;
-  }
+  // Main description on the sheet (often uses data-wm-desc)
+  if (ta?.hasAttribute?.('data-wm-desc')) return prefix + 'wmDesc:main';
 
   // Notes / misc fields
-  if (ta?.hasAttribute?.('data-note-text')) {
-    const lk = getLabelKey();
-    return prefix + `noteText:${lk || `idx:${fallbackIndex}`}`;
-  }
+  if (ta?.hasAttribute?.('data-note-text')) return prefix + 'noteText:main';
 
   // Popup manual description field
-  if (ta?.hasAttribute?.('data-manual-desc')) {
-    const lk = getLabelKey();
-    return prefix + `manualDesc:${lk || `idx:${fallbackIndex}`}`;
-  }
+  if (ta?.hasAttribute?.('data-manual-desc')) return prefix + 'manualDesc:main';
 
-  // Weapon fields with idx (already stable)
+  // Weapon fields with idx
   const wf = ta?.getAttribute?.('data-weapon-field');
   if (wf) {
     const card = ta.closest?.('.weapon-card[data-weapon-idx]');
@@ -671,9 +627,11 @@ function rtePersistKey(player, ta, fallbackIndex) {
     return prefix + `spellDesc:${href}`;
   }
 
+  // id/name
+  if (ta?.id) return prefix + `id:${ta.id}`;
+  if (ta?.name) return prefix + `name:${ta.name}`;
+
   // last resort
-  const lk = getLabelKey();
-  if (lk) return prefix + `misc:${lk}`;
   return prefix + `idx:${fallbackIndex}`;
 }
 
