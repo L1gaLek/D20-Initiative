@@ -657,7 +657,17 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         .rte-editor a.rte-link:hover, .rte-modal a.rte-link:hover {
           filter: brightness(1.15);
         }
-      `;
+
+        /* Keep pasted structure readable with site styling */
+        .rte-editor p, .rte-modal p { margin: 0 0 8px 0; }
+        .rte-editor p:last-child, .rte-modal p:last-child { margin-bottom: 0; }
+        .rte-editor ul, .rte-modal ul,
+        .rte-editor ol, .rte-modal ol { margin: 6px 0 6px 20px; padding: 0; }
+        .rte-editor li, .rte-modal li { margin: 2px 0; }
+        .rte-editor table.rte-table, .rte-modal table.rte-table { width: 100%; border-collapse: collapse; }
+        .rte-editor table.rte-table td, .rte-modal table.rte-table td,
+        .rte-editor table.rte-table th, .rte-modal table.rte-table th { border: 1px solid rgba(255,255,255,0.12); padding: 6px 8px; vertical-align: top; }
+      `;`;
       document.head.appendChild(st);
     } catch {}
   }
@@ -670,17 +680,30 @@ function upgradeSheetTextareasToRte(root, canEdit) {
   };
 
   const linkifyPlain = (plain) => {
+    // Preserve paragraph structure from plain text:
+    // - blank line(s) => new paragraph
+    // - single newline => <br> inside paragraph
     const t = String(plain || '');
-    const esc = htmlEscape(t);
+    const paras = t.split(/\n\s*\n+/g);
+
     const urlRe = /((https?:\/\/|www\.)[^\s<]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
-    return esc.replace(urlRe, (m) => {
-      if (m.includes('@') && !m.startsWith('http')) {
-        const href = 'mailto:' + m;
+
+    const renderInline = (s) => {
+      const esc = htmlEscape(String(s || ''));
+      return esc.replace(urlRe, (m) => {
+        if (m.includes('@') && !m.startsWith('http')) {
+          const href = 'mailto:' + m;
+          return makeLinkAnchorHTML(href, m);
+        }
+        const href = normalizeHref(m);
         return makeLinkAnchorHTML(href, m);
-      }
-      const href = normalizeHref(m);
-      return makeLinkAnchorHTML(href, m);
-    }).replace(/\n/g, '<br>');
+      }).replace(/\n/g, '<br>');
+    };
+
+    // If it's a single paragraph (no blank lines), keep it compact.
+    if (paras.length <= 1) return renderInline(t);
+
+    return paras.map(p => `<p>${renderInline(p)}</p>`).join('');
   };
 
   const ALLOWED_TAGS = new Set([
@@ -704,8 +727,18 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           const tag = (ch.tagName || '').toUpperCase();
 
-          // Normalize block tags to <br> breaks (but don't force extra <br> inside table cells)
-          if (tag === 'P' || tag === 'DIV') {
+          // Block structure:
+          // - In paste mode: preserve paragraphs (<p>) and convert <div> blocks to <p>
+          // - In legacy/other modes: flatten <p>/<div> to <br> (as before)
+          if (tag === 'DIV') {
+            if (mode === 'paste') {
+              const p = document.createElement('p');
+              while (ch.firstChild) p.appendChild(ch.firstChild);
+              ch.replaceWith(p);
+              walk(p, 'P');
+              continue;
+            }
+
             const frag = document.createDocumentFragment();
             while (ch.firstChild) frag.appendChild(ch.firstChild);
             ch.replaceWith(frag);
@@ -713,6 +746,17 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               node.insertBefore(document.createElement('br'), frag.nextSibling);
             }
             continue;
+          }
+
+          if (tag === 'P' && mode !== 'paste') {
+            const frag = document.createDocumentFragment();
+            while (ch.firstChild) frag.appendChild(ch.firstChild);
+            ch.replaceWith(frag);
+            if (parentTag !== 'TD' && parentTag !== 'TH') {
+              node.insertBefore(document.createElement('br'), frag.nextSibling);
+            }
+            continue;
+          }
           }
 
           if (!ALLOWED_TAGS.has(tag)) {
@@ -745,61 +789,14 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           if (tag === 'SPAN') {
             // Allow only a very small safe subset of inline styles.
-            // - store mode: allow font-size: 12..30px (our editor feature)
-            // - paste mode: convert common inline styles (bold/italic/underline) to semantic tags, then strip styles
-            // - color is only allowed for our link marker and will be normalized anyway
+            // - font-size: 12..30px
+            // - color: rgb(204,130,36) for our link spans
             const st = String(ch.getAttribute('style') || '');
-
-            // If an external site uses <span style="font-weight:700"> instead of <b>/<strong>,
-            // we preserve the meaning but not the foreign styling.
-            if (mode === 'paste' && st) {
-              const fwM = st.match(/font-weight\s*:\s*([^;]+)/i);
-              const fsItalic = /font-style\s*:\s*italic/i.test(st);
-              const tdUnderline = /text-decoration\s*:\s*[^;]*underline/i.test(st);
-
-              let isBold = false;
-              if (fwM) {
-                const v = String(fwM[1] || '').trim().toLowerCase();
-                if (v === 'bold' || v === 'bolder') isBold = true;
-                else {
-                  const n = parseInt(v, 10);
-                  if (Number.isFinite(n) && n >= 600) isBold = true;
-                }
-              }
-
-              if (isBold || fsItalic || tdUnderline) {
-                const frag = document.createDocumentFragment();
-                while (ch.firstChild) frag.appendChild(ch.firstChild);
-
-                // Wrap inner-most first
-                let inner = frag;
-                if (tdUnderline) {
-                  const u = document.createElement('u');
-                  u.appendChild(inner);
-                  inner = u;
-                }
-                if (fsItalic) {
-                  const i = document.createElement('i');
-                  i.appendChild(inner);
-                  inner = i;
-                }
-                if (isBold) {
-                  const b = document.createElement('b');
-                  b.appendChild(inner);
-                  inner = b;
-                }
-
-                ch.replaceWith(inner);
-                walk(inner, parentTag);
-                continue;
-              }
-            }
-
             const sizeM = st.match(/font-size\s*:\s*([0-9]+)px/i);
             const colorM = st.match(/color\s*:\s*([^;]+)/i);
 
             const out = [];
-            if (mode !== 'paste' && sizeM) {
+            if (sizeM) {
               const px = Math.max(12, Math.min(30, Number(sizeM[1])));
               out.push(`font-size:${px}px`);
             }
