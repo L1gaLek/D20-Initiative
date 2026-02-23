@@ -745,14 +745,61 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           if (tag === 'SPAN') {
             // Allow only a very small safe subset of inline styles.
-            // - font-size: 12..30px
-            // - color: rgb(204,130,36) for our link spans
+            // - store mode: allow font-size: 12..30px (our editor feature)
+            // - paste mode: convert common inline styles (bold/italic/underline) to semantic tags, then strip styles
+            // - color is only allowed for our link marker and will be normalized anyway
             const st = String(ch.getAttribute('style') || '');
+
+            // If an external site uses <span style="font-weight:700"> instead of <b>/<strong>,
+            // we preserve the meaning but not the foreign styling.
+            if (mode === 'paste' && st) {
+              const fwM = st.match(/font-weight\s*:\s*([^;]+)/i);
+              const fsItalic = /font-style\s*:\s*italic/i.test(st);
+              const tdUnderline = /text-decoration\s*:\s*[^;]*underline/i.test(st);
+
+              let isBold = false;
+              if (fwM) {
+                const v = String(fwM[1] || '').trim().toLowerCase();
+                if (v === 'bold' || v === 'bolder') isBold = true;
+                else {
+                  const n = parseInt(v, 10);
+                  if (Number.isFinite(n) && n >= 600) isBold = true;
+                }
+              }
+
+              if (isBold || fsItalic || tdUnderline) {
+                const frag = document.createDocumentFragment();
+                while (ch.firstChild) frag.appendChild(ch.firstChild);
+
+                // Wrap inner-most first
+                let inner = frag;
+                if (tdUnderline) {
+                  const u = document.createElement('u');
+                  u.appendChild(inner);
+                  inner = u;
+                }
+                if (fsItalic) {
+                  const i = document.createElement('i');
+                  i.appendChild(inner);
+                  inner = i;
+                }
+                if (isBold) {
+                  const b = document.createElement('b');
+                  b.appendChild(inner);
+                  inner = b;
+                }
+
+                ch.replaceWith(inner);
+                walk(inner, parentTag);
+                continue;
+              }
+            }
+
             const sizeM = st.match(/font-size\s*:\s*([0-9]+)px/i);
             const colorM = st.match(/color\s*:\s*([^;]+)/i);
 
             const out = [];
-            if (sizeM) {
+            if (mode !== 'paste' && sizeM) {
               const px = Math.max(12, Math.min(30, Number(sizeM[1])));
               out.push(`font-size:${px}px`);
             }
