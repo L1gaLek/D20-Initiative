@@ -317,7 +317,8 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    return `<div class="sheet-grid-2">${blocks}</div>`;
+    // One column list for levels (cantrips, level 1, ...)
+    return `<div class="sheet-grid-1">${blocks}</div>`;
   }
 
   function renderSpellsTab(vm) {

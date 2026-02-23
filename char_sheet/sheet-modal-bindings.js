@@ -2679,10 +2679,14 @@ function bindTextareaHeightPersistence(root, player) {
       // IMPORTANT: do it in-place (DOM) to avoid any rerender side-effects.
       const toggleDescBtn = e.target?.closest?.('[data-inv-toggle-desc][data-tab][data-idx]');
       if (toggleDescBtn) {
-        const tabId = String(toggleDescBtn.getAttribute('data-tab') || 'weapons');
-        const idx = safeInt(toggleDescBtn.getAttribute('data-idx'), -1);
+        try { e.preventDefault(); e.stopPropagation(); } catch {}
 
         const card = toggleDescBtn.closest('[data-inv-item]');
+        // Prefer card dataset (more robust if button attrs get out of sync)
+        const tabId = String(card?.getAttribute?.('data-inv-tabid') || toggleDescBtn.getAttribute('data-tab') || 'weapons');
+        const idx = safeInt(card?.getAttribute?.('data-inv-idx') ?? toggleDescBtn.getAttribute('data-idx'), -1);
+
+        // Collapse/expand the whole description block for the item
         const descEl = card?.querySelector?.('.equip-desc, .equip-descedit');
         if (descEl) {
           descEl.classList.toggle('collapsed');
