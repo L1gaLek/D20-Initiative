@@ -1304,30 +1304,12 @@ button:hover {
   line-height: 16px;
   outline: none;
   white-space: normal;
-  /* allow user to resize text blocks vertically (requested for description boxes) */
-  resize: vertical;
-  overflow: auto;
 }
 
-/* RTE: enforce project styles on pasted content (strip foreign fonts/colors/backgrounds) */
-.rte-editor *{
-  font-family: inherit;
-  color: inherit;
-  background: transparent;
-}
-
-/* If pasted links come as plain <a>, keep same styling as rte-link */
-.rte-editor a{
-  color: rgb(204,130,36);
-  text-decoration: underline;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-/* RTE: preserve visual paragraphs/lists from pasted HTML (p/div/ul/ol) */
+/* Preserve pasted structure (paragraphs/lists) while keeping site styling */
 .rte-editor p,
 .rte-editor div{
-  margin: 0 0 8px 0;
+  margin: 0 0 0.6em 0;
 }
 .rte-editor p:last-child,
 .rte-editor div:last-child{
@@ -1335,12 +1317,10 @@ button:hover {
 }
 .rte-editor ul,
 .rte-editor ol{
-  margin: 8px 0 8px 22px;
-  padding-left: 18px;
+  margin: 0 0 0.6em 1.1em;
+  padding: 0;
 }
-.rte-editor li{
-  margin: 2px 0;
-}
+.rte-editor li{ margin: 0.15em 0; }
 
 .rte-editor:empty:before{
   content: attr(data-placeholder);

@@ -422,23 +422,9 @@
 .rte-select {
   margin-left: auto;
   border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(0,0,0,0.45);
+  background: rgba(255,255,255,0.06);
   color: inherit;
   padding: 4px 8px;
-  border-radius: 8px;
-}
-
-.rte-view a,
-.rte-editor a {
-  color: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-}
-
-.rte-view[contenteditable="true"] {
-  cursor: text;
-  outline: 1px solid rgba(255,255,255,0.16);
-  outline-offset: 2px;
   border-radius: 8px;
 }
 
@@ -448,6 +434,22 @@
   outline: none;
   white-space: normal;
 }
+
+/* Preserve pasted structure (paragraphs/lists) while keeping site styling */
+.rte-editor p,
+.rte-editor div{
+  margin: 0 0 0.6em 0;
+}
+.rte-editor p:last-child,
+.rte-editor div:last-child{
+  margin-bottom: 0;
+}
+.rte-editor ul,
+.rte-editor ol{
+  margin: 0 0 0.6em 1.1em;
+  padding: 0;
+}
+.rte-editor li{ margin: 0.15em 0; }
 
 .rte-editor:empty:before {
   content: attr(data-placeholder);
