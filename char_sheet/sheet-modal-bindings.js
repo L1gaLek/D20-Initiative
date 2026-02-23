@@ -600,7 +600,10 @@ function rtePersistKey(player, ta, fallbackIndex) {
   if (ta?.hasAttribute?.('data-wm-desc')) return prefix + 'wmDesc:main';
 
   // Notes / misc fields
-  if (ta?.hasAttribute?.('data-note-text')) return prefix + 'noteText:main';
+  if (ta?.hasAttribute?.('data-note-text')) {
+    const idx = ta?.getAttribute?.('data-note-text') ?? '';
+    return prefix + `noteText:${idx || fallbackIndex}`;
+  }
 
   // Popup manual description field
   if (ta?.hasAttribute?.('data-manual-desc')) return prefix + 'manualDesc:main';
