@@ -581,7 +581,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       try {
         const a = e.target?.closest?.('a[href]');
         if (!a) return;
-        if (!a.closest('.rte-editor') && !a.closest('.rte-modal')) return;
+        if (!a.closest('.rte-editor') && !a.closest('.rte-modal') && !a.closest('#sheet-modal') && !a.closest('.sheet-modal')) return;
         const href = normalizeHref(a.getAttribute('href'));
         if (!href) return;
 
@@ -590,16 +590,46 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         e.stopPropagation();
         try { e.stopImmediatePropagation?.(); } catch {}
 
-        // If target was stripped, force new tab only for a normal left click.
-        const target = String(a.getAttribute('target') || '').toLowerCase();
-        if (target !== '_blank' && e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        // Force-open on normal left click in a NEW TAB (even if target=_blank already).
+        const isEditable = !!a.closest('[contenteditable="true"]');
+        const isPlainLeftDown = ((e.type === 'pointerdown' || e.type === 'mousedown') && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey);
+        if (isPlainLeftDown && !isEditable) {
           e.preventDefault();
-          try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
+          try {
+            const tmp = document.createElement('a');
+            tmp.href = href;
+            tmp.target = '_blank';
+            tmp.rel = 'noopener noreferrer';
+            tmp.style.position = 'fixed';
+            tmp.style.left = '-9999px';
+            document.body.appendChild(tmp);
+            tmp.click();
+            tmp.remove();
+          } catch {}
+          return;
+        }
+
+        const isPlainLeft = (e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey);
+        if (isPlainLeft) {
+          e.preventDefault();
+          try {
+            // Use a real <a target=_blank>.click() to mimic native "Open link in new tab".
+            const tmp = document.createElement('a');
+            tmp.href = href;
+            tmp.target = '_blank';
+            tmp.rel = 'noopener noreferrer';
+            tmp.style.position = 'fixed';
+            tmp.style.left = '-9999px';
+            document.body.appendChild(tmp);
+            tmp.click();
+            tmp.remove();
+          } catch {}
         }
       } catch {}
     };
 
     document.addEventListener('pointerdown', stopHijack, true);
+    document.addEventListener('mousedown', stopHijack, true);
     document.addEventListener('click', stopHijack, true);
   }
 
@@ -612,6 +642,36 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
   const LINK_COLOR = 'rgb(204,130,36)';
 
+  // Ensure link hover/hand cursor styling exists even if global CSS doesn't include it.
+  if (!window.__rteLinkStyleInstalled) {
+    window.__rteLinkStyleInstalled = true;
+    try {
+      const st = document.createElement('style');
+      st.setAttribute('data-rte-link-style', '1');
+      st.textContent = `
+        .rte-editor a.rte-link, .rte-modal a.rte-link {
+          cursor: pointer;
+          text-decoration: underline;
+          font-weight: 700;
+        }
+        .rte-editor a.rte-link:hover, .rte-modal a.rte-link:hover {
+          filter: brightness(1.15);
+        }
+
+        /* Keep pasted structure readable with site styling */
+        .rte-editor p, .rte-modal p { margin: 0 0 8px 0; }
+        .rte-editor p:last-child, .rte-modal p:last-child { margin-bottom: 0; }
+        .rte-editor ul, .rte-modal ul,
+        .rte-editor ol, .rte-modal ol { margin: 6px 0 6px 20px; padding: 0; }
+        .rte-editor li, .rte-modal li { margin: 2px 0; }
+        .rte-editor table.rte-table, .rte-modal table.rte-table { width: 100%; border-collapse: collapse; }
+        .rte-editor table.rte-table td, .rte-modal table.rte-table td,
+        .rte-editor table.rte-table th, .rte-modal table.rte-table th { border: 1px solid rgba(255,255,255,0.12); padding: 6px 8px; vertical-align: top; }
+      `;`;
+      document.head.appendChild(st);
+    } catch {}
+  }
+
   const makeLinkAnchorHTML = (href, label) => {
     const safeHref = htmlEscape(String(href || ''));
     const safeLabel = htmlEscape(String(label || ''));
@@ -621,7 +681,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
   const linkifyPlain = (plain) => {
     // Preserve paragraph structure from plain text:
-    // - blank line(s) => new paragraph (<p>)
+    // - blank line(s) => new paragraph
     // - single newline => <br> inside paragraph
     const t = String(plain || '');
     const paras = t.split(/\n\s*\n+/g);
@@ -640,29 +700,26 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       }).replace(/\n/g, '<br>');
     };
 
+    // If it's a single paragraph (no blank lines), keep it compact.
     if (paras.length <= 1) return renderInline(t);
 
     return paras.map(p => `<p>${renderInline(p)}</p>`).join('');
   };
 
-
-  // NOTE: sanitizeHtml is used both for:
-  // 1) saving editor content (keep our own safe inline styles like font-size)
-  // 2) pasting from external sources (strip ALL foreign styles, keep only semantic markup)
-  // Use options.mode = 'paste' to apply stricter rules.
   const ALLOWED_TAGS = new Set([
-    'B','STRONG','I','EM','U','BR','UL','OL','LI','A','P','DIV','SPAN','H1','H2','H3','H4','H5','H6',
-    // Tables
+    'B','STRONG','U','BR','UL','OL','LI','A',
+    'P','DIV','SPAN',
+    // Tables (for paste + stored content)
     'TABLE','THEAD','TBODY','TFOOT','TR','TD','TH'
   ]);
 
-  const sanitizeHtml = (html, options) => {
-    const mode = String(options?.mode || 'store'); // 'store' | 'paste'
+  const sanitizeHtml = (html, opts = {}) => {
     try {
+      const mode = opts && opts.mode ? String(opts.mode) : '';
       const tpl = document.createElement('template');
       tpl.innerHTML = String(html || '');
 
-      const walk = (node) => {
+      const walk = (node, parentTag = '') => {
         const children = Array.from(node.childNodes || []);
         for (const ch of children) {
           if (ch.nodeType === Node.TEXT_NODE) continue;
@@ -670,27 +727,37 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           const tag = (ch.tagName || '').toUpperCase();
 
-          // Normalize headings to plain blocks (visual emphasis is handled by site CSS).
-          if (tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'H4' || tag === 'H5' || tag === 'H6') {
-            const div = document.createElement('div');
-            const b = document.createElement('b');
-            while (ch.firstChild) b.appendChild(ch.firstChild);
-            div.appendChild(b);
-            ch.replaceWith(div);
-            walk(div);
+          // Block structure:
+          // - In paste mode: preserve paragraphs (<p>) and convert <div> blocks to <p>
+          // - In legacy/other modes: flatten <p>/<div> to <br> (as before)
+          if (tag === 'DIV') {
+            if (mode === 'paste') {
+              const p = document.createElement('p');
+              while (ch.firstChild) p.appendChild(ch.firstChild);
+              ch.replaceWith(p);
+              walk(p, 'P');
+              continue;
+            }
+
+            const frag = document.createDocumentFragment();
+            while (ch.firstChild) frag.appendChild(ch.firstChild);
+            ch.replaceWith(frag);
+            if (parentTag !== 'TD' && parentTag !== 'TH') {
+              node.insertBefore(document.createElement('br'), frag.nextSibling);
+            }
             continue;
           }
 
-          // Preserve paragraphs.
-// In paste mode, many sources use <div> for paragraphs; convert those to <p> so spacing is consistent.
-          if (mode === 'paste' && tag === 'DIV') {
-            const p = document.createElement('p');
-            while (ch.firstChild) p.appendChild(ch.firstChild);
-            ch.replaceWith(p);
-            walk(p);
+          if (tag === 'P' && mode !== 'paste') {
+            const frag = document.createDocumentFragment();
+            while (ch.firstChild) frag.appendChild(ch.firstChild);
+            ch.replaceWith(frag);
+            if (parentTag !== 'TD' && parentTag !== 'TH') {
+              node.insertBefore(document.createElement('br'), frag.nextSibling);
+            }
             continue;
           }
-
+          }
 
           if (!ALLOWED_TAGS.has(tag)) {
             const frag = document.createDocumentFragment();
@@ -709,18 +776,27 @@ function upgradeSheetTextareasToRte(root, canEdit) {
             ch.removeAttribute(attr.name);
           }
 
+          // Tables: keep structure but remove foreign styling and apply our site class.
+          if (tag === 'TABLE') {
+            ch.classList.add('rte-table');
+            // Remove inline style/class from the source if any slipped through
+            ch.removeAttribute('style');
+          }
+          if (tag === 'TD' || tag === 'TH') {
+            ch.removeAttribute('style');
+          }
+
 
           if (tag === 'SPAN') {
             // Allow only a very small safe subset of inline styles.
-            // - store mode: allow font-size: 12..30px (our own editor feature)
-            // - paste mode: strip ALL external styles to keep site look consistent
-            // - color is only allowed for our link marker and will be normalized anyway
+            // - font-size: 12..30px
+            // - color: rgb(204,130,36) for our link spans
             const st = String(ch.getAttribute('style') || '');
             const sizeM = st.match(/font-size\s*:\s*([0-9]+)px/i);
             const colorM = st.match(/color\s*:\s*([^;]+)/i);
 
             const out = [];
-            if (mode !== 'paste' && sizeM) {
+            if (sizeM) {
               const px = Math.max(12, Math.min(30, Number(sizeM[1])));
               out.push(`font-size:${px}px`);
             }
@@ -786,11 +862,11 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           }
 
 
-          walk(ch);
-        }
+          walk(ch, tag);
+          }
       };
 
-      walk(tpl.content);
+      walk(tpl.content, '');
 
       let htmlOut = tpl.innerHTML;
 
@@ -819,6 +895,12 @@ function upgradeSheetTextareasToRte(root, canEdit) {
   const openModal = (ta, inlineEditor, persistKey) => {
     if (!inlineEditor) return;
     if (!canEdit) return;
+
+    // Prevent stacking overlays if something goes wrong (or user dblclicks many times).
+    try {
+      document.querySelectorAll('.rte-modal-overlay').forEach((n) => n.remove());
+    } catch {}
+
     const path = persistKey || ta?.getAttribute?.('data-sheet-path') || '';
 
     const overlay = document.createElement('div');
@@ -1035,12 +1117,56 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     const stopLinkBubble = (e) => {
       const a = e.target?.closest?.('a[href].rte-link');
       if (!a) return;
+
+      // In many browsers, <a> inside contenteditable won't navigate on click.
+      // So we open it explicitly and prevent any in-app click hijackers.
+      const href = normalizeHref(a.getAttribute('href') || a.href || '');
+      if (!href) return;
+
       e.stopPropagation();
       try { e.stopImmediatePropagation?.(); } catch {}
+
+      // Let context menu / right click work normally.
+      if (e.type === 'pointerdown' && (e.button !== 0)) return;
+
+      const isPlainLeft = (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey);
+
+      // Fallback: some routers cancel the final click; open early for non-editable areas.
+      if ((e.type === 'pointerdown' || e.type === 'mousedown') && isPlainLeft && !a.closest('[contenteditable="true"]')) {
+        e.preventDefault();
+        try {
+          const tmp = document.createElement('a');
+          tmp.href = href;
+          tmp.target = '_blank';
+          tmp.rel = 'noopener noreferrer';
+          tmp.style.position = 'fixed';
+          tmp.style.left = '-9999px';
+          document.body.appendChild(tmp);
+          tmp.click();
+          tmp.remove();
+        } catch {}
+        return;
+      }
+
+      if (e.type === 'click' && isPlainLeft) {
+        e.preventDefault();
+        try {
+          const tmp = document.createElement('a');
+          tmp.href = href;
+          tmp.target = '_blank';
+          tmp.rel = 'noopener noreferrer';
+          tmp.style.position = 'fixed';
+          tmp.style.left = '-9999px';
+          document.body.appendChild(tmp);
+          tmp.click();
+          tmp.remove();
+        } catch {}
+      }
     };
 
     // Use capture to beat any global click routers.
     editor.addEventListener('pointerdown', stopLinkBubble, true);
+    editor.addEventListener('mousedown', stopLinkBubble, true);
     editor.addEventListener('click', stopLinkBubble, true);
 
     const close = () => { try { overlay.remove(); } catch {} };
