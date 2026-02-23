@@ -461,9 +461,10 @@
   gap: 10px;
 }
 
+/* One-column sheet grid (used for Spells levels list) */
 .sheet-grid-1 {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
