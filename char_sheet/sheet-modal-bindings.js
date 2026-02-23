@@ -567,6 +567,45 @@ function normalizeHref(href) {
 }
 // ================== RICH TEXT (modal editor) ==================
 function upgradeSheetTextareasToRte(root, canEdit) {
+
+  // ===== Persisted heights for description/notes editors =====
+  const __rteHeightKey = (k) => {
+    const key = String(k || '').trim();
+    return key ? (`dnd_rte_height:${key}`) : '';
+  };
+  const __applyPersistedHeight = (el, key) => {
+    try {
+      if (!el) return;
+      const hk = __rteHeightKey(key);
+      if (!hk) return;
+      const raw = localStorage.getItem(hk);
+      const n = raw ? Number(raw) : NaN;
+      if (Number.isFinite(n) && n >= 60 && n <= 2000) {
+        el.style.height = `${Math.round(n)}px`;
+      }
+    } catch {}
+  };
+  const __bindPersistedHeight = (el, key) => {
+    try {
+      if (!el) return;
+      const hk = __rteHeightKey(key);
+      if (!hk) return;
+      let last = 0;
+      const save = () => {
+        try {
+          const h = Math.round(el.getBoundingClientRect().height || el.offsetHeight || 0);
+          if (!h || h === last) return;
+          last = h;
+          if (h >= 60 && h <= 2000) localStorage.setItem(hk, String(h));
+        } catch {}
+      };
+      // save after resize (mouse/touch) + when leaving focus
+      el.addEventListener('pointerup', save);
+      el.addEventListener('mouseup', save);
+      el.addEventListener('touchend', save, { passive: true });
+      el.addEventListener('blur', save);
+    } catch {}
+  };
   if (!root) return;
 
   // Global link interceptor for rich-text areas.
@@ -590,9 +629,9 @@ function upgradeSheetTextareasToRte(root, canEdit) {
         e.stopPropagation();
         try { e.stopImmediatePropagation?.(); } catch {}
 
-        // Force open in a new tab/window for a normal left click.
-        // We do it ourselves to avoid any in-app click hijackers resetting the sheet.
-        if (e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        // If target was stripped, force new tab only for a normal left click.
+        const target = String(a.getAttribute('target') || '').toLowerCase();
+        if (target !== '_blank' && e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
           e.preventDefault();
           try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
         }
@@ -876,6 +915,17 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     const toolbar = overlay.querySelector('.rte-modal-toolbar');
     const fontSel = overlay.querySelector('[data-rte-fontsize]');
 
+
+    // modal editor: allow resize + persist the chosen height (same key as inline)
+    try {
+      editor.style.resize = 'vertical';
+      editor.style.overflow = 'auto';
+      const persistKey = String(path || ta?.getAttribute?.('data-sheet-path') || ta?.id || ta?.name || '').trim();
+      __applyPersistedHeight(editor, persistKey);
+      __bindPersistedHeight(editor, persistKey);
+    } catch {}
+
+
     editor.innerHTML = inlineEditor.innerHTML || '';
     editor.focus();
 
@@ -1093,6 +1143,15 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       const rows = Number(ta.getAttribute('rows') || 0);
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
+    // allow user to resize description frame vertically (and persist height)
+    try {
+      editor.style.resize = 'vertical';
+      editor.style.overflow = 'auto';
+      const persistKey = String(ta?.getAttribute?.('data-sheet-path') || ta?.id || ta?.name || '').trim();
+      __applyPersistedHeight(editor, persistKey);
+      __bindPersistedHeight(editor, persistKey);
+    } catch {}
+
 
     editor.addEventListener('paste', (e) => {
       if (!canEdit) return;
@@ -1121,21 +1180,10 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     });
 
     const stopInlineLinkBubble = (e) => {
-      // Make links truly clickable via LMB even if the app has global click handlers.
-      const a = e.target?.closest?.('a[href]');
+      const a = e.target?.closest?.('a[href].rte-link');
       if (!a) return;
-      const href = normalizeHref(a.getAttribute('href'));
-      if (!href) return;
-
-      // Stop in-app handlers.
       e.stopPropagation();
       try { e.stopImmediatePropagation?.(); } catch {}
-
-      // Only override normal left click. Right click / long tap should keep native behavior.
-      if (e.type === 'click' && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        try { window.open(href, '_blank', 'noopener,noreferrer'); } catch {}
-      }
     };
 
     editor.addEventListener('pointerdown', stopInlineLinkBubble, true);
@@ -1152,123 +1200,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       wrap.appendChild(ta);
     }
   });
-}
-
-// ===================== Rich-text height persistence =====================
-// Пользователь просил: «рамку описания» (rte) можно тянуть по высоте, и высота сохраняется.
-// Делаем это для всех .rte-editor (contenteditable) так же, как уже сделано для textarea.
-const RTE_HEIGHT_LS_KEY = 'dnd_sheet_rte_heights_v1';
-
-function loadRteHeights() {
-  try {
-    const raw = localStorage.getItem(RTE_HEIGHT_LS_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
-    return (obj && typeof obj === 'object') ? obj : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveRteHeights(obj) {
-  try { localStorage.setItem(RTE_HEIGHT_LS_KEY, JSON.stringify(obj || {})); } catch {}
-}
-
-function rtePersistKey(player, editor, fallbackIndex) {
-  const pid = String(player?.id || player?.name || 'unknown');
-  const prefix = `p:${pid}|`;
-
-  // prefer the hidden textarea path inside the same wrapper (stable)
-  const wrap = editor?.closest?.('.rte');
-  const ta = wrap?.querySelector?.('textarea[data-sheet-path]');
-  const sp = ta?.getAttribute?.('data-sheet-path');
-  if (sp) return prefix + `path:${sp}`;
-
-  // fallback: id/name
-  if (editor?.id) return prefix + `id:${editor.id}`;
-  return prefix + `idx:${fallbackIndex}`;
-}
-
-function bindRteHeightPersistence(root, player) {
-  if (!root || !player) return;
-
-  const store = loadRteHeights();
-
-  try {
-    if (root.__rteResizeObserver && typeof root.__rteResizeObserver.disconnect === 'function') {
-      root.__rteResizeObserver.disconnect();
-    }
-  } catch {}
-  root.__rteResizeObserver = null;
-
-  const editors = Array.from(root.querySelectorAll('.rte-editor'));
-
-  // apply saved heights
-  editors.forEach((ed, i) => {
-    try {
-      const cs = window.getComputedStyle ? getComputedStyle(ed) : null;
-      if (cs && cs.resize === 'none') return; // only if resizable
-      const key = rtePersistKey(player, ed, i);
-      const h = store[key];
-      if (Number.isFinite(h) && h >= 40) {
-        ed.style.height = `${Math.round(h)}px`;
-      }
-    } catch {}
-  });
-
-  let saveTimer = null;
-  const scheduleSave = () => {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveRteHeights(store), 120);
-  };
-
-  if (typeof ResizeObserver === 'function') {
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const ed = entry?.target;
-        if (!ed || !ed.classList?.contains('rte-editor')) continue;
-        const i = editors.indexOf(ed);
-        const key = rtePersistKey(player, ed, i >= 0 ? i : 0);
-        const h = Math.round(ed.getBoundingClientRect().height);
-        if (h >= 40) {
-          store[key] = h;
-          scheduleSave();
-        }
-      }
-    });
-
-    editors.forEach((ed) => {
-      try {
-        const cs = window.getComputedStyle ? getComputedStyle(ed) : null;
-        if (cs && cs.resize === 'none') return;
-        ro.observe(ed);
-      } catch {}
-    });
-
-    root.__rteResizeObserver = ro;
-  } else {
-    // Fallback: save on mouseup/touchend
-    const handler = (e) => {
-      const ed = e.target?.closest?.('.rte-editor');
-      if (!ed) return;
-      try {
-        const cs = window.getComputedStyle ? getComputedStyle(ed) : null;
-        if (cs && cs.resize === 'none') return;
-        const i = editors.indexOf(ed);
-        const key = rtePersistKey(player, ed, i >= 0 ? i : 0);
-        const h = Math.round(ed.getBoundingClientRect().height);
-        if (h >= 40) {
-          store[key] = h;
-          scheduleSave();
-        }
-      } catch {}
-    };
-    root.addEventListener('mouseup', handler);
-    root.addEventListener('touchend', handler, { passive: true });
-    root.__rteResizeObserver = { disconnect: () => {
-      try { root.removeEventListener('mouseup', handler); } catch {}
-      try { root.removeEventListener('touchend', handler); } catch {}
-    }};
-  }
 }
 
 function bindEditableInputs(root, player, canEdit) {
@@ -1457,14 +1388,6 @@ if (path === "proficiency" || path === "proficiencyCustom") {
       bindTextareaHeightPersistence(root, player);
     } catch (e) {
       console.warn('bindTextareaHeightPersistence failed', e);
-    }
-
-    // ===== Persist manual rich-text resize (height) =====
-    // То же самое, но для rich-text (contenteditable) блоков описания/заметок.
-    try {
-      bindRteHeightPersistence(root, player);
-    } catch (e) {
-      console.warn('bindRteHeightPersistence failed', e);
     }
   }
 
