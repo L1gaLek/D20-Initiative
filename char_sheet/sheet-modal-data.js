@@ -39,8 +39,14 @@
     if (!sheetModal || sheetModal.classList.contains('hidden')) return false;
     const activeEl = document.activeElement;
     if (activeEl && sheetModal.contains(activeEl)) return true;
+    // If equipment overlay is open, treat it as part of sheet interactions.
+    try {
+      const overlay = document.querySelector('.equip-overlay');
+      if (overlay && activeEl && overlay.contains(activeEl)) return true;
+    } catch {}
     const st = getUiState(playerId);
-    return (Date.now() - (st.lastInteractAt || 0)) < 900;
+    // Wider window so network round-trips don't cause "tab jumping" while editing.
+    return (Date.now() - (st.lastInteractAt || 0)) < 2500;
   }
 
   // ================== SHEET PARSER (Charbox/LSS) ==================

@@ -2243,7 +2243,8 @@ function bindTextareaHeightPersistence(root, player) {
         + (safeInt(sheet?.coins?.pp?.value, 0) * 1000);
     }
 
-    function addToInventory(sheet, tabId, item, qty) {
+    // source: 'db' | 'shop' | ''  (used to adjust UI/description behavior)
+    function addToInventory(sheet, tabId, item, qty, source = '') {
       if (!sheet) return;
       if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: tabId };
       if (!Array.isArray(sheet.inventory[tabId])) sheet.inventory[tabId] = [];
@@ -2262,6 +2263,23 @@ function bindTextareaHeightPersistence(root, player) {
       const payload = JSON.parse(JSON.stringify(item || {}));
       payload.qty = q;
       payload._tab = tabId;
+
+      // Mark items coming from SRD db/shop so inventory UI can hide redundant buttons.
+      if (source) payload._source = String(source);
+
+      // For db/shop items we merge long description into short description so that
+      // the single "Показать/Скрыть" button controls all text.
+      try {
+        if (source) {
+          const short = String(payload.description_ru || payload.desc_ru || payload.desc || '').trim();
+          const long = String(payload.details_ru || payload.long_description_ru || payload.long_desc_ru || '').trim();
+          if (long) {
+            const merged = short ? `${short}\n\n${long}` : long;
+            payload.description_ru = merged;
+          }
+          payload._fromDb = true;
+        }
+      } catch {}
       arr.push(payload);
 
       // Если добавили оружие — синхронизируем его в "Бой"
@@ -2470,6 +2488,12 @@ function bindTextareaHeightPersistence(root, player) {
       `;
       document.body.appendChild(wrap);
 
+      // Mark interactions in overlay so state updates don't cause UI jumps.
+      try {
+        wrap.addEventListener('pointerdown', () => { try { markModalInteracted(curPlayer.id); } catch {} }, { passive: true });
+        wrap.addEventListener('keydown', () => { try { markModalInteracted(curPlayer.id); } catch {} }, { passive: true });
+      } catch {}
+
       const close = () => {
         wrap.remove();
       };
@@ -2557,7 +2581,6 @@ function bindTextareaHeightPersistence(root, player) {
                 ${details ? `<div class="equip-row__details collapsed" data-equip-details>${details}</div>` : ''}
               </div>
               <div class="equip-row__right">
-                ${details ? `<button class="weapon-btn" type="button" data-equip-toggle-details data-item-id="${escapeHtml(String(it.id || ''))}">Описание</button>` : ''}
                 <button class="weapon-btn" type="button" data-equip-action data-item-id="${escapeHtml(String(it.id || ''))}">${mode === 'buy' ? 'Купить' : 'Добавить'}</button>
               </div>
             </div>
@@ -2585,6 +2608,18 @@ function bindTextareaHeightPersistence(root, player) {
       qInp.addEventListener('input', renderList);
 
       listEl.addEventListener('click', (e) => {
+        // Toggle details by clicking on the left part of a row (no dedicated button).
+        const left = e.target?.closest?.('.equip-row__left');
+        if (left && listEl.contains(left)) {
+          const row = left.closest('.equip-row');
+          const det = row?.querySelector?.('[data-equip-details]');
+          // Don't toggle when clicking the action button
+          if (det && !e.target?.closest?.('[data-equip-action]')) {
+            det.classList.toggle('collapsed');
+            return;
+          }
+        }
+
         const btn = e.target?.closest?.('[data-equip-action][data-item-id]');
         if (!btn) return;
         const id = btn.getAttribute('data-item-id') || '';
@@ -2614,10 +2649,19 @@ function bindTextareaHeightPersistence(root, player) {
             alert('Недостаточно монет.');
             return;
           }
-          addToInventory(sheet, targetTab, found, qty);
+          addToInventory(sheet, targetTab, found, qty, 'shop');
         } else {
-          addToInventory(sheet, targetTab, found, qty);
+          addToInventory(sheet, targetTab, found, qty, 'db');
         }
+
+        // Visual feedback: flash the action button green for a moment.
+        try {
+          btn.classList.add('equip-action-flash-ok');
+          setTimeout(() => { try { btn.classList.remove('equip-action-flash-ok'); } catch {} }, 1400);
+        } catch {}
+
+        // Mark interaction so state refresh does not jump tabs while user is working in overlay.
+        try { markModalInteracted(curPlayer.id); } catch {}
 
         // выставим активную вкладку инвентаря = вкладка добавления
         if (!sheet.inventory || typeof sheet.inventory !== 'object') sheet.inventory = { activeTab: targetTab };

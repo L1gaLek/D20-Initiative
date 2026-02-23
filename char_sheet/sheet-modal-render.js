@@ -317,7 +317,7 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    return `<div class="sheet-grid-1">${blocks}</div>`;
+    return `<div class="sheet-grid-2">${blocks}</div>`;
   }
 
   function renderSpellsTab(vm) {
@@ -638,6 +638,9 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   const desc = String(it.description_ru || it.desc_ru || it.desc || "").trim();
   const details = String(it.details_ru || it.long_description_ru || it.long_desc_ru || "").trim();
 
+  // Items from SRD DB / Shop: we keep UI simpler (no extra "Описание" button).
+  const fromDb = !!it._fromDb || (String(it._source || '').toLowerCase() === 'db') || (String(it._source || '').toLowerCase() === 'shop');
+
   const descCollapsed = !!it.descCollapsed;
   const detailsOpen = !!it.detailsOpen;
 
@@ -689,7 +692,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
     </button>
   `;
 
-  const detailsToggleBtn = details ? `
+  const detailsToggleBtn = (details && !fromDb) ? `
     <button class="weapon-btn" type="button" data-inv-toggle-details data-tab="${escapeHtml(tabId)}" data-idx="${idx}" title="Подробное описание">
       ${detailsOpen ? "Скрыть описание" : "Описание"}
     </button>
@@ -701,7 +704,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
     : `<div class="equip-desc ${descCollapsed ? "collapsed" : ""}">${desc ? escapeHtml(desc) : `<span class="equip-desc--empty">—</span>`}</div>`;
 
 
-  const detailsBlock = details
+  const detailsBlock = (details && !fromDb)
     ? `<div class="equip-details ${detailsOpen ? "" : "collapsed"}">${escapeHtml(details)}</div>`
     : "";
 
