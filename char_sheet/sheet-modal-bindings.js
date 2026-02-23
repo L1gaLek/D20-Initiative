@@ -567,45 +567,6 @@ function normalizeHref(href) {
 }
 // ================== RICH TEXT (modal editor) ==================
 function upgradeSheetTextareasToRte(root, canEdit) {
-
-  // ===== Persisted heights for description/notes editors =====
-  const __rteHeightKey = (k) => {
-    const key = String(k || '').trim();
-    return key ? (`dnd_rte_height:${key}`) : '';
-  };
-  const __applyPersistedHeight = (el, key) => {
-    try {
-      if (!el) return;
-      const hk = __rteHeightKey(key);
-      if (!hk) return;
-      const raw = localStorage.getItem(hk);
-      const n = raw ? Number(raw) : NaN;
-      if (Number.isFinite(n) && n >= 60 && n <= 2000) {
-        el.style.height = `${Math.round(n)}px`;
-      }
-    } catch {}
-  };
-  const __bindPersistedHeight = (el, key) => {
-    try {
-      if (!el) return;
-      const hk = __rteHeightKey(key);
-      if (!hk) return;
-      let last = 0;
-      const save = () => {
-        try {
-          const h = Math.round(el.getBoundingClientRect().height || el.offsetHeight || 0);
-          if (!h || h === last) return;
-          last = h;
-          if (h >= 60 && h <= 2000) localStorage.setItem(hk, String(h));
-        } catch {}
-      };
-      // save after resize (mouse/touch) + when leaving focus
-      el.addEventListener('pointerup', save);
-      el.addEventListener('mouseup', save);
-      el.addEventListener('touchend', save, { passive: true });
-      el.addEventListener('blur', save);
-    } catch {}
-  };
   if (!root) return;
 
   // Global link interceptor for rich-text areas.
@@ -915,17 +876,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     const toolbar = overlay.querySelector('.rte-modal-toolbar');
     const fontSel = overlay.querySelector('[data-rte-fontsize]');
 
-
-    // modal editor: allow resize + persist the chosen height (same key as inline)
-    try {
-      editor.style.resize = 'vertical';
-      editor.style.overflow = 'auto';
-      const persistKey = String(path || ta?.getAttribute?.('data-sheet-path') || ta?.id || ta?.name || '').trim();
-      __applyPersistedHeight(editor, persistKey);
-      __bindPersistedHeight(editor, persistKey);
-    } catch {}
-
-
     editor.innerHTML = inlineEditor.innerHTML || '';
     editor.focus();
 
@@ -1143,15 +1093,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       const rows = Number(ta.getAttribute('rows') || 0);
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
-    // allow user to resize description frame vertically (and persist height)
-    try {
-      editor.style.resize = 'vertical';
-      editor.style.overflow = 'auto';
-      const persistKey = String(ta?.getAttribute?.('data-sheet-path') || ta?.id || ta?.name || '').trim();
-      __applyPersistedHeight(editor, persistKey);
-      __bindPersistedHeight(editor, persistKey);
-    } catch {}
-
 
     editor.addEventListener('paste', (e) => {
       if (!canEdit) return;
