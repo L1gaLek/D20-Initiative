@@ -317,7 +317,7 @@ function renderSpellCard({ level, name, href, desc }) {
       `;
     }).join("");
 
-    return `<div class="sheet-grid-2">${blocks}</div>`;
+    return `<div class="sheet-grid-1">${blocks}</div>`;
   }
 
   function renderSpellsTab(vm) {
@@ -1192,256 +1192,6 @@ function renderShopTab(vm, canEdit) {
     return `<div class="sheet-note">Раздел в разработке</div>`;
   }
 
-  // ================== RTE: persist manual height (per player + field) ==================
-  function wireRteHeightPersistence(root, playerId) {
-    if (!root || !playerId) return;
-    let ls;
-    try { ls = window.localStorage; } catch { ls = null; }
-    if (!ls) return;
-
-    const editors = Array.from(root.querySelectorAll('.rte-editor[data-rte-editor]'));
-    editors.forEach((ed) => {
-      if (!ed || ed.__rteHeightPersistBound) return;
-      ed.__rteHeightPersistBound = true;
-
-      const wrap = ed.closest('.rte');
-      const ta = wrap ? (wrap.querySelector('textarea[data-sheet-path]') || wrap.querySelector('textarea')) : null;
-      const fieldKey = String(
-        ta?.getAttribute?.('data-sheet-path') ||
-        ta?.id ||
-        ta?.name ||
-        ''
-      ).trim();
-      if (!fieldKey) return;
-
-      const lsKey = `sheet_rte_h:${String(playerId)}:${fieldKey}`;
-
-      // restore once
-      try {
-        const saved = String(ls.getItem(lsKey) || '').trim();
-        const h = Math.round(Number(saved));
-        if (Number.isFinite(h) && h >= 60 && h <= 1800) {
-          ed.style.height = `${h}px`;
-        }
-      } catch {}
-
-      // persist on resize (user dragging the resize handle)
-      let last = 0;
-      const getH = () => {
-        try { return Math.round(ed.getBoundingClientRect().height || 0); } catch { return 0; }
-      };
-      last = getH();
-
-      let t = null;
-      const scheduleSave = () => {
-        if (t) clearTimeout(t);
-        t = setTimeout(() => {
-          const h = getH();
-          if (!h || Math.abs(h - last) < 2) return;
-          last = h;
-          try { ls.setItem(lsKey, String(h)); } catch {}
-        }, 120);
-      };
-
-      try {
-        const ro = new ResizeObserver(() => scheduleSave());
-        ro.observe(ed);
-        ed.__rteHeightResizeObserver = ro;
-      } catch {
-        // fallback: save on mouseup/touchend
-        ed.addEventListener('mouseup', scheduleSave);
-        ed.addEventListener('touchend', scheduleSave, { passive: true });
-      }
-    });
-  }
-
-  // ================== RTE: normalize paste (keep structure/formatting, drop чужие стили) ==================
-  function wireRtePasteNormalization(root) {
-    if (!root) return;
-
-    const editors = Array.from(root.querySelectorAll('.rte-editor[data-rte-editor]'));
-    editors.forEach((ed) => {
-      if (!ed || ed.__rtePasteNormalizedBound) return;
-      ed.__rtePasteNormalizedBound = true;
-
-      const clampNum = (n, min, max) => Math.max(min, Math.min(max, n));
-
-      const sanitizeHref = (hrefRaw) => {
-        const href = String(hrefRaw || '').trim();
-        if (!href) return '';
-        const low = href.toLowerCase();
-        if (low.startsWith('javascript:') || low.startsWith('data:') || low.startsWith('vbscript:')) return '';
-        try {
-          const u = new URL(href, window.location.href);
-          if (u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:' || u.protocol === 'about:') {
-            return href;
-          }
-          if (href.startsWith('/') || href.startsWith('#')) return href;
-          return href;
-        } catch {
-          if (href.startsWith('/') || href.startsWith('#') || href.startsWith('./') || href.startsWith('../')) return href;
-          return href;
-        }
-      };
-
-      const parseFontSize = (val) => {
-        const s = String(val || '').trim().toLowerCase();
-        if (!s) return null;
-        let num = parseFloat(s);
-        if (!Number.isFinite(num)) return null;
-        if (s.endsWith('px')) return clampNum(num / 14, 0.75, 2.0);
-        if (s.endsWith('pt')) return clampNum((num * 1.333) / 14, 0.75, 2.0);
-        if (s.endsWith('%')) return clampNum(num / 100, 0.75, 2.0);
-        if (s.endsWith('em') || s.endsWith('rem')) return clampNum(num, 0.75, 2.0);
-        return null;
-      };
-
-      const toSafeTag = (tag) => {
-        const t = String(tag || '').toUpperCase();
-        if (['P','BR','UL','OL','LI','STRONG','EM','U','A','SPAN'].includes(t)) return t;
-        if (/^H[1-6]$/.test(t)) return 'P';
-        if (t === 'DIV') return 'P';
-        return null;
-      };
-
-      const sanitizeNode = (node, doc) => {
-        if (!node) return null;
-        if (node.nodeType === Node.TEXT_NODE) return doc.createTextNode(node.nodeValue || '');
-        if (node.nodeType !== Node.ELEMENT_NODE) return null;
-
-        const tag = toSafeTag(node.tagName);
-        if (!tag) {
-          const frag = doc.createDocumentFragment();
-          Array.from(node.childNodes || []).forEach((ch) => {
-            const safe = sanitizeNode(ch, doc);
-            if (safe) frag.appendChild(safe);
-          });
-          return frag;
-        }
-        if (tag === 'BR') return doc.createElement('br');
-
-        const style = node.getAttribute('style') || '';
-        const lowStyle = style.toLowerCase();
-
-        const hasUnderline = lowStyle.includes('text-decoration') && lowStyle.includes('underline');
-        const isBold = lowStyle.includes('font-weight') && (lowStyle.includes('bold') || /font-weight\s*:\s*[6-9]00/.test(lowStyle));
-        const isItalic = lowStyle.includes('font-style') && lowStyle.includes('italic');
-
-        let el = doc.createElement(tag.toLowerCase());
-
-        if (tag === 'A') {
-          const href = sanitizeHref(node.getAttribute('href') || node.getAttribute('data-href') || '');
-          if (href) el.setAttribute('href', href);
-        }
-
-        const fs = parseFontSize(node.style?.fontSize || (lowStyle.match(/font-size\s*:\s*([^;]+)/)?.[1] || ''));
-        if (fs && (tag === 'SPAN' || tag === 'P' || tag === 'A' || tag === 'LI')) {
-          el.setAttribute('style', `font-size:${fs.toFixed(3)}em`);
-        }
-
-        Array.from(node.childNodes || []).forEach((ch) => {
-          const safe = sanitizeNode(ch, doc);
-          if (safe) el.appendChild(safe);
-        });
-
-        let out = el;
-        if (hasUnderline && tag !== 'U') {
-          const w = doc.createElement('u');
-          w.appendChild(out);
-          out = w;
-        }
-        if (isItalic && tag !== 'EM') {
-          const w = doc.createElement('em');
-          w.appendChild(out);
-          out = w;
-        }
-        if (isBold && tag !== 'STRONG') {
-          const w = doc.createElement('strong');
-          w.appendChild(out);
-          out = w;
-        }
-
-        if (String(node.tagName || '').toUpperCase() === 'B' && tag !== 'STRONG') {
-          const w = doc.createElement('strong');
-          w.appendChild(out);
-          out = w;
-        }
-        if (String(node.tagName || '').toUpperCase() === 'I' && tag !== 'EM') {
-          const w = doc.createElement('em');
-          w.appendChild(out);
-          out = w;
-        }
-
-        return out;
-      };
-
-      const normalizeFromHtml = (html) => {
-        const doc = document.implementation.createHTMLDocument('');
-        const wrap = doc.createElement('div');
-        wrap.innerHTML = String(html || '');
-        wrap.querySelectorAll('style,script,meta,link,iframe,object,embed').forEach((n) => n.remove());
-
-        const outDoc = document.implementation.createHTMLDocument('');
-        const outWrap = outDoc.createElement('div');
-        Array.from(wrap.childNodes || []).forEach((ch) => {
-          const safe = sanitizeNode(ch, outDoc);
-          if (safe) outWrap.appendChild(safe);
-        });
-
-        const hasBlock = !!outWrap.querySelector('p,ul,ol,li');
-        if (!hasBlock) {
-          const txt = outWrap.textContent || '';
-          const p = outDoc.createElement('p');
-          p.textContent = txt;
-          outWrap.innerHTML = '';
-          outWrap.appendChild(p);
-        }
-
-        return outWrap.innerHTML;
-      };
-
-      const normalizeFromText = (text) => {
-        const t = String(text || '').replace(/\r\n/g, '\n');
-        const parts = t.split(/\n{2,}/g);
-        const esc = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-        return parts.map((para) => {
-          const lines = para.split(/\n/g);
-          const inner = lines.map(esc).join('<br>');
-          return `<p>${inner}</p>`;
-        }).join('');
-      };
-
-      const insertHtmlAtCaret = (html) => {
-        try {
-          document.execCommand('insertHTML', false, html);
-          return;
-        } catch {}
-        const sel = window.getSelection?.();
-        if (!sel || !sel.rangeCount) return;
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-        const tpl = document.createElement('template');
-        tpl.innerHTML = html;
-        range.insertNode(tpl.content);
-        sel.collapseToEnd?.();
-      };
-
-      ed.addEventListener('paste', (e) => {
-        try {
-          const cd = e.clipboardData || window.clipboardData;
-          if (!cd) return;
-          const html = cd.getData('text/html');
-          const text = cd.getData('text/plain');
-          e.preventDefault();
-          const cleaned = html ? normalizeFromHtml(html) : normalizeFromText(text);
-          insertHtmlAtCaret(cleaned);
-        } catch {
-          // if something went wrong, do nothing (browser will paste default only if we didn't prevent)
-        }
-      });
-    });
-  }
-
   // ================== RENDER MODAL ==================
   function renderSheetModal(player, opts = {}) {
     if (!sheetTitle || !sheetSubtitle || !sheetActions || !sheetContent) return;
@@ -1691,9 +1441,6 @@ function renderShopTab(vm, canEdit) {
     sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
     bindEditableInputs(sheetContent, player, canEdit);
-    // after RTE upgrade: allow manual resize and persist chosen height
-    wireRteHeightPersistence(sheetContent, player.id);
-    wireRtePasteNormalization(sheetContent);
     bindLanguagesUi(sheetContent, player, canEdit);
     bindSkillBoostDots(sheetContent, player, canEdit);
     bindSaveProfDots(sheetContent, player, canEdit);
@@ -1738,8 +1485,6 @@ function renderShopTab(vm, canEdit) {
           main.innerHTML = renderActiveTab(activeTab, freshVm, canEdit);
 
           bindEditableInputs(sheetContent, player, canEdit);
-          wireRteHeightPersistence(sheetContent, player.id);
-          wireRtePasteNormalization(sheetContent);
           bindSkillBoostDots(sheetContent, player, canEdit);
           bindSaveProfDots(sheetContent, player, canEdit);
           bindStatRollButtons(sheetContent, player);
