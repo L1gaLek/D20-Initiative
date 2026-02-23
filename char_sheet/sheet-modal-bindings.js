@@ -821,6 +821,12 @@ function upgradeSheetTextareasToRte(root, canEdit) {
   const openModal = (ta, inlineEditor, persistKey) => {
     if (!inlineEditor) return;
     if (!canEdit) return;
+
+    // Prevent stacking overlays if something goes wrong (or user dblclicks many times).
+    try {
+      document.querySelectorAll('.rte-modal-overlay').forEach((n) => n.remove());
+    } catch {}
+
     const path = persistKey || ta?.getAttribute?.('data-sheet-path') || '';
 
     const overlay = document.createElement('div');
