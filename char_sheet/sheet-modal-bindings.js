@@ -653,13 +653,20 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     }).replace(/\n/g, '<br>');
   };
 
-  const ALLOWED_TAGS = new Set(['B','STRONG','U','BR','UL','OL','LI','A','P','DIV','SPAN']);
-  const sanitizeHtml = (html) => {
+  const ALLOWED_TAGS = new Set([
+    'B','STRONG','U','BR','UL','OL','LI','A',
+    'P','DIV','SPAN',
+    // Tables (for paste + stored content)
+    'TABLE','THEAD','TBODY','TFOOT','TR','TD','TH'
+  ]);
+
+  const sanitizeHtml = (html, opts = {}) => {
     try {
+      const mode = opts && opts.mode ? String(opts.mode) : '';
       const tpl = document.createElement('template');
       tpl.innerHTML = String(html || '');
 
-      const walk = (node) => {
+      const walk = (node, parentTag = '') => {
         const children = Array.from(node.childNodes || []);
         for (const ch of children) {
           if (ch.nodeType === Node.TEXT_NODE) continue;
@@ -667,12 +674,14 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           const tag = (ch.tagName || '').toUpperCase();
 
-          // Normalize block tags to <br> breaks
+          // Normalize block tags to <br> breaks (but don't force extra <br> inside table cells)
           if (tag === 'P' || tag === 'DIV') {
             const frag = document.createDocumentFragment();
             while (ch.firstChild) frag.appendChild(ch.firstChild);
             ch.replaceWith(frag);
-            node.insertBefore(document.createElement('br'), frag.nextSibling);
+            if (parentTag !== 'TD' && parentTag !== 'TH') {
+              node.insertBefore(document.createElement('br'), frag.nextSibling);
+            }
             continue;
           }
 
@@ -691,6 +700,16 @@ function upgradeSheetTextareasToRte(root, canEdit) {
             if (tag === 'A' && (n === 'href' || n === 'title' || n === 'target' || n === 'rel' || n === 'class' || n === 'style')) continue;
             if (tag === 'SPAN' && (n === 'style' || n === 'data-href' || n === 'class')) continue;
             ch.removeAttribute(attr.name);
+          }
+
+          // Tables: keep structure but remove foreign styling and apply our site class.
+          if (tag === 'TABLE') {
+            ch.classList.add('rte-table');
+            // Remove inline style/class from the source if any slipped through
+            ch.removeAttribute('style');
+          }
+          if (tag === 'TD' || tag === 'TH') {
+            ch.removeAttribute('style');
           }
 
 
@@ -769,11 +788,11 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           }
 
 
-          walk(ch);
-        }
+          walk(ch, tag);
+          }
       };
 
-      walk(tpl.content);
+      walk(tpl.content, '');
 
       let htmlOut = tpl.innerHTML;
 
