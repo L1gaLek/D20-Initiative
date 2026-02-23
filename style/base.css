@@ -1306,38 +1306,22 @@ button:hover {
   white-space: normal;
 }
 
-/* Force *project* typography/colors on pasted content.
-   Keep semantic emphasis (b/i/u) and list structure, but suppress
-   foreign fonts/colors/backgrounds coming from external sources. */
-.rte-editor *,
-.rte-editor *::before,
-.rte-editor *::after{
-  font-family: inherit !important;
-  font-size: inherit !important;
-  background: transparent !important;
-  background-color: transparent !important;
+/* ===== Rich Text Editor: block formatting (project style) ===== */
+.rte-editor p{
+  margin: 0 0 8px 0;
 }
-
-/* Keep link styling controlled by our .rte-link rules below */
-.rte-editor :not(a):not(a *){
-  color: inherit !important;
-}
-
-/* Preserve pasted structure (paragraphs/lists) while keeping site styling */
-.rte-editor p,
-.rte-editor div{
-  margin: 0 0 0.6em 0;
-}
-.rte-editor p:last-child,
-.rte-editor div:last-child{
+.rte-editor p:last-child{
   margin-bottom: 0;
 }
 .rte-editor ul,
 .rte-editor ol{
-  margin: 0 0 0.6em 1.1em;
+  margin: 0 0 8px 18px;
   padding: 0;
 }
-.rte-editor li{ margin: 0.15em 0; }
+.rte-editor li{
+  margin: 2px 0;
+}
+
 
 .rte-editor:empty:before{
   content: attr(data-placeholder);
