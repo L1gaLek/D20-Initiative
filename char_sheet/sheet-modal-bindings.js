@@ -2256,6 +2256,10 @@ function bindTextareaHeightPersistence(root, player) {
       payload.qty = q;
       payload._tab = tabId;
 
+      // Inventory item description is collapsed by default.
+      // Keep explicit value if it exists on the incoming payload.
+      if (typeof payload.descCollapsed === 'undefined') payload.descCollapsed = true;
+
       // Mark items coming from SRD db/shop so inventory UI can hide redundant buttons.
       if (source) payload._source = String(source);
 
@@ -2886,6 +2890,7 @@ function bindTextareaHeightPersistence(root, player) {
           cost: { amount: 0, coin: 'gp', coin_ru: 'зм' },
           weight: { lb: 0, text: '' },
           description_ru: "",
+          descCollapsed: true,
           type: 'manual'
         });
         scheduleSheetSave(curPlayer);
