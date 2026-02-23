@@ -704,13 +704,29 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           const tag = (ch.tagName || '').toUpperCase();
 
-          // Normalize block tags to <br> breaks (but don't force extra <br> inside table cells)
+          // Block tags:
+          // - In paste mode we KEEP paragraphs so the user gets real paragraph/list structure.
+          // - In other modes we historically flattened blocks into <br> to keep saved data compact.
+          //   We keep that behavior for backward compatibility.
           if (tag === 'P' || tag === 'DIV') {
-            const frag = document.createDocumentFragment();
-            while (ch.firstChild) frag.appendChild(ch.firstChild);
-            ch.replaceWith(frag);
-            if (parentTag !== 'TD' && parentTag !== 'TH') {
-              node.insertBefore(document.createElement('br'), frag.nextSibling);
+            if (mode === 'paste') {
+              // Normalize DIV -> P for consistent styling in our editor.
+              if (tag === 'DIV') {
+                const p = document.createElement('p');
+                while (ch.firstChild) p.appendChild(ch.firstChild);
+                ch.replaceWith(p);
+                walk(p, parentTag);
+              } else {
+                // keep <p>, just continue walking
+                walk(ch, tag);
+              }
+            } else {
+              const frag = document.createDocumentFragment();
+              while (ch.firstChild) frag.appendChild(ch.firstChild);
+              ch.replaceWith(frag);
+              if (parentTag !== 'TD' && parentTag !== 'TH') {
+                node.insertBefore(document.createElement('br'), frag.nextSibling);
+              }
             }
             continue;
           }
@@ -795,12 +811,18 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               }
             }
 
-            const sizeM = st.match(/font-size\s*:\s*([0-9]+)px/i);
+            // font-size: keep only numeric sizes (px/pt) and clamp to a safe range.
+            const sizeM = st.match(/font-size\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*(px|pt)\b/i);
             const colorM = st.match(/color\s*:\s*([^;]+)/i);
 
             const out = [];
-            if (mode !== 'paste' && sizeM) {
-              const px = Math.max(12, Math.min(30, Number(sizeM[1])));
+            // Keep font-size in both store mode (our editor feature) and paste mode ("по возможности").
+            // We clamp to a safe range so external huge fonts don't break layout.
+            if (sizeM) {
+              const num = Number(sizeM[1]);
+              const unit = String(sizeM[2] || 'px').toLowerCase();
+              const pxRaw = unit === 'pt' ? (num * 4 / 3) : num; // ~1pt = 1.333px
+              const px = Math.max(12, Math.min(30, Math.round(pxRaw)));
               out.push(`font-size:${px}px`);
             }
             if (ch.classList?.contains?.('rte-link') && colorM) {
