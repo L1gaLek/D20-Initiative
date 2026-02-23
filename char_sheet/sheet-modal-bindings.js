@@ -1249,38 +1249,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
     } catch {}
 
-    // Allow resizing the description frame by height and persist it.
-    // (So it doesn't auto-grow strictly by text length.)
-    const heightKey = (() => {
-      const k = path || ta.id || ta.name || '';
-      return k ? `rte_height:${k}` : '';
-    })();
-
-    try {
-      if (heightKey) {
-        const saved = Number(localStorage.getItem(heightKey) || 0);
-        if (saved && Number.isFinite(saved)) {
-          const h = Math.max(60, Math.min(900, saved));
-          editor.style.height = `${h}px`;
-        }
-      }
-    } catch {}
-
-    try {
-      if (heightKey && window.ResizeObserver) {
-        let t = 0;
-        const ro = new ResizeObserver(() => {
-          try {
-            clearTimeout(t);
-            t = setTimeout(() => {
-              const h = Math.round(editor.getBoundingClientRect().height || 0);
-              if (h > 0) localStorage.setItem(heightKey, String(h));
-            }, 120);
-          } catch {}
-        });
-        ro.observe(editor);
-      }
-    } catch {}
+    // Height persistence is handled globally (bindRteHeightPersistence).
 
     editor.addEventListener('paste', (e) => {
       if (!canEdit) return;
@@ -1515,6 +1484,12 @@ if (path === "proficiency" || path === "proficiencyCustom") {
     // при переключении вкладок и повторном открытии «Листа персонажа».
     try {
       bindTextareaHeightPersistence(root, player);
+      try {
+        bindRteHeightPersistence(root, player);
+      } catch (e) {
+        console.warn('bindRteHeightPersistence failed', e);
+      }
+
     } catch (e) {
       console.warn('bindTextareaHeightPersistence failed', e);
     }
@@ -1662,6 +1637,136 @@ function bindTextareaHeightPersistence(root, player) {
       try { root.removeEventListener('touchend', handler); } catch {}
     }};
   }
+
+
+// ===================== RTE editor height persistence =====================
+// Сохраняем высоту resizable rich-text редакторов (.rte-editor) по игроку и полю.
+// Нужно, чтобы после закрытия/открытия «Листа персонажа» высота оставалась той же.
+const RTE_HEIGHT_LS_KEY = 'dnd_sheet_rte_heights_v1';
+
+function loadRteHeights() {
+  try {
+    const raw = localStorage.getItem(RTE_HEIGHT_LS_KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return (obj && typeof obj === 'object') ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveRteHeights(obj) {
+  try { localStorage.setItem(RTE_HEIGHT_LS_KEY, JSON.stringify(obj || {})); } catch {}
+}
+
+function rtePersistKey(player, editor, fallbackIndex) {
+  const pid = String(player?.id || player?.name || 'unknown');
+  const prefix = `p:${pid}|`;
+
+  // Prefer the hidden textarea data-sheet-path inside the same wrapper.
+  try {
+    const wrap = editor?.closest?.('[data-rte]');
+    const ta = wrap?.querySelector?.('textarea[data-sheet-path]') || wrap?.querySelector?.('textarea');
+    const sp = ta?.getAttribute?.('data-sheet-path');
+    if (sp) return prefix + `path:${sp}`;
+    if (ta?.id) return prefix + `id:${ta.id}`;
+    if (ta?.name) return prefix + `name:${ta.name}`;
+  } catch {}
+
+  // Fallback: index in DOM list of editors
+  return prefix + `idx:${fallbackIndex}`;
+}
+
+function bindRteHeightPersistence(root, player) {
+  if (!root || !player) return;
+
+  const store = loadRteHeights();
+
+  // Clean previous observer if tab rerendered
+  try {
+    if (root.__rteResizeObserver && typeof root.__rteResizeObserver.disconnect === 'function') {
+      root.__rteResizeObserver.disconnect();
+    }
+  } catch {}
+  root.__rteResizeObserver = null;
+
+  const editors = Array.from(root.querySelectorAll('.rte-editor[data-rte-editor]'));
+  if (!editors.length) return;
+
+  // Apply saved heights
+  editors.forEach((ed, i) => {
+    try {
+      const cs = window.getComputedStyle ? getComputedStyle(ed) : null;
+      if (cs && cs.resize === 'none') return;
+
+      const key = rtePersistKey(player, ed, i);
+      const h = store[key];
+      if (Number.isFinite(h) && h >= 60) {
+        ed.style.height = `${Math.round(h)}px`;
+      }
+    } catch {}
+  });
+
+  let saveTimer = null;
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveRteHeights(store), 120);
+  };
+
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const ed = entry?.target;
+        if (!ed || !ed.classList?.contains?.('rte-editor')) continue;
+
+        try {
+          const cs = window.getComputedStyle ? getComputedStyle(ed) : null;
+          if (cs && cs.resize === 'none') continue;
+
+          const i = editors.indexOf(ed);
+          const key = rtePersistKey(player, ed, i >= 0 ? i : 0);
+          const h = Math.round(ed.getBoundingClientRect().height);
+          if (h >= 60) {
+            store[key] = h;
+            scheduleSave();
+          }
+        } catch {}
+      }
+    });
+
+    editors.forEach((ed) => {
+      try {
+        const cs = window.getComputedStyle ? getComputedStyle(ed) : null;
+        if (cs && cs.resize === 'none') return;
+        ro.observe(ed);
+      } catch {}
+    });
+
+    root.__rteResizeObserver = ro;
+  } else {
+    // Fallback
+    const handler = (e) => {
+      const ed = e.target?.closest?.('.rte-editor[data-rte-editor]');
+      if (!ed) return;
+      try {
+        const cs = window.getComputedStyle ? getComputedStyle(ed) : null;
+        if (cs && cs.resize === 'none') return;
+        const i = editors.indexOf(ed);
+        const key = rtePersistKey(player, ed, i >= 0 ? i : 0);
+        const h = Math.round(ed.getBoundingClientRect().height);
+        if (h >= 60) {
+          store[key] = h;
+          scheduleSave();
+        }
+      } catch {}
+    };
+    root.addEventListener('mouseup', handler);
+    root.addEventListener('touchend', handler, { passive: true });
+    root.__rteResizeObserver = { disconnect: () => {
+      try { root.removeEventListener('mouseup', handler); } catch {}
+      try { root.removeEventListener('touchend', handler); } catch {}
+    }};
+  }
+}
 }
   // ===== clickable dots binding (skills boost) =====
   function bindSkillBoostDots(root, player, canEdit) {
