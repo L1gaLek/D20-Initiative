@@ -10,7 +10,16 @@
   function captureUiStateFromDom(player) {
     if (!player?.id) return;
     const st = getUiState(player.id);
-    const activeTab = player._activeSheetTab || st.activeTab || "basic";
+
+    // Prefer DOM (current active sidebar tab) — protects against "tab jumping" on state updates
+    // when player object is reconstructed without _activeSheetTab.
+    let domTab = null;
+    try {
+      const activeBtn = sheetContent?.querySelector?.('.sheet-tab.active[data-tab]');
+      domTab = activeBtn ? String(activeBtn.getAttribute('data-tab') || '') : null;
+    } catch { domTab = null; }
+
+    const activeTab = (domTab && domTab.trim()) ? domTab : (player._activeSheetTab || st.activeTab || "basic");
     st.activeTab = activeTab;
 
     const main = sheetContent?.querySelector?.("#sheet-main");

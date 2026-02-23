@@ -2636,11 +2636,26 @@ function bindTextareaHeightPersistence(root, player) {
         const qty = Math.max(1, safeInt(qtyInp?.value, 1));
 
         if (mode === 'buy') {
-          const cp = costToCp(found.cost) * qty;
-          if (!spendCoins(sheet, cp)) {
+          // Покупка строго за тот тип монет, который указан у предмета (без конвертации).
+          const cost = (found && typeof found === 'object' && found.cost && typeof found.cost === 'object') ? found.cost : null;
+          const coin = String(cost?.coin || '').toLowerCase();
+          const amountOne = Number(cost?.amount ?? cost?.value ?? 0);
+          const amount = Math.max(0, Math.round(amountOne)) * qty;
+
+          const coinBox = (sheet.coins && sheet.coins[coin] && typeof sheet.coins[coin] === 'object') ? sheet.coins[coin] : null;
+          const cur = coinBox ? Math.max(0, safeInt(coinBox.value, 0)) : 0;
+
+          if (!coin || !coinBox) {
+            alert('У предмета не указан корректный тип монеты.');
+            return;
+          }
+          if (cur < amount) {
             alert('Недостаточно монет.');
             return;
           }
+
+          coinBox.value = cur - amount;
+
           addToInventory(sheet, targetTab, found, qty, 'shop');
         } else {
           addToInventory(sheet, targetTab, found, qty, 'db');
@@ -2888,8 +2903,14 @@ function bindTextareaHeightPersistence(root, player) {
         if (!sheet?.inventory || !Array.isArray(sheet.inventory[tabId]) || idx < 0 || idx >= sheet.inventory[tabId].length) return;
         const it = sheet.inventory[tabId][idx];
         const qty = Math.max(1, safeInt(it?.qty, 1));
-        const addCp = costToCp(it?.cost) * qty;
-        addCoins(sheet, addCp);
+        const cost = (it && typeof it === 'object' && it.cost && typeof it.cost === 'object') ? it.cost : null;
+        const coin = String(cost?.coin || '').toLowerCase();
+        const amountOne = Number(cost?.amount ?? cost?.value ?? 0);
+        const addAmount = Math.max(0, Math.round(amountOne)) * qty;
+
+        if (!sheet.coins || typeof sheet.coins !== 'object') sheet.coins = { cp:{value:0}, sp:{value:0}, ep:{value:0}, gp:{value:0}, pp:{value:0} };
+        if (!sheet.coins[coin] || typeof sheet.coins[coin] !== 'object') sheet.coins[coin] = { value: 0 };
+        sheet.coins[coin].value = Math.max(0, safeInt(sheet.coins[coin].value, 0)) + addAmount;
         // если продаём оружие — убираем его и из вкладки "Бой"
         try {
           if (tabId === 'weapons') {
