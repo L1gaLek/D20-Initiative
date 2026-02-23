@@ -920,24 +920,6 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     'textarea.spell-desc-editor'
   ].join(',');
 
-  // Persist all current RTE heights (important when switching tabs/menus,
-  // because the sheet re-renders and RTE editors are re-created).
-  const persistAllRteHeights = (scope) => {
-    try {
-      const rootEl = scope || root || document;
-      const editors = Array.from(rootEl.querySelectorAll('.rte-editor[data-rte-editor]'));
-      editors.forEach((ed) => {
-        const key = ed?.dataset?.rteHeightKey || '';
-        if (!key) return;
-        const h = Math.round(ed.getBoundingClientRect().height || 0);
-        if (h > 0) localStorage.setItem(key, String(h));
-      });
-    } catch {}
-  };
-
-  // Expose to other binders so tab switching can persist heights before rerender.
-  try { root.__persistRteHeights = persistAllRteHeights; } catch {}
-
   const openModal = (ta, inlineEditor, persistKey) => {
     if (!inlineEditor) return;
     if (!canEdit) return;
@@ -1274,9 +1256,14 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       return k ? `rte_height:${k}` : '';
     })();
 
-    // Save the key on the editor itself so we can persist heights
-    // even when the textarea is later replaced during re-render.
-    try { if (heightKey) editor.dataset.rteHeightKey = heightKey; } catch {}
+    // Persist height helper (ResizeObserver doesn't reliably fire for CSS resize in some browsers).
+    const persistEditorHeight = () => {
+      try {
+        if (!heightKey) return;
+        const h = Math.round(editor.getBoundingClientRect().height || 0);
+        if (h > 0) localStorage.setItem(heightKey, String(h));
+      } catch {}
+    };
 
     try {
       if (heightKey) {
@@ -1295,8 +1282,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
           try {
             clearTimeout(t);
             t = setTimeout(() => {
-              const h = Math.round(editor.getBoundingClientRect().height || 0);
-              if (h > 0) localStorage.setItem(heightKey, String(h));
+              persistEditorHeight();
             }, 120);
           } catch {}
         });
@@ -1304,19 +1290,35 @@ function upgradeSheetTextareasToRte(root, canEdit) {
       }
     } catch {}
 
-    // Fallback/extra safety: persist height on mouse/touch end (some browsers
-    // do not trigger ResizeObserver reliably for CSS-resize on contenteditable).
-    const persistHeightNow = () => {
-      try {
-        if (!heightKey) return;
-        const h = Math.round(editor.getBoundingClientRect().height || 0);
-        if (h > 0) localStorage.setItem(heightKey, String(h));
-      } catch {}
-    };
+    // Fallback: save on user interaction end (works even when ResizeObserver doesn't trigger).
     try {
-      editor.addEventListener('mouseup', persistHeightNow);
-      editor.addEventListener('touchend', persistHeightNow, { passive: true });
-      editor.addEventListener('pointerup', persistHeightNow);
+      editor.addEventListener('pointerup', persistEditorHeight);
+      editor.addEventListener('mouseup', persistEditorHeight);
+      editor.addEventListener('touchend', persistEditorHeight, { passive: true });
+      editor.addEventListener('mouseleave', persistEditorHeight);
+    } catch {}
+
+    // Extra-robust: during CSS resize the mouseup often happens outside the element,
+    // so local listeners won't fire. Track last interacted editor and persist on global mouseup.
+    try {
+      if (!window.__rteHeightPersistGlobalInstalled) {
+        window.__rteHeightPersistGlobalInstalled = true;
+        const persistLast = () => {
+          try {
+            const fn = window.__rteHeightPersistLastFn;
+            if (typeof fn === 'function') fn();
+          } catch {}
+        };
+        window.addEventListener('mouseup', persistLast, true);
+        window.addEventListener('pointerup', persistLast, true);
+        window.addEventListener('touchend', persistLast, { passive: true, capture: true });
+      }
+      const markLast = () => {
+        try { window.__rteHeightPersistLastFn = persistEditorHeight; } catch {}
+      };
+      editor.addEventListener('pointerdown', markLast, true);
+      editor.addEventListener('mousedown', markLast, true);
+      editor.addEventListener('touchstart', markLast, { passive: true, capture: true });
     } catch {}
 
     editor.addEventListener('paste', (e) => {
@@ -2329,8 +2331,6 @@ function bindTextareaHeightPersistence(root, player) {
     }
 
     function rerenderActiveTab(curPlayer) {
-      // Persist any resized RTE heights before the DOM is replaced by re-render.
-      try { root.__persistRteHeights?.(root); } catch {}
       // перерисуем только main текущей вкладки, как это делает обработчик табов
       const main = root.querySelector('#sheet-main');
       const sheet = curPlayer?.sheet?.parsed || createEmptySheet(curPlayer?.name);
