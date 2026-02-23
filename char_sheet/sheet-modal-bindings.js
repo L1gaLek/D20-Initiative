@@ -684,12 +684,18 @@ function upgradeSheetTextareasToRte(root, canEdit) {
   };
 
   const ALLOWED_TAGS = new Set([
-    'B','STRONG','U','BR','UL','OL','LI','A',
+    'B','STRONG','I','EM','U','BR','UL','OL','LI','A',
     'P','DIV','SPAN',
     // Tables (for paste + stored content)
     'TABLE','THEAD','TBODY','TFOOT','TR','TD','TH'
   ]);
 
+  // sanitizeHtml
+  // Modes:
+  // - paste: keep structure (p/div/ul/ol/li), keep semantic formatting (b/i/u), keep links,
+  //          optionally keep font-size (clamped) but drop foreign fonts/colors/backgrounds.
+  // - store: same as paste, but also preserves our internal font-size spans.
+  // - flatten: legacy mode (p/div -> <br>)
   const sanitizeHtml = (html, opts = {}) => {
     try {
       const mode = opts && opts.mode ? String(opts.mode) : '';
@@ -704,25 +710,30 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           const tag = (ch.tagName || '').toUpperCase();
 
-          // Normalize block tags to <br> breaks for legacy/plain storage.
-          // In 'store' mode we PRESERVE paragraphs/lists so formatting doesn't collapse after Save.
-          if ((tag === 'P' || tag === 'DIV') && mode !== 'store') {
-            const frag = document.createDocumentFragment();
-            while (ch.firstChild) frag.appendChild(ch.firstChild);
-            ch.replaceWith(frag);
-            if (parentTag !== 'TD' && parentTag !== 'TH') {
-              node.insertBefore(document.createElement('br'), frag.nextSibling);
+          // Block tags
+          // - legacy: flatten p/div into <br>
+          // - paste/store: keep paragraphs so formatting survives Save/Load
+          if (tag === 'P' || tag === 'DIV') {
+            if (mode === 'flatten') {
+              const frag = document.createDocumentFragment();
+              while (ch.firstChild) frag.appendChild(ch.firstChild);
+              ch.replaceWith(frag);
+              if (parentTag !== 'TD' && parentTag !== 'TH') {
+                node.insertBefore(document.createElement('br'), frag.nextSibling);
+              }
+              continue;
             }
-            continue;
-          }
 
-          // In 'store' mode we keep block structure; normalize <div> to <p> for consistency.
-          if (mode === 'store' && tag === 'DIV') {
-            const p = document.createElement('p');
-            while (ch.firstChild) p.appendChild(ch.firstChild);
-            ch.replaceWith(p);
-            walk(p, 'P');
-            continue;
+            // Normalize DIV -> P (cleaner storage)
+            if (tag === 'DIV') {
+              const p = document.createElement('p');
+              while (ch.firstChild) p.appendChild(ch.firstChild);
+              ch.replaceWith(p);
+              walk(p, parentTag);
+              continue;
+            }
+
+            // P: keep it, just strip attrs (handled below) and recurse
           }
 
           if (!ALLOWED_TAGS.has(tag)) {
@@ -755,8 +766,8 @@ function upgradeSheetTextareasToRte(root, canEdit) {
 
           if (tag === 'SPAN') {
             // Allow only a very small safe subset of inline styles.
-            // - store mode: allow font-size: 12..30px (our editor feature)
-            // - paste mode: convert common inline styles (bold/italic/underline) to semantic tags, then strip styles
+            // - paste/store: allow font-size: 12..30px (clamped)
+            // - paste: also convert common inline styles (bold/italic/underline) to semantic tags, then strip styles
             // - color is only allowed for our link marker and will be normalized anyway
             const st = String(ch.getAttribute('style') || '');
 
@@ -805,12 +816,16 @@ function upgradeSheetTextareasToRte(root, canEdit) {
               }
             }
 
-            const sizeM = st.match(/font-size\s*:\s*([0-9]+)px/i);
+            // Font size from external sources can be px or pt; keep it "по возможности"
+            const sizePxM = st.match(/font-size\s*:\s*([0-9]+)px/i);
+            const sizePtM = st.match(/font-size\s*:\s*([0-9]+)pt/i);
             const colorM = st.match(/color\s*:\s*([^;]+)/i);
 
             const out = [];
-            if (mode !== 'paste' && sizeM) {
-              const px = Math.max(12, Math.min(30, Number(sizeM[1])));
+            // Keep font-size in both paste and store (but nothing else from foreign styles)
+            const pxRaw = sizePxM ? Number(sizePxM[1]) : (sizePtM ? (Number(sizePtM[1]) * 4/3) : null);
+            if (pxRaw && Number.isFinite(pxRaw)) {
+              const px = Math.max(12, Math.min(30, Math.round(pxRaw)));
               out.push(`font-size:${px}px`);
             }
             if (ch.classList?.contains?.('rte-link') && colorM) {
@@ -1189,6 +1204,7 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 
     btnSave?.addEventListener('click', () => {
+      // Important: store mode keeps paragraphs/lists so they don't "ломаются" after Save.
       const html = sanitizeHtml(editor.innerHTML || '', { mode: 'store' });
       inlineEditor.innerHTML = html;
       try { if (ta) ta.value = html; } catch {}
@@ -1231,6 +1247,39 @@ function upgradeSheetTextareasToRte(root, canEdit) {
     try {
       const rows = Number(ta.getAttribute('rows') || 0);
       if (rows) editor.style.minHeight = `${Math.max(3, rows) * 18}px`;
+    } catch {}
+
+    // Allow resizing the description frame by height and persist it.
+    // (So it doesn't auto-grow strictly by text length.)
+    const heightKey = (() => {
+      const k = path || ta.id || ta.name || '';
+      return k ? `rte_height:${k}` : '';
+    })();
+
+    try {
+      if (heightKey) {
+        const saved = Number(localStorage.getItem(heightKey) || 0);
+        if (saved && Number.isFinite(saved)) {
+          const h = Math.max(60, Math.min(900, saved));
+          editor.style.height = `${h}px`;
+        }
+      }
+    } catch {}
+
+    try {
+      if (heightKey && window.ResizeObserver) {
+        let t = 0;
+        const ro = new ResizeObserver(() => {
+          try {
+            clearTimeout(t);
+            t = setTimeout(() => {
+              const h = Math.round(editor.getBoundingClientRect().height || 0);
+              if (h > 0) localStorage.setItem(heightKey, String(h));
+            }, 120);
+          } catch {}
+        });
+        ro.observe(editor);
+      }
     } catch {}
 
     editor.addEventListener('paste', (e) => {
