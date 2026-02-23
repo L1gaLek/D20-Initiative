@@ -1282,23 +1282,11 @@ button:hover {
   font-size: 12px;
 }
 
-
-/* RTE modal: font-size dropdown (dark) */
-.rte-fontsize select[data-rte-fontsize]{
-  background: #2a2a2a;
-  color: #eee;
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 8px;
-  padding: 2px 6px;
-  font-size: 12px;
-}
-.rte-fontsize select[data-rte-fontsize] option{
-  background: #2a2a2a;
-  color: #eee;
-}
 .rte-editor{
   padding: 6px 8px;
   min-height: 90px;
+  resize: vertical;
+  overflow: auto;
   color: #eee;
   font-size: 13px;
   line-height: 16px;
@@ -1413,6 +1401,8 @@ button:hover {
 
 .rte-editor--modal{
   min-height: 260px;
+  resize: vertical;
+  overflow: auto;
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 12px;
   background: rgba(0,0,0,0.18);
