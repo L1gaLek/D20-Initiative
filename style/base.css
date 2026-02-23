@@ -1246,12 +1246,9 @@ button:hover {
   border: 1px solid #666;
   border-radius: 10px;
   background: #111;
-  /* allow user to регулировать высоту "рамки описания" */
+  overflow: auto;
   resize: vertical;
-  min-height: 120px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  min-height: 90px;
 }
 
 .rte-toolbar{
@@ -1288,8 +1285,6 @@ button:hover {
 }
 
 .rte-editor{
-  flex: 1 1 auto;
-  overflow: auto;
   padding: 6px 8px;
   min-height: 90px;
   color: #eee;
