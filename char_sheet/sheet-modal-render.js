@@ -1359,12 +1359,10 @@ function renderShopTab(vm, canEdit) {
           </div>
           <div class="sheet-chips">
             <div class="sheet-chip sheet-chip--rest" data-hero="rest" title="Отдых">
-              <div class="k">Отдых</div>
               <div class="rest-pills" aria-label="Отдых">
                 <button class="rest-pill" type="button" data-rest-btn="short" title="Короткий отдых" aria-label="Короткий отдых">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21h10v-2H7v2Zm2.2-6.6 2.1 1.2 1.3-2.2 1.3 2.2 2.1-1.2L14.7 12l1.3-2.4-2.1-1.2-1.3 2.2-1.3-2.2-2.1 1.2L10.5 12 9.2 14.4Z" fill="currentColor" opacity=".95"/></svg>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12v6l-4 4 4 4v6H6v-6l4-4-4-4V2Zm2 2v3.17L12 11l4-3.83V4H8Zm8 16v-3.17L12 13l-4 3.83V20h8Z" fill="currentColor" opacity=".95"/></svg>
                 </button>
-                <span class="rest-sep" aria-hidden="true">/</span>
                 <button class="rest-pill" type="button" data-rest-btn="long" title="Длинный отдых" aria-label="Длинный отдых">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.6 2.3c-3.2 1.2-5.4 4.3-5.4 7.8 0 4.6 3.7 8.3 8.3 8.3 2.2 0 4.2-.8 5.7-2.2-1.1 3.3-4.3 5.7-8 5.7C8 21.9 3.8 17.7 3.8 12.5c0-4.8 3.6-8.8 8.8-10.2Z" fill="currentColor" opacity=".95"/></svg>
                 </button>
