@@ -682,9 +682,9 @@
   align-items:center;
   justify-content:center;
   border-radius: 10px;
-  border: 1px solid rgba(255,210,120,.45);
-  background: rgba(255,210,120,.16);
-  color: rgba(255,210,120,.95);
+  border: 1px solid rgba(0,120,215,.55);
+  background: rgba(0,120,215,.14);
+  color: rgb(0,120,215);
   cursor: pointer;
   padding: 0;
   line-height: 0;
@@ -696,8 +696,15 @@
   display:block;
 }
 
-.spell-cast-btn:hover{ background: rgba(255,210,120,.22); }
+.spell-cast-btn:hover{ background: rgba(0,120,215,.20); }
 .spell-cast-btn:active{ transform: translateY(1px); }
+
+.spell-cast-btn.is-disabled,
+.spell-cast-btn:disabled{
+  opacity: .38;
+  cursor: not-allowed;
+  filter: grayscale(.2);
+}
 
 .spell-dice-btn{
   width: 22px;
