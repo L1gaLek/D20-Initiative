@@ -313,6 +313,70 @@ async function ensureSupabaseReady() {
   return sbClient;
 }
 
+
+// Small async delay helper (used for retrying optimistic writes)
+function delayMs(ms) {
+  return new Promise(res => setTimeout(res, Number(ms) || 0));
+}
+
+// Fetch latest room_state.state snapshot from DB (source of truth for low-frequency state)
+async function fetchRoomStateSnapshot(roomId) {
+  await ensureSupabaseReady();
+  if (!roomId) return null;
+  const { data, error } = await sbClient
+    .from("room_state")
+    .select("state,updated_at")
+    .eq("room_id", roomId)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.state || null;
+}
+
+// Apply initiative updates for owned players with retry to avoid "last write wins" collisions.
+// This is needed when multiple users roll initiative at the same time.
+async function applyInitiativeAtomic(roomId, myUserId, updates) {
+  if (!roomId || !myUserId) return;
+  const updArr = Array.isArray(updates) ? updates : [];
+  if (!updArr.length) return;
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const latest = await fetchRoomStateSnapshot(roomId);
+    if (!latest) return;
+
+    const next = deepClone(latest);
+    const pls = Array.isArray(next.players) ? next.players : [];
+    for (const u of updArr) {
+      const pid = String(u?.playerId || "");
+      if (!pid) continue;
+      const p = pls.find(pp => String(pp?.id) === pid);
+      if (!p) continue;
+      // Only allow owner to set their own initiative.
+      if (String(p.ownerId) !== String(myUserId)) continue;
+
+      // Do not overwrite if already rolled (e.g., due to a retry or GM action).
+      if (!p.inCombat || p.hasRolledInitiative) continue;
+
+      p.initiative = Number(u.total);
+      p.hasRolledInitiative = true;
+    }
+
+    await upsertRoomState(roomId, next);
+
+    // Verify (read-after-write) – if a concurrent writer overwrote us, retry quickly.
+    try {
+      const check = await fetchRoomStateSnapshot(roomId);
+      const cpls = Array.isArray(check?.players) ? check.players : [];
+      const ok = updArr.every(u => {
+        const pid = String(u?.playerId || "");
+        const cp = cpls.find(pp => String(pp?.id) === pid);
+        return !!cp && cp.hasRolledInitiative && Number(cp.initiative) === Number(u.total);
+      });
+      if (ok) return;
+    } catch {}
+    await delayMs(35 + attempt * 25);
+  }
+}
+
 async function upsertRoomState(roomId, nextState) {
   await ensureSupabaseReady();
   // v4 architecture: room_state is NOT the source of truth for token positions or logs.
@@ -887,13 +951,16 @@ async function sendMessage(msg) {
       case 'log': {
         if (!currentRoomId) return;
         await insertRoomLog(currentRoomId, msg.text);
-        // Optimistic local append (realtime INSERT will also arrive if enabled)
-        try {
-          handleMessage({
-            type: 'logRow',
-            row: { text: String(msg.text || ''), created_at: new Date().toISOString() }
-          });
-        } catch {}
+        // Optimistic local append (realtime INSERT will also arrive if enabled).
+        // Если msg.noOptimistic = true — НЕ добавляем локально, чтобы не было дублей.
+        if (!msg.noOptimistic) {
+          try {
+            handleMessage({
+              type: 'logRow',
+              row: { text: String(msg.text || ''), created_at: new Date().toISOString() }
+            });
+          } catch {}
+        }
         break;
       }
 
@@ -1929,24 +1996,26 @@ else if (type === "addWall") {
         }
 
 
-        else if (type === "rollInitiative") {
+        
+else if (type === "rollInitiative") {
           if (next.phase !== "initiative") return;
-          // IMPORTANT: we must NOT call sendMessage({type:'diceEvent'}) here.
-          // diceEvent case writes logs using lastState and can overwrite fresh initiative changes.
+
+          // Collect rolls from the current snapshot, then apply them to DB with retry.
+          // This prevents the "last write wins" collision when multiple users roll simultaneously.
           const toRoll = (next.players || []).filter(p => (
             String(p.ownerId) === myUserId && !!p.inCombat && !p.hasRolledInitiative
           ));
+
+          if (!toRoll.length) return;
+
+          const updates = [];
           for (const p of toRoll) {
             const roll = Math.floor(Math.random() * 20) + 1;
             const dexMod = getDexMod(p);
             const total = roll + dexMod;
-            p.initiative = total;
-            p.hasRolledInitiative = true;
+            updates.push({ playerId: p.id, total, roll, dexMod, name: p.name });
 
-            const sign = dexMod >= 0 ? "+" : "";
-            logEventToState(next, `${p.name} бросил инициативу: ${roll}${sign}${dexMod} = ${total}`);
-
-            // live dice event (broadcast only)
+            // Live dice event (broadcast only) – includes its own log line in room_log.
             await broadcastDiceEventOnly({
               fromId: myUserId,
               fromName: p.name,
@@ -1959,9 +2028,16 @@ else if (type === "addWall") {
               crit: ""
             });
           }
+
+          // Atomic-ish apply to room_state (retry on collision)
+          await applyInitiativeAtomic(currentRoomId, myUserId, updates);
+
+          // IMPORTANT: We already wrote to DB using the latest snapshot inside applyInitiativeAtomic.
+          // Do NOT fall through to the generic upsert at the end of the handler (it would use stale 'next').
+          return;
         }
 
-        else if (type === "startCombat") {
+        else if (type === "startCombat") { {
           if (!isGM) return;
           if (next.phase !== "initiative" && next.phase !== "placement" && next.phase !== "exploration") return;
           // In v6, combat includes only selected combatants.
