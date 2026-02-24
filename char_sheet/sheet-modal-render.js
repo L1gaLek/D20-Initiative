@@ -106,7 +106,7 @@
   // всегда показываем блок, даже без загруженного файла
   return `
     <div class="lss-profbox">
-      <div class="lss-passives-title">ПРОЧИЕ ВЛАДЕНИЯ И ЗАКЛИНАНИЯ</div>
+      <div class="lss-passives-title">ДОПОЛНИТЕЛЬНЫЕ НАВЫКИ</div>
 
       <!-- Языки: на всю ширину блока -->
       <div class="lss-langbox lss-langbox--full">
@@ -212,18 +212,24 @@ function renderSpellCard({ level, name, href, desc }) {
       ? `<a class="spell-item-link" href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeName}</a>`
       : `<span class="spell-item-title">${safeName}</span>`;
 
-    const castSvg = `
+    const actionSvg = `
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-        <path d="M13 2 4 14h7l-1 8 10-14h-7l0-6Z" fill="currentColor" opacity="0.95"></path>
+        <path d="M12 2.5c3.6 2.2 6 5.1 6 8.4 0 4.5-3.6 8.6-6 10.6-2.4-2-6-6.1-6-10.6 0-3.3 2.4-6.2 6-8.4z" fill="currentColor" opacity="0.95"></path>
+        <path d="M12 7.2v6.3" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="1.6" stroke-linecap="round"></path>
+        <path d="M9.2 10.4h5.6" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="1.6" stroke-linecap="round"></path>
       </svg>
     `;
 
     return `
       <div class="spell-item" data-spell-url="${safeHref}" data-spell-level="${lvl}">
         <div class="spell-item-head">
-          <div class="spell-item-titlewrap">${titleHtml}</div>
+          <div class="spell-item-titlewrap">
+            ${titleHtml}
+          </div>
+
           <div class="spell-item-controls">
-            <button class="spell-cast-btn" type="button" data-spell-cast title="Применить">${castSvg}</button>
+            <button class="spell-cast-btn" type="button" data-spell-cast title="Применить">${actionSvg}</button>
+
             <div class="spell-item-actions">
               <button class="spell-desc-btn" type="button" data-spell-desc-toggle>Описание</button>
               <button class="spell-del-btn" type="button" data-spell-delete>Удалить</button>
@@ -691,7 +697,7 @@ function renderCombatTab(vm) {
 
       <div class="sheet-card combat-abilities-card" style="margin-top:0;">
         <div class="combat-abilities-head">
-          <h4 style="margin:0;">Умения и способности</h4>
+          <h4 style="margin:0;">Умения</h4>
           <button class="weapon-add-btn" type="button" data-combat-ability-add>Добавить</button>
         </div>
 
@@ -1000,7 +1006,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
 
         <div class="sheet-card fullwidth" style="margin-top:10px" data-inventory-root>
           <div class="equip-topline">
-            <h4 style="margin:0">База предметов (инвентарь)</h4>
+            <h4 style="margin:0">Инвентарь</h4>
             <div class="equip-top-actions">
               <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-open-db>База предметов</button>
               <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-add-manual>Добавить вручную</button>
@@ -1059,6 +1065,7 @@ function renderShopTab(vm, canEdit) {
 
   function renderPersonalityTab(vm) {
     const genderVal = String(vm?.gender || "male");
+    const bodySizeVal = String(vm?.bodySize || "Средние");
     return `
       <div class="sheet-section">
         <h3>Личность</h3>
@@ -1073,6 +1080,16 @@ function renderShopTab(vm, canEdit) {
                   <option value="female" ${genderVal==="female"?"selected":""}>Женский</option>
                 </select>
               </div></div>
+
+<div class="kv"><div class="k">Габарит тела</div><div class="v">
+  <select class="sheet-select-dark" data-sheet-path="notes.details.bodySize.value" style="width:160px">
+    <option value="Крохотное" ${bodySizeVal==="Крохотное"?"selected":""}>Крохотное</option>
+    <option value="Маленькое" ${bodySizeVal==="Маленькое"?"selected":""}>Маленькое</option>
+    <option value="Средние" ${bodySizeVal==="Средние"?"selected":""}>Средние</option>
+    <option value="Большое" ${bodySizeVal==="Большое"?"selected":""}>Большое</option>
+    <option value="Огромное" ${bodySizeVal==="Огромное"?"selected":""}>Огромное</option>
+  </select>
+</div></div>
               <div class="kv"><div class="k">Рост</div><div class="v"><input type="text" data-sheet-path="notes.details.height.value" style="width:140px"></div></div>
               <div class="kv"><div class="k">Вес</div><div class="v"><input type="text" data-sheet-path="notes.details.weight.value" style="width:140px"></div></div>
               <div class="kv"><div class="k">Возраст</div><div class="v"><input type="text" data-sheet-path="notes.details.age.value" style="width:140px"></div></div>
@@ -1088,7 +1105,7 @@ function renderShopTab(vm, canEdit) {
           </div>
 
           <div class="sheet-card">
-            <h4>Союзники и организации</h4>
+            <h4>Адаптация</h4>
             <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.allies.value" placeholder="Союзники, контакты, гильдии..."></textarea>
           </div>
 

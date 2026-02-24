@@ -272,7 +272,8 @@
           age: { value: "" },
           eyes: { value: "" },
           skin: { value: "" },
-          hair: { value: "" }
+          hair: { value: "" },
+          bodySize: { value: "" }
         },
         entries: []
       },
@@ -456,6 +457,9 @@
     const genderRaw = String(get(sheet, 'notes.details.gender.value', '') || '').trim();
     const gender = normalizeGenderKey(genderRaw);
 
+    const bodySizeRaw = String(get(sheet, 'notes.details.bodySize.value', '') || '').trim();
+    const bodySize = bodySizeRaw || 'Средние';
+
     // Appearance base image (auto) — can be overridden by sheet.appearance.baseUrl
     const baseOverride = String(get(sheet, 'appearance.baseUrl', '') || '').trim();
     const raceFolder = (race && race !== '-') ? String(race).trim() : '';
@@ -546,7 +550,8 @@
       age: get(sheet, "notes.details.age.value", ""),
       eyes: get(sheet, "notes.details.eyes.value", ""),
       skin: get(sheet, "notes.details.skin.value", ""),
-      hair: get(sheet, "notes.details.hair.value", "")
+      hair: get(sheet, "notes.details.hair.value", ""),
+      bodySize: get(sheet, "notes.details.bodySize.value", "")
     };
     const notesEntries = Array.isArray(sheet?.notes?.entries) ? sheet.notes.entries : [];
 
@@ -735,6 +740,7 @@ const weapons = weaponsRaw
     return {
       name, cls, lvl, race,
       gender,
+      bodySize,
       appearanceBaseUrl,
       hp, hpCur, hpTemp, ac, spd,
       inspiration, exhaustion, conditions,

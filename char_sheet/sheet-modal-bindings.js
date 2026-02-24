@@ -3422,6 +3422,17 @@ function bindSlotEditors(root, player, canEdit) {
 
       // ===== ⚡ Применение конкретного заклинания/заговора (без броска) =====
       if (castSpellBtn) {
+        try { e?.preventDefault?.(); e?.stopPropagation?.(); e?.stopImmediatePropagation?.(); } catch {}
+        try {
+          const btnEl = (castSpellBtn instanceof HTMLElement) ? castSpellBtn : null;
+          if (btnEl) {
+            const now = Date.now();
+            const last = Number(btnEl.dataset.castTs || 0);
+            if (now - last < 400) return;
+            btnEl.dataset.castTs = String(now);
+          }
+        } catch {}
+
         const item = castSpellBtn.closest(".spell-item");
         const lvl = safeInt(item?.getAttribute?.("data-spell-level"), 0);
         const title = (item?.querySelector?.(".spell-item-link")?.textContent || item?.querySelector?.(".spell-item-title")?.textContent || "").trim();
