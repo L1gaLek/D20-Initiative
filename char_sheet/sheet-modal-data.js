@@ -720,6 +720,14 @@ const weapons = weaponsRaw
       ? sheet.combat.abilitiesEntries
       : [];
 
+    const combatPowersDefs = Array.isArray(sheet?.combat?.powersDefs)
+      ? sheet.combat.powersDefs
+      : [];
+
+    const combatPowersActions = Array.isArray(sheet?.combat?.powersActions)
+      ? sheet.combat.powersActions
+      : [];
+
 
     const inv = (sheet?.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
     const shop = (sheet?.shop && typeof sheet.shop === "object") ? sheet.shop : null;
@@ -736,6 +744,7 @@ const weapons = weaponsRaw
       spellsInfo, slots, spellsByLevel, spellsPlainByLevel, spellNameByHref, spellDescByHref,
       profBonus: getProfBonus(sheet),
       weapons, combatAbilitiesEntries,
+      combatPowersDefs, combatPowersActions,
       coins, coinsViewDenom,
       inventory: inv,
       shop

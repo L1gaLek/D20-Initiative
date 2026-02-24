@@ -550,6 +550,241 @@ function bindCombatEditors(root, player, canEdit) {
     }
   });
 
+  // ===== Combat powers (Способности: ячейки + бросок d20) =====
+  if (!sheet.combat || typeof sheet.combat !== 'object') sheet.combat = {};
+  if (!Array.isArray(sheet.combat.powersDefs)) sheet.combat.powersDefs = [];
+  if (!Array.isArray(sheet.combat.powersActions)) sheet.combat.powersActions = [];
+
+  const makeId = () => {
+    try { return (crypto?.randomUUID && crypto.randomUUID()) || ('id_' + Math.random().toString(16).slice(2) + '_' + Date.now()); }
+    catch { return 'id_' + Math.random().toString(16).slice(2) + '_' + Date.now(); }
+  };
+
+  const getDefById = (id) => sheet?.combat?.powersDefs?.find(d => String(d?.id || '') === String(id || ''));
+
+  const ensureDefSlotsState = (def) => {
+    if (!def || typeof def !== 'object') return;
+    const max = Math.max(0, safeInt(def.slotsMax, 0));
+    if (!Array.isArray(def.slotsState)) def.slotsState = [];
+    // normalize length; keep existing states when possible
+    const next = [];
+    for (let i = 0; i < max; i++) next[i] = (typeof def.slotsState[i] === 'boolean') ? def.slotsState[i] : true;
+    def.slotsState = next;
+  };
+
+  // add definition
+  const addDefBtn = root.querySelector('[data-combat-power-def-add]');
+  if (addDefBtn) {
+    if (!canEdit) addDefBtn.disabled = true;
+    addDefBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!canEdit) return;
+      const id = makeId();
+      const def = { id, name: `Способность-${sheet.combat.powersDefs.length + 1}`, desc: '', slotsMax: 0, slotsState: [], recharge: 'short', collapsed: true };
+      ensureDefSlotsState(def);
+      sheet.combat.powersDefs.push(def);
+      scheduleSheetSave(player);
+      rerenderCombatTabInPlace(root, player, canEdit);
+    });
+  }
+
+  // bind definitions
+  const defEls = root.querySelectorAll('.combat-power-def[data-cpw-def-id]');
+  defEls.forEach(defEl => {
+    const defId = defEl.getAttribute('data-cpw-def-id');
+    const def = getDefById(defId);
+    if (!def) return;
+    ensureDefSlotsState(def);
+
+    const nameInp = defEl.querySelector('[data-cpw-def-name]');
+    if (nameInp) {
+      if (!canEdit) nameInp.disabled = true;
+      const handler = () => {
+        if (!canEdit) return;
+        def.name = String(nameInp.value || '');
+        scheduleSheetSave(player);
+      };
+      nameInp.addEventListener('input', handler);
+      nameInp.addEventListener('change', handler);
+    }
+
+    const slotsInp = defEl.querySelector('[data-cpw-def-slots]');
+    if (slotsInp) {
+      if (!canEdit) slotsInp.disabled = true;
+      const handler = () => {
+        if (!canEdit) return;
+        def.slotsMax = Math.max(0, safeInt(slotsInp.value, 0));
+        ensureDefSlotsState(def);
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      };
+      slotsInp.addEventListener('input', handler);
+      slotsInp.addEventListener('change', handler);
+    }
+
+    const rechargeSel = defEl.querySelector('[data-cpw-def-recharge]');
+    if (rechargeSel) {
+      if (!canEdit) rechargeSel.disabled = true;
+      const handler = () => {
+        if (!canEdit) return;
+        const v = String(rechargeSel.value || 'short');
+        def.recharge = (v === 'long') ? 'long' : 'short';
+        scheduleSheetSave(player);
+      };
+      rechargeSel.addEventListener('change', handler);
+    }
+
+    const descTa = defEl.querySelector('[data-cpw-def-desc]');
+    if (descTa) {
+      if (!canEdit) descTa.disabled = true;
+      const handler = () => {
+        if (!canEdit) return;
+        def.desc = String(descTa.value || '');
+        scheduleSheetSave(player);
+      };
+      descTa.addEventListener('input', handler);
+      descTa.addEventListener('change', handler);
+    }
+
+    const dotsWrap = defEl.querySelector('[data-cpw-def-dots]');
+    if (dotsWrap) {
+      dotsWrap.addEventListener('click', (e) => {
+        const btn = (e.target instanceof Element) ? e.target.closest('[data-cpw-dot]') : null;
+        if (!btn) return;
+        e.preventDefault();
+        if (!canEdit) return;
+        const di = safeInt(btn.getAttribute('data-cpw-dot'), -1);
+        if (di < 0) return;
+        ensureDefSlotsState(def);
+        def.slotsState[di] = !def.slotsState[di];
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+
+    const toggleDescBtn = defEl.querySelector('[data-cpw-def-toggle-desc]');
+    if (toggleDescBtn) {
+      if (!canEdit) toggleDescBtn.disabled = true;
+      toggleDescBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!canEdit) return;
+        def.collapsed = !def.collapsed;
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+
+    const addActionBtn = defEl.querySelector('[data-cpw-def-add-action]');
+    if (addActionBtn) {
+      if (!canEdit) addActionBtn.disabled = true;
+      addActionBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!canEdit) return;
+        // prevent duplicates for same def: allow multiples? user didn't request; keep one by default.
+        const exists = sheet.combat.powersActions.some(a => String(a?.defId || '') === String(def.id || ''));
+        if (!exists) {
+          sheet.combat.powersActions.push({ id: makeId(), defId: String(def.id || ''), stat: '-', collapsed: true });
+          scheduleSheetSave(player);
+        }
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+
+    const delBtn = defEl.querySelector('[data-cpw-def-del]');
+    if (delBtn) {
+      if (!canEdit) delBtn.disabled = true;
+      delBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!canEdit) return;
+        if (!confirm('Удалить способность?')) return;
+        const id = String(def.id || defId || '');
+        sheet.combat.powersDefs = sheet.combat.powersDefs.filter(d => String(d?.id || '') !== id);
+        sheet.combat.powersActions = sheet.combat.powersActions.filter(a => String(a?.defId || '') !== id);
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+  });
+
+  // bind actions
+  const actEls = root.querySelectorAll('.combat-power-action[data-cpw-action-id]');
+  actEls.forEach(actEl => {
+    const actionId = actEl.getAttribute('data-cpw-action-id');
+    const act = sheet?.combat?.powersActions?.find(a => String(a?.id || '') === String(actionId || ''));
+    if (!act) return;
+    const defId = actEl.getAttribute('data-cpw-def-id') || act.defId;
+    const def = getDefById(defId);
+    if (def) ensureDefSlotsState(def);
+
+    const statSel = actEl.querySelector('[data-cpw-action-stat]');
+    if (statSel) {
+      if (!canEdit) statSel.disabled = true;
+      const handler = () => {
+        if (!canEdit) return;
+        const v = String(statSel.value || '-');
+        act.stat = (['str','dex','con','int','wis','cha'].includes(v)) ? v : '-';
+        scheduleSheetSave(player);
+      };
+      statSel.addEventListener('change', handler);
+    }
+
+    const toggleBtn = actEl.querySelector('[data-cpw-toggle-desc]');
+    if (toggleBtn) {
+      if (!canEdit) toggleBtn.disabled = true;
+      toggleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!canEdit) return;
+        act.collapsed = !act.collapsed;
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+
+    const delBtn = actEl.querySelector('[data-cpw-action-del]');
+    if (delBtn) {
+      if (!canEdit) delBtn.disabled = true;
+      delBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!canEdit) return;
+        sheet.combat.powersActions = sheet.combat.powersActions.filter(a => String(a?.id || '') !== String(actionId || ''));
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+
+    const rollBtn = actEl.querySelector('[data-cpw-roll]');
+    if (rollBtn) {
+      // disable if no slots available
+      const slotsMax = Math.max(0, safeInt(def?.slotsMax, 0));
+      const hasAvailable = (slotsMax <= 0) ? true : (Array.isArray(def?.slotsState) ? def.slotsState.some(Boolean) : false);
+      if (!hasAvailable) rollBtn.disabled = true;
+
+      rollBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        // can't edit? rolling is OK, but spending cells should require edit rights
+        if (!def) return;
+
+        const max = Math.max(0, safeInt(def.slotsMax, 0));
+        ensureDefSlotsState(def);
+        if (max > 0) {
+          const i = def.slotsState.findIndex(Boolean);
+          if (i < 0) return; // no cells
+          if (!canEdit) return; // spending requires edit rights
+          def.slotsState[i] = false;
+        }
+
+        const statKey = (['str','dex','con','int','wis','cha'].includes(String(act.stat || '')) ? String(act.stat) : '-');
+        const bonus = (statKey === '-') ? 0 : safeInt((sheet?.stats?.[statKey]?.modifier ?? 0), 0);
+        const nm = String(def.name || 'Способность');
+        if (window.DicePanel?.roll) {
+          window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `${nm}: d20${formatMod(bonus)}` });
+        }
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+  });
+
   updateWeaponsBonuses(root, sheet);
 }
 

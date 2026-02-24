@@ -1023,6 +1023,18 @@ function ensureWiredCloseHandlers() {
     const sheet = player.sheet?.parsed;
     if (!sheet?.vitality) return;
 
+    // Combat powers: recharge those marked as "короткий отдых"
+    try {
+      if (sheet.combat && Array.isArray(sheet.combat.powersDefs)) {
+        sheet.combat.powersDefs.forEach(d => {
+          const r = String(d?.recharge || 'short');
+          if (r !== 'short') return;
+          const max = Math.max(0, safeInt(d?.slotsMax, 0));
+          d.slotsState = Array.from({ length: max }).map(() => true);
+        });
+      }
+    } catch {}
+
     const maxHp = safeInt(sheet?.vitality?.['hp-max']?.value, 0) || 0;
     const curHp = safeInt(sheet?.vitality?.['hp-current']?.value, 0) || 0;
 
@@ -1070,6 +1082,18 @@ function ensureWiredCloseHandlers() {
     const sheet = player.sheet?.parsed;
     if (!sheet) return;
     if (!sheet.vitality) sheet.vitality = {};
+
+    // Combat powers: recharge both long-rest and short-rest abilities
+    try {
+      if (sheet.combat && Array.isArray(sheet.combat.powersDefs)) {
+        sheet.combat.powersDefs.forEach(d => {
+          const r = String(d?.recharge || 'short');
+          if (r !== 'short' && r !== 'long') return;
+          const max = Math.max(0, safeInt(d?.slotsMax, 0));
+          d.slotsState = Array.from({ length: max }).map(() => true);
+        });
+      }
+    } catch {}
 
     // hp
     const maxHp = safeInt(sheet?.vitality?.['hp-max']?.value, 0) || 0;
