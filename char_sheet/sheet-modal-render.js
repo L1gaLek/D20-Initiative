@@ -1075,14 +1075,14 @@ function renderShopTab(vm, canEdit) {
             <h4>Внешность</h4>
             <div class="notes-details-grid">
               <div class="kv"><div class="k">Пол</div><div class="v">
-                <select data-sheet-path="notes.details.gender.value" data-gender-select style="width:150px">
+                <select data-sheet-path="notes.details.gender.value" data-gender-select style="width:140px">
                   <option value="male" ${genderVal==="male"?"selected":""}>Мужской</option>
                   <option value="female" ${genderVal==="female"?"selected":""}>Женский</option>
                 </select>
               </div></div>
 
 <div class="kv"><div class="k">Габарит тела</div><div class="v">
-  <select class="sheet-select-dark" data-sheet-path="notes.details.bodySize.value" style="width:160px">
+  <select data-sheet-path="notes.details.bodySize.value" style="width:140px">
     <option value="Крохотное" ${bodySizeVal==="Крохотное"?"selected":""}>Крохотное</option>
     <option value="Маленькое" ${bodySizeVal==="Маленькое"?"selected":""}>Маленькое</option>
     <option value="Средние" ${bodySizeVal==="Средние"?"selected":""}>Средние</option>

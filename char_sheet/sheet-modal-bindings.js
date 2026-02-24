@@ -3433,6 +3433,18 @@ function bindSlotEditors(root, player, canEdit) {
           }
         } catch {}
 
+        // Дополнительный глобальный анти-дубль на контейнере (на случай повторного бинда)
+        try {
+          const now = Date.now();
+          const item = castSpellBtn.closest(".spell-item");
+          const lvl = safeInt(item?.getAttribute?.("data-spell-level"), 0);
+          const title = (item?.querySelector?.(".spell-item-link")?.textContent || item?.querySelector?.(".spell-item-title")?.textContent || "").trim();
+          const key = `${lvl}:${title}`;
+          if (!root.__spellCastGuard) root.__spellCastGuard = { ts: 0, key: '' };
+          if (root.__spellCastGuard.key === key && (now - Number(root.__spellCastGuard.ts || 0) < 500)) return;
+          root.__spellCastGuard = { ts: now, key };
+        } catch {}
+
         const item = castSpellBtn.closest(".spell-item");
         const lvl = safeInt(item?.getAttribute?.("data-spell-level"), 0);
         const title = (item?.querySelector?.(".spell-item-link")?.textContent || item?.querySelector?.(".spell-item-title")?.textContent || "").trim();
