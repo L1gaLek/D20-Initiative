@@ -199,6 +199,17 @@ loginDiv.style.display = 'none';
       if (!Array.isArray(lastState.log)) lastState.log = [];
       const text = String(msg.row.text || '').trim();
       if (text) {
+        // Анти-дубль: иногда один и тот же лог приходит дважды подряд (optimistic + realtime или повторный bind).
+        // Скрываем повтор, если он совпадает с предыдущей строкой и пришёл почти сразу.
+        try {
+          const now = Date.now();
+          const prev = lastState.log.length ? String(lastState.log[lastState.log.length - 1] || '') : '';
+          if (prev === text) {
+            const lastTs = Number(window.__lastLogRowTs || 0);
+            if (now - lastTs < 1500) return;
+          }
+          window.__lastLogRowTs = now;
+        } catch {}
         lastState.log.push(text);
         if (lastState.log.length > 200) lastState.log.splice(0, lastState.log.length - 200);
         renderLog(lastState.log);
