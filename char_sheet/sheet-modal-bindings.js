@@ -1503,6 +1503,11 @@ function bindEditableInputs(root, player, canEdit) {
       }
 
       const handler = () => {
+        const sheetBefore = player.sheet.parsed;
+        const oldLevel = Math.max(1, safeInt(getByPath(sheetBefore, 'info.level.value'), 1) || 1);
+        const oldHdMax = oldLevel;
+        const oldHdRem = Math.max(0, safeInt(getByPath(sheetBefore, 'vitality.hit-dice-total.value'), oldHdMax) || 0);
+
         let val;
         if (inp.type === "checkbox") val = !!inp.checked;
         else if (inp.type === "radio") {
@@ -1518,13 +1523,18 @@ function bindEditableInputs(root, player, canEdit) {
 
         setByPath(player.sheet.parsed, path, val);
 
-        // Автосвязь: всего костей здоровья = уровень ("Основное" → "Уровень")
+        // Keep hit dice max (= level) in sync when user changes level.
+        // We store only remaining in vitality.hit-dice-total.value.
         if (path === 'info.level.value') {
           const sheet = player.sheet.parsed;
-          const lvl = Math.max(1, Math.min(20, safeInt(getByPath(sheet, 'info.level.value'), 1)));
-          if (!sheet.vitality) sheet.vitality = {};
-          if (!sheet.vitality['hit-dice-total']) sheet.vitality['hit-dice-total'] = { value: lvl };
-          sheet.vitality['hit-dice-total'].value = lvl;
+          const newLevel = Math.max(1, safeInt(getByPath(sheet, 'info.level.value'), 1) || 1);
+          const newHdMax = newLevel;
+          let rem = Math.max(0, safeInt(getByPath(sheet, 'vitality.hit-dice-total.value'), newHdMax) || 0);
+          // If it was full before, keep it full on level-up.
+          if (oldHdRem >= oldHdMax) rem = newHdMax;
+          // Clamp for level-down.
+          rem = Math.max(0, Math.min(newHdMax, rem));
+          setByPath(sheet, 'vitality.hit-dice-total.value', rem);
         }
 
         // If armor selection changes, sync meta inputs immediately (КД/Мод./Макс.).

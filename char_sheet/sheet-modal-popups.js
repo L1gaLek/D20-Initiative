@@ -60,7 +60,7 @@
 
               <div class="hp-hitdice-total">
                 <div class="hp-hitdice-total__label">Всего костей здоровья</div>
-                <input class="hp-input hp-input--small" type="number" min="0" max="99" step="1" data-hp-field="hdTotal" readonly title="Авто: равно уровню персонажа">
+                <input class="hp-input hp-input--small" type="number" min="0" max="99" step="1" data-hp-field="hdTotal">
               </div>
             </div>
           </div>
@@ -251,19 +251,11 @@
 
   function syncHpPopupInputs(sheet) {
     if (!hpPopupEl || !sheet) return;
-    // Всего костей здоровья = уровень (из вкладки "Основное")
-    const lvl = Math.max(1, Math.min(20, safeInt(sheet?.info?.level?.value, 1)));
-    if (!sheet.vitality) sheet.vitality = {};
-    if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: 0 };
-    if (Number(sheet.vitality["hit-dice-total"].value) !== lvl) {
-      sheet.vitality["hit-dice-total"].value = lvl;
-    }
-
     const max = Number(sheet?.vitality?.["hp-max"]?.value) || 0;
     const cur = Number(sheet?.vitality?.["hp-current"]?.value) || 0;
     const temp = Number(sheet?.vitality?.["hp-temp"]?.value) || 0;
     const hdSides = Number(sheet?.vitality?.["hit-die-sides"]?.value) || 8;
-    const hdTotal = lvl;
+    const hdTotal = Number(sheet?.vitality?.["hit-dice-total"]?.value) || 0;
 
     const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
     const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
@@ -286,12 +278,6 @@
     const inputs = hpPopupEl.querySelectorAll('input.hp-input');
     inputs.forEach(inp => {
       const isDelta = inp.getAttribute('data-hp-field') === 'delta';
-      const isHdTotal = inp.getAttribute('data-hp-field') === 'hdTotal';
-      // Всего костей здоровья всегда авто = уровень
-      if (isHdTotal) {
-        inp.setAttribute('disabled', 'disabled');
-        return;
-      }
       // delta input можно менять всем, но кнопки применения/изменения - только редактору
       if (!can && !isDelta) inp.setAttribute('disabled', 'disabled');
       else inp.removeAttribute('disabled');
@@ -322,19 +308,6 @@
     if (!player) return;
     const sheet = player.sheet?.parsed;
     if (!sheet) return;
-
-    // Всего костей здоровья = уровень
-    const lvl = Math.max(1, Math.min(20, safeInt(sheet?.info?.level?.value, 1)));
-    if (!sheet.vitality) sheet.vitality = {};
-    if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: lvl };
-    const prev = Number(sheet.vitality["hit-dice-total"].value) || 0;
-    if (prev !== lvl) {
-      sheet.vitality["hit-dice-total"].value = lvl;
-      if (canEditPlayer(player)) {
-        markModalInteracted(player.id);
-        scheduleSheetSave(player);
-      }
-    }
 
     if (!sheet.vitality) sheet.vitality = {};
     if (!sheet.vitality["hp-max"]) sheet.vitality["hp-max"] = { value: 0 };
@@ -846,24 +819,16 @@ function ensureWiredCloseHandlers() {
     if (!root || root.__basicQuickWired) return;
     root.__basicQuickWired = true;
 
-    // Отдых (пока только кликабельные кнопки + событие)
-    const restBox = root.querySelector('[data-hero="rest"]');
-    if (restBox) {
-      const restBtns = restBox.querySelectorAll('[data-rest-btn]');
-      restBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const player = getOpenedPlayerSafe();
-          if (!player) return;
-          const type = String(btn.getAttribute('data-rest-btn') || '');
-          try {
-            window.dispatchEvent(new CustomEvent('sheet:rest', {
-              detail: { playerId: player.id, type }
-            }));
-          } catch {}
-          markModalInteracted(player.id);
-        });
+    // Отдых (короткий/длинный)
+    const restChip = root.querySelector('[data-hero="rest"]');
+    if (restChip) {
+      restChip.addEventListener('click', (e) => {
+        const btn = (e.target instanceof Element) ? e.target.closest('[data-rest]') : null;
+        if (!btn) return;
+        e.stopPropagation();
+        const type = btn.getAttribute('data-rest');
+        if (type === 'short') showShortRestPopup();
+        if (type === 'long') applyLongRest();
       });
     }
 
@@ -890,6 +855,252 @@ function ensureWiredCloseHandlers() {
 
     const condChip = root.querySelector('[data-cond-open]');
     if (condChip) condChip.addEventListener('click', (e) => { e.stopPropagation(); showCondPopup(); });
+  }
+
+
+  // ================== REST (Short / Long) ==================
+  let restPopupEl = null;
+
+  function ensureRestPopup() {
+    if (restPopupEl) return restPopupEl;
+
+    restPopupEl = document.createElement('div');
+    restPopupEl.className = 'rest-popover hidden';
+    restPopupEl.innerHTML = `
+      <div class="rest-popover__backdrop" data-rest-close></div>
+      <div class="rest-popover__panel" role="dialog" aria-label="Короткий отдых" aria-modal="false">
+        <div class="rest-popover__head">
+          <div class="rest-popover__title">Короткий отдых</div>
+          <button class="rest-popover__x" type="button" data-rest-close title="Закрыть">✕</button>
+        </div>
+        <div class="rest-popover__body">
+          <div class="rest-row">
+            <button class="rest-die-btn" type="button" data-rest-die title="Выбрать кости здоровья">
+              <svg viewBox="0 0 24 24" width="46" height="46" aria-hidden="true">
+                <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="rgb(138,0,0)" opacity="0.96"></path>
+                <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"></path>
+              </svg>
+            </button>
+            <div class="rest-hd-info">
+              <div class="lbl">Костей здоровья</div>
+              <div class="val"><span data-rest-hd-rem>0</span>/<span data-rest-hd-max>0</span> • <span data-rest-hd-die>к8</span></div>
+              <div class="lbl" style="margin-top:4px">Мод. телосложения: <span data-rest-conmod>+0</span></div>
+            </div>
+          </div>
+          <div class="rest-dots" data-rest-dots></div>
+          <div class="rest-actions">
+            <button class="rest-btn" type="button" data-rest-apply>отдохнуть</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    sheetModal?.appendChild(restPopupEl);
+
+    restPopupEl.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      if (t.closest('[data-rest-close]')) { hideShortRestPopup(); return; }
+      if (t.closest('[data-rest-die]')) { bumpShortRestSelection(); return; }
+      if (t.closest('[data-rest-apply]')) { applyShortRest(); return; }
+    });
+
+    restPopupEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hideShortRestPopup();
+    });
+
+    return restPopupEl;
+  }
+
+  let shortRestSelected = 0;
+
+  function getHitDieSides(sheet){
+    return Math.max(4, Math.min(12, safeInt(sheet?.vitality?.['hit-die-sides']?.value, 8) || 8));
+  }
+
+  function getHitDiceMax(sheet){
+    // максимум = уровень
+    const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+    return lvl;
+  }
+
+  function getHitDiceRemaining(sheet){
+    // текущее доступное (старое поле)
+    const rem = Math.max(0, safeInt(sheet?.vitality?.['hit-dice-total']?.value, getHitDiceMax(sheet)) || 0);
+    return rem;
+  }
+
+  function setHitDiceRemaining(sheet, v){
+    if (!sheet.vitality) sheet.vitality = {};
+    if (!sheet.vitality['hit-dice-total']) sheet.vitality['hit-dice-total'] = { value: 0 };
+    const max = getHitDiceMax(sheet);
+    sheet.vitality['hit-dice-total'].value = Math.max(0, Math.min(max, safeInt(v, 0) || 0));
+  }
+
+  function formatSigned(n){
+    const x = Number(n) || 0;
+    return (x >= 0 ? `+${x}` : `${x}`);
+  }
+
+  function syncShortRestPopup(){
+    if (!restPopupEl) return;
+    const player = getOpenedPlayerSafe();
+    if (!player) return;
+    const sheet = player.sheet?.parsed;
+    if (!sheet) return;
+
+    const max = getHitDiceMax(sheet);
+    const rem = getHitDiceRemaining(sheet);
+    const sides = getHitDieSides(sheet);
+    const conMod = safeInt(sheet?.stats?.con?.modifier, 0) || 0;
+
+    // clamp selection to remaining
+    shortRestSelected = Math.max(0, Math.min(rem, safeInt(shortRestSelected, 0) || 0));
+
+    const remEl = restPopupEl.querySelector('[data-rest-hd-rem]');
+    const maxEl = restPopupEl.querySelector('[data-rest-hd-max]');
+    const dieEl = restPopupEl.querySelector('[data-rest-hd-die]');
+    const conEl = restPopupEl.querySelector('[data-rest-conmod]');
+    if (remEl) remEl.textContent = String(rem);
+    if (maxEl) maxEl.textContent = String(max);
+    if (dieEl) dieEl.textContent = `к${sides}`;
+    if (conEl) conEl.textContent = formatSigned(conMod);
+
+    const dotsWrap = restPopupEl.querySelector('[data-rest-dots]');
+    if (dotsWrap) {
+      dotsWrap.innerHTML = Array.from({ length: max }).map((_, i) => {
+        const isAvail = i < rem;
+        const isSel = i < shortRestSelected;
+        const cls = `rest-dot${isSel ? ' is-selected' : ''}${!isAvail ? ' is-disabled' : ''}`;
+        return `<span class="${cls}"></span>`;
+      }).join('');
+    }
+  }
+
+  function showShortRestPopup(){
+    const player = getOpenedPlayerSafe();
+    if (!player) return;
+    if (!canEditPlayer(player)) return;
+
+    const sheet = player.sheet?.parsed;
+    if (!sheet) return;
+    if (!sheet.vitality) sheet.vitality = {};
+    if (!sheet.vitality['hit-die-sides']) sheet.vitality['hit-die-sides'] = { value: 8 };
+    if (!sheet.vitality['hit-dice-total']) {
+      // по умолчанию даём максимум (уровень)
+      sheet.vitality['hit-dice-total'] = { value: getHitDiceMax(sheet) };
+    } else {
+      // clamp в пределах 0..max (на случай старых данных)
+      setHitDiceRemaining(sheet, sheet.vitality['hit-dice-total'].value);
+    }
+
+    shortRestSelected = 0;
+    ensureRestPopup();
+    syncShortRestPopup();
+    restPopupEl.classList.remove('hidden');
+  }
+
+  function hideShortRestPopup(){
+    restPopupEl?.classList.add('hidden');
+    shortRestSelected = 0;
+  }
+
+  function bumpShortRestSelection(){
+    const player = getOpenedPlayerSafe();
+    if (!player) return;
+    const sheet = player.sheet?.parsed;
+    if (!sheet) return;
+    const rem = getHitDiceRemaining(sheet);
+    if (rem <= 0) { shortRestSelected = 0; syncShortRestPopup(); return; }
+    shortRestSelected = (shortRestSelected < rem) ? (shortRestSelected + 1) : 0;
+    syncShortRestPopup();
+  }
+
+  async function applyShortRest(){
+    const player = getOpenedPlayerSafe();
+    if (!player) return;
+    if (!canEditPlayer(player)) return;
+    const sheet = player.sheet?.parsed;
+    if (!sheet?.vitality) return;
+
+    const maxHp = safeInt(sheet?.vitality?.['hp-max']?.value, 0) || 0;
+    const curHp = safeInt(sheet?.vitality?.['hp-current']?.value, 0) || 0;
+
+    const rem = getHitDiceRemaining(sheet);
+    const spend = Math.max(0, Math.min(rem, safeInt(shortRestSelected, 0) || 0));
+    const sides = getHitDieSides(sheet);
+    const conMod = safeInt(sheet?.stats?.con?.modifier, 0) || 0;
+
+    let totalHeal = 0;
+
+    if (spend > 0) {
+      // DicePanel: sum of dice + spend*conMod
+      if (window.DicePanel?.roll) {
+        const kindText = `Короткий отдых: ${spend}d${sides}${conMod ? ` ${conMod>=0?'+':''}${conMod} (за каждый)` : ''}`;
+        const res = await window.DicePanel.roll({ sides, count: spend, bonus: conMod * spend, kindText });
+        totalHeal = safeInt(res?.total, 0) || 0;
+      }
+      if (!Number.isFinite(totalHeal) || totalHeal <= 0) {
+        // fallback
+        for (let i = 0; i < spend; i++) {
+          totalHeal += (Math.floor(Math.random() * sides) + 1) + conMod;
+        }
+        totalHeal = Math.max(0, Math.trunc(totalHeal));
+      }
+    }
+
+    // apply heal (can be 0)
+    if (!sheet.vitality['hp-current']) sheet.vitality['hp-current'] = { value: 0 };
+    const nextHp = Math.max(0, Math.min(maxHp, curHp + Math.max(0, totalHeal)));
+    sheet.vitality['hp-current'].value = nextHp;
+
+    // spend hit dice
+    if (spend > 0) setHitDiceRemaining(sheet, rem - spend);
+
+    markModalInteracted(player.id);
+    scheduleSheetSave(player);
+    if (sheetContent) updateHeroChips(sheetContent, sheet);
+    hideShortRestPopup();
+  }
+
+  function applyLongRest(){
+    const player = getOpenedPlayerSafe();
+    if (!player) return;
+    if (!canEditPlayer(player)) return;
+    const sheet = player.sheet?.parsed;
+    if (!sheet) return;
+    if (!sheet.vitality) sheet.vitality = {};
+
+    // hp
+    const maxHp = safeInt(sheet?.vitality?.['hp-max']?.value, 0) || 0;
+    if (!sheet.vitality['hp-current']) sheet.vitality['hp-current'] = { value: 0 };
+    sheet.vitality['hp-current'].value = maxHp;
+    if (!sheet.vitality['hp-temp']) sheet.vitality['hp-temp'] = { value: 0 };
+    sheet.vitality['hp-temp'].value = 0;
+
+    // spell slots: make all available (filled = 0)
+    if (!sheet.spells || typeof sheet.spells !== 'object') sheet.spells = {};
+    for (let lvlN = 1; lvlN <= 9; lvlN++) {
+      const k = `slots-${lvlN}`;
+      const total = safeInt(sheet?.spells?.[k]?.value, 0) || 0;
+      if (!sheet.spells[k] || typeof sheet.spells[k] !== 'object') sheet.spells[k] = { value: total, filled: 0 };
+      sheet.spells[k].filled = 0;
+      // keep value as-is
+      if (typeof sheet.spells[k].value !== 'number') sheet.spells[k].value = total;
+    }
+
+    // hit dice: restore половину от максимума (уровня), в меньшую сторону
+    if (!sheet.vitality['hit-dice-total']) sheet.vitality['hit-dice-total'] = { value: getHitDiceMax(sheet) };
+    const max = getHitDiceMax(sheet);
+    const rem = getHitDiceRemaining(sheet);
+    const gain = Math.floor(max / 2);
+    setHitDiceRemaining(sheet, Math.min(max, rem + gain));
+
+    markModalInteracted(player.id);
+    scheduleSheetSave(player);
+    if (sheetContent) updateHeroChips(sheetContent, sheet);
+    // закрываем короткий отдых если был открыт
+    hideShortRestPopup();
   }
 
   // keep condition chip highlight in sync when user edits the field manually

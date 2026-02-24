@@ -1359,14 +1359,17 @@ function renderShopTab(vm, canEdit) {
           </div>
           <div class="sheet-chips">
             <div class="sheet-chip sheet-chip--rest" data-hero="rest" title="Отдых">
-              <div class="rest-pills" aria-label="Отдых">
-                <button class="rest-pill" type="button" data-rest-btn="short" title="Короткий отдых" aria-label="Короткий отдых">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12v6l-4 4 4 4v6H6v-6l4-4-4-4V2Zm2 2v3.17L12 11l4-3.83V4H8Zm8 16v-3.17L12 13l-4 3.83V20h8Z" fill="currentColor" opacity=".95"/></svg>
-                </button>
-                <button class="rest-pill" type="button" data-rest-btn="long" title="Длинный отдых" aria-label="Длинный отдых">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.6 2.3c-3.2 1.2-5.4 4.3-5.4 7.8 0 4.6 3.7 8.3 8.3 8.3 2.2 0 4.2-.8 5.7-2.2-1.1 3.3-4.3 5.7-8 5.7C8 21.9 3.8 17.7 3.8 12.5c0-4.8 3.6-8.8 8.8-10.2Z" fill="currentColor" opacity=".95"/></svg>
-                </button>
-              </div>
+              <button class="rest-half rest-half--short" type="button" data-rest="short" title="Короткий отдых" aria-label="Короткий отдых">
+                <svg class="rest-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 2h10v3c0 2-2 4-5 5 3 1 5 3 5 5v3H7v-3c0-2 2-4 5-5-3-1-5-3-5-5V2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path>
+                  <path d="M9 6h6M9 18h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+                </svg>
+              </button>
+              <button class="rest-half rest-half--long" type="button" data-rest="long" title="Длинный отдых" aria-label="Длинный отдых">
+                <svg class="rest-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M15.5 2.7a8.6 8.6 0 1 0 5.8 15.7 7.2 7.2 0 0 1-5.8-15.7z" fill="currentColor"></path>
+                </svg>
+              </button>
             </div>
             <div class="sheet-chip sheet-chip--insp" data-hero="insp" title="Вдохновение" ${canEdit ? "" : "data-readonly"}>
               <div class="k">Вдохновение</div>
