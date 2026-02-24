@@ -3385,21 +3385,32 @@ function bindSlotEditors(root, player, canEdit) {
       // ===== 🎲 Атака заклинанием (d20 + бонус атаки) =====
       // (должно работать независимо от клика по слотам)
       const rollHeaderBtn = e.target?.closest?.("[data-spell-roll-header]");
-      const rollSpellBtn = e.target?.closest?.("[data-spell-roll]");
+      const castSpellBtn = e.target?.closest?.("[data-spell-cast]");
 
-      if (rollHeaderBtn || rollSpellBtn) {
+      // ===== ⚡ Применение конкретного заклинания/заговора (без броска) =====
+      if (castSpellBtn) {
+        const item = castSpellBtn.closest(".spell-item");
+        const lvl = safeInt(item?.getAttribute?.("data-spell-level"), 0);
+        const title = (item?.querySelector?.(".spell-item-link")?.textContent || item?.querySelector?.(".spell-item-title")?.textContent || "").trim();
+        const kind = (lvl === 0) ? "Заговор" : "Заклинание";
+        const who = String(curPlayer?.name || '').trim() || 'Игрок';
+        const nm = title || '(без названия)';
+        try {
+          if (typeof sendMessage === 'function') {
+            sendMessage({ type: 'log', text: `${who} применил ${kind}: ${nm}` });
+          }
+        } catch {}
+        return;
+      }
+
+      // ===== 🎲 Атака заклинанием (d20 + бонус атаки) =====
+      if (rollHeaderBtn) {
         const sheet = getSheet();
         if (!sheet) return;
 
         const bonus = computeSpellAttack(sheet);
 
-        let lvl = 0;
         let title = "";
-        if (rollSpellBtn) {
-          const item = rollSpellBtn.closest(".spell-item");
-          lvl = safeInt(item?.getAttribute?.("data-spell-level"), 0);
-          title = (item?.querySelector?.(".spell-item-link")?.textContent || item?.querySelector?.(".spell-item-title")?.textContent || "").trim();
-        }
 
         // Бонус для броска берём из видимого поля "Бонус атаки" (если есть),
         // чтобы итог в панели "Бросок" совпадал с тем, что видит игрок.
@@ -3446,36 +3457,6 @@ function bindSlotEditors(root, player, canEdit) {
             });
           }
         } catch {}
-
-        // если бросок был из конкретного заклинания — тратим 1 ячейку соответствующего уровня (кроме заговоров)
-        if (rollSpellBtn && lvl > 0) {
-          if (!curCanEdit) return;
-
-          if (!sheet.spells || typeof sheet.spells !== "object") sheet.spells = {};
-          const key = `slots-${lvl}`;
-          if (!sheet.spells[key] || typeof sheet.spells[key] !== "object") sheet.spells[key] = { value: 0, filled: 0 };
-
-          const total = Math.max(0, Math.min(12, numLike(sheet.spells[key].value, 0)));
-          const filled = Math.max(0, Math.min(total, numLike(sheet.spells[key].filled, 0)));
-          const available = Math.max(0, total - filled);
-
-          if (available > 0) {
-            setMaybeObjField(sheet.spells[key], "filled", Math.min(total, filled + 1));
-
-            // обновим UI кружков конкретного уровня без полного ререндера
-            const dotsWrap = root.querySelector(`.slot-dots[data-slot-dots="${lvl}"]`);
-            if (dotsWrap) {
-              const filled2 = Math.max(0, Math.min(total, numLike(sheet.spells[key].filled, 0)));
-              const available2 = Math.max(0, total - filled2);
-              const dots = Array.from({ length: total })
-                .map((_, i) => `<span class="slot-dot${i < available2 ? " is-available" : ""}" data-slot-level="${lvl}"></span>`)
-                .join("");
-              dotsWrap.innerHTML = dots || `<span class="slot-dots-empty">—</span>`;
-            }
-
-            scheduleSheetSave(curPlayer);
-          }
-        }
 
         return;
       }

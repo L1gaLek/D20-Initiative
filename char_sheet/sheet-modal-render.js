@@ -212,21 +212,22 @@ function renderSpellCard({ level, name, href, desc }) {
       ? `<a class="spell-item-link" href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeName}</a>`
       : `<span class="spell-item-title">${safeName}</span>`;
 
-    const diceSvg = `
+    const castSvg = `
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-        <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor" opacity="0.95"></path>
-        <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="1.2"></path>
+        <path d="M13 2 4 14h7l-1 8 10-14h-7l0-6Z" fill="currentColor" opacity="0.95"></path>
       </svg>
     `;
 
     return `
       <div class="spell-item" data-spell-url="${safeHref}" data-spell-level="${lvl}">
         <div class="spell-item-head">
-          ${titleHtml}
-          <button class="spell-dice-btn" type="button" data-spell-roll title="Бросок атаки">${diceSvg}</button>
-          <div class="spell-item-actions">
-            <button class="spell-desc-btn" type="button" data-spell-desc-toggle>Описание</button>
-            <button class="spell-del-btn" type="button" data-spell-delete>Удалить</button>
+          <div class="spell-item-titlewrap">${titleHtml}</div>
+          <div class="spell-item-controls">
+            <button class="spell-cast-btn" type="button" data-spell-cast title="Применить">${castSvg}</button>
+            <div class="spell-item-actions">
+              <button class="spell-desc-btn" type="button" data-spell-desc-toggle>Описание</button>
+              <button class="spell-del-btn" type="button" data-spell-delete>Удалить</button>
+            </div>
           </div>
         </div>
         <div class="spell-item-desc hidden">
@@ -1672,21 +1673,7 @@ function renderShopTab(vm, canEdit) {
     if (!Array.isArray(players)) return;
     rememberPlayersSnapshot(players);
     const pl = players.find(x => x.id === openedSheetPlayerId);
-    if (!pl) return;
-
-    // Protect against UI "jumps" while user is editing inside the modal.
-    // If the sheet is "busy" (focused/just interacted), avoid full rerender.
-    try { captureUiStateFromDom({ id: openedSheetPlayerId, _activeSheetTab: null }); } catch {}
-    try {
-      if (isModalBusy(openedSheetPlayerId)) {
-        // Lightweight updates (hero chips) without touching active tab / collapsing blocks.
-        try { if (sheetContent) updateHeroChips(sheetContent, pl.sheet?.parsed); } catch {}
-        try { if (sheetContent) updateCoinsTotal(sheetContent, pl.sheet?.parsed); } catch {}
-        return;
-      }
-    } catch {}
-
-    renderSheetModal(pl);
+    if (pl) renderSheetModal(pl);
   }
 
   // callbacks are called from client.js when server answers

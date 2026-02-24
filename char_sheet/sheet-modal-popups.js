@@ -147,29 +147,21 @@
       const sheet = player.sheet?.parsed;
       if (!sheet) return;
 
-      // "Всего костей здоровья" (остаток) — редактируемое значение
-      if (f === 'hdTotal') {
-        if (!sheet.vitality) sheet.vitality = {};
-        if (!sheet.vitality['hit-dice-total']) sheet.vitality['hit-dice-total'] = { value: 0 };
-        const lvlMax = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
-        const v = Math.max(0, Math.min(lvlMax, Math.trunc(Number(el.value ?? 0) || 0)));
-        sheet.vitality['hit-dice-total'].value = v;
-        try { syncShortRestPopup(); } catch {}
-        markModalInteracted(player.id);
-        scheduleSheetSave(player);
-        return;
-      }
-
       if (!sheet.vitality) sheet.vitality = {};
       if (!sheet.vitality["hp-max"]) sheet.vitality["hp-max"] = { value: 0 };
       if (!sheet.vitality["hp-current"]) sheet.vitality["hp-current"] = { value: 0 };
       if (!sheet.vitality["hp-temp"]) sheet.vitality["hp-temp"] = { value: 0 };
       if (!sheet.vitality["hit-die-sides"]) sheet.vitality["hit-die-sides"] = { value: 8 };
       if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: 0 };
+      if (!sheet.vitality["hit-dice-max"]) {
+        const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+        sheet.vitality["hit-dice-max"] = { value: lvl };
+      }
 
       const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
       const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
       const tempEl = hpPopupEl.querySelector('[data-hp-field="temp"]');
+      const hdTotalEl = hpPopupEl.querySelector('[data-hp-field="hdTotal"]');
 
       const max = Number(maxEl?.value ?? sheet.vitality["hp-max"].value) || 0;
       const cur = Number(curEl?.value ?? sheet.vitality["hp-current"].value) || 0;
@@ -182,6 +174,18 @@
       sheet.vitality["hp-max"].value = clampedMax;
       sheet.vitality["hp-current"].value = clampedCur;
       sheet.vitality["hp-temp"].value = clampedTemp;
+
+      // total hit dice (max) — используется в коротком отдыхе
+      try {
+        const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+        const rawHdTotal = Number(hdTotalEl?.value ?? sheet.vitality['hit-dice-max'].value);
+        const nextHdMax = Math.max(0, Math.min(99, Math.trunc(Number.isFinite(rawHdTotal) ? rawHdTotal : lvl)));
+        sheet.vitality['hit-dice-max'].value = nextHdMax;
+
+        // clamp remaining to new max
+        const rem = Math.max(0, safeInt(sheet?.vitality?.['hit-dice-total']?.value, nextHdMax) || 0);
+        sheet.vitality['hit-dice-total'].value = Math.max(0, Math.min(nextHdMax, rem));
+      } catch {}
 
       syncHpPopupInputs(sheet);
       markModalInteracted(player.id);
@@ -257,7 +261,9 @@
     const cur = Number(sheet?.vitality?.["hp-current"]?.value) || 0;
     const temp = Number(sheet?.vitality?.["hp-temp"]?.value) || 0;
     const hdSides = Number(sheet?.vitality?.["hit-die-sides"]?.value) || 8;
-    const hdTotal = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+    // editable total hit dice (fallback: level)
+    const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+    const hdTotal = Math.max(0, Math.min(99, safeInt(sheet?.vitality?.['hit-dice-max']?.value, lvl) || 0));
 
     const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
     const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
@@ -281,9 +287,6 @@
     inputs.forEach(inp => {
       const f = inp.getAttribute('data-hp-field');
       const isDelta = f === 'delta';
-      const isHdTotal = f === 'hdTotal';
-      // 'Всего костей здоровья' = уровень и не редактируется вручную
-      if (isHdTotal) { inp.setAttribute('disabled','disabled'); return; }
       // delta input можно менять всем, но кнопки применения/изменения - только редактору
       if (!can && !isDelta) inp.setAttribute('disabled', 'disabled');
       else inp.removeAttribute('disabled');
@@ -320,14 +323,10 @@
     if (!sheet.vitality["hp-current"]) sheet.vitality["hp-current"] = { value: 0 };
     if (!sheet.vitality["hp-temp"]) sheet.vitality["hp-temp"] = { value: 0 };
     if (!sheet.vitality["hit-die-sides"]) sheet.vitality["hit-die-sides"] = { value: 8 };
-    if (!sheet.vitality["hit-dice-total"]) {
-      // по умолчанию: полный запас = уровень
-      const lvlMax = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
-      sheet.vitality["hit-dice-total"] = { value: lvlMax };
-    } else {
-      // clamp 0..уровень
-      const lvlMax = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
-      sheet.vitality["hit-dice-total"].value = Math.max(0, Math.min(lvlMax, safeInt(sheet.vitality["hit-dice-total"].value, lvlMax) || 0));
+    if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: 0 };
+    if (!sheet.vitality["hit-dice-max"]) {
+      const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+      sheet.vitality["hit-dice-max"] = { value: lvl };
     }
 
     syncHpPopupInputs(sheet);
@@ -933,8 +932,13 @@ function ensureWiredCloseHandlers() {
   }
 
   function getHitDiceMax(sheet){
-    // максимум = уровень
+    // Максимум костей здоровья: редактируемое поле (hit-dice-max).
+    // Fallback: уровень персонажа.
     const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+    const customMax = safeInt(sheet?.vitality?.['hit-dice-max']?.value, null);
+    if (Number.isFinite(customMax)) {
+      return Math.max(0, Math.min(99, Math.trunc(customMax)));
+    }
     return lvl;
   }
 
@@ -949,6 +953,18 @@ function ensureWiredCloseHandlers() {
     if (!sheet.vitality['hit-dice-total']) sheet.vitality['hit-dice-total'] = { value: 0 };
     const max = getHitDiceMax(sheet);
     sheet.vitality['hit-dice-total'].value = Math.max(0, Math.min(max, safeInt(v, 0) || 0));
+  }
+
+  function setHitDiceMax(sheet, v){
+    if (!sheet.vitality) sheet.vitality = {};
+    if (!sheet.vitality['hit-dice-max']) sheet.vitality['hit-dice-max'] = { value: 0 };
+    const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+    const nextMax = Math.max(0, Math.min(99, safeInt(v, lvl) || 0));
+    sheet.vitality['hit-dice-max'].value = nextMax;
+
+    // Clamp remaining to new max
+    const rem = getHitDiceRemaining(sheet);
+    if (rem > nextMax) setHitDiceRemaining(sheet, nextMax);
   }
 
   function formatSigned(n){
@@ -1000,13 +1016,20 @@ function ensureWiredCloseHandlers() {
     if (!sheet) return;
     if (!sheet.vitality) sheet.vitality = {};
     if (!sheet.vitality['hit-die-sides']) sheet.vitality['hit-die-sides'] = { value: 8 };
-    if (!sheet.vitality['hit-dice-total']) {
-      // по умолчанию даём максимум (уровень)
-      sheet.vitality['hit-dice-total'] = { value: getHitDiceMax(sheet) };
+    // ensure max
+    if (!sheet.vitality['hit-dice-max']) {
+      sheet.vitality['hit-dice-max'] = { value: Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1) };
     } else {
-      // clamp в пределах 0..max (на случай старых данных)
-      setHitDiceRemaining(sheet, sheet.vitality['hit-dice-total'].value);
+      setHitDiceMax(sheet, sheet.vitality['hit-dice-max'].value);
     }
+
+    // ensure remaining
+    if (!sheet.vitality['hit-dice-total']) {
+      // по умолчанию даём максимум
+      sheet.vitality['hit-dice-total'] = { value: getHitDiceMax(sheet) };
+    }
+    // clamp в пределах 0..max (на случай старых данных)
+    setHitDiceRemaining(sheet, sheet.vitality['hit-dice-total'].value);
 
     shortRestSelected = 0;
     ensureRestPopup();
