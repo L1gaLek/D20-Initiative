@@ -1567,3 +1567,12 @@
 .cpw-dotbtn{ width:14px; height:14px; border-radius:999px; border:1px solid rgba(255,255,255,.25); background: transparent; padding:0; cursor:pointer; }
 .cpw-dotbtn.on{ background: rgba(204,130,36,.9); border-color: rgba(204,130,36,.95); }
 .cpw-dotbtn.off{ background: transparent; }
+
+
+/* ===== Combat powers: dark modifier dropdown + exec selector ===== */
+.cpw-stat{background:#2b2b2b !important;color:#fff !important;border:1px solid rgba(255,255,255,0.18) !important;}
+.cpw-exec{background:#1f1f1f;color:#fff;border:1px solid rgba(255,255,255,0.18);padding:6px 8px;border-radius:10px;font-size:12px;line-height:1;}
+.cpw-action{background:rgba(255,140,0,0.18);border:1px solid rgba(255,140,0,0.45);color:rgb(255,170,70);width:34px;height:34px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;}
+.cpw-action:disabled{opacity:0.35;cursor:not-allowed;}
+
+.combat-powers-card{margin-top:10px;}
