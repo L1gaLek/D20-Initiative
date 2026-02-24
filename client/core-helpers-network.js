@@ -2037,7 +2037,7 @@ else if (type === "rollInitiative") {
           return;
         }
 
-        else if (type === "startCombat") { {
+        else if (type === "startCombat") {
           if (!isGM) return;
           if (next.phase !== "initiative" && next.phase !== "placement" && next.phase !== "exploration") return;
           // In v6, combat includes only selected combatants.
