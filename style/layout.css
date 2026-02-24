@@ -1543,6 +1543,15 @@
 .cpw-field .weapon-fieldlabel{ margin-bottom:6px; }
 .cpw-def-desc.collapsed{ display:none; }
 
+/* ===== Combat Powers: sub-abilities inside a power ===== */
+.cpw-sublist{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
+.cpw-sub{ padding:10px; border-radius:14px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.18); }
+.cpw-sub-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.cpw-sub-name{ flex:1 1 auto; min-width:0; }
+.cpw-sub-right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.cpw-sub-desc{ margin-top:8px; }
+.cpw-sub-desc.collapsed{ display:none; }
+
 .cpw-dots{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
 .cpw-dots--empty{ opacity:.75; font-size:12px; }
 .cpw-dot{ width:10px; height:10px; border-radius:999px; border:1px solid rgba(255,255,255,.2); display:inline-block; }
