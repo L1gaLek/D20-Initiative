@@ -560,7 +560,115 @@ function renderCombatTab(vm) {
         ${listHtml}
       </div>
 
-      <div class="sheet-card combat-abilities-card">
+      <!-- ===== Способности (ячейки + подспособности d20) ===== -->
+      <div class="sheet-card combat-powers-card" style="margin-bottom:12px;">
+        <div class="combat-powers-head">
+          <h4 style="margin:0;">Способности</h4>
+          <button class="weapon-add-btn" type="button" data-combat-power-def-add>Добавить</button>
+        </div>
+        <div class="combat-powers-defs">
+          ${(() => {
+            const defs = Array.isArray(vm?.combatPowersDefs) ? vm.combatPowersDefs : [];
+            if (!defs.length) return `<div class="sheet-note">Пока нет способностей. Нажми «Добавить».</div>`;
+
+            const statOpts = [
+              { k: '-', label: '—' },
+              { k: 'str', label: 'Сила' },
+              { k: 'dex', label: 'Ловкость' },
+              { k: 'con', label: 'Телосложение' },
+              { k: 'int', label: 'Интеллект' },
+              { k: 'wis', label: 'Мудрость' },
+              { k: 'cha', label: 'Харизма' },
+            ];
+
+            return defs.map((d, idx) => {
+              const id = escapeHtml(String(d?.id || idx));
+              const name = escapeHtml(String(d?.name || `Способность-${idx+1}`));
+              const desc = escapeHtml(String(d?.desc || ''));
+              const slotsMax = Math.max(0, safeInt(d?.slotsMax, 0));
+              const states = Array.isArray(d?.slotsState) ? d.slotsState : [];
+              const recharge = String(d?.recharge || 'short');
+              const collapsed = !!d?.collapsed;
+              const subs = Array.isArray(d?.subs) ? d.subs : [];
+
+              const dots = (slotsMax > 0)
+                ? `<div class="cpw-dots" data-cpw-def-dots>${Array.from({length: slotsMax}).map((_, di) => {
+                    const on = !!states[di];
+                    return `<button class="cpw-dotbtn ${on ? 'on' : 'off'}" type="button" data-cpw-dot="${di}" title="Ячейка"></button>`;
+                  }).join('')}</div>`
+                : `<div class="cpw-dots cpw-dots--empty">Ячеек нет</div>`;
+
+              return `
+                <div class="combat-power-def" data-cpw-def-id="${id}">
+                  <div class="cpw-def-head">
+                    <input class="weapon-title-input cpw-def-name" type="text" value="${name}" placeholder="Название" data-cpw-def-name>
+                    <div class="weapon-actions">
+                      <button class="weapon-btn" type="button" data-cpw-def-add-sub>Добавить способность</button>
+                      <button class="weapon-btn" type="button" data-cpw-def-toggle-desc>${collapsed ? 'Описание' : 'Скрыть'}</button>
+                      <button class="weapon-btn danger" type="button" data-cpw-def-del>Удалить</button>
+                    </div>
+                  </div>
+
+                  <div class="cpw-def-grid">
+                    <div class="cpw-field">
+                      <div class="weapon-fieldlabel">Ячейки</div>
+                      <input class="weapon-num" type="number" min="0" max="30" step="1" value="${escapeHtml(String(slotsMax))}" data-cpw-def-slots>
+                    </div>
+                    <div class="cpw-field">
+                      <div class="weapon-fieldlabel">Использования</div>
+                      ${dots}
+                    </div>
+                    <div class="cpw-field">
+                      <div class="weapon-fieldlabel">Способ восстановления</div>
+                      <select class="weapon-select" data-cpw-def-recharge>
+                        <option value="short" ${recharge === 'short' ? 'selected' : ''}>короткий отдых</option>
+                        <option value="long" ${recharge === 'long' ? 'selected' : ''}>длинный отдых</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="cpw-def-desc ${collapsed ? 'collapsed' : ''}">
+                    <textarea class="sheet-textarea" rows="4" placeholder="Описание..." data-cpw-def-desc>${desc}</textarea>
+                  </div>
+
+                  <div class="cpw-sublist" data-cpw-sublist>
+                    ${(() => {
+                      if (!subs.length) return `<div class="sheet-note">Подспособностей пока нет. Нажми «Добавить способность».</div>`;
+                      return subs.map((s, si) => {
+                        const sid = escapeHtml(String(s?.id ?? si));
+                        const sname = escapeHtml(String(s?.name || `Способность-${si+1}`));
+                        const sstat = String(s?.stat || '-');
+                        const scoll = !!s?.collapsed;
+                        const sdesc = escapeHtml(String(s?.desc || ''));
+                        return `
+                          <div class="cpw-sub" data-cpw-sub-id="${sid}">
+                            <div class="cpw-sub-head">
+                              <input class="weapon-title-input cpw-sub-name" type="text" value="${sname}" placeholder="Название" data-cpw-sub-name>
+                              <div class="cpw-sub-right">
+                                <select class="cpw-stat" data-cpw-sub-stat>
+                                  ${statOpts.map(o => `<option value="${o.k}" ${o.k === sstat ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+                                </select>
+                                <button class="cpw-dice" type="button" data-cpw-sub-roll title="Бросок: d20 + модификатор">${d20Svg}</button>
+                                <button class="weapon-btn" type="button" data-cpw-sub-toggle-desc>${scoll ? 'Описание' : 'Скрыть'}</button>
+                                <button class="weapon-btn danger" type="button" data-cpw-sub-del>✕</button>
+                              </div>
+                            </div>
+                            <div class="cpw-sub-desc ${scoll ? 'collapsed' : ''}">
+                              <textarea class="sheet-textarea" rows="3" placeholder="Описание..." data-cpw-sub-desc>${sdesc}</textarea>
+                            </div>
+                          </div>
+                        `;
+                      }).join('');
+                    })()}
+                  </div>
+                </div>
+              `;
+            }).join('');
+          })()}
+        </div>
+      </div>
+
+      <div class="sheet-card combat-abilities-card" style="margin-top:0;">
         <div class="combat-abilities-head">
           <h4 style="margin:0;">Умения и способности</h4>
           <button class="weapon-add-btn" type="button" data-combat-ability-add>Добавить</button>
@@ -592,132 +700,6 @@ function renderCombatTab(vm) {
                 </div>
               `;
             }).join("");
-          })()}
-        </div>
-      </div>
-
-      <!-- ===== Способности (ячейки + бросок d20) ===== -->
-      <div class="sheet-card combat-powers-card">
-        <div class="combat-powers-head">
-          <h4 style="margin:0;">Способности</h4>
-          <button class="weapon-add-btn" type="button" data-combat-power-def-add>Добавить</button>
-        </div>
-
-        <div class="combat-powers-actions">
-          ${(() => {
-            const acts = Array.isArray(vm?.combatPowersActions) ? vm.combatPowersActions : [];
-            const defs = Array.isArray(vm?.combatPowersDefs) ? vm.combatPowersDefs : [];
-            if (!acts.length) return `<div class="sheet-note">Панель быстрых бросков пуста. Добавь способность и нажми «Добавить способность».</div>`;
-
-            const statOpts = [
-              { k: '-', label: '—' },
-              { k: 'str', label: 'Сила' },
-              { k: 'dex', label: 'Ловкость' },
-              { k: 'con', label: 'Телосложение' },
-              { k: 'int', label: 'Интеллект' },
-              { k: 'wis', label: 'Мудрость' },
-              { k: 'cha', label: 'Харизма' },
-            ];
-
-            return acts.map((a, i) => {
-              const def = defs.find(d => String(d?.id || '') === String(a?.defId || ''));
-              const name = escapeHtml(String(def?.name || a?.name || 'Способность'));
-              const stat = String(a?.stat || '-');
-              const collapsed = !!a?.collapsed;
-              const aid = escapeHtml(String(a?.id || i));
-              const defId = escapeHtml(String(a?.defId || ''));
-
-              // read-only dots preview (available/used)
-              const slots = Math.max(0, safeInt(def?.slotsMax, 0));
-              const states = Array.isArray(def?.slotsState) ? def.slotsState : [];
-              const dots = (slots > 0)
-                ? `<div class="cpw-dots" data-cpw-dots-preview>${Array.from({length: slots}).map((_, di) => {
-                    const on = !!states[di];
-                    return `<span class="cpw-dot ${on ? 'on' : 'off'}" aria-hidden="true"></span>`;
-                  }).join('')}</div>`
-                : `<div class="cpw-dots cpw-dots--empty" title="Ячеек нет">—</div>`;
-
-              return `
-                <div class="combat-power-action" data-cpw-action-id="${aid}" data-cpw-def-id="${defId}">
-                  <div class="cpw-action-head">
-                    <div class="cpw-action-name" title="${name}">${name}</div>
-                    <div class="cpw-action-right">
-                      ${dots}
-                      <select class="cpw-stat" data-cpw-action-stat>
-                        ${statOpts.map(o => `<option value="${o.k}" ${o.k === stat ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
-                      </select>
-                      <button class="cpw-dice" type="button" data-cpw-roll title="Бросок: d20 + модификатор">
-                        ${d20Svg}
-                      </button>
-                      <button class="weapon-btn" type="button" data-cpw-toggle-desc>${collapsed ? 'Описание' : 'Скрыть'}</button>
-                      <button class="weapon-btn danger" type="button" data-cpw-action-del>✕</button>
-                    </div>
-                  </div>
-                  <div class="cpw-action-desc ${collapsed ? 'collapsed' : ''}">
-                    <div class="sheet-note" style="white-space:pre-wrap">${escapeHtml(String(def?.desc || '')) || '—'}</div>
-                  </div>
-                </div>
-              `;
-            }).join('');
-          })()}
-        </div>
-
-        <div class="combat-powers-defs">
-          ${(() => {
-            const defs = Array.isArray(vm?.combatPowersDefs) ? vm.combatPowersDefs : [];
-            if (!defs.length) return `<div class="sheet-note">Пока нет способностей. Нажми «Добавить».</div>`;
-
-            return defs.map((d, idx) => {
-              const id = escapeHtml(String(d?.id || idx));
-              const name = escapeHtml(String(d?.name || `Способность-${idx+1}`));
-              const desc = escapeHtml(String(d?.desc || ''));
-              const slotsMax = Math.max(0, safeInt(d?.slotsMax, 0));
-              const states = Array.isArray(d?.slotsState) ? d.slotsState : [];
-              const recharge = String(d?.recharge || 'short');
-              const collapsed = !!d?.collapsed;
-
-              const dots = (slotsMax > 0)
-                ? `<div class="cpw-dots" data-cpw-def-dots>${Array.from({length: slotsMax}).map((_, di) => {
-                    const on = !!states[di];
-                    return `<button class="cpw-dotbtn ${on ? 'on' : 'off'}" type="button" data-cpw-dot="${di}" title="Ячейка"></button>`;
-                  }).join('')}</div>`
-                : `<div class="cpw-dots cpw-dots--empty">Ячеек нет</div>`;
-
-              return `
-                <div class="combat-power-def" data-cpw-def-id="${id}">
-                  <div class="cpw-def-head">
-                    <input class="weapon-title-input cpw-def-name" type="text" value="${name}" placeholder="Название" data-cpw-def-name>
-                    <div class="weapon-actions">
-                      <button class="weapon-btn" type="button" data-cpw-def-add-action>Добавить способность</button>
-                      <button class="weapon-btn" type="button" data-cpw-def-toggle-desc>${collapsed ? 'Описание' : 'Скрыть'}</button>
-                      <button class="weapon-btn danger" type="button" data-cpw-def-del>Удалить</button>
-                    </div>
-                  </div>
-
-                  <div class="cpw-def-grid">
-                    <div class="cpw-field">
-                      <div class="weapon-fieldlabel">Ячейки</div>
-                      <input class="weapon-num" type="number" min="0" max="30" step="1" value="${escapeHtml(String(slotsMax))}" data-cpw-def-slots>
-                    </div>
-                    <div class="cpw-field">
-                      <div class="weapon-fieldlabel">Использования</div>
-                      ${dots}
-                    </div>
-                    <div class="cpw-field">
-                      <div class="weapon-fieldlabel">Способ восстановления</div>
-                      <select class="weapon-select" data-cpw-def-recharge>
-                        <option value="short" ${recharge === 'short' ? 'selected' : ''}>короткий отдых</option>
-                        <option value="long" ${recharge === 'long' ? 'selected' : ''}>длинный отдых</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="cpw-def-desc ${collapsed ? 'collapsed' : ''}">
-                    <textarea class="sheet-textarea" rows="4" placeholder="Описание..." data-cpw-def-desc>${desc}</textarea>
-                  </div>
-                </div>
-              `;
-            }).join('');
           })()}
         </div>
       </div>
