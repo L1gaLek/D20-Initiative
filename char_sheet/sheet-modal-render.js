@@ -447,6 +447,15 @@ function renderCombatTab(vm) {
     </svg>
   `;
 
+  const actionSvg = `
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M12 2.5c3.6 2.2 6 5.1 6 8.4 0 4.5-3.6 8.6-6 10.6-2.4-2-6-6.1-6-10.6 0-3.3 2.4-6.2 6-8.4z" fill="currentColor" opacity="0.95"></path>
+      <path d="M12 7.2v6.3" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="1.6" stroke-linecap="round"></path>
+      <path d="M9.2 10.4h5.6" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="1.6" stroke-linecap="round"></path>
+    </svg>
+  `;
+
+
   const weapons = Array.isArray(vm?.weapons) ? vm.weapons : [];
 
   const listHtml = weapons.length
@@ -638,6 +647,7 @@ function renderCombatTab(vm) {
                         const sid = escapeHtml(String(s?.id ?? si));
                         const sname = escapeHtml(String(s?.name || `Способность-${si+1}`));
                         const sstat = String(s?.stat || '-');
+                        const sexec = (String(s?.exec || s?.mode || 'attack') === 'action') ? 'action' : 'attack';
                         const scoll = !!s?.collapsed;
                         const sdesc = escapeHtml(String(s?.desc || ''));
                         return `
@@ -645,10 +655,20 @@ function renderCombatTab(vm) {
                             <div class="cpw-sub-head">
                               <input class="weapon-title-input cpw-sub-name" type="text" value="${sname}" placeholder="Название" data-cpw-sub-name>
                               <div class="cpw-sub-right">
-                                <select class="cpw-stat" data-cpw-sub-stat>
-                                  ${statOpts.map(o => `<option value="${o.k}" ${o.k === sstat ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+                                <select class="cpw-exec" data-cpw-sub-exec title="Способ исполнения">
+                                  <option value="action" ${sexec === 'action' ? 'selected' : ''}>Действие</option>
+                                  <option value="attack" ${sexec === 'attack' ? 'selected' : ''}>Атака</option>
                                 </select>
-                                <button class="cpw-dice" type="button" data-cpw-sub-roll title="Бросок: d20 + модификатор">${d20Svg}</button>
+                                ${sexec === 'attack' ? `
+                                  <select class="cpw-stat" data-cpw-sub-stat>
+                                    ${statOpts.map(o => `<option value="${o.k}" ${o.k === sstat ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+                                  </select>
+                                ` : ``}
+                                ${sexec === 'attack' ? `
+                                  <button class="cpw-dice" type="button" data-cpw-sub-roll title="Бросок: d20 + модификатор">${d20Svg}</button>
+                                ` : `
+                                  <button class="cpw-action" type="button" data-cpw-sub-action title="Применить действие">${actionSvg}</button>
+                                `}
                                 <button class="weapon-btn" type="button" data-cpw-sub-toggle-desc>${scoll ? 'Описание' : 'Скрыть'}</button>
                                 <button class="weapon-btn danger" type="button" data-cpw-sub-del>✕</button>
                               </div>
@@ -1164,13 +1184,13 @@ function renderShopTab(vm, canEdit) {
 
     return `
       <div class="sheet-section" data-appearance-root>
-        <h3>Облик</h3>
+        <h3>Персонаж</h3>
 
         <div class="sheet-card fullwidth">
           <div class="appearance-layout">
             <div class="appearance-left">
               <div class="appearance-preview-wrap">
-                <img class="appearance-preview" data-appearance-preview src="${escapeHtml(baseUrl)}" alt="Облик" />
+                <img class="appearance-preview" data-appearance-preview src="${escapeHtml(baseUrl)}" alt="Персонаж" />
               </div>
               <div class="kv" style="margin-top:10px">
                 <div class="k">Ссылка на базовую картинку</div>
@@ -1254,7 +1274,7 @@ function renderShopTab(vm, canEdit) {
                           </label>
                           <label class="token-mode">
                             <input type="radio" name="tokenMode" value="full" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
-                            <span>Облик целиком</span>
+                            <span>Персонаж целиком</span>
                           </label>
                           <label class="token-mode">
                             <input type="radio" name="tokenMode" value="crop" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
@@ -1447,7 +1467,7 @@ function renderShopTab(vm, canEdit) {
       { id: "inventory", label: "Инвентарь" },
       { id: "shop", label: "Магазин" },
       { id: "personality", label: "Личность" },
-      { id: "appearance", label: "Облик" },
+      { id: "appearance", label: "Персонаж" },
       { id: "notes", label: "Заметки" }
     ];
 

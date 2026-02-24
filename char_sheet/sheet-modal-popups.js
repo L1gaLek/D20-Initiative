@@ -154,17 +154,6 @@
       if (!sheet.vitality["hit-die-sides"]) sheet.vitality["hit-die-sides"] = { value: 8 };
       if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: 0 };
 
-      if (f === 'hdTotal') {
-        const v = Math.max(0, Math.min(99, Math.trunc(Number(el.value) || 0)));
-        sheet.vitality["hit-dice-total"].value = v;
-        // синхронизируем вид
-        const hdTotalEl = hpPopupEl.querySelector('[data-hp-field="hdTotal"]');
-        if (hdTotalEl && hdTotalEl !== el) hdTotalEl.value = String(v);
-        markModalInteracted(player.id);
-        scheduleSheetSave(player);
-        return;
-      }
-
       const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
       const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
       const tempEl = hpPopupEl.querySelector('[data-hp-field="temp"]');
@@ -255,7 +244,7 @@
     const cur = Number(sheet?.vitality?.["hp-current"]?.value) || 0;
     const temp = Number(sheet?.vitality?.["hp-temp"]?.value) || 0;
     const hdSides = Number(sheet?.vitality?.["hit-die-sides"]?.value) || 8;
-    const hdTotal = Number(sheet?.vitality?.["hit-dice-total"]?.value) || 0;
+    const hdTotal = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
 
     const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
     const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
@@ -277,7 +266,11 @@
     if (!hpPopupEl) return;
     const inputs = hpPopupEl.querySelectorAll('input.hp-input');
     inputs.forEach(inp => {
-      const isDelta = inp.getAttribute('data-hp-field') === 'delta';
+      const f = inp.getAttribute('data-hp-field');
+      const isDelta = f === 'delta';
+      const isHdTotal = f === 'hdTotal';
+      // 'Всего костей здоровья' = уровень и не редактируется вручную
+      if (isHdTotal) { inp.setAttribute('disabled','disabled'); return; }
       // delta input можно менять всем, но кнопки применения/изменения - только редактору
       if (!can && !isDelta) inp.setAttribute('disabled', 'disabled');
       else inp.removeAttribute('disabled');
@@ -819,16 +812,16 @@ function ensureWiredCloseHandlers() {
     if (!root || root.__basicQuickWired) return;
     root.__basicQuickWired = true;
 
-    // Отдых (короткий/длинный)
-    const restChip = root.querySelector('[data-hero="rest"]');
-    if (restChip) {
-      restChip.addEventListener('click', (e) => {
+    // Отдых (короткий/длинный) — делегируем на root, чтобы не отваливалось после перерендера
+    if (!root.__restDelegated) {
+      root.__restDelegated = true;
+      root.addEventListener('click', (e) => {
         const btn = (e.target instanceof Element) ? e.target.closest('[data-rest]') : null;
         if (!btn) return;
         e.stopPropagation();
         const type = btn.getAttribute('data-rest');
         if (type === 'short') showShortRestPopup();
-        if (type === 'long') applyLongRest();
+        if (type === 'long') showLongRestPopup();
       });
     }
 
@@ -1075,7 +1068,60 @@ function ensureWiredCloseHandlers() {
     hideShortRestPopup();
   }
 
-  function applyLongRest(){
+  
+
+  // ================== REST (Long) popup ==================
+  let longRestPopupEl = null;
+
+  function ensureLongRestPopup() {
+    if (longRestPopupEl) return longRestPopupEl;
+
+    longRestPopupEl = document.createElement('div');
+    longRestPopupEl.className = 'rest-popover rest-popover--long hidden';
+    longRestPopupEl.innerHTML = `
+      <div class="rest-popover__backdrop" data-longrest-close></div>
+      <div class="rest-popover__panel" role="dialog" aria-label="Длинный отдых" aria-modal="false">
+        <div class="rest-popover__head">
+          <div class="rest-popover__title">Длинный отдых</div>
+          <button class="rest-popover__x" type="button" data-longrest-close title="Закрыть">✕</button>
+        </div>
+        <div class="rest-popover__body">
+          <div class="sheet-note" style="margin:0 0 10px 0;">Подтверди длинный отдых.</div>
+          <div class="rest-actions">
+            <button class="rest-btn" type="button" data-longrest-apply>отдохнуть</button>
+          </div>
+        </div>
+      </div>
+    `;
+    sheetModal?.appendChild(longRestPopupEl);
+
+    longRestPopupEl.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      if (t.closest('[data-longrest-close]')) { hideLongRestPopup(); return; }
+      if (t.closest('[data-longrest-apply]')) { applyLongRest(); hideLongRestPopup(); return; }
+    });
+
+    longRestPopupEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hideLongRestPopup();
+    });
+
+    return longRestPopupEl;
+  }
+
+  function showLongRestPopup() {
+    const el = ensureLongRestPopup();
+    if (!el) return;
+    el.classList.remove('hidden');
+    try { el.querySelector('button[data-longrest-apply]')?.focus?.(); } catch {}
+  }
+
+  function hideLongRestPopup() {
+    if (!longRestPopupEl) return;
+    longRestPopupEl.classList.add('hidden');
+  }
+
+function applyLongRest(){
     const player = getOpenedPlayerSafe();
     if (!player) return;
     if (!canEditPlayer(player)) return;

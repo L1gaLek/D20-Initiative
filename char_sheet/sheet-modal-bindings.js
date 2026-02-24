@@ -714,7 +714,7 @@ function bindCombatEditors(root, player, canEdit) {
         e.preventDefault();
         if (!canEdit) return;
         ensureDefSlotsState(def);
-        def.subs.push({ id: makeId(), name: `Способность-${def.subs.length + 1}`, stat: '-', desc: '', collapsed: true });
+        def.subs.push({ id: makeId(), name: `Способность-${def.subs.length + 1}`, exec: 'attack', stat: '-', desc: '', collapsed: true });
         scheduleSheetSave(player);
         rerenderCombatTabInPlace(root, player, canEdit);
       });
@@ -753,7 +753,21 @@ function bindCombatEditors(root, player, canEdit) {
         nameInp.addEventListener('change', handler);
       }
 
-      const statSel = subEl.querySelector('[data-cpw-sub-stat]');
+      
+      const execSel = subEl.querySelector('[data-cpw-sub-exec]');
+      if (execSel) {
+        if (!canEdit) execSel.disabled = true;
+        execSel.addEventListener('change', () => {
+          if (!canEdit) return;
+          const v = String(execSel.value || 'attack');
+          sub.exec = (v === 'action') ? 'action' : 'attack';
+          if (sub.exec === 'action') sub.stat = '-';
+          scheduleSheetSave(player);
+          rerenderCombatTabInPlace(root, player, canEdit);
+        });
+      }
+
+const statSel = subEl.querySelector('[data-cpw-sub-stat]');
       if (statSel) {
         if (!canEdit) statSel.disabled = true;
         statSel.addEventListener('change', () => {
@@ -800,7 +814,42 @@ function bindCombatEditors(root, player, canEdit) {
         });
       }
 
-      const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
+      
+      const actionBtn = subEl.querySelector('[data-cpw-sub-action]');
+      if (actionBtn) {
+        const max = Math.max(0, safeInt(def?.slotsMax, 0));
+        ensureDefSlotsState(def);
+        const hasAvailable = (max <= 0) ? true : (Array.isArray(def?.slotsState) ? def.slotsState.some(Boolean) : false);
+        if (!hasAvailable) actionBtn.disabled = true;
+
+        actionBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          ensureDefSlotsState(def);
+
+          const max2 = Math.max(0, safeInt(def?.slotsMax, 0));
+          if (max2 > 0) {
+            const i = def.slotsState.findIndex(Boolean);
+            if (i < 0) return;
+            if (!canEdit) return;
+            def.slotsState[i] = false;
+          } else {
+            if (!canEdit) return;
+          }
+
+          const nm = String(sub.name || def.name || 'Способность');
+          try {
+            const fromName = String(player?.name || '');
+            if (typeof sendMessage === 'function') {
+              sendMessage({ type: 'log', text: `${fromName} применил «${nm}»` });
+            }
+          } catch {}
+
+          scheduleSheetSave(player);
+          rerenderCombatTabInPlace(root, player, canEdit);
+        });
+      }
+
+const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
       if (rollBtn) {
         // disable if no cells
         const max = Math.max(0, safeInt(def?.slotsMax, 0));
