@@ -1522,6 +1522,7 @@
 .combat-ability-body.collapsed{ display:none; }
 
 /* ===== Combat powers (ячейки + d20) ===== */
+.combat-powers-card{ margin-top: 12px; }
 .combat-powers-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; margin-bottom:10px; }
 
 .combat-powers-actions{ display:grid; gap:10px; margin-bottom:12px; }
@@ -1547,10 +1548,15 @@
 .cpw-sublist{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
 .cpw-sub{ padding:10px; border-radius:14px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.18); }
 .cpw-sub-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.cpw-sub-name{ flex:1 1 auto; min-width:0; }
-.cpw-sub-right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.cpw-sub-name{ flex:0 1 240px; max-width:240px; min-width:160px; }
+.cpw-sub-right{ display:flex; align-items:center; gap:8px; flex-wrap:nowrap; justify-content:flex-end; }
 .cpw-sub-desc{ margin-top:8px; }
 .cpw-sub-desc.collapsed{ display:none; }
+
+@media (max-width: 820px){
+  .cpw-sub-name{ flex:1 1 auto; max-width:none; }
+  .cpw-sub-right{ flex-wrap:wrap; }
+}
 
 .cpw-dots{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
 .cpw-dots--empty{ opacity:.75; font-size:12px; }
