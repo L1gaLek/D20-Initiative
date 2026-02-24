@@ -658,6 +658,47 @@
   gap: 6px;
 }
 
+/* ===== Spells: apply/cast button in spell cards ===== */
+.spell-item-head{
+  align-items: stretch; /* allow cast button to match actions column height */
+}
+
+.spell-item-titlewrap{
+  align-self: center;
+  min-width: 0;
+}
+
+.spell-item-controls{
+  display:flex;
+  align-items: stretch;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.spell-cast-btn{
+  width: 34px;
+  min-width: 34px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius: 10px;
+  border: 1px solid rgba(255,210,120,.45);
+  background: rgba(255,210,120,.16);
+  color: rgba(255,210,120,.95);
+  cursor: pointer;
+  padding: 0;
+  line-height: 0;
+}
+
+.spell-cast-btn svg{
+  width: 14px;
+  height: 14px;
+  display:block;
+}
+
+.spell-cast-btn:hover{ background: rgba(255,210,120,.22); }
+.spell-cast-btn:active{ transform: translateY(1px); }
+
 .spell-dice-btn{
   width: 22px;
   height: 22px;
