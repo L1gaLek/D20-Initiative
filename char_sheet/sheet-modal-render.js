@@ -1672,7 +1672,21 @@ function renderShopTab(vm, canEdit) {
     if (!Array.isArray(players)) return;
     rememberPlayersSnapshot(players);
     const pl = players.find(x => x.id === openedSheetPlayerId);
-    if (pl) renderSheetModal(pl);
+    if (!pl) return;
+
+    // Protect against UI "jumps" while user is editing inside the modal.
+    // If the sheet is "busy" (focused/just interacted), avoid full rerender.
+    try { captureUiStateFromDom({ id: openedSheetPlayerId, _activeSheetTab: null }); } catch {}
+    try {
+      if (isModalBusy(openedSheetPlayerId)) {
+        // Lightweight updates (hero chips) without touching active tab / collapsing blocks.
+        try { if (sheetContent) updateHeroChips(sheetContent, pl.sheet?.parsed); } catch {}
+        try { if (sheetContent) updateCoinsTotal(sheetContent, pl.sheet?.parsed); } catch {}
+        return;
+      }
+    } catch {}
+
+    renderSheetModal(pl);
   }
 
   // callbacks are called from client.js when server answers
