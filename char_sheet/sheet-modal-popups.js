@@ -175,16 +175,22 @@
       sheet.vitality["hp-current"].value = clampedCur;
       sheet.vitality["hp-temp"].value = clampedTemp;
 
-      // total hit dice (max) — используется в коротком отдыхе
+      // total hit dice (и максимум, и текущее) — используется в коротком отдыхе.
+      // Требование: при коротком отдыхе тратятся именно эти кости,
+      // и это значение должно уменьшаться и в окне "Здоровье".
+      //
+      // Данные:
+      // - hit-dice-max   = максимум
+      // - hit-dice-total = текущее доступное
+      //
+      // В этом инпуте редактируем "всего" и синхронно выставляем и максимум и текущее.
       try {
         const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
-        const rawHdTotal = Number(hdTotalEl?.value ?? sheet.vitality['hit-dice-max'].value);
-        const nextHdMax = Math.max(0, Math.min(99, Math.trunc(Number.isFinite(rawHdTotal) ? rawHdTotal : lvl)));
-        sheet.vitality['hit-dice-max'].value = nextHdMax;
+        const raw = Number(hdTotalEl?.value ?? sheet.vitality['hit-dice-total'].value);
+        const nextTotal = Math.max(0, Math.min(99, Math.trunc(Number.isFinite(raw) ? raw : lvl)));
 
-        // clamp remaining to new max
-        const rem = Math.max(0, safeInt(sheet?.vitality?.['hit-dice-total']?.value, nextHdMax) || 0);
-        sheet.vitality['hit-dice-total'].value = Math.max(0, Math.min(nextHdMax, rem));
+        sheet.vitality['hit-dice-max'].value = nextTotal;
+        sheet.vitality['hit-dice-total'].value = nextTotal;
       } catch {}
 
       syncHpPopupInputs(sheet);
@@ -261,9 +267,10 @@
     const cur = Number(sheet?.vitality?.["hp-current"]?.value) || 0;
     const temp = Number(sheet?.vitality?.["hp-temp"]?.value) || 0;
     const hdSides = Number(sheet?.vitality?.["hit-die-sides"]?.value) || 8;
-    // editable total hit dice (fallback: level)
+    // total hit dice (текущее доступное). Если не задано — по максимуму/уровню.
     const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
-    const hdTotal = Math.max(0, Math.min(99, safeInt(sheet?.vitality?.['hit-dice-max']?.value, lvl) || 0));
+    const maxHd = Math.max(0, Math.min(99, safeInt(sheet?.vitality?.['hit-dice-max']?.value, lvl) || 0));
+    const hdTotal = Math.max(0, Math.min(maxHd, safeInt(sheet?.vitality?.['hit-dice-total']?.value, maxHd) || 0));
 
     const maxEl = hpPopupEl.querySelector('[data-hp-field="max"]');
     const curEl = hpPopupEl.querySelector('[data-hp-field="cur"]');
@@ -323,7 +330,12 @@
     if (!sheet.vitality["hp-current"]) sheet.vitality["hp-current"] = { value: 0 };
     if (!sheet.vitality["hp-temp"]) sheet.vitality["hp-temp"] = { value: 0 };
     if (!sheet.vitality["hit-die-sides"]) sheet.vitality["hit-die-sides"] = { value: 8 };
-    if (!sheet.vitality["hit-dice-total"]) sheet.vitality["hit-dice-total"] = { value: 0 };
+    if (!sheet.vitality["hit-dice-total"]) {
+      // По умолчанию доступные кости = максимум (уровень или кастом).
+      const fallbackMax = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
+      const maxNow = Math.max(0, safeInt(sheet?.vitality?.["hit-dice-max"]?.value, fallbackMax) || 0);
+      sheet.vitality["hit-dice-total"] = { value: maxNow };
+    }
     if (!sheet.vitality["hit-dice-max"]) {
       const lvl = Math.max(1, safeInt(sheet?.info?.level?.value, 1) || 1);
       sheet.vitality["hit-dice-max"] = { value: lvl };
@@ -1105,6 +1117,9 @@ function ensureWiredCloseHandlers() {
 
     // spend hit dice
     if (spend > 0) setHitDiceRemaining(sheet, rem - spend);
+
+    // если попап "Здоровье" открыт — мгновенно обновляем поле "Всего костей здоровья"
+    try { syncHpPopupInputs(sheet); } catch {}
 
     markModalInteracted(player.id);
     scheduleSheetSave(player);

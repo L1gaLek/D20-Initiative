@@ -3323,6 +3323,45 @@ function bindSlotEditors(root, player, canEdit) {
     return s;
   };
 
+  const getSlotsState = (sheet, lvl) => {
+    const key = `slots-${lvl}`;
+    if (!sheet.spells[key] || typeof sheet.spells[key] !== 'object') sheet.spells[key] = { value: 0, filled: 0 };
+    const total = Math.max(0, Math.min(12, numLike(sheet.spells[key].value, 0)));
+    const filled = Math.max(0, Math.min(total, numLike(sheet.spells[key].filled, 0)));
+    const current = Math.max(0, total - filled);
+    return { key, total, filled, current };
+  };
+
+  const updateSlotDotsUi = (lvl, sheet) => {
+    const { total, current } = getSlotsState(sheet, lvl);
+    const dotsWrap = root.querySelector(`.slot-dots[data-slot-dots="${lvl}"]`);
+    if (dotsWrap) {
+      const dots = Array.from({ length: total })
+        .map((_, i) => `<span class="slot-dot${i < current ? " is-available" : ""}" data-slot-level="${lvl}"></span>`)
+        .join("");
+      dotsWrap.innerHTML = dots || `<span class="slot-dots-empty">—</span>`;
+    }
+  };
+
+  const updateSpellCastButtonsAvailability = (sheet) => {
+    // Заговоры (0) всегда можно применять. Заклинания требуют доступных слотов.
+    const items = root.querySelectorAll('.spell-item');
+    items.forEach(it => {
+      const btn = it.querySelector('[data-spell-cast]');
+      if (!(btn instanceof HTMLButtonElement)) return;
+      const lvl = safeInt(it.getAttribute('data-spell-level'), 0);
+      if (lvl <= 0) {
+        btn.disabled = false;
+        btn.classList.remove('is-disabled');
+        return;
+      }
+      const st = getSlotsState(sheet, lvl);
+      const disabled = st.current <= 0;
+      btn.disabled = disabled;
+      btn.classList.toggle('is-disabled', disabled);
+    });
+  };
+
   const inputs = root.querySelectorAll(".slot-current-input[data-slot-level]");
   inputs.forEach(inp => {
     const lvl = safeInt(inp.getAttribute("data-slot-level"), 0);
@@ -3358,14 +3397,8 @@ function bindSlotEditors(root, player, canEdit) {
       setMaybeObjField(sheet.spells[key], "filled", Math.max(0, total - current));
 
       // update dots in UI without full rerender
-      const dotsWrap = root.querySelector(`.slot-dots[data-slot-dots="${lvl}"]`);
-      if (dotsWrap) {
-        const totalForUi = Math.max(0, Math.min(12, numLike(sheet.spells[key].value, 0)));
-        const dots = Array.from({ length: totalForUi })
-          .map((_, i) => `<span class="slot-dot${i < current ? " is-available" : ""}" data-slot-level="${lvl}"></span>`)
-          .join("");
-        dotsWrap.innerHTML = dots || `<span class="slot-dots-empty">—</span>`;
-      }
+      updateSlotDotsUi(lvl, sheet);
+      updateSpellCastButtonsAvailability(sheet);
 
       inp.value = String(total);
       const { player: curPlayer } = getState();
@@ -3395,9 +3428,36 @@ function bindSlotEditors(root, player, canEdit) {
         const kind = (lvl === 0) ? "Заговор" : "Заклинание";
         const who = String(curPlayer?.name || '').trim() || 'Игрок';
         const nm = title || '(без названия)';
+
+        // ===== расход ячеек заклинаний (для уровней 1+) =====
+        const sheet = getSheet();
+        if (!sheet) return;
+
+        if (lvl > 0) {
+          if (!curCanEdit) return;
+          const st = getSlotsState(sheet, lvl);
+          if (st.current <= 0) {
+            // слотов нет — блокируем кнопку
+            try {
+              if (castSpellBtn instanceof HTMLButtonElement) {
+                castSpellBtn.disabled = true;
+                castSpellBtn.classList.add('is-disabled');
+              }
+            } catch {}
+            return;
+          }
+
+          // тратим 1 слот => увеличиваем filled
+          setMaybeObjField(sheet.spells[st.key], 'filled', Math.min(st.total, st.filled + 1));
+          updateSlotDotsUi(lvl, sheet);
+          updateSpellCastButtonsAvailability(sheet);
+          scheduleSheetSave(curPlayer);
+        }
+
         try {
           if (typeof sendMessage === 'function') {
-            sendMessage({ type: 'log', text: `${who} применил ${kind}: ${nm}` });
+            // Без оптимистичного локального дубля (realtime вставка придёт сама)
+            sendMessage({ type: 'log', text: `${who} применил ${kind}: ${nm}`, noOptimistic: true });
           }
         } catch {}
         return;
@@ -3473,35 +3533,31 @@ function bindSlotEditors(root, player, canEdit) {
       const lvl = safeInt(dot.getAttribute("data-slot-level"), 0);
       if (!lvl) return;
 
-      const key = `slots-${lvl}`;
-      if (!sheet.spells[key] || typeof sheet.spells[key] !== "object") {
-        sheet.spells[key] = { value: 0, filled: 0 };
-      }
-
-      const total = Math.max(0, Math.min(12, numLike(sheet.spells[key].value, 0)));
-      const filled = Math.max(0, Math.min(total, numLike(sheet.spells[key].filled, 0)));
-      let available = Math.max(0, total - filled);
+      const st = getSlotsState(sheet, lvl);
+      const total = st.total;
+      let available = st.current;
 
       // нажали на доступный -> используем 1; нажали на пустой -> возвращаем 1
       if (dot.classList.contains("is-available")) available = Math.max(0, available - 1);
       else available = Math.min(total, available + 1);
 
-      setMaybeObjField(sheet.spells[key], "filled", Math.max(0, total - available));
+      setMaybeObjField(sheet.spells[st.key], "filled", Math.max(0, total - available));
 
       const inp = root.querySelector(`.slot-current-input[data-slot-level="${lvl}"]`);
       if (inp) inp.value = String(available);
 
-      const dotsWrap = root.querySelector(`.slot-dots[data-slot-dots="${lvl}"]`);
-      if (dotsWrap) {
-        const dots = Array.from({ length: total })
-          .map((_, i) => `<span class="slot-dot${i < available ? " is-available" : ""}" data-slot-level="${lvl}"></span>`)
-          .join("");
-        dotsWrap.innerHTML = dots || `<span class="slot-dots-empty">—</span>`;
-      }
+      updateSlotDotsUi(lvl, sheet);
+      updateSpellCastButtonsAvailability(sheet);
 
       scheduleSheetSave(curPlayer);
     });
   }
+
+  // init availability (при первом биндинге таба "Заклинания")
+  try {
+    const sheet = getSheet();
+    if (sheet) updateSpellCastButtonsAvailability(sheet);
+  } catch {}
 }
 
 // ===== add spells by URL + toggle descriptions =====
