@@ -682,9 +682,9 @@
   align-items:center;
   justify-content:center;
   border-radius: 10px;
-  border: 1px solid rgba(0,120,215,.55);
-  background: rgba(0,120,215,.14);
-  color: rgb(0,120,215);
+  border: 1px solid rgba(27,87,121,.55);
+  background: rgba(27,87,121,.14);
+  color: rgb(27,87,121);
   cursor: pointer;
   padding: 0;
   line-height: 0;
@@ -696,7 +696,7 @@
   display:block;
 }
 
-.spell-cast-btn:hover{ background: rgba(0,120,215,.20); }
+.spell-cast-btn:hover{ background: rgba(27,87,121,.20); }
 .spell-cast-btn:active{ transform: translateY(1px); }
 
 .spell-cast-btn.is-disabled,
