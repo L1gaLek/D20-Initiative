@@ -736,3 +736,54 @@
 .spell-dice-btn:active{
   transform: translateY(1px);
 }
+
+/* ================== BOARD MARKS (обозначения) ================== */
+.marks-toolbar{
+  margin-top:10px;
+  padding:10px;
+  border:1px solid #555;
+  border-radius:6px;
+  background:rgba(20,20,20,0.82);
+}
+.marks-toolbar__head{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+}
+.marks-toolbar__title{
+  font-weight:700;
+  color:#eee;
+  margin-right:auto;
+}
+.marks-switch{ display:flex; align-items:center; gap:8px; font-size:12px; opacity:.95; }
+.marks-btn{ padding:5px 10px; font-size:12px; }
+.marks-toolbar__row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.marks-toolbar__row--sub{ margin-top:8px; }
+.marks-seg{ display:flex; border:1px solid #555; border-radius:6px; overflow:hidden; }
+.marks-seg__btn{ padding:6px 10px; font-size:12px; border:0; border-right:1px solid #555; background:#2c2c2c; }
+.marks-seg__btn:last-child{ border-right:0; }
+.marks-seg__btn.is-active{ background:#3a3a3a; box-shadow: inset 0 0 0 1px rgba(255,165,0,0.45); }
+.marks-field{ display:flex; align-items:center; gap:8px; font-size:12px; opacity:.95; }
+.marks-field span{ min-width:52px; }
+.marks-field input[type="range"]{ width:140px; }
+.marks-field input[type="number"]{ width:64px; }
+.marks-label{ flex:1; min-width:180px; }
+.marks-hint{ font-size:11px; opacity:.75; white-space:nowrap; }
+
+/* слой меток */
+#marks-layer{
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  z-index: 20; /* выше сетки/стен, ниже fog-layer (30) */
+}
+.marks-svg{ width:100%; height:100%; }
+.mark-shape.is-selected{ filter: drop-shadow(0 0 4px rgba(255,165,0,0.85)); }
+.mark-preview{ filter: drop-shadow(0 0 3px rgba(255,165,0,0.65)); }
+
+/* spectators: hide draw controls visually */
+.marks-toolbar.is-spectator{ opacity:.55; }
+.marks-toolbar.is-spectator .marks-switch{ display:none; }
