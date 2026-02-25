@@ -168,3 +168,19 @@ try {
 } catch (e) {
   console.warn("controlbox init failed", e);
 }
+
+// ================== BOARD MARKS INIT ==================
+try {
+  if (typeof window.initBoardMarks === 'function') {
+    window.initBoardMarks({
+      sendMessage,
+      isGM,
+      isSpectator,
+      getState: () => lastState,
+      boardEl: board,
+      boardWrapperEl: boardWrapper
+    });
+  }
+} catch (e) {
+  console.warn('board marks init failed', e);
+}
