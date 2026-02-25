@@ -18,6 +18,8 @@ function createInitialGameState() {
     gridAlpha: 1,
     wallAlpha: 1,
     walls: [],
+    // Marks/areas (per map): translucent rectangles/circles/polygons
+    marks: [],
     // Fog of war (per map)
     fog: {
       enabled: false,
@@ -52,6 +54,7 @@ function createInitialGameState() {
     boardHeight: base.boardHeight,
     boardBgDataUrl: base.boardBgDataUrl,
     walls: base.walls,
+    marks: base.marks,
 
     // Mirror fog from active map for easy access
     fog: base.fog,
@@ -81,6 +84,7 @@ function ensureStateHasMaps(state) {
       const firstSid = String(state.mapSections[0]?.id || "");
     state.maps.forEach(m => {
       if (m && !m.sectionId) m.sectionId = firstSid;
+      if (m && !Array.isArray(m.marks)) m.marks = [];
       // ensure fog defaults on every map
       if (m && (!m.fog || typeof m.fog !== 'object')) {
         m.fog = {
@@ -112,6 +116,14 @@ function ensureStateHasMaps(state) {
     });
     }
     state.schemaVersion = Math.max(Number(state.schemaVersion) || 0, 3);
+
+    // root mirror for marks (active map)
+    if (!Array.isArray(state.marks)) {
+      const id = String(state.currentMapId || "");
+      const maps = Array.isArray(state.maps) ? state.maps : [];
+      const m = maps.find(mm => String(mm?.id) === id) || maps[0] || null;
+      state.marks = (m && Array.isArray(m.marks)) ? deepClone(m.marks) : [];
+    }
     return state;
   }
 
@@ -128,6 +140,7 @@ function ensureStateHasMaps(state) {
     gridAlpha: (typeof state.gridAlpha !== 'undefined') ? state.gridAlpha : 1,
     wallAlpha: (typeof state.wallAlpha !== 'undefined') ? state.wallAlpha : 1,
     walls: Array.isArray(state.walls) ? state.walls : [],
+    marks: Array.isArray(state.marks) ? state.marks : [],
     fog: (state.fog && typeof state.fog === 'object') ? state.fog : {
       enabled: false,
       mode: 'manual',
@@ -159,6 +172,7 @@ function ensureStateHasMaps(state) {
   state.gridAlpha = migratedMap.gridAlpha ?? 1;
   state.wallAlpha = migratedMap.wallAlpha ?? 1;
   state.walls = migratedMap.walls;
+  state.marks = migratedMap.marks;
 
   // keep root mirror
   state.fog = migratedMap.fog;
@@ -185,6 +199,9 @@ function syncActiveToMap(state) {
   m.wallAlpha = (typeof st.wallAlpha !== 'undefined') ? st.wallAlpha : 1;
 
   m.walls = Array.isArray(st.walls) ? st.walls : [];
+
+  // sync marks (root mirror -> map)
+  m.marks = Array.isArray(st.marks) ? st.marks : [];
 
   // sync fog (root mirror -> map)
   if (!m.fog || typeof m.fog !== 'object') m.fog = {};
@@ -214,6 +231,7 @@ function loadMapToRoot(state, mapId) {
   st.wallAlpha = (typeof m.wallAlpha !== 'undefined') ? m.wallAlpha : 1;
 
   st.walls = Array.isArray(m.walls) ? m.walls : [];
+  st.marks = Array.isArray(m.marks) ? deepClone(m.marks) : [];
   st.fog = (m.fog && typeof m.fog === 'object') ? deepClone(m.fog) : {
     enabled: false,
     mode: 'manual',
@@ -1935,6 +1953,115 @@ else if (type === "addWall") {
           const a = Number(msg.alpha);
           next.wallAlpha = Number.isFinite(a) ? clamp(a, 0, 1) : 1;
           logEventToState(next, `Прозрачность стен: ${Math.round((1 - next.wallAlpha) * 100)}%`);
+        }
+
+        // ===== Marks / Areas (everyone can draw; GM can remove all) =====
+        else if (type === 'addMark') {
+          const raw = msg.mark;
+          if (!raw || typeof raw !== 'object') return;
+
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
+          if (!Array.isArray(next.marks)) next.marks = [];
+
+          const id = String(raw.id || '').trim();
+          const kind = String(raw.kind || '').trim();
+          if (!id) return;
+          if (!(kind === 'rect' || kind === 'circle' || kind === 'poly')) return;
+
+          // Avoid duplicates
+          if (m.marks.some(mm => String(mm?.id) === id)) return;
+
+          const ownerId = String(raw.ownerId || myId || '').trim();
+          const color = String(raw.color || '#ffa500').trim();
+          const alphaFill = Number.isFinite(Number(raw.alphaFill)) ? clamp(Number(raw.alphaFill), 0, 1) : 0.7;
+          const alphaStroke = Number.isFinite(Number(raw.alphaStroke)) ? clamp(Number(raw.alphaStroke), 0, 1) : 0.6;
+          const strokeW = Number.isFinite(Number(raw.strokeW)) ? clamp(Number(raw.strokeW), 1, 10) : 2;
+          const label = String(raw.label || '').slice(0, 80);
+
+          const safe = {
+            id,
+            mapId: String(next.currentMapId || m.id || ''),
+            ownerId,
+            kind,
+            color,
+            alphaFill,
+            alphaStroke,
+            strokeW,
+            label
+          };
+
+          if (kind === 'rect') {
+            const x = Number(raw.x), y = Number(raw.y), w = Number(raw.w), h = Number(raw.h);
+            if (![x, y, w, h].every(Number.isFinite)) return;
+            if (w <= 0 || h <= 0) return;
+            safe.x = clamp(x, 0, Math.max(0, next.boardWidth - 0.01));
+            safe.y = clamp(y, 0, Math.max(0, next.boardHeight - 0.01));
+            safe.w = clamp(w, 0.01, next.boardWidth * 2);
+            safe.h = clamp(h, 0.01, next.boardHeight * 2);
+          } else if (kind === 'circle') {
+            const cx = Number(raw.cx), cy = Number(raw.cy), r = Number(raw.r);
+            if (![cx, cy, r].every(Number.isFinite)) return;
+            if (r <= 0) return;
+            safe.cx = clamp(cx, 0, Math.max(0, next.boardWidth));
+            safe.cy = clamp(cy, 0, Math.max(0, next.boardHeight));
+            safe.r = clamp(r, 0.05, Math.max(next.boardWidth, next.boardHeight) * 2);
+          } else if (kind === 'poly') {
+            const pts = Array.isArray(raw.pts) ? raw.pts : [];
+            if (pts.length < 3) return;
+            safe.pts = pts.slice(0, 64).map(p => ({
+              x: clamp(Number(p?.x) || 0, 0, Math.max(0, next.boardWidth)),
+              y: clamp(Number(p?.y) || 0, 0, Math.max(0, next.boardHeight))
+            }));
+          }
+
+          m.marks.push(safe);
+          next.marks = deepClone(m.marks);
+          logEventToState(next, `Обозначение добавлено`);
+        }
+
+        else if (type === 'removeMark') {
+          const id = String(msg.id || '').trim();
+          if (!id) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
+
+          const mark = m.marks.find(mm => String(mm?.id) === id);
+          if (!mark) return;
+
+          // GM может удалить всё, игрок — только своё
+          if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
+
+          const before = m.marks.length;
+          m.marks = m.marks.filter(mm => String(mm?.id) !== id);
+          if (m.marks.length !== before) {
+            next.marks = deepClone(m.marks);
+            logEventToState(next, `Обозначение удалено`);
+          }
+        }
+
+        else if (type === 'clearMarks') {
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
+          const scope = String(msg.scope || 'mine');
+          if (scope === 'all') {
+            if (!isGM) return;
+            if (m.marks.length) {
+              m.marks = [];
+              next.marks = [];
+              logEventToState(next, `Обозначения очищены`);
+            }
+          } else {
+            const before = m.marks.length;
+            m.marks = m.marks.filter(mm => String(mm?.ownerId || '') !== String(myId || ''));
+            if (m.marks.length !== before) {
+              next.marks = deepClone(m.marks);
+              logEventToState(next, `Обозначения очищены (локально)`);
+            }
+          }
         }
 
         // ===== Fog of war (GM controls) =====

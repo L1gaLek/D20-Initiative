@@ -81,6 +81,9 @@ function renderBoard(state) {
 
   // Fog of war overlay needs to match board size and state.
   try { window.FogWar?.onBoardRendered?.(state); } catch {}
+
+  // Board marks/areas (rect/circle/poly overlays)
+  try { window.BoardMarks?.onBoardRendered?.(state); } catch {}
 }
 
 // ================== WALL EDGES RENDER ==================
