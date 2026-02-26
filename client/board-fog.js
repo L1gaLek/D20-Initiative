@@ -609,7 +609,7 @@
         const drawOn = !!document.getElementById('fog-draw')?.checked;
         if (isGm && fog?.enabled && String(fog?.mode || '') === 'manual' && drawOn && this._manualPreview) {
           const pv = this._manualPreview;
-          const n = Math.max(1, Math.min(20, Math.floor(Number(pv.n) || 1)));
+          const n = Math.max(1, Math.min(10, Math.floor(Number(pv.n) || 1)));
           const x0 = Math.floor(Number(pv.x) || 0);
           const y0 = Math.floor(Number(pv.y) || 0);
           const fill = (String(pv.mode || 'reveal') === 'hide') ? 'rgba(255,80,80,0.16)' : 'rgba(90,220,140,0.16)';
@@ -665,7 +665,7 @@
 
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
-      const brushSize = () => clampInt(Number(document.getElementById('fog-brush')?.value) || 1, 1, 20);
+      const brushSize = () => clampInt(Number(document.getElementById('fog-brush')?.value) || 1, 1, 10);
 
       const canDrawNow = () => {
         const st = this._lastState;
