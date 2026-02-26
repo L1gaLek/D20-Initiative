@@ -524,9 +524,10 @@
       this._pendingExploredSync = setTimeout(() => {
         this._pendingExploredSync = null;
         try {
-          if (typeof sendMessage === 'function') {
-            sendMessage({ type: 'fogSetExplored', cells: Array.from(this._exploredSet) });
-          }
+          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
+            ? window.sendMessage
+            : (typeof sendMessage === 'function' ? sendMessage : null);
+          if (sm) sm({ type: 'fogSetExplored', cells: Array.from(this._exploredSet) });
         } catch {}
       }, 250);
     },
@@ -623,9 +624,7 @@
     },
 
     _wireManualPainting(canvas) {
-      // Manual drawing (GM): circle/rect/poly like "Обозначения".
-      let start = null;      // {x,y}
-      let poly = [];         // [{x,y}, ...]
+      // Manual drawing (GM): square NxN brush ("Размер"), open/close like buttons.
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -641,21 +640,10 @@
       };
 
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
-      const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'circle');
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
-
-      // Brush size (cells). Optional UI field.
-      // Supports multiple ids to be backward/forward compatible.
-      const brushSize = () => {
-        const ids = ['fog-size', 'fog-brush-size', 'fog-manual-size', 'fog-size-cells'];
-        let raw = null;
-        for (const id of ids) {
-          const el = document.getElementById(id);
-          if (!el) continue;
-          raw = (el.value != null) ? el.value : null;
-          break;
-        }
-        return clampInt(Number(raw) || 1, 1, 10);
+      const size = () => {
+        const n = Number(document.getElementById('fog-size')?.value);
+        return clampInt(Number.isFinite(n) ? n : 1, 1, 10);
       };
 
       const canDrawNow = () => {
@@ -668,9 +656,10 @@
 
       const sendStamp = (stampObj) => {
         try {
-          if (typeof sendMessage === 'function') {
-            sendMessage({ type: 'fogStamp2', stamp: stampObj });
-          }
+          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
+            ? window.sendMessage
+            : (typeof sendMessage === 'function' ? sendMessage : null);
+          if (sm) sm({ type: 'fogStamp2', stamp: stampObj });
         } catch {}
       };
 
@@ -680,15 +669,6 @@
 
       this._togglePointerEvents = updatePointerEvents;
 
-      const reset = () => {
-        start = null;
-        poly = [];
-      };
-
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') reset();
-      });
-
       const onClick = (e) => {
         updatePointerEvents();
         if (!canDrawNow()) return;
@@ -696,62 +676,12 @@
         if (!st) return;
         const p = getCellFromEvent(e);
         const m = mode();
-        const t = tool();
 
-        // ===== Square brush ("Размер" cells) =====
-        // Single click: open/close an NxN area centered on the clicked cell.
-        if (t === 'square' || t === 'brush') {
-          const n = brushSize();
-          const half = Math.floor((n - 1) / 2);
-          const w = (Number(this._lastState?.boardWidth) || 10);
-          const h = (Number(this._lastState?.boardHeight) || 10);
-          const x0 = clampInt(p.x - half, 0, Math.max(0, w - 1));
-          const y0 = clampInt(p.y - half, 0, Math.max(0, h - 1));
-          sendStamp({ kind: 'square', x: x0, y: y0, n, mode: m });
-          start = null;
-          return;
-        }
-
-        if (t === 'circle') {
-          if (!start) { start = p; return; }
-          // radius in cells (center-to-center)
-          const cx = start.x + 0.5;
-          const cy = start.y + 0.5;
-          const dx = (p.x + 0.5) - cx;
-          const dy = (p.y + 0.5) - cy;
-          const r = Math.max(0.5, Math.sqrt(dx * dx + dy * dy));
-          sendStamp({ kind: 'circle', cx, cy, r, mode: m });
-          start = null;
-          return;
-        }
-
-        if (t === 'rect') {
-          if (!start) { start = p; return; }
-          sendStamp({ kind: 'rect', x1: start.x, y1: start.y, x2: p.x, y2: p.y, mode: m });
-          start = null;
-          return;
-        }
-
-        // poly: clicks add points, double click finalizes
-        if (t === 'poly') {
-          poly.push({ x: p.x + 0.5, y: p.y + 0.5 });
-          return;
-        }
-      };
-
-      const onDblClick = (e) => {
-        updatePointerEvents();
-        if (!canDrawNow()) return;
-        if (tool() !== 'poly') return;
-        if (poly.length < 3) { reset(); return; }
-        const m = mode();
-        sendStamp({ kind: 'poly', pts: poly.slice(), mode: m });
-        reset();
-        e.preventDefault();
+        // Single-click square stamp (top-left cell), size NxN.
+        sendStamp({ kind: 'square', x: p.x, y: p.y, n: size(), mode: m });
       };
 
       canvas.addEventListener('click', onClick);
-      canvas.addEventListener('dblclick', onDblClick);
 
       // Touch: emulate click on touchstart
       canvas.addEventListener('touchstart', (e) => {
@@ -769,8 +699,17 @@
         el.addEventListener('click', fn);
       };
 
-      bindBtn('fog-hide-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'hideAll' }); } catch {} });
-      bindBtn('fog-reveal-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'revealAll' }); } catch {} });
+      const callSend = (payload) => {
+        try {
+          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
+            ? window.sendMessage
+            : (typeof sendMessage === 'function' ? sendMessage : null);
+          if (sm) sm(payload);
+        } catch {}
+      };
+
+      bindBtn('fog-hide-all', () => callSend({ type: 'fogFill', value: 'hideAll' }));
+      bindBtn('fog-reveal-all', () => callSend({ type: 'fogFill', value: 'revealAll' }));
       bindBtn('fog-clear-explored', () => {
         // IMPORTANT: after clearing explored on the server, we must also clear the local cache
         // and cancel any pending debounce sync. Otherwise, an old scheduled sync can
@@ -782,7 +721,12 @@
           this._dynKey = '';
           this._render();
         } catch {}
-        try { sendMessage?.({ type: 'fogClearExplored' }); } catch {}
+        try {
+          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
+            ? window.sendMessage
+            : (typeof sendMessage === 'function' ? sendMessage : null);
+          if (sm) sm({ type: 'fogClearExplored' });
+        } catch {}
       });
 
       const onSettingsChange = () => {
@@ -796,11 +740,14 @@
           const useWalls = !!document.getElementById('fog-use-walls')?.checked;
           const exploredEnabled = !!document.getElementById('fog-explored')?.checked;
           const moveOnlyExplored = !!document.getElementById('fog-move-only-open')?.checked;
-          sendMessage?.({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
+          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
+            ? window.sendMessage
+            : (typeof sendMessage === 'function' ? sendMessage : null);
+          if (sm) sm({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
         } catch {}
       };
 
-      ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open'].forEach(id => {
+      ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open','fog-size'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', onSettingsChange);
