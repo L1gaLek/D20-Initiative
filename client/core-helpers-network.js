@@ -2109,6 +2109,14 @@ else if (type === "addWall") {
           const kind = String(s.kind || '').toLowerCase();
           const mode = (String(s.mode || 'reveal') === 'hide') ? 'hide' : 'reveal';
 
+          // Square NxN brush (top-left cell x,y; size n)
+          if (kind === 'square') {
+            const x = Number(s.x), y = Number(s.y), n = Number(s.n);
+            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(n)) return;
+            f.manualStamps.push({ kind: 'square', x, y, n: clamp(n, 1, 10), mode });
+            return;
+          }
+
           if (kind === 'rect') {
             const x1 = Number(s.x1), y1 = Number(s.y1), x2 = Number(s.x2), y2 = Number(s.y2);
             if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) return;
@@ -2136,14 +2144,6 @@ else if (type === "addWall") {
             f.manualStamps.push({ kind: 'poly', pts: safe, mode });
             return;
           }
-
-          if (kind === 'square') {
-            const x = Number(s.x), y = Number(s.y), n = Number(s.n);
-            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(n)) return;
-            f.manualStamps.push({ kind: 'square', x: Math.floor(x), y: Math.floor(y), n: clamp(Math.floor(n), 1, 10), mode });
-            return;
-          }
-
 
           // fallback: ignore unknown kind
         }
