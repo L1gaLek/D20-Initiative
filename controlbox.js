@@ -287,6 +287,10 @@
 
     clearBoardBtn?.addEventListener('click', () => {
       if (!ctx.isGM?.()) return;
+      // Safety: require explicit confirmation before wiping the whole board.
+      // (Requested by user)
+      const ok = window.confirm('Очистить поле? Это удалит стены, обозначения, туман войны и другие данные карты.');
+      if (!ok) return;
       ctx.sendMessage?.({ type: 'clearBoard' });
     });
 
