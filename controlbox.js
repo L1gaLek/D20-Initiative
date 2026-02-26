@@ -394,149 +394,134 @@
       try { window.dispatchEvent(new CustomEvent('dnd_wall_preview_clear')); } catch {}
     }
 
-    board?.addEventListener('mousedown', (e) => {
-      if (!ctx.isGM?.() || !editEnvironment || !wallMode) return;
-      const cell = e.target.closest('.cell');
-      if (!cell) return;
-      mouseDown = true;
-      dragTouched = new Set();
+    // ===== NEW WALL INPUT MODEL =====
+    // brush: like "Поли" in marks — click to add segments, preview follows mouse.
+    // line/rect: first click sets start, second click sets end (no hold).
+    // point: one click toggles a single edge under cursor.
 
-      readWallUi();
-      const edge = edgeFromPointer(cell, e);
-      dragStart = edge;
+    let clickStart = null;      // for line/rect (edge)
+    let polyActive = false;     // for brush/poly
+    let polyLast = null;        // last edge point (edge)
 
-      
-      // Point tool: single click places/removes one edge immediately
-      if (wallTool === "point") {
-        mouseDown = false;
-        clearWallPreview();
-        if (edge) {
-          const one = (wallMode === "add")
-            ? [{ x: edge.x, y: edge.y, dir: String(edge.dir||"N").toUpperCase(), type: wallType, thickness: wallThickness }]
-            : [{ x: edge.x, y: edge.y, dir: String(edge.dir||"N").toUpperCase() }];
-          try {
-            window.dispatchEvent(new CustomEvent("dnd_local_wall_edges", { detail: { mode: wallMode, edges: one } }));
-          } catch {}
-          if (draftEnabled) {
-            for (const ed of one) addToDraft(wallMode, ed);
-          } else {
-            ctx.sendMessage?.({ type: "bulkWallEdges", mode: wallMode, edges: one });
-          }
-        }
-        dragTouched = new Set();
-        dragStart = null;
-        return;
-      }
-if (wallTool === 'brush') {
-        touchEdge(edge);
-        clearWallPreview();
-      } else {
-        // start preview for line/rect
-        clearWallPreview();
-      }
-    });
-
-    board?.addEventListener('mouseover', (e) => {
-      if (!mouseDown || !ctx.isGM?.() || !editEnvironment || !wallMode) return;
-      const cell = e.target.closest('.cell');
-      if (!cell) return;
-
-      readWallUi();
-      const edge = edgeFromPointer(cell, e);
-      if (wallTool === 'brush') {
-        touchEdge(edge);
-        // brush uses immediate optimistic render; no preview
-        return;
-      }
-
-      // Live preview for line/rect
-      if ((wallTool === 'line' || wallTool === 'rect') && dragStart && edge) {
-        const previewEdges = (wallTool === 'rect') ? edgesForRect(dragStart, edge) : edgesForLine(dragStart, edge);
-        // attach current type/thickness for correct contour size
-        const withMeta = previewEdges.map(ed => ({
-          x: ed.x,
-          y: ed.y,
-          dir: ed.dir,
-          type: wallType,
-          thickness: wallThickness
+    function applyWallEdges(changed) {
+      if (!changed || !changed.length) return;
+      // optimistic
+      try {
+        window.dispatchEvent(new CustomEvent('dnd_local_wall_edges', {
+          detail: { mode: wallMode, edges: changed }
         }));
-        setWallPreview(withMeta);
+      } catch {}
+
+      if (draftEnabled) {
+        for (const ed of changed) addToDraft(wallMode, ed);
+      } else {
+        ctx.sendMessage?.({ type: 'bulkWallEdges', mode: wallMode, edges: changed });
       }
+    }
+
+    function toChanged(edges) {
+      const out = [];
+      for (const ed of (edges || [])) {
+        if (!ed) continue;
+        const x = Number(ed.x), y = Number(ed.y);
+        const d = String(ed.dir || '').toUpperCase();
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (d !== 'N' && d !== 'E' && d !== 'S' && d !== 'W') continue;
+        if (wallMode === 'add') out.push({ x, y, dir: d, type: wallType, thickness: wallThickness });
+        else out.push({ x, y, dir: d });
+      }
+      return out;
+    }
+
+    // Preview follows mouse after start click for line/rect OR after first poly click.
+    board?.addEventListener('mousemove', (e) => {
+      if (!ctx.isGM?.() || !editEnvironment || !wallMode) return;
+      readWallUi();
+      const cell = e.target.closest('.cell');
+      if (!cell) return;
+      const edge = edgeFromPointer(cell, e);
+      if (!edge) return;
+
+      if (wallTool === 'line' && clickStart) {
+        const prev = edgesForLine(clickStart, edge).map(ed => ({ ...ed, type: wallType, thickness: wallThickness }));
+        setWallPreview(prev);
+      } else if (wallTool === 'rect' && clickStart) {
+        const prev = edgesForRect(clickStart, edge).map(ed => ({ ...ed, type: wallType, thickness: wallThickness }));
+        setWallPreview(prev);
+      } else if (wallTool === 'brush' && polyActive && polyLast) {
+        // For brush/poly preview use a line from last to hover.
+        const prev = edgesForLine(polyLast, edge).map(ed => ({ ...ed, type: wallType, thickness: wallThickness }));
+        setWallPreview(prev);
+      } else {
+        // no active gesture
+        clearWallPreview();
+      }
+    }, { passive: true });
+
+    // End/cancel helpers
+    function resetWallGesture() {
+      clickStart = null;
+      polyActive = false;
+      polyLast = null;
+      clearWallPreview();
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') resetWallGesture();
     });
 
-    window.addEventListener('mouseup', () => {
-      if (!mouseDown) return;
-      mouseDown = false;
-
-      // Clear preview when gesture ends
-      clearWallPreview();
-
-      // одним сообщением отправляем все изменения
+    // Use CLICK for all tools.
+    board?.addEventListener('click', (e) => {
       if (!ctx.isGM?.() || !editEnvironment || !wallMode) return;
+      const cell = e.target.closest('.cell');
+      if (!cell) return;
 
       readWallUi();
+      const edge = edgeFromPointer(cell, e);
+      if (!edge) return;
 
-      const changed = [];
-      // For line/rect tools we generate edges from dragStart to current hover cell
-      // If we didn't collect anything (line/rect), create it now.
-      if ((wallTool === 'line' || wallTool === 'rect') && dragStart) {
-        // Find current cell under mouse
-        let cell = null;
-        try {
-          const el = document.elementFromPoint(window.__lastMouseX || 0, window.__lastMouseY || 0);
-          cell = el?.closest?.('.cell') || null;
-        } catch {}
-        // If not found, just send nothing.
-        if (cell) {
-          const end = edgeFromPointer(cell, { clientX: window.__lastMouseX, clientY: window.__lastMouseY });
-          if (end) {
-            const edges = (wallTool === 'rect') ? edgesForRect(dragStart, end) : edgesForLine(dragStart, end);
-            for (const ed of edges) touchEdge(ed);
-          }
-        }
+      // point: immediate
+      if (wallTool === 'point') {
+        applyWallEdges(toChanged([edge]));
+        return;
       }
 
-      dragTouched.forEach((k) => {
-        const [xs, ys, dir] = String(k).split(',');
-        const x = Number(xs), y = Number(ys);
-        const d = String(dir || '').toUpperCase();
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-        if (d !== 'N' && d !== 'E' && d !== 'S' && d !== 'W') return;
-        if (wallMode === 'add') changed.push({ x, y, dir: d, type: wallType, thickness: wallThickness });
-        else changed.push({ x, y, dir: d });
-      });
-
-      if (changed.length) {
-        // Optimistic UI: apply locally immediately to avoid perceived lag while
-        // waiting for realtime/state echo.
-        try {
-          window.dispatchEvent(new CustomEvent('dnd_local_wall_edges', {
-            detail: { mode: wallMode, edges: changed }
-          }));
-        } catch {}
-
-        // Draft mode: keep changes local until GM clicks "Загрузить".
-        if (draftEnabled) {
-          for (const ed of changed) addToDraft(wallMode, ed);
-        } else {
-          // IMPORTANT:
-          // The project uses *edge walls* (v2) on cell borders. The room state handler
-          // expects message type `bulkWallEdges` with field `edges`.
-          // Sending legacy `bulkWalls` (which expects `cells`) causes walls to appear
-          // optimistically for a moment and then disappear (state never updates).
-          ctx.sendMessage?.({ type: 'bulkWallEdges', mode: wallMode, edges: changed });
+      // line/rect: 2-click
+      if (wallTool === 'line' || wallTool === 'rect') {
+        if (!clickStart) {
+          clickStart = edge;
+          clearWallPreview();
+          return;
         }
+        const edges = (wallTool === 'rect') ? edgesForRect(clickStart, edge) : edgesForLine(clickStart, edge);
+        applyWallEdges(toChanged(edges));
+        clickStart = null;
+        clearWallPreview();
+        return;
       }
 
-      dragTouched = new Set();
-      dragStart = null;
+      // brush/poly: like marks poly — every click extends from last point
+      if (wallTool === 'brush') {
+        if (!polyActive || !polyLast) {
+          polyActive = true;
+          polyLast = edge;
+          clearWallPreview();
+          return;
+        }
+        const seg = edgesForLine(polyLast, edge);
+        applyWallEdges(toChanged(seg));
+        polyLast = edge;
+        clearWallPreview();
+      }
     });
 
-    // Track last mouse for line/rect end point
-    window.addEventListener('mousemove', (e) => {
-      window.__lastMouseX = e.clientX;
-      window.__lastMouseY = e.clientY;
-    }, { passive: true });
+    // Double click finishes brush/poly sequence.
+    board?.addEventListener('dblclick', (e) => {
+      if (!ctx.isGM?.() || !editEnvironment || !wallMode) return;
+      readWallUi();
+      if (wallTool !== 'brush') return;
+      resetWallGesture();
+    });
 
     // ===== Campaign maps / sections (GM): Parameters modal =====
     const campaignParamsBtn = document.getElementById('campaign-params');
