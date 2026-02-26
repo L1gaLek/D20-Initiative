@@ -348,10 +348,14 @@
                   <option value="hide">Закрывать</option>
                 </select>
                 <select id="fog-manual-tool" title="Инструмент">
+                  <option value="brush">Кисть</option>
                   <option value="circle">Круг</option>
                   <option value="rect">Прямоугольник</option>
                   <option value="poly">Поли</option>
                 </select>
+                <label class="fog-inline" title="Размер кисти (в клетках)">Размер:
+                  <input id="fog-brush" type="number" min="1" max="10" value="1" style="width:54px;">
+                </label>
               </div>
               <div class="fog-row fog-row--manual">
                 <button id="fog-hide-all" type="button">Скрыть всё</button>
