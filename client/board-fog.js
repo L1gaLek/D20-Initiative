@@ -623,7 +623,9 @@
     },
 
     _wireManualPainting(canvas) {
-      // Manual drawing (GM): square brush only (NxN).
+      // Manual drawing (GM): circle/rect/poly like "Обозначения".
+      let start = null;      // {x,y}
+      let poly = [];         // [{x,y}, ...]
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -639,10 +641,21 @@
       };
 
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
+      const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'circle');
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
+
+      // Brush size (cells). Optional UI field.
+      // Supports multiple ids to be backward/forward compatible.
       const brushSize = () => {
-        const n = Number(document.getElementById('fog-brush')?.value);
-        return clampInt(Number.isFinite(n) ? n : 1, 1, 10);
+        const ids = ['fog-size', 'fog-brush-size', 'fog-manual-size', 'fog-size-cells'];
+        let raw = null;
+        for (const id of ids) {
+          const el = document.getElementById(id);
+          if (!el) continue;
+          raw = (el.value != null) ? el.value : null;
+          break;
+        }
+        return clampInt(Number(raw) || 1, 1, 10);
       };
 
       const canDrawNow = () => {
@@ -667,8 +680,14 @@
 
       this._togglePointerEvents = updatePointerEvents;
 
-      // Hover state for brush preview
-      this._hoverCell = null; // {x,y}
+      const reset = () => {
+        start = null;
+        poly = [];
+      };
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') reset();
+      });
 
       const onClick = (e) => {
         updatePointerEvents();
@@ -676,27 +695,63 @@
         const st = this._lastState;
         if (!st) return;
         const p = getCellFromEvent(e);
+        const m = mode();
+        const t = tool();
 
-        const w = Number(st.boardWidth) || 10;
-        const h = Number(st.boardHeight) || 10;
-        const n = brushSize();
-        const x0 = clampInt(p.x, 0, Math.max(0, w - n));
-        const y0 = clampInt(p.y, 0, Math.max(0, h - n));
-        sendStamp({ kind: 'square', x: x0, y: y0, n, mode: mode() });
+        // ===== Square brush ("Размер" cells) =====
+        // Single click: open/close an NxN area centered on the clicked cell.
+        if (t === 'square' || t === 'brush') {
+          const n = brushSize();
+          const half = Math.floor((n - 1) / 2);
+          const w = (Number(this._lastState?.boardWidth) || 10);
+          const h = (Number(this._lastState?.boardHeight) || 10);
+          const x0 = clampInt(p.x - half, 0, Math.max(0, w - 1));
+          const y0 = clampInt(p.y - half, 0, Math.max(0, h - 1));
+          sendStamp({ kind: 'square', x: x0, y: y0, n, mode: m });
+          start = null;
+          return;
+        }
+
+        if (t === 'circle') {
+          if (!start) { start = p; return; }
+          // radius in cells (center-to-center)
+          const cx = start.x + 0.5;
+          const cy = start.y + 0.5;
+          const dx = (p.x + 0.5) - cx;
+          const dy = (p.y + 0.5) - cy;
+          const r = Math.max(0.5, Math.sqrt(dx * dx + dy * dy));
+          sendStamp({ kind: 'circle', cx, cy, r, mode: m });
+          start = null;
+          return;
+        }
+
+        if (t === 'rect') {
+          if (!start) { start = p; return; }
+          sendStamp({ kind: 'rect', x1: start.x, y1: start.y, x2: p.x, y2: p.y, mode: m });
+          start = null;
+          return;
+        }
+
+        // poly: clicks add points, double click finalizes
+        if (t === 'poly') {
+          poly.push({ x: p.x + 0.5, y: p.y + 0.5 });
+          return;
+        }
+      };
+
+      const onDblClick = (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) return;
+        if (tool() !== 'poly') return;
+        if (poly.length < 3) { reset(); return; }
+        const m = mode();
+        sendStamp({ kind: 'poly', pts: poly.slice(), mode: m });
+        reset();
+        e.preventDefault();
       };
 
       canvas.addEventListener('click', onClick);
-
-      // Mouse hover (for brush preview)
-      canvas.addEventListener('mousemove', (e) => {
-        if (!canDrawNow()) { this._hoverCell = null; return; }
-        this._hoverCell = getCellFromEvent(e);
-        try { this._render(); } catch {}
-      });
-      canvas.addEventListener('mouseleave', () => {
-        this._hoverCell = null;
-        try { this._render(); } catch {}
-      });
+      canvas.addEventListener('dblclick', onDblClick);
 
       // Touch: emulate click on touchstart
       canvas.addEventListener('touchstart', (e) => {
@@ -749,19 +804,6 @@
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', onSettingsChange);
-      });
-
-      // Manual paint UI changes (update pointer events + redraw immediately)
-      ['fog-draw', 'fog-brush-mode', 'fog-brush'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('change', () => {
-          try { updatePointerEvents(); } catch {}
-          try { this._render(); } catch {}
-        });
-        if (id === 'fog-brush') {
-          el.addEventListener('input', () => { try { this._render(); } catch {} });
-        }
       });
 
       // Keep pointer-events updated
