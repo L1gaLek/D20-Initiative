@@ -663,6 +663,7 @@
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
       const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'circle');
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
+      const brushSize = () => clampInt(Number(document.getElementById('fog-brush-size')?.value) || 1, 1, 10);
 
       const canDrawNow = () => {
         const st = this._lastState;
@@ -699,11 +700,16 @@
       });
 
       const paintCellOnce = (x, y) => {
-        const k = `${x},${y}|${mode()}`;
+        const n = brushSize();
+        // Brush is NxN square centered on the cursor cell.
+        const half = Math.floor(n / 2);
+        const x0 = x - half;
+        const y0 = y - half;
+        const k = `${x0},${y0}|${n}|${mode()}`;
         if (k === lastPaintKey) return;
         lastPaintKey = k;
-        // Use explicit 1x1 square stamp (top-left x,y; n=1)
-        sendStamp({ kind: 'square', x, y, n: 1, mode: mode() });
+        // Use explicit NxN square stamp (top-left x0,y0; size n).
+        sendStamp({ kind: 'square', x: x0, y: y0, n, mode: mode() });
       };
 
       const colorForMode = () => {
@@ -740,16 +746,26 @@
             pctx.strokeRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
           };
 
+          const drawSquareBrush = (cx, cy) => {
+            const n = brushSize();
+            const half = Math.floor(n / 2);
+            const x0 = cx - half;
+            const y0 = cy - half;
+            for (let yy = y0; yy < y0 + n; yy++) {
+              for (let xx = x0; xx < x0 + n; xx++) drawCell(xx, yy);
+            }
+          };
+
           // Circle tool = "brush" (1 cell). Always show hovered cell.
           if (t === 'circle') {
-            if (hover) drawCell(hover.x, hover.y);
+            if (hover) drawSquareBrush(hover.x, hover.y);
             return;
           }
 
           // Rect tool: if start chosen -> preview rectangle; else preview hovered cell
           if (t === 'rect') {
             if (!start) {
-              if (hover) drawCell(hover.x, hover.y);
+              if (hover) drawSquareBrush(hover.x, hover.y);
               return;
             }
             const end = hover || start;
@@ -767,9 +783,9 @@
             for (const pt of poly) {
               const x = clampInt(Math.floor(pt.x), 0, w - 1);
               const y = clampInt(Math.floor(pt.y), 0, h - 1);
-              drawCell(x, y);
+              drawSquareBrush(x, y);
             }
-            if (hover) drawCell(hover.x, hover.y);
+            if (hover) drawSquareBrush(hover.x, hover.y);
             // Edges (cell-center polyline)
             if (poly.length >= 1) {
               pctx.beginPath();
@@ -800,19 +816,6 @@
         // Circle tool acts as a simple brush: click paints one cell immediately.
         if (t === 'circle') {
           paintCellOnce(p.x, p.y);
-          return;
-        }
-
-        if (t === 'circle') {
-          if (!start) { start = p; return; }
-          // radius in cells (center-to-center)
-          const cx = start.x + 0.5;
-          const cy = start.y + 0.5;
-          const dx = (p.x + 0.5) - cx;
-          const dy = (p.y + 0.5) - cy;
-          const r = Math.max(0.5, Math.sqrt(dx * dx + dy * dy));
-          sendStamp({ kind: 'circle', cx, cy, r, mode: m });
-          start = null;
           return;
         }
 
@@ -966,10 +969,11 @@
       });
 
       // Preview / pointer updates on manual controls changes
-      ['fog-draw','fog-brush-mode','fog-manual-tool'].forEach(id => {
+      ['fog-draw','fog-brush-mode','fog-manual-tool','fog-brush-size'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener('change', () => {
+        const ev = (el.tagName === 'SELECT' || el.type === 'checkbox') ? 'change' : 'input';
+        el.addEventListener(ev, () => {
           try {
             updatePointerEvents();
             renderPreview();
