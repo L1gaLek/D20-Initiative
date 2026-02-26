@@ -347,12 +347,11 @@
                   <option value="reveal">Открывать</option>
                   <option value="hide">Закрывать</option>
                 </select>
-                <select id="fog-manual-tool" title="Инструмент">
-                  <option value="circle">Круг</option>
-                  <option value="rect">Прямоугольник</option>
-                  <option value="poly">Поли</option>
-                </select>
-              </div>
+                <label class="fog-inline" title="Размер квадрата NxN (1..10)">
+  <span style="opacity:0.85;">Размер:</span>
+  <input id="fog-square-size" type="number" min="1" max="10" value="1" style="width:64px;">
+</label>
+</div>
               <div class="fog-row fog-row--manual">
                 <button id="fog-hide-all" type="button">Скрыть всё</button>
                 <button id="fog-reveal-all" type="button">Открыть всё</button>
@@ -363,11 +362,13 @@
                 </label>
                 <label class="fog-inline"><input type="checkbox" id="fog-use-walls" checked> Учитывать стены</label>
               </div>
-              <div class="fog-row fog-row--dynamic">
-                <label class="fog-inline"><input type="checkbox" id="fog-explored" checked> Исследованное</label>
-                <label class="fog-inline"><input type="checkbox" id="fog-move-only-open"> Движение по открытому</label>
-                <button id="fog-clear-explored" type="button">Очистить исслед.</button>
-              </div>
+              <div class="fog-row">
+  <label class="fog-inline"><input type="checkbox" id="fog-move-only-open"> Движение по открытому</label>
+</div>
+<div class="fog-row fog-row--dynamic">
+  <label class="fog-inline"><input type="checkbox" id="fog-explored" checked> Исследованное</label>
+  <button id="fog-clear-explored" type="button">Очистить исслед.</button>
+</div>
             </div>
 
 
