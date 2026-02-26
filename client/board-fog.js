@@ -16,6 +16,8 @@
     _dynNpcVisible: null, // Uint8Array (GM-created non-allies vision, GM-only overlay)
     _exploredSet: new Set(),
     _pendingExploredSync: null,
+    _manualPreview: null, // {x,y,n,mode}
+    _manualPreviewRaf: 0,
 
     isEnabled() {
       const s = this._lastState;
@@ -208,20 +210,6 @@
         const kind = String(s?.kind || '').toLowerCase();
         const mode = (String(s?.mode || 'reveal') === 'hide') ? 2 : 1;
 
-        // ===== Square NxN brush (top-left cell x,y; size n) =====
-        if (kind === 'square') {
-          const x0 = Math.floor(Number(s?.x));
-          const y0 = Math.floor(Number(s?.y));
-          const n = clampInt(Number(s?.n) || 1, 1, 10);
-          if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
-          for (let yy = y0; yy < y0 + n; yy++) {
-            for (let xx = x0; xx < x0 + n; xx++) {
-              markCell(xx, yy, mode);
-            }
-          }
-          continue;
-        }
-
         // ===== New kinds =====
         if (kind === 'rect') {
           const x1 = Math.floor(Number(s?.x1));
@@ -286,18 +274,24 @@
           continue;
         }
 
-        // ===== Legacy stamp (square brush) =====
-        const cx = Math.round(Number(s?.x) || 0);
-        const cy = Math.round(Number(s?.y) || 0);
-        const r = Math.max(1, Math.round(Number(s?.r) || 1));
-        const spread = Math.max(0, r - 1);
-
-        for (let dy = -spread; dy <= spread; dy++) {
-          for (let dx = -spread; dx <= spread; dx++) {
-            const x = cx + dx;
-            const y = cy + dy;
-            markCell(x, y, mode);
+        if (kind === 'square') {
+          const x0 = Math.floor(Number(s?.x));
+          const y0 = Math.floor(Number(s?.y));
+          const n = Math.max(1, Math.min(40, Math.floor(Number(s?.n ?? s?.size ?? s?.r) || 1)));
+          if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
+          for (let y = y0; y < y0 + n; y++) {
+            for (let x = x0; x < x0 + n; x++) markCell(x, y, mode);
           }
+          continue;
+        }
+
+        // ===== Legacy stamp (now treated as NxN square) =====
+        const x0 = Math.floor(Number(s?.x));
+        const y0 = Math.floor(Number(s?.y));
+        const n = Math.max(1, Math.min(40, Math.floor(Number(s?.r) || 1)));
+        if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
+        for (let y = y0; y < y0 + n; y++) {
+          for (let x = x0; x < x0 + n; x++) markCell(x, y, mode);
         }
       }
 
@@ -524,10 +518,9 @@
       this._pendingExploredSync = setTimeout(() => {
         this._pendingExploredSync = null;
         try {
-          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
-            ? window.sendMessage
-            : (typeof sendMessage === 'function' ? sendMessage : null);
-          if (sm) sm({ type: 'fogSetExplored', cells: Array.from(this._exploredSet) });
+          if (typeof sendMessage === 'function') {
+            sendMessage({ type: 'fogSetExplored', cells: Array.from(this._exploredSet) });
+          }
         } catch {}
       }, 250);
     },
@@ -608,6 +601,37 @@
         }
       }
 
+      // Manual brush preview (GM, manual mode, only when "Рисовать" включено)
+      try {
+        const st = this._lastState;
+        const fog = st?.fog;
+        const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
+        const drawOn = !!document.getElementById('fog-draw')?.checked;
+        if (isGm && fog?.enabled && String(fog?.mode || '') === 'manual' && drawOn && this._manualPreview) {
+          const pv = this._manualPreview;
+          const n = Math.max(1, Math.min(10, Math.floor(Number(pv.n) || 1)));
+          const x0 = Math.floor(Number(pv.x) || 0);
+          const y0 = Math.floor(Number(pv.y) || 0);
+          const fill = (String(pv.mode || 'reveal') === 'hide') ? 'rgba(255,80,80,0.16)' : 'rgba(90,220,140,0.16)';
+          const stroke = (String(pv.mode || 'reveal') === 'hide') ? 'rgba(255,80,80,0.55)' : 'rgba(90,220,140,0.55)';
+          ctx.fillStyle = fill;
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = 2;
+          for (let y = y0; y < y0 + n; y++) {
+            for (let x = x0; x < x0 + n; x++) {
+              if (x < 0 || y < 0 || x >= wCells || y >= hCells) continue;
+              ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+            }
+          }
+          // outline bbox
+          const bx1 = Math.max(0, x0) * CELL;
+          const by1 = Math.max(0, y0) * CELL;
+          const bx2 = Math.min(wCells, x0 + n) * CELL;
+          const by2 = Math.min(hCells, y0 + n) * CELL;
+          ctx.strokeRect(bx1 + 1, by1 + 1, Math.max(0, bx2 - bx1 - 2), Math.max(0, by2 - by1 - 2));
+        }
+      } catch {}
+
       // GM-only overlay: show FOV for GM-created non-allies in red tint (dynamic mode only).
       try {
         if (isGm && gmView !== 'player' && String(fog.mode || '') === 'dynamic' && this._dynNpcVisible && this._dynNpcVisible.length === wCells * hCells) {
@@ -624,7 +648,7 @@
     },
 
     _wireManualPainting(canvas) {
-      // Manual drawing (GM): square NxN brush ("Размер"), open/close like buttons.
+      // Manual drawing (GM): NxN square brush with preview.
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -641,10 +665,7 @@
 
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
-      const size = () => {
-        const n = Number(document.getElementById('fog-size')?.value);
-        return clampInt(Number.isFinite(n) ? n : 1, 1, 10);
-      };
+      const brushSize = () => clampInt(Number(document.getElementById('fog-brush')?.value) || 1, 1, 10);
 
       const canDrawNow = () => {
         const st = this._lastState;
@@ -656,10 +677,9 @@
 
       const sendStamp = (stampObj) => {
         try {
-          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
-            ? window.sendMessage
-            : (typeof sendMessage === 'function' ? sendMessage : null);
-          if (sm) sm({ type: 'fogStamp2', stamp: stampObj });
+          if (typeof sendMessage === 'function') {
+            sendMessage({ type: 'fogStamp2', stamp: stampObj });
+          }
         } catch {}
       };
 
@@ -669,19 +689,60 @@
 
       this._togglePointerEvents = updatePointerEvents;
 
+      const reset = () => {
+        this._manualPreview = null;
+        this._requestPreviewRender?.();
+      };
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') reset();
+      });
+
       const onClick = (e) => {
         updatePointerEvents();
         if (!canDrawNow()) return;
-        const st = this._lastState;
-        if (!st) return;
         const p = getCellFromEvent(e);
         const m = mode();
+        const n = brushSize();
+        // x,y are top-left cell of NxN square
+        sendStamp({ kind: 'square', x: p.x, y: p.y, n, mode: m });
+      };
 
-        // Single-click square stamp (top-left cell), size NxN.
-        sendStamp({ kind: 'square', x: p.x, y: p.y, n: size(), mode: m });
+      const onMove = (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) {
+          if (this._manualPreview) {
+            this._manualPreview = null;
+            this._requestPreviewRender?.();
+          }
+          return;
+        }
+        const p = getCellFromEvent(e);
+        const n = brushSize();
+        const m = mode();
+        const prev = this._manualPreview;
+        if (prev && prev.x === p.x && prev.y === p.y && prev.n === n && prev.mode === m) return;
+        this._manualPreview = { x: p.x, y: p.y, n, mode: m };
+        this._requestPreviewRender?.();
+      };
+
+      // rAF render for preview
+      this._requestPreviewRender = () => {
+        if (this._manualPreviewRaf) return;
+        this._manualPreviewRaf = requestAnimationFrame(() => {
+          this._manualPreviewRaf = 0;
+          try { this._render(); } catch {}
+        });
       };
 
       canvas.addEventListener('click', onClick);
+      canvas.addEventListener('mousemove', onMove);
+      canvas.addEventListener('mouseleave', () => {
+        if (this._manualPreview) {
+          this._manualPreview = null;
+          this._requestPreviewRender?.();
+        }
+      });
 
       // Touch: emulate click on touchstart
       canvas.addEventListener('touchstart', (e) => {
@@ -692,6 +753,12 @@
         e.preventDefault();
       }, { passive: false });
 
+      canvas.addEventListener('touchmove', (e) => {
+        const t = e.touches?.[0];
+        if (t) onMove(t);
+        e.preventDefault();
+      }, { passive: false });
+
       // UI actions
       const bindBtn = (id, fn) => {
         const el = document.getElementById(id);
@@ -699,17 +766,8 @@
         el.addEventListener('click', fn);
       };
 
-      const callSend = (payload) => {
-        try {
-          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
-            ? window.sendMessage
-            : (typeof sendMessage === 'function' ? sendMessage : null);
-          if (sm) sm(payload);
-        } catch {}
-      };
-
-      bindBtn('fog-hide-all', () => callSend({ type: 'fogFill', value: 'hideAll' }));
-      bindBtn('fog-reveal-all', () => callSend({ type: 'fogFill', value: 'revealAll' }));
+      bindBtn('fog-hide-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'hideAll' }); } catch {} });
+      bindBtn('fog-reveal-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'revealAll' }); } catch {} });
       bindBtn('fog-clear-explored', () => {
         // IMPORTANT: after clearing explored on the server, we must also clear the local cache
         // and cancel any pending debounce sync. Otherwise, an old scheduled sync can
@@ -721,12 +779,7 @@
           this._dynKey = '';
           this._render();
         } catch {}
-        try {
-          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
-            ? window.sendMessage
-            : (typeof sendMessage === 'function' ? sendMessage : null);
-          if (sm) sm({ type: 'fogClearExplored' });
-        } catch {}
+        try { sendMessage?.({ type: 'fogClearExplored' }); } catch {}
       });
 
       const onSettingsChange = () => {
@@ -740,14 +793,11 @@
           const useWalls = !!document.getElementById('fog-use-walls')?.checked;
           const exploredEnabled = !!document.getElementById('fog-explored')?.checked;
           const moveOnlyExplored = !!document.getElementById('fog-move-only-open')?.checked;
-          const sm = (typeof window !== 'undefined' && typeof window.sendMessage === 'function')
-            ? window.sendMessage
-            : (typeof sendMessage === 'function' ? sendMessage : null);
-          if (sm) sm({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
+          sendMessage?.({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
         } catch {}
       };
 
-      ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open','fog-size'].forEach(id => {
+      ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', onSettingsChange);
