@@ -17,6 +17,9 @@
     _exploredSet: new Set(),
     _pendingExploredSync: null,
 
+    // manual preview (GM only)
+    _preview: { active: false, x: 0, y: 0, n: 1, mode: 'reveal' },
+
     isEnabled() {
       const s = this._lastState;
       return !!(s && s.fog && s.fog.enabled);
@@ -189,17 +192,15 @@
       for (const s of stamps) {
         const cx = Math.round(Number(s?.x) || 0);
         const cy = Math.round(Number(s?.y) || 0);
-        // Brush radius is in "cells count" like:
-        // r=1 => only the clicked cell
-        // r=2 => adds 1 cell each side (3x3)
-        // r=3 => 5x5, etc.
-        const r = Math.max(1, Math.round(Number(s?.r) || 1));
-        const spread = Math.max(0, r - 1);
+
+        // "Размер" — это размер квадрата N×N клеток.
+        // N=1 -> 1 клетка, N=2 -> 2×2, N=3 -> 3×3 и т.д.
+        const n = Math.max(1, Math.round(Number(s?.r) || 1));
         const mode = (String(s?.mode || 'reveal') === 'hide') ? 2 : 1;
 
-        // Square brush (Chebyshev radius), matching user's expectation.
-        for (let dy = -spread; dy <= spread; dy++) {
-          for (let dx = -spread; dx <= spread; dx++) {
+        // Square stamp: start cell is the TOP-LEFT of the area.
+        for (let dy = 0; dy < n; dy++) {
+          for (let dx = 0; dx < n; dx++) {
             const x = cx + dx;
             const y = cy + dy;
             if (x < 0 || y < 0 || x >= w || y >= h) continue;
@@ -527,6 +528,30 @@
           }
         }
       } catch {}
+
+      // ===== Manual preview (GM only) =====
+      try {
+        const isGm2 = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
+        if (isGm2 && String(fog.mode || '') === 'manual' && !!this._preview?.active) {
+          const px = clampInt(Number(this._preview.x) || 0, 0, wCells - 1);
+          const py = clampInt(Number(this._preview.y) || 0, 0, hCells - 1);
+          const n = clampInt(Number(this._preview.n) || 1, 1, 20);
+          const mode = String(this._preview.mode || 'reveal') === 'hide' ? 'hide' : 'reveal';
+
+          const fill = (mode === 'hide') ? 'rgba(255,0,0,0.22)' : 'rgba(0,255,0,0.18)';
+          const stroke = (mode === 'hide') ? 'rgba(255,0,0,0.65)' : 'rgba(0,255,0,0.55)';
+
+          ctx.fillStyle = fill;
+          const maxN = Math.min(n, Math.min(wCells - px, hCells - py));
+          ctx.fillRect(px * CELL, py * CELL, maxN * CELL, maxN * CELL);
+
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          ctx.strokeRect(px * CELL + 1, py * CELL + 1, maxN * CELL - 2, maxN * CELL - 2);
+          ctx.setLineDash([]);
+        }
+      } catch {}
     },
 
     _wireManualPainting(canvas) {
@@ -551,19 +576,59 @@
           if (typeof myRole === 'undefined' || String(myRole) !== 'GM') return;
         } catch { return; }
 
+        // Only when "Рисовать" is enabled.
+        const drawOn = !!document.getElementById('fog-draw')?.checked;
+        if (!drawOn) return;
+
         const { x, y } = getCellFromEvent(e);
-        const r = clampInt(Number(document.getElementById('fog-brush')?.value) || 4, 1, 20);
+        const n = clampInt(Number(document.getElementById('fog-square-size')?.value) || 1, 1, 20);
         const mode = String(document.getElementById('fog-brush-mode')?.value || 'reveal');
 
-        const key = `${x},${y},${r},${mode}`;
+        const key = `${x},${y},${n},${mode}`;
         if (key === lastStampKey) return;
         lastStampKey = key;
 
         try {
           if (typeof sendMessage === 'function') {
-            sendMessage({ type: 'fogStamp', x, y, r, mode });
+            // NOTE: server field name is "r" for legacy reasons; we store square size in it.
+            sendMessage({ type: 'fogStamp', x, y, r: n, mode });
           }
         } catch {}
+      };
+
+      const clearPreview = () => {
+        try {
+          if (!this._preview) this._preview = { active: false, x: 0, y: 0, n: 1, mode: 'reveal' };
+          if (this._preview.active) {
+            this._preview.active = false;
+            this._render();
+          }
+        } catch {}
+      };
+
+      const updatePreviewFromEvent = (e) => {
+        const st = this._lastState;
+        if (!st || !st.fog || !st.fog.enabled || st.fog.mode !== 'manual') { clearPreview(); return; }
+        let isGm = false;
+        try { isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM'); } catch {}
+        if (!isGm) { clearPreview(); return; }
+
+        const drawOn = !!document.getElementById('fog-draw')?.checked;
+        if (!drawOn) { clearPreview(); return; }
+
+        const { x, y } = getCellFromEvent(e);
+        const n = clampInt(Number(document.getElementById('fog-square-size')?.value) || 1, 1, 20);
+        const mode = String(document.getElementById('fog-brush-mode')?.value || 'reveal');
+
+        if (!this._preview) this._preview = { active: false, x: 0, y: 0, n: 1, mode: 'reveal' };
+        const next = { active: true, x, y, n, mode: (mode === 'hide' ? 'hide' : 'reveal') };
+        const same = this._preview.active
+          && this._preview.x === next.x
+          && this._preview.y === next.y
+          && this._preview.n === next.n
+          && String(this._preview.mode) === String(next.mode);
+        this._preview = next;
+        if (!same) this._render();
       };
 
       // We keep pointer-events none for players; for GM painting we temporarily enable.
@@ -574,7 +639,8 @@
           return;
         }
         const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
-        canvas.style.pointerEvents = (isGm && st.fog.mode === 'manual') ? 'auto' : 'none';
+        const drawOn = !!document.getElementById('fog-draw')?.checked;
+        canvas.style.pointerEvents = (isGm && st.fog.mode === 'manual' && drawOn) ? 'auto' : 'none';
       };
 
       // Called on each board render
@@ -588,7 +654,12 @@
         stamp(e);
       });
       window.addEventListener('mouseup', () => { painting = false; lastStampKey = ''; });
-      canvas.addEventListener('mousemove', (e) => { if (painting) stamp(e); });
+      canvas.addEventListener('mousemove', (e) => {
+        try { updatePreviewFromEvent(e); } catch {}
+        if (painting) stamp(e);
+      });
+
+      canvas.addEventListener('mouseleave', () => { clearPreview(); });
 
       // Touch support
       canvas.addEventListener('touchstart', (e) => {
@@ -651,6 +722,15 @@
         if (!el) return;
         el.addEventListener('change', onSettingsChange);
       });
+
+      // Local UI (manual editor)
+      const drawEl = document.getElementById('fog-draw');
+      drawEl?.addEventListener('change', () => {
+        try { updatePointerEvents(); } catch {}
+        if (!drawEl.checked) clearPreview();
+      });
+      document.getElementById('fog-brush-mode')?.addEventListener('change', () => { try { this._render(); } catch {} });
+      document.getElementById('fog-square-size')?.addEventListener('change', () => { try { this._render(); } catch {} });
 
       // Keep pointer-events updated
       setInterval(updatePointerEvents, 500);
