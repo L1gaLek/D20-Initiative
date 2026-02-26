@@ -225,6 +225,19 @@
           continue;
         }
 
+        if (kind === 'square') {
+          const x0 = Math.floor(Number(s?.x));
+          const y0 = Math.floor(Number(s?.y));
+          const n0 = Math.max(1, Math.min(10, Math.floor(Number(s?.n) || 1)));
+          if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
+          const maxX = Math.min(w - 1, x0 + n0 - 1);
+          const maxY = Math.min(h - 1, y0 + n0 - 1);
+          for (let y = Math.max(0, y0); y <= maxY; y++) {
+            for (let x = Math.max(0, x0); x <= maxX; x++) markCell(x, y, mode);
+          }
+          continue;
+        }
+
         if (kind === 'circle') {
           const cx = Number(s?.cx);
           const cy = Number(s?.cy);
@@ -267,19 +280,6 @@
           for (let y = by1; y <= by2; y++) {
             for (let x = bx1; x <= bx2; x++) {
               if (pointInPoly(x + 0.5, y + 0.5, pts)) markCell(x, y, mode);
-            }
-          }
-          continue;
-        }
-
-        if (kind === 'square') {
-          const x0 = Math.floor(Number(s?.x));
-          const y0 = Math.floor(Number(s?.y));
-          const n = Math.max(1, Math.min(10, Math.floor(Number(s?.n) || 1)));
-          if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
-          for (let yy = y0; yy < y0 + n; yy++) {
-            for (let xx = x0; xx < x0 + n; xx++) {
-              markCell(xx, yy, mode);
             }
           }
           continue;
@@ -619,32 +619,12 @@
           }
         }
       } catch {}
-
-      // Manual mode preview (GM): square NxN brush outline
-      try {
-        const prev = this._manualPreview;
-        const fog = st?.fog || {};
-        const isGm2 = isGm;
-        if (isGm2 && fog?.enabled && String(fog.mode || '') === 'manual' && prev && prev.active) {
-          const n = Math.max(1, Math.min(10, Math.floor(Number(prev.n) || 1)));
-          const x0 = Math.max(0, Math.min(wCells - 1, Math.floor(Number(prev.x) || 0)));
-          const y0 = Math.max(0, Math.min(hCells - 1, Math.floor(Number(prev.y) || 0)));
-          const w = Math.min(n, wCells - x0);
-          const h = Math.min(n, hCells - y0);
-          // subtle fill + outline
-          ctx.fillStyle = (String(prev.mode) === 'hide') ? 'rgba(255,80,80,0.10)' : 'rgba(120,200,255,0.10)';
-          ctx.fillRect(x0 * CELL, y0 * CELL, w * CELL, h * CELL);
-          ctx.strokeStyle = (String(prev.mode) === 'hide') ? 'rgba(255,80,80,0.85)' : 'rgba(120,200,255,0.85)';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x0 * CELL + 1, y0 * CELL + 1, w * CELL - 2, h * CELL - 2);
-        }
-      } catch {}
     },
 
     _wireManualPainting(canvas) {
-      // Manual drawing (GM): square brush NxN.
-      // Requires checkbox "Рисовать".
-      let hover = null; // {x,y}
+      // Manual drawing (GM): circle/rect/poly like "Обозначения".
+      let start = null;      // {x,y}
+      let poly = [];         // [{x,y}, ...]
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -660,8 +640,8 @@
       };
 
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
+      const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'circle');
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
-      const sizeN = () => clampInt(Number(document.getElementById('fog-square-size')?.value) || 1, 1, 10);
 
       const canDrawNow = () => {
         const st = this._lastState;
@@ -673,8 +653,9 @@
 
       const sendStamp = (stampObj) => {
         try {
-          if (typeof sendMessage === 'function') {
-            sendMessage({ type: 'fogStamp2', stamp: stampObj });
+          const fn = (typeof sendMessage === 'function') ? sendMessage : (typeof window !== 'undefined' ? window.sendMessage : null);
+          if (typeof fn === 'function') {
+            fn({ type: 'fogStamp2', stamp: stampObj });
           }
         } catch {}
       };
@@ -685,8 +666,14 @@
 
       this._togglePointerEvents = updatePointerEvents;
 
-      // expose preview state for renderer
-      this._manualPreview = { active: false, x: 0, y: 0, n: 1, mode: 'reveal' };
+      const reset = () => {
+        start = null;
+        poly = [];
+      };
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') reset();
+      });
 
       const onClick = (e) => {
         updatePointerEvents();
@@ -695,31 +682,48 @@
         if (!st) return;
         const p = getCellFromEvent(e);
         const m = mode();
+        const t = tool();
 
-        const n = sizeN();
-        sendStamp({ kind: 'square', x: p.x, y: p.y, n, mode: m });
-      };
-
-      const onMove = (e) => {
-        updatePointerEvents();
-        if (!canDrawNow()) {
-          if (this._manualPreview) this._manualPreview.active = false;
+        if (t === 'circle') {
+          if (!start) { start = p; return; }
+          // radius in cells (center-to-center)
+          const cx = start.x + 0.5;
+          const cy = start.y + 0.5;
+          const dx = (p.x + 0.5) - cx;
+          const dy = (p.y + 0.5) - cy;
+          const r = Math.max(0.5, Math.sqrt(dx * dx + dy * dy));
+          sendStamp({ kind: 'circle', cx, cy, r, mode: m });
+          start = null;
           return;
         }
-        const p = getCellFromEvent(e);
-        hover = p;
-        if (this._manualPreview) {
-          this._manualPreview.active = true;
-          this._manualPreview.x = p.x;
-          this._manualPreview.y = p.y;
-          this._manualPreview.n = sizeN();
-          this._manualPreview.mode = mode();
+
+        if (t === 'rect') {
+          if (!start) { start = p; return; }
+          sendStamp({ kind: 'rect', x1: start.x, y1: start.y, x2: p.x, y2: p.y, mode: m });
+          start = null;
+          return;
         }
-        try { this._render(); } catch {}
+
+        // poly: clicks add points, double click finalizes
+        if (t === 'poly') {
+          poly.push({ x: p.x + 0.5, y: p.y + 0.5 });
+          return;
+        }
+      };
+
+      const onDblClick = (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) return;
+        if (tool() !== 'poly') return;
+        if (poly.length < 3) { reset(); return; }
+        const m = mode();
+        sendStamp({ kind: 'poly', pts: poly.slice(), mode: m });
+        reset();
+        e.preventDefault();
       };
 
       canvas.addEventListener('click', onClick);
-      canvas.addEventListener('mousemove', onMove);
+      canvas.addEventListener('dblclick', onDblClick);
 
       // Touch: emulate click on touchstart
       canvas.addEventListener('touchstart', (e) => {
@@ -729,11 +733,6 @@
         if (t) onClick(t);
         e.preventDefault();
       }, { passive: false });
-
-      canvas.addEventListener('mouseleave', () => {
-        if (this._manualPreview) this._manualPreview.active = false;
-        try { this._render(); } catch {}
-      });
 
       // UI actions
       const bindBtn = (id, fn) => {
