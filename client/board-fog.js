@@ -8,6 +8,8 @@
   const FogWar = {
     _canvas: null,
     _ctx: null,
+    _previewCanvas: null,
+    _previewCtx: null,
     _lastState: null,
     _manualGrid: null, // Uint8Array (1=reveal, 0=hide) used as overrides on top of manualBase
     _manualKey: '',
@@ -135,6 +137,15 @@
         this._canvas = c;
         this._ctx = c.getContext('2d');
 
+        // Preview layer (manual paint selection, green/red)
+        const pc = document.createElement('canvas');
+        pc.id = 'fog-preview-layer';
+        pc.width = 1;
+        pc.height = 1;
+        boardEl.appendChild(pc);
+        this._previewCanvas = pc;
+        this._previewCtx = pc.getContext('2d');
+
         // GM paint handlers
         this._wireManualPainting(c);
       }
@@ -143,6 +154,11 @@
       const h = (Number(state?.boardHeight) || 10) * CELL;
       if (this._canvas.width !== w) this._canvas.width = w;
       if (this._canvas.height !== h) this._canvas.height = h;
+
+      if (this._previewCanvas) {
+        if (this._previewCanvas.width !== w) this._previewCanvas.width = w;
+        if (this._previewCanvas.height !== h) this._previewCanvas.height = h;
+      }
 
       this._syncManualFromState();
       this._syncExploredFromState();
@@ -552,6 +568,7 @@
 
       // Hide canvas if fog disabled
       this._canvas.style.display = enabled ? 'block' : 'none';
+      if (this._previewCanvas) this._previewCanvas.style.display = enabled ? 'block' : 'none';
       if (!enabled) return;
 
       // IMPORTANT: show fog for GM in BOTH modes.
@@ -626,6 +643,9 @@
       // Manual drawing (GM): circle/rect/poly like "Обозначения".
       let start = null;      // {x,y}
       let poly = [];         // [{x,y}, ...]
+      let hover = null;      // {x,y}
+      let painting = false;  // circle tool: click/drag to paint cells
+      let lastPaintKey = '';
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -669,11 +689,101 @@
       const reset = () => {
         start = null;
         poly = [];
+        lastPaintKey = '';
+        painting = false;
+        this._renderManualPreview?.();
       };
 
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') reset();
       });
+
+      const paintCellOnce = (x, y) => {
+        const k = `${x},${y}|${mode()}`;
+        if (k === lastPaintKey) return;
+        lastPaintKey = k;
+        // Use explicit 1x1 square stamp (top-left x,y; n=1)
+        sendStamp({ kind: 'square', x, y, n: 1, mode: mode() });
+      };
+
+      const colorForMode = () => {
+        const m = mode();
+        // green for reveal, red for hide
+        return (m === 'hide')
+          ? { fill: 'rgba(255,0,0,0.25)', stroke: 'rgba(255,0,0,0.9)' }
+          : { fill: 'rgba(0,255,0,0.22)', stroke: 'rgba(0,255,0,0.9)' };
+      };
+
+      const renderPreview = () => {
+        try {
+          const pc = this._previewCanvas;
+          const pctx = this._previewCtx;
+          if (!pc || !pctx) return;
+
+          // Clear
+          pctx.clearRect(0, 0, pc.width, pc.height);
+
+          if (!canDrawNow()) return;
+
+          const st = this._lastState;
+          const w = Number(st?.boardWidth) || 10;
+          const h = Number(st?.boardHeight) || 10;
+          const t = tool();
+          const { fill, stroke } = colorForMode();
+          pctx.fillStyle = fill;
+          pctx.strokeStyle = stroke;
+          pctx.lineWidth = 2;
+
+          const drawCell = (x, y) => {
+            if (x < 0 || y < 0 || x >= w || y >= h) return;
+            pctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+            pctx.strokeRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+          };
+
+          // Circle tool = "brush" (1 cell). Always show hovered cell.
+          if (t === 'circle') {
+            if (hover) drawCell(hover.x, hover.y);
+            return;
+          }
+
+          // Rect tool: if start chosen -> preview rectangle; else preview hovered cell
+          if (t === 'rect') {
+            if (!start) {
+              if (hover) drawCell(hover.x, hover.y);
+              return;
+            }
+            const end = hover || start;
+            const minX = Math.min(start.x, end.x);
+            const maxX = Math.max(start.x, end.x);
+            const minY = Math.min(start.y, end.y);
+            const maxY = Math.max(start.y, end.y);
+            for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) drawCell(x, y);
+            return;
+          }
+
+          // Poly tool: show points + edges + hovered cell
+          if (t === 'poly') {
+            // Points
+            for (const pt of poly) {
+              const x = clampInt(Math.floor(pt.x), 0, w - 1);
+              const y = clampInt(Math.floor(pt.y), 0, h - 1);
+              drawCell(x, y);
+            }
+            if (hover) drawCell(hover.x, hover.y);
+            // Edges (cell-center polyline)
+            if (poly.length >= 1) {
+              pctx.beginPath();
+              pctx.moveTo(poly[0].x * CELL, poly[0].y * CELL);
+              for (let i = 1; i < poly.length; i++) pctx.lineTo(poly[i].x * CELL, poly[i].y * CELL);
+              if (hover) pctx.lineTo((hover.x + 0.5) * CELL, (hover.y + 0.5) * CELL);
+              pctx.stroke();
+            }
+          }
+        } catch {}
+      };
+
+      // Expose for reset()
+      this._renderManualPreview = renderPreview;
 
       const onClick = (e) => {
         updatePointerEvents();
@@ -683,6 +793,15 @@
         const p = getCellFromEvent(e);
         const m = mode();
         const t = tool();
+
+        hover = p;
+        renderPreview();
+
+        // Circle tool acts as a simple brush: click paints one cell immediately.
+        if (t === 'circle') {
+          paintCellOnce(p.x, p.y);
+          return;
+        }
 
         if (t === 'circle') {
           if (!start) { start = p; return; }
@@ -701,12 +820,14 @@
           if (!start) { start = p; return; }
           sendStamp({ kind: 'rect', x1: start.x, y1: start.y, x2: p.x, y2: p.y, mode: m });
           start = null;
+          renderPreview();
           return;
         }
 
         // poly: clicks add points, double click finalizes
         if (t === 'poly') {
           poly.push({ x: p.x + 0.5, y: p.y + 0.5 });
+          renderPreview();
           return;
         }
       };
@@ -722,17 +843,83 @@
         e.preventDefault();
       };
 
+      const onMouseMove = (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) return;
+        const p = getCellFromEvent(e);
+        if (!hover || hover.x !== p.x || hover.y !== p.y) {
+          hover = p;
+          // While dragging with circle tool -> continuous paint
+          if (painting && tool() === 'circle') {
+            paintCellOnce(p.x, p.y);
+          }
+          renderPreview();
+        }
+      };
+
+      const onMouseDown = (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) return;
+        if (tool() !== 'circle') return;
+        painting = true;
+        lastPaintKey = '';
+        const p = getCellFromEvent(e);
+        hover = p;
+        paintCellOnce(p.x, p.y);
+        renderPreview();
+        e.preventDefault();
+      };
+
+      const endPaint = () => {
+        painting = false;
+        lastPaintKey = '';
+      };
+
+      window.addEventListener('mouseup', endPaint);
+      window.addEventListener('blur', endPaint);
+
       canvas.addEventListener('click', onClick);
       canvas.addEventListener('dblclick', onDblClick);
+      canvas.addEventListener('mousemove', onMouseMove);
+      canvas.addEventListener('mousedown', onMouseDown);
 
       // Touch: emulate click on touchstart
       canvas.addEventListener('touchstart', (e) => {
         updatePointerEvents();
         if (!canDrawNow()) return;
         const t = e.touches?.[0];
-        if (t) onClick(t);
+        if (t) {
+          // Circle tool: treat as brush start
+          if (tool() === 'circle') {
+            painting = true;
+            lastPaintKey = '';
+            const p = getCellFromEvent(t);
+            hover = p;
+            paintCellOnce(p.x, p.y);
+            renderPreview();
+          } else {
+            onClick(t);
+          }
+        }
         e.preventDefault();
       }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) return;
+        if (tool() !== 'circle') return;
+        const t = e.touches?.[0];
+        if (!t) return;
+        const p = getCellFromEvent(t);
+        if (!hover || hover.x !== p.x || hover.y !== p.y) {
+          hover = p;
+          if (painting) paintCellOnce(p.x, p.y);
+          renderPreview();
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', () => { endPaint(); }, { passive: true });
 
       // UI actions
       const bindBtn = (id, fn) => {
@@ -778,14 +965,16 @@
         el.addEventListener('change', onSettingsChange);
       });
 
-      // IMPORTANT: manual paint overlay has pointer-events:none by default in CSS.
-      // If we enable drawing only by polling (setInterval), the first click can be lost
-      // because it never reaches the canvas. So we also update pointer-events immediately
-      // when the relevant UI controls change.
-      ['fog-draw', 'fog-mode', 'fog-enabled', 'fog-brush-mode', 'fog-manual-tool'].forEach(id => {
+      // Preview / pointer updates on manual controls changes
+      ['fog-draw','fog-brush-mode','fog-manual-tool'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener('change', updatePointerEvents);
+        el.addEventListener('change', () => {
+          try {
+            updatePointerEvents();
+            renderPreview();
+          } catch {}
+        });
       });
 
       // Keep pointer-events updated
