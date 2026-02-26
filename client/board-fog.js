@@ -208,20 +208,6 @@
         const kind = String(s?.kind || '').toLowerCase();
         const mode = (String(s?.mode || 'reveal') === 'hide') ? 2 : 1;
 
-        // ===== Square NxN brush (top-left cell x,y; size n) =====
-        if (kind === 'square') {
-          const x0 = Math.floor(Number(s?.x));
-          const y0 = Math.floor(Number(s?.y));
-          const n = clampInt(Number(s?.n) || 1, 1, 10);
-          if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
-          for (let yy = y0; yy < y0 + n; yy++) {
-            for (let xx = x0; xx < x0 + n; xx++) {
-              markCell(xx, yy, mode);
-            }
-          }
-          continue;
-        }
-
         // ===== New kinds =====
         if (kind === 'rect') {
           const x1 = Math.floor(Number(s?.x1));
@@ -281,6 +267,19 @@
           for (let y = by1; y <= by2; y++) {
             for (let x = bx1; x <= bx2; x++) {
               if (pointInPoly(x + 0.5, y + 0.5, pts)) markCell(x, y, mode);
+            }
+          }
+          continue;
+        }
+
+        if (kind === 'square') {
+          const x0 = Math.floor(Number(s?.x));
+          const y0 = Math.floor(Number(s?.y));
+          const n = Math.max(1, Math.min(10, Math.floor(Number(s?.n) || 1)));
+          if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
+          for (let yy = y0; yy < y0 + n; yy++) {
+            for (let xx = x0; xx < x0 + n; xx++) {
+              markCell(xx, yy, mode);
             }
           }
           continue;
@@ -607,38 +606,6 @@
         }
       }
 
-
-
-// ===== Manual paint preview (square NxN) =====
-try {
-  const pv = this._paintPreview;
-  const st = this._lastState;
-  const fog = st?.fog || {};
-  const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
-  const canPreview = !!fog.enabled && String(fog.mode || 'manual') === 'manual' && isGm && !!document.getElementById('fog-draw')?.checked;
-  if (canPreview && pv && pv.kind === 'square') {
-    const n = Math.max(1, Math.min(10, Number(pv.n) || 1));
-    const x0 = Math.floor(Number(pv.x) || 0);
-    const y0 = Math.floor(Number(pv.y) || 0);
-
-    // Clamp so preview never goes outside board
-    const maxX0 = Math.max(0, wCells - n);
-    const maxY0 = Math.max(0, hCells - n);
-    const ax = Math.max(0, Math.min(maxX0, x0));
-    const ay = Math.max(0, Math.min(maxY0, y0));
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    // Fill is subtle, outline is stronger
-    const isHide = String(pv.mode || 'reveal') === 'hide';
-    ctx.fillStyle = isHide ? 'rgba(255,80,80,0.12)' : 'rgba(80,200,255,0.12)';
-    ctx.strokeStyle = isHide ? 'rgba(255,80,80,0.55)' : 'rgba(80,200,255,0.55)';
-    ctx.lineWidth = 2;
-    ctx.fillRect(ax * CELL, ay * CELL, n * CELL, n * CELL);
-    ctx.strokeRect(ax * CELL + 1, ay * CELL + 1, n * CELL - 2, n * CELL - 2);
-    ctx.restore();
-  }
-} catch {}
       // GM-only overlay: show FOV for GM-created non-allies in red tint (dynamic mode only).
       try {
         if (isGm && gmView !== 'player' && String(fog.mode || '') === 'dynamic' && this._dynNpcVisible && this._dynNpcVisible.length === wCells * hCells) {
@@ -652,182 +619,171 @@ try {
           }
         }
       } catch {}
+
+      // Manual mode preview (GM): square NxN brush outline
+      try {
+        const prev = this._manualPreview;
+        const fog = st?.fog || {};
+        const isGm2 = isGm;
+        if (isGm2 && fog?.enabled && String(fog.mode || '') === 'manual' && prev && prev.active) {
+          const n = Math.max(1, Math.min(10, Math.floor(Number(prev.n) || 1)));
+          const x0 = Math.max(0, Math.min(wCells - 1, Math.floor(Number(prev.x) || 0)));
+          const y0 = Math.max(0, Math.min(hCells - 1, Math.floor(Number(prev.y) || 0)));
+          const w = Math.min(n, wCells - x0);
+          const h = Math.min(n, hCells - y0);
+          // subtle fill + outline
+          ctx.fillStyle = (String(prev.mode) === 'hide') ? 'rgba(255,80,80,0.10)' : 'rgba(120,200,255,0.10)';
+          ctx.fillRect(x0 * CELL, y0 * CELL, w * CELL, h * CELL);
+          ctx.strokeStyle = (String(prev.mode) === 'hide') ? 'rgba(255,80,80,0.85)' : 'rgba(120,200,255,0.85)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0 * CELL + 1, y0 * CELL + 1, w * CELL - 2, h * CELL - 2);
+        }
+      } catch {}
     },
 
-_wireManualPainting(canvas) {
-  // Manual drawing (GM): ONLY square NxN brush (1..10) with preview.
-  let raf = 0;
-  let hover = null; // {x,y}
+    _wireManualPainting(canvas) {
+      // Manual drawing (GM): square brush NxN.
+      // Requires checkbox "Рисовать".
+      let hover = null; // {x,y}
 
-  const getCellFromEvent = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const px = (e.clientX - rect.left);
-    const py = (e.clientY - rect.top);
-    const x = clampInt(Math.floor(px / CELL), 0, (Number(this._lastState?.boardWidth) || 10) - 1);
-    const y = clampInt(Math.floor(py / CELL), 0, (Number(this._lastState?.boardHeight) || 10) - 1);
-    return { x, y };
-  };
+      const getCellFromEvent = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const px = (e.clientX - rect.left);
+        const py = (e.clientY - rect.top);
+        const x = clampInt(Math.floor(px / CELL), 0, (Number(this._lastState?.boardWidth) || 10) - 1);
+        const y = clampInt(Math.floor(py / CELL), 0, (Number(this._lastState?.boardHeight) || 10) - 1);
+        return { x, y };
+      };
 
-  const isGm = () => {
-    try { return (typeof myRole !== 'undefined' && String(myRole) === 'GM'); } catch { return false; }
-  };
+      const isGm = () => {
+        try { return (typeof myRole !== 'undefined' && String(myRole) === 'GM'); } catch { return false; }
+      };
 
-  const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
-  const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
-  const size = () => clampInt(Number(document.getElementById('fog-square-size')?.value) || 1, 1, 10);
+      const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
+      const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
+      const sizeN = () => clampInt(Number(document.getElementById('fog-square-size')?.value) || 1, 1, 10);
 
-  const canDrawNow = () => {
-    const st = this._lastState;
-    if (!st?.fog?.enabled) return false;
-    if (st.fog.mode !== 'manual') return false;
-    if (!isGm()) return false;
-    return drawEnabled();
-  };
+      const canDrawNow = () => {
+        const st = this._lastState;
+        if (!st?.fog?.enabled) return false;
+        if (st.fog.mode !== 'manual') return false;
+        if (!isGm()) return false;
+        return drawEnabled();
+      };
 
-  const sendSquareStamp = (cell) => {
-    try {
-      if (typeof sendMessage === 'function') {
-        sendMessage({
-          type: 'fogStamp2',
-          stamp: {
-            kind: 'square',
-            // Top-left anchor (predictable NxN like in many VTTs)
-            x: cell.x,
-            y: cell.y,
-            n: size(),
-            mode: (mode() === 'hide' ? 'hide' : 'reveal')
+      const sendStamp = (stampObj) => {
+        try {
+          if (typeof sendMessage === 'function') {
+            sendMessage({ type: 'fogStamp2', stamp: stampObj });
           }
-        });
-      }
-    } catch {}
-  };
+        } catch {}
+      };
 
-  const scheduleRender = () => {
-    if (raf) return;
-    raf = requestAnimationFrame(() => {
-      raf = 0;
-      try { this._render(); } catch {}
-    });
-  };
+      const updatePointerEvents = () => {
+        canvas.style.pointerEvents = canDrawNow() ? 'auto' : 'none';
+      };
 
-  const updatePointerEvents = () => {
-    canvas.style.pointerEvents = canDrawNow() ? 'auto' : 'none';
-  };
-  this._togglePointerEvents = updatePointerEvents;
+      this._togglePointerEvents = updatePointerEvents;
 
-  const setPreview = (cellOrNull) => {
-    if (!canDrawNow()) {
-      this._paintPreview = null;
-      scheduleRender();
-      return;
-    }
-    if (!cellOrNull) {
-      this._paintPreview = null;
-      scheduleRender();
-      return;
-    }
-    this._paintPreview = {
-      kind: 'square',
-      x: cellOrNull.x,
-      y: cellOrNull.y,
-      n: size(),
-      mode: (mode() === 'hide' ? 'hide' : 'reveal')
-    };
-    scheduleRender();
-  };
+      // expose preview state for renderer
+      this._manualPreview = { active: false, x: 0, y: 0, n: 1, mode: 'reveal' };
 
-  // ===== Events =====
-  canvas.addEventListener('mousemove', (e) => {
-    updatePointerEvents();
-    if (!canDrawNow()) return;
-    const c = getCellFromEvent(e);
-    // avoid extra rerenders if same cell
-    if (hover && hover.x === c.x && hover.y === c.y) return;
-    hover = c;
-    setPreview(c);
-  });
+      const onClick = (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) return;
+        const st = this._lastState;
+        if (!st) return;
+        const p = getCellFromEvent(e);
+        const m = mode();
 
-  canvas.addEventListener('mouseleave', () => {
-    hover = null;
-    setPreview(null);
-  });
+        const n = sizeN();
+        sendStamp({ kind: 'square', x: p.x, y: p.y, n, mode: m });
+      };
 
-  // Click to stamp
-  canvas.addEventListener('mousedown', (e) => {
-    updatePointerEvents();
-    if (!canDrawNow()) return;
-    const c = getCellFromEvent(e);
-    sendSquareStamp(c);
-    // keep preview in sync
-    hover = c;
-    setPreview(c);
-  });
+      const onMove = (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) {
+          if (this._manualPreview) this._manualPreview.active = false;
+          return;
+        }
+        const p = getCellFromEvent(e);
+        hover = p;
+        if (this._manualPreview) {
+          this._manualPreview.active = true;
+          this._manualPreview.x = p.x;
+          this._manualPreview.y = p.y;
+          this._manualPreview.n = sizeN();
+          this._manualPreview.mode = mode();
+        }
+        try { this._render(); } catch {}
+      };
 
-  // Touch: stamp on touchstart
-  canvas.addEventListener('touchstart', (e) => {
-    updatePointerEvents();
-    if (!canDrawNow()) return;
-    const t = e.touches?.[0];
-    if (!t) return;
-    const c = getCellFromEvent(t);
-    sendSquareStamp(c);
-    hover = c;
-    setPreview(c);
-    e.preventDefault();
-  }, { passive: false });
+      canvas.addEventListener('click', onClick);
+      canvas.addEventListener('mousemove', onMove);
 
-  // UI actions
-  const bindBtn = (id, fn) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('click', fn);
-  };
+      // Touch: emulate click on touchstart
+      canvas.addEventListener('touchstart', (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) return;
+        const t = e.touches?.[0];
+        if (t) onClick(t);
+        e.preventDefault();
+      }, { passive: false });
 
-  bindBtn('fog-hide-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'hideAll' }); } catch {} });
-  bindBtn('fog-reveal-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'revealAll' }); } catch {} });
-  bindBtn('fog-clear-explored', () => {
-    try {
-      this._exploredSet = new Set();
-      this._cancelExploredSync();
-      this._dynKey = '';
-      this._render();
-    } catch {}
-    try { sendMessage?.({ type: 'fogClearExplored' }); } catch {}
-  });
+      canvas.addEventListener('mouseleave', () => {
+        if (this._manualPreview) this._manualPreview.active = false;
+        try { this._render(); } catch {}
+      });
 
-  // Settings change (GM only)
-  const onSettingsChange = () => {
-    try {
-      if (typeof myRole === 'undefined' || String(myRole) !== 'GM') return;
-      const enabled = !!document.getElementById('fog-enabled')?.checked;
-      const gmOpen = !!document.getElementById('fog-open-for-gm')?.checked;
-      const mode = String(document.getElementById('fog-mode')?.value || 'manual');
-      const gmViewMode = String(document.getElementById('fog-gm-view')?.value || 'gm');
-      const visionRadius = clampInt(Number(document.getElementById('fog-vision')?.value) || 8, 1, 60);
-      const useWalls = !!document.getElementById('fog-use-walls')?.checked;
-      const exploredEnabled = !!document.getElementById('fog-explored')?.checked;
-      const moveOnlyExplored = !!document.getElementById('fog-move-only-open')?.checked;
-      sendMessage?.({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
-    } catch {}
-  };
+      // UI actions
+      const bindBtn = (id, fn) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', fn);
+      };
 
-  // Note: fog-square-size affects only local preview & stamp payload. It is not stored in state.
-  ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open','fog-draw','fog-brush-mode','fog-square-size'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('change', () => {
-      // update preview immediately
-      try { updatePointerEvents(); } catch {}
-      try { setPreview(hover); } catch {}
-      onSettingsChange();
-    });
-  });
+      bindBtn('fog-hide-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'hideAll' }); } catch {} });
+      bindBtn('fog-reveal-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'revealAll' }); } catch {} });
+      bindBtn('fog-clear-explored', () => {
+        // IMPORTANT: after clearing explored on the server, we must also clear the local cache
+        // and cancel any pending debounce sync. Otherwise, an old scheduled sync can
+        // overwrite fresh exploration or keep clients stuck until a full fog toggle.
+        try {
+          this._exploredSet = new Set();
+          this._cancelExploredSync();
+          // Force dynamic recompute on next token update (exploration depends on it).
+          this._dynKey = '';
+          this._render();
+        } catch {}
+        try { sendMessage?.({ type: 'fogClearExplored' }); } catch {}
+      });
 
-  // First init
-  updatePointerEvents();
-},
+      const onSettingsChange = () => {
+        try {
+          if (typeof myRole === 'undefined' || String(myRole) !== 'GM') return;
+          const enabled = !!document.getElementById('fog-enabled')?.checked;
+          const gmOpen = !!document.getElementById('fog-open-for-gm')?.checked;
+          const mode = String(document.getElementById('fog-mode')?.value || 'manual');
+          const gmViewMode = String(document.getElementById('fog-gm-view')?.value || 'gm');
+          const visionRadius = clampInt(Number(document.getElementById('fog-vision')?.value) || 8, 1, 60);
+          const useWalls = !!document.getElementById('fog-use-walls')?.checked;
+          const exploredEnabled = !!document.getElementById('fog-explored')?.checked;
+          const moveOnlyExplored = !!document.getElementById('fog-move-only-open')?.checked;
+          sendMessage?.({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
+        } catch {}
+      };
 
-_syncUiFromState() {
+      ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change', onSettingsChange);
+      });
+
+      // Keep pointer-events updated
+      setInterval(updatePointerEvents, 500);
+    },
+
+    _syncUiFromState() {
       // Update UI inputs based on state (GM only)
       try {
         const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
