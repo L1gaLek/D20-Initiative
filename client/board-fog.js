@@ -178,46 +178,112 @@
       if (!st) return;
       const fog = st.fog || {};
       const stamps = Array.isArray(fog.manualStamps) ? fog.manualStamps : [];
-      const shapes = Array.isArray(fog.manualShapes) ? fog.manualShapes : [];
-      const key = `x|||`;
+      const key = `${st.boardWidth}x${st.boardHeight}|${fog.manualBase}|${stamps.length}`;
       if (key === this._manualKey && this._manualGrid) return;
 
       const w = Number(st.boardWidth) || 10;
       const h = Number(st.boardHeight) || 10;
       const grid = new Uint8Array(w * h); // 0 none, 1 reveal, 2 hide
 
+      // Helpers for new manual shapes
+      const markCell = (x, y, mode) => {
+        if (x < 0 || y < 0 || x >= w || y >= h) return;
+        grid[y * w + x] = mode;
+      };
+
+      function pointInPoly(px, py, pts) {
+        // ray casting on cell centers
+        let inside = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const xi = pts[i].x, yi = pts[i].y;
+          const xj = pts[j].x, yj = pts[j].y;
+          const intersect = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / ((yj - yi) || 1e-9) + xi);
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      }
+
       // apply stamps in order (later stamps override earlier)
       for (const s of stamps) {
-        const cx = Math.round(Number(s?.x) || 0);
-        const cy = Math.round(Number(s?.y) || 0);
-        // Brush radius is in "cells count" like:
-        // r=1 => only the clicked cell
-        // r=2 => adds 1 cell each side (3x3)
-        // r=3 => 5x5, etc.
-        const r = Math.max(1, Math.round(Number(s?.r) || 1));
-        const spread = Math.max(0, r - 1);
+        const kind = String(s?.kind || '').toLowerCase();
         const mode = (String(s?.mode || 'reveal') === 'hide') ? 2 : 1;
 
-        // Square brush (Chebyshev radius), matching user's expectation.
+        // ===== New kinds =====
+        if (kind === 'rect') {
+          const x1 = Math.floor(Number(s?.x1));
+          const y1 = Math.floor(Number(s?.y1));
+          const x2 = Math.floor(Number(s?.x2));
+          const y2 = Math.floor(Number(s?.y2));
+          if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) continue;
+          const minX = Math.max(0, Math.min(x1, x2));
+          const maxX = Math.min(w - 1, Math.max(x1, x2));
+          const minY = Math.max(0, Math.min(y1, y2));
+          const maxY = Math.min(h - 1, Math.max(y1, y2));
+          for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) markCell(x, y, mode);
+          }
+          continue;
+        }
+
+        if (kind === 'circle') {
+          const cx = Number(s?.cx);
+          const cy = Number(s?.cy);
+          const r = Number(s?.r);
+          if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r)) continue;
+          const rr = Math.max(0.1, r);
+          const minX = Math.max(0, Math.floor(cx - rr - 1));
+          const maxX = Math.min(w - 1, Math.ceil(cx + rr + 1));
+          const minY = Math.max(0, Math.floor(cy - rr - 1));
+          const maxY = Math.min(h - 1, Math.ceil(cy + rr + 1));
+          for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+              const px = x + 0.5;
+              const py = y + 0.5;
+              const dx = px - cx;
+              const dy = py - cy;
+              if ((dx * dx + dy * dy) <= (rr * rr)) markCell(x, y, mode);
+            }
+          }
+          continue;
+        }
+
+        if (kind === 'poly') {
+          const ptsRaw = Array.isArray(s?.pts) ? s.pts : [];
+          const pts = ptsRaw
+            .map(p => ({ x: Number(p?.x), y: Number(p?.y) }))
+            .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+          if (pts.length < 3) continue;
+          let minX = w - 1, maxX = 0, minY = h - 1, maxY = 0;
+          for (const p of pts) {
+            minX = Math.min(minX, p.x);
+            maxX = Math.max(maxX, p.x);
+            minY = Math.min(minY, p.y);
+            maxY = Math.max(maxY, p.y);
+          }
+          const bx1 = Math.max(0, Math.floor(minX));
+          const bx2 = Math.min(w - 1, Math.ceil(maxX));
+          const by1 = Math.max(0, Math.floor(minY));
+          const by2 = Math.min(h - 1, Math.ceil(maxY));
+          for (let y = by1; y <= by2; y++) {
+            for (let x = bx1; x <= bx2; x++) {
+              if (pointInPoly(x + 0.5, y + 0.5, pts)) markCell(x, y, mode);
+            }
+          }
+          continue;
+        }
+
+        // ===== Legacy stamp (square brush) =====
+        const cx = Math.round(Number(s?.x) || 0);
+        const cy = Math.round(Number(s?.y) || 0);
+        const r = Math.max(1, Math.round(Number(s?.r) || 1));
+        const spread = Math.max(0, r - 1);
+
         for (let dy = -spread; dy <= spread; dy++) {
           for (let dx = -spread; dx <= spread; dx++) {
             const x = cx + dx;
             const y = cy + dy;
-            if (x < 0 || y < 0 || x >= w || y >= h) continue;
-            grid[y * w + x] = mode;
+            markCell(x, y, mode);
           }
-        }
-      }
-
-      // apply shapes in order (later shapes override earlier)
-      for (const sh of shapes) {
-        const kind = String(sh?.kind || "");
-        const mode = (String(sh?.mode || "reveal") === "hide") ? 2 : 1;
-        const cells = rasterizeFogShape(kind, sh, w, h);
-        for (const c of cells) {
-          const x = c.x, y = c.y;
-          if (x < 0 || y < 0 || x >= w || y >= h) continue;
-          grid[y * w + x] = mode;
         }
       }
 
@@ -543,20 +609,9 @@
     },
 
     _wireManualPainting(canvas) {
-      let painting = false;
-      let lastStampKey = "";
-
-      let dragStart = null; // for rect/circle
-      let polyPts = [];
-      let polyActive = false;
-
-      const getUi = () => {
-        const draw = !!document.getElementById("fog-draw")?.checked;
-        const tool = String(document.getElementById("fog-tool")?.value || "brush");
-        const mode = String(document.getElementById("fog-brush-mode")?.value || "reveal");
-        const r = clampInt(Number(document.getElementById("fog-brush")?.value) || 4, 1, 20);
-        return { draw, tool, mode, r };
-      };
+      // Manual drawing (GM): circle/rect/poly like "Обозначения".
+      let start = null;      // {x,y}
+      let poly = [];         // [{x,y}, ...]
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -567,247 +622,146 @@
         return { x, y };
       };
 
+      const isGm = () => {
+        try { return (typeof myRole !== 'undefined' && String(myRole) === 'GM'); } catch { return false; }
+      };
+
+      const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
+      const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'circle');
+      const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
+
       const canDrawNow = () => {
         const st = this._lastState;
-        if (!st || !st.fog || !st.fog.enabled) return false;
-        if (String(st.fog.mode || "") !== "manual") return false;
+        if (!st?.fog?.enabled) return false;
+        if (st.fog.mode !== 'manual') return false;
+        if (!isGm()) return false;
+        return drawEnabled();
+      };
+
+      const sendStamp = (stampObj) => {
         try {
-          if (typeof myRole === "undefined" || String(myRole) !== "GM") return false;
-        } catch { return false; }
-        const ui = getUi();
-        return !!ui.draw;
-      };
-
-      const updatePointerEvents = () => {
-        canvas.style.pointerEvents = canDrawNow() ? "auto" : "none";
-      };
-      this._togglePointerEvents = updatePointerEvents;
-
-      const setPreviewCells = (cells, mode) => {
-        this._manualPreviewCells = Array.isArray(cells) ? cells : null;
-        this._manualPreviewMode = (String(mode || "reveal") === "hide") ? "hide" : "reveal";
-        try { this._render(); } catch {}
-      };
-      const clearPreview = () => {
-        this._manualPreviewCells = null;
-        this._manualPreviewMode = "reveal";
-        try { this._render(); } catch {}
-      };
-
-      const stamp = (cell, r, mode) => {
-        const x = cell.x, y = cell.y;
-        const key = `,,,`;
-        if (key === lastStampKey) return;
-        lastStampKey = key;
-        try { sendMessage?.({ type: "fogStamp", x, y, r, mode }); } catch {}
-      };
-
-      const commitShape = (shape) => {
-        try {
-          sendMessage?.({ type: "fogAddShape", shape });
+          if (typeof sendMessage === 'function') {
+            sendMessage({ type: 'fogStamp2', stamp: stampObj });
+          }
         } catch {}
       };
 
-      const buildRectCells = (a, b) => {
-        const xa = Math.min(a.x, b.x), xb = Math.max(a.x, b.x);
-        const ya = Math.min(a.y, b.y), yb = Math.max(a.y, b.y);
-        const out = [];
-        for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) out.push({ x, y });
-        return out;
+      const updatePointerEvents = () => {
+        canvas.style.pointerEvents = canDrawNow() ? 'auto' : 'none';
       };
 
-      const buildCircleCells = (c, r) => {
-        const out = [];
-        const rr = r * r;
-        for (let y = c.y - r; y <= c.y + r; y++) {
-          for (let x = c.x - r; x <= c.x + r; x++) {
-            const dx = x - c.x;
-            const dy = y - c.y;
-            if ((dx * dx + dy * dy) <= rr) out.push({ x, y });
-          }
-        }
-        return out;
+      this._togglePointerEvents = updatePointerEvents;
+
+      const reset = () => {
+        start = null;
+        poly = [];
       };
 
-      const buildPolyCells = (pts) => {
-        // reuse rasterizer by passing a temp shape
-        return rasterizeFogShape("poly", { pts }, (Number(this._lastState?.boardWidth) || 10), (Number(this._lastState?.boardHeight) || 10));
-      };
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') reset();
+      });
 
-      // Mouse
-      canvas.addEventListener("mousedown", (e) => {
+      const onClick = (e) => {
         updatePointerEvents();
-        if (canvas.style.pointerEvents !== "auto") return;
-
-        const ui = getUi();
-        const cell = getCellFromEvent(e);
-
-        if (ui.tool === "brush") {
-          painting = true;
-          lastStampKey = "";
-          stamp(cell, ui.r, ui.mode);
-          return;
-        }
-
-        if (ui.tool === "rect" || ui.tool === "circle") {
-          dragStart = cell;
-          painting = true;
-          return;
-        }
-
-        if (ui.tool === "poly") {
-          polyActive = true;
-          polyPts.push({ x: cell.x, y: cell.y });
-          // show preview with current polygon (no fill yet)
-          if (polyPts.length >= 2) {
-            const cells = buildPolyCells(polyPts);
-            setPreviewCells(cells, ui.mode);
-          }
-          return;
-        }
-      });
-
-      canvas.addEventListener("mousemove", (e) => {
         if (!canDrawNow()) return;
-        const ui = getUi();
-        const cell = getCellFromEvent(e);
+        const st = this._lastState;
+        if (!st) return;
+        const p = getCellFromEvent(e);
+        const m = mode();
+        const t = tool();
 
-        if (ui.tool === "brush") {
-          if (painting) stamp(cell, ui.r, ui.mode);
+        if (t === 'circle') {
+          if (!start) { start = p; return; }
+          // radius in cells (center-to-center)
+          const cx = start.x + 0.5;
+          const cy = start.y + 0.5;
+          const dx = (p.x + 0.5) - cx;
+          const dy = (p.y + 0.5) - cy;
+          const r = Math.max(0.5, Math.sqrt(dx * dx + dy * dy));
+          sendStamp({ kind: 'circle', cx, cy, r, mode: m });
+          start = null;
           return;
         }
 
-        if ((ui.tool === "rect" || ui.tool === "circle") && painting && dragStart) {
-          if (ui.tool === "rect") setPreviewCells(buildRectCells(dragStart, cell), ui.mode);
-          else {
-            const r = Math.max(Math.abs(cell.x - dragStart.x), Math.abs(cell.y - dragStart.y));
-            setPreviewCells(buildCircleCells(dragStart, r), ui.mode);
-          }
+        if (t === 'rect') {
+          if (!start) { start = p; return; }
+          sendStamp({ kind: 'rect', x1: start.x, y1: start.y, x2: p.x, y2: p.y, mode: m });
+          start = null;
           return;
         }
 
-        if (ui.tool === "poly" && polyActive && polyPts.length) {
-          // preview with a temp last point
-          const temp = polyPts.concat([{ x: cell.x, y: cell.y }]);
-          if (temp.length >= 3) setPreviewCells(buildPolyCells(temp), ui.mode);
+        // poly: clicks add points, double click finalizes
+        if (t === 'poly') {
+          poly.push({ x: p.x + 0.5, y: p.y + 0.5 });
           return;
         }
-      });
+      };
 
-      window.addEventListener("mouseup", (e) => {
-        if (!painting) return;
-        painting = false;
-        lastStampKey = "";
-
-        if (!canDrawNow()) {
-          dragStart = null;
-          clearPreview();
-          return;
-        }
-
-        const ui = getUi();
-        if ((ui.tool === "rect" || ui.tool === "circle") && dragStart) {
-          // end at current pointer
-          let cell = null;
-          try {
-            const el = document.elementFromPoint(window.__lastMouseX || 0, window.__lastMouseY || 0);
-            const c = el?.closest?.("#fog-layer");
-            if (c) cell = getCellFromEvent({ clientX: window.__lastMouseX, clientY: window.__lastMouseY });
-          } catch {}
-          if (!cell) { dragStart = null; clearPreview(); return; }
-
-          if (ui.tool === "rect") {
-            commitShape({ kind: "rect", x0: dragStart.x, y0: dragStart.y, x1: cell.x, y1: cell.y, mode: ui.mode });
-          } else {
-            const r = Math.max(Math.abs(cell.x - dragStart.x), Math.abs(cell.y - dragStart.y));
-            commitShape({ kind: "circle", cx: dragStart.x, cy: dragStart.y, r, mode: ui.mode });
-          }
-          dragStart = null;
-          clearPreview();
-        }
-      });
-
-      // Double click finishes polygon
-      canvas.addEventListener("dblclick", (e) => {
+      const onDblClick = (e) => {
+        updatePointerEvents();
         if (!canDrawNow()) return;
-        const ui = getUi();
-        if (ui.tool !== "poly") return;
-        if (!polyActive) return;
-        if (polyPts.length >= 3) {
-          commitShape({ kind: "poly", pts: polyPts.slice(), mode: ui.mode });
-        }
-        polyPts = [];
-        polyActive = false;
-        clearPreview();
-      });
+        if (tool() !== 'poly') return;
+        if (poly.length < 3) { reset(); return; }
+        const m = mode();
+        sendStamp({ kind: 'poly', pts: poly.slice(), mode: m });
+        reset();
+        e.preventDefault();
+      };
 
-      // ESC cancels polygon
-      window.addEventListener("keydown", (e) => {
-        if (e.key !== "Escape") return;
-        if (!polyActive) return;
-        polyPts = [];
-        polyActive = false;
-        clearPreview();
-      });
+      canvas.addEventListener('click', onClick);
+      canvas.addEventListener('dblclick', onDblClick);
 
-      // Track last mouse for rect/circle end
-      window.addEventListener("mousemove", (e) => {
-        window.__lastMouseX = e.clientX;
-        window.__lastMouseY = e.clientY;
-      }, { passive: true });
+      // Touch: emulate click on touchstart
+      canvas.addEventListener('touchstart', (e) => {
+        updatePointerEvents();
+        if (!canDrawNow()) return;
+        const t = e.touches?.[0];
+        if (t) onClick(t);
+        e.preventDefault();
+      }, { passive: false });
 
       // UI actions
       const bindBtn = (id, fn) => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener("click", fn);
+        el.addEventListener('click', fn);
       };
-      bindBtn("fog-hide-all", () => { try { sendMessage?.({ type: "fogFill", value: "hideAll" }); } catch {} });
-      bindBtn("fog-reveal-all", () => { try { sendMessage?.({ type: "fogFill", value: "revealAll" }); } catch {} });
-      bindBtn("fog-clear-explored", () => {
+
+      bindBtn('fog-hide-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'hideAll' }); } catch {} });
+      bindBtn('fog-reveal-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'revealAll' }); } catch {} });
+      bindBtn('fog-clear-explored', () => {
+        // IMPORTANT: after clearing explored on the server, we must also clear the local cache
+        // and cancel any pending debounce sync. Otherwise, an old scheduled sync can
+        // overwrite fresh exploration or keep clients stuck until a full fog toggle.
         try {
           this._exploredSet = new Set();
           this._cancelExploredSync();
-          this._dynKey = "";
+          // Force dynamic recompute on next token update (exploration depends on it).
+          this._dynKey = '';
           this._render();
         } catch {}
-        try { sendMessage?.({ type: "fogClearExplored" }); } catch {}
+        try { sendMessage?.({ type: 'fogClearExplored' }); } catch {}
       });
 
       const onSettingsChange = () => {
         try {
-          if (typeof myRole === "undefined" || String(myRole) !== "GM") return;
-          const enabled = !!document.getElementById("fog-enabled")?.checked;
-          const gmOpen = !!document.getElementById("fog-open-for-gm")?.checked;
-          const mode = String(document.getElementById("fog-mode")?.value || "manual");
-          const gmViewMode = String(document.getElementById("fog-gm-view")?.value || "gm");
-          const visionRadius = clampInt(Number(document.getElementById("fog-vision")?.value) || 8, 1, 60);
-          const useWalls = !!document.getElementById("fog-use-walls")?.checked;
-          const exploredEnabled = !!document.getElementById("fog-explored")?.checked;
-          const moveOnlyExplored = !!document.getElementById("fog-move-only-open")?.checked;
-          sendMessage?.({ type: "setFogSettings", enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
+          if (typeof myRole === 'undefined' || String(myRole) !== 'GM') return;
+          const enabled = !!document.getElementById('fog-enabled')?.checked;
+          const gmOpen = !!document.getElementById('fog-open-for-gm')?.checked;
+          const mode = String(document.getElementById('fog-mode')?.value || 'manual');
+          const gmViewMode = String(document.getElementById('fog-gm-view')?.value || 'gm');
+          const visionRadius = clampInt(Number(document.getElementById('fog-vision')?.value) || 8, 1, 60);
+          const useWalls = !!document.getElementById('fog-use-walls')?.checked;
+          const exploredEnabled = !!document.getElementById('fog-explored')?.checked;
+          const moveOnlyExplored = !!document.getElementById('fog-move-only-open')?.checked;
+          sendMessage?.({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
         } catch {}
       };
 
-      ["fog-enabled","fog-open-for-gm","fog-mode","fog-gm-view","fog-vision","fog-use-walls","fog-explored","fog-move-only-open"].forEach(id => {
+      ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.addEventListener("change", onSettingsChange);
-      });
-
-      // draw/tool toggles should update pointer events immediately
-      ["fog-draw","fog-tool","fog-brush","fog-brush-mode"].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener("change", () => {
-          updatePointerEvents();
-          if (!canDrawNow()) {
-            polyPts = [];
-            polyActive = false;
-            dragStart = null;
-            clearPreview();
-          }
-        });
+        el.addEventListener('change', onSettingsChange);
       });
 
       // Keep pointer-events updated
@@ -861,80 +815,6 @@
   function clampInt(v, a, b) {
     v = Math.floor(Number(v) || 0);
     return Math.min(Math.max(v, a), b);
-  }
-
-
-  // Rasterize fog manual shapes into list of cells
-  function rasterizeFogShape(kind, sh, w, h) {
-    kind = String(kind || "");
-    const out = [];
-    const push = (x, y) => { out.push({ x, y }); };
-
-    if (kind === "rect") {
-      const x0 = Math.round(Number(sh?.x0) || 0);
-      const y0 = Math.round(Number(sh?.y0) || 0);
-      const x1 = Math.round(Number(sh?.x1) || 0);
-      const y1 = Math.round(Number(sh?.y1) || 0);
-      const xa = Math.min(x0, x1), xb = Math.max(x0, x1);
-      const ya = Math.min(y0, y1), yb = Math.max(y0, y1);
-      for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) push(x, y);
-      return out;
-    }
-
-    if (kind === "circle") {
-      const cx = Math.round(Number(sh?.cx) || 0);
-      const cy = Math.round(Number(sh?.cy) || 0);
-      const r = Math.max(0, Math.round(Number(sh?.r) || 0));
-      const rr = r * r;
-      for (let y = cy - r; y <= cy + r; y++) {
-        for (let x = cx - r; x <= cx + r; x++) {
-          const dx = x - cx;
-          const dy = y - cy;
-          if ((dx * dx + dy * dy) <= rr) push(x, y);
-        }
-      }
-      return out;
-    }
-
-    if (kind === "poly") {
-      const ptsIn = Array.isArray(sh?.pts) ? sh.pts : [];
-      const pts = ptsIn
-        .map(p => ({ x: Number(p?.x), y: Number(p?.y) }))
-        .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
-      if (pts.length < 3) return out;
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const p of pts) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
-      const x0 = Math.floor(minX), x1 = Math.ceil(maxX);
-      const y0 = Math.floor(minY), y1 = Math.ceil(maxY);
-
-      const inside = (px, py) => {
-        // ray-casting
-        let c = false;
-        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-          const xi = pts[i].x, yi = pts[i].y;
-          const xj = pts[j].x, yj = pts[j].y;
-          const intersect = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / ((yj - yi) || 1e-9) + xi);
-          if (intersect) c = !c;
-        }
-        return c;
-      };
-
-      for (let y = y0; y <= y1; y++) {
-        for (let x = x0; x <= x1; x++) {
-          const px = x + 0.5;
-          const py = y + 0.5;
-          if (inside(px, py)) push(x, y);
-        }
-      }
-      return out;
-    }
-
-    return out;
   }
 
   // Bresenham LOS across grid cells.
