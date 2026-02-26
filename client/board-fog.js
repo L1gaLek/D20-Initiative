@@ -607,25 +607,6 @@
         }
       }
 
-      // Manual brush preview (GM only): show selected NxN area under cursor
-      try {
-        if (isGm && String(fog.mode || 'manual') === 'manual') {
-          const draw = !!document.getElementById('fog-draw')?.checked;
-          const tool = String(document.getElementById('fog-manual-tool')?.value || 'brush');
-          if (draw && tool === 'brush' && this._hoverCell) {
-            const nRaw = Number(document.getElementById('fog-brush')?.value);
-            const n = clampInt(Number.isFinite(nRaw) ? nRaw : 1, 1, 10);
-            const x0 = clampInt(this._hoverCell.x, 0, Math.max(0, wCells - n));
-            const y0 = clampInt(this._hoverCell.y, 0, Math.max(0, hCells - n));
-            ctx.save();
-            ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x0 * CELL + 1, y0 * CELL + 1, n * CELL - 2, n * CELL - 2);
-            ctx.restore();
-          }
-        }
-      } catch {}
-
       // GM-only overlay: show FOV for GM-created non-allies in red tint (dynamic mode only).
       try {
         if (isGm && gmView !== 'player' && String(fog.mode || '') === 'dynamic' && this._dynNpcVisible && this._dynNpcVisible.length === wCells * hCells) {
@@ -642,9 +623,7 @@
     },
 
     _wireManualPainting(canvas) {
-      // Manual drawing (GM): circle/rect/poly like "Обозначения".
-      let start = null;      // {x,y}
-      let poly = [];         // [{x,y}, ...]
+      // Manual drawing (GM): square brush only (NxN).
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -660,10 +639,8 @@
       };
 
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
-      const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'brush');
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
       const brushSize = () => {
-        // "Размер" для кисти (в клетках)
         const n = Number(document.getElementById('fog-brush')?.value);
         return clampInt(Number.isFinite(n) ? n : 1, 1, 10);
       };
@@ -690,17 +667,8 @@
 
       this._togglePointerEvents = updatePointerEvents;
 
-      const reset = () => {
-        start = null;
-        poly = [];
-      };
-
       // Hover state for brush preview
       this._hoverCell = null; // {x,y}
-
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') reset();
-      });
 
       const onClick = (e) => {
         updatePointerEvents();
@@ -708,69 +676,21 @@
         const st = this._lastState;
         if (!st) return;
         const p = getCellFromEvent(e);
-        const m = mode();
-        const t = tool();
 
-        // "Кисть" (квадрат NxN) — по одному клику, как "Открыть всё/Скрыть всё", но только по области.
-        if (t === 'brush') {
-          const w = Number(st.boardWidth) || 10;
-          const h = Number(st.boardHeight) || 10;
-          const n = brushSize();
-          // p.x/p.y трактуем как верхний левый угол области, но не выходим за поле
-          const x0 = clampInt(p.x, 0, Math.max(0, w - n));
-          const y0 = clampInt(p.y, 0, Math.max(0, h - n));
-          sendStamp({ kind: 'square', x: x0, y: y0, n, mode: m });
-          // сброс незавершённых фигур
-          reset();
-          return;
-        }
-
-        if (t === 'circle') {
-          if (!start) { start = p; return; }
-          // radius in cells (center-to-center)
-          const cx = start.x + 0.5;
-          const cy = start.y + 0.5;
-          const dx = (p.x + 0.5) - cx;
-          const dy = (p.y + 0.5) - cy;
-          const r = Math.max(0.5, Math.sqrt(dx * dx + dy * dy));
-          sendStamp({ kind: 'circle', cx, cy, r, mode: m });
-          start = null;
-          return;
-        }
-
-        if (t === 'rect') {
-          if (!start) { start = p; return; }
-          sendStamp({ kind: 'rect', x1: start.x, y1: start.y, x2: p.x, y2: p.y, mode: m });
-          start = null;
-          return;
-        }
-
-        // poly: clicks add points, double click finalizes
-        if (t === 'poly') {
-          poly.push({ x: p.x + 0.5, y: p.y + 0.5 });
-          return;
-        }
-      };
-
-      const onDblClick = (e) => {
-        updatePointerEvents();
-        if (!canDrawNow()) return;
-        if (tool() !== 'poly') return;
-        if (poly.length < 3) { reset(); return; }
-        const m = mode();
-        sendStamp({ kind: 'poly', pts: poly.slice(), mode: m });
-        reset();
-        e.preventDefault();
+        const w = Number(st.boardWidth) || 10;
+        const h = Number(st.boardHeight) || 10;
+        const n = brushSize();
+        const x0 = clampInt(p.x, 0, Math.max(0, w - n));
+        const y0 = clampInt(p.y, 0, Math.max(0, h - n));
+        sendStamp({ kind: 'square', x: x0, y: y0, n, mode: mode() });
       };
 
       canvas.addEventListener('click', onClick);
-      canvas.addEventListener('dblclick', onDblClick);
 
       // Mouse hover (for brush preview)
       canvas.addEventListener('mousemove', (e) => {
         if (!canDrawNow()) { this._hoverCell = null; return; }
-        const p = getCellFromEvent(e);
-        this._hoverCell = { x: p.x, y: p.y };
+        this._hoverCell = getCellFromEvent(e);
         try { this._render(); } catch {}
       });
       canvas.addEventListener('mouseleave', () => {
@@ -831,15 +751,14 @@
         el.addEventListener('change', onSettingsChange);
       });
 
-      // Manual paint UI changes (enable pointer events immediately)
-      ['fog-draw','fog-brush-mode','fog-manual-tool','fog-brush'].forEach(id => {
+      // Manual paint UI changes (update pointer events + redraw immediately)
+      ['fog-draw', 'fog-brush-mode', 'fog-brush'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', () => {
           try { updatePointerEvents(); } catch {}
           try { this._render(); } catch {}
         });
-        // live typing for size
         if (id === 'fog-brush') {
           el.addEventListener('input', () => { try { this._render(); } catch {} });
         }
