@@ -178,7 +178,7 @@
       if (!st) return;
       const fog = st.fog || {};
       const stamps = Array.isArray(fog.manualStamps) ? fog.manualStamps : [];
-      const key = `${st.boardWidth}x${st.boardHeight}|${fog.manualBase}|${stamps.length}`;
+      const key = `${st.boardWidth}x${st.boardHeight}|${fog.manualBase}|${JSON.stringify(stamps)}`;
       if (key === this._manualKey && this._manualGrid) return;
 
       const w = Number(st.boardWidth) || 10;
@@ -187,17 +187,80 @@
 
       // apply stamps in order (later stamps override earlier)
       for (const s of stamps) {
-        const cx = Math.round(Number(s?.x) || 0);
-        const cy = Math.round(Number(s?.y) || 0);
-        // Brush radius is in "cells count" like:
-        // r=1 => only the clicked cell
-        // r=2 => adds 1 cell each side (3x3)
-        // r=3 => 5x5, etc.
-        const r = Math.max(1, Math.round(Number(s?.r) || 1));
-        const spread = Math.max(0, r - 1);
+        const kind = String(s?.kind || 'brush');
         const mode = (String(s?.mode || 'reveal') === 'hide') ? 2 : 1;
 
-        // Square brush (Chebyshev radius), matching user's expectation.
+        if (kind === 'rect') {
+          const x1 = Math.min(Number(s?.x1) || 0, Number(s?.x2) || 0);
+          const y1 = Math.min(Number(s?.y1) || 0, Number(s?.y2) || 0);
+          const x2 = Math.max(Number(s?.x1) || 0, Number(s?.x2) || 0);
+          const y2 = Math.max(Number(s?.y1) || 0, Number(s?.y2) || 0);
+          for (let y = y1; y <= y2; y++) {
+            if (y < 0 || y >= h) continue;
+            for (let x = x1; x <= x2; x++) {
+              if (x < 0 || x >= w) continue;
+              grid[y * w + x] = mode;
+            }
+          }
+          continue;
+        }
+
+        if (kind === 'circle') {
+          const cx = Math.round(Number(s?.x) || 0);
+          const cy = Math.round(Number(s?.y) || 0);
+          const r = Math.max(1, Math.round(Number(s?.r) || 1));
+          const r2 = r * r;
+          for (let y = cy - r; y <= cy + r; y++) {
+            if (y < 0 || y >= h) continue;
+            for (let x = cx - r; x <= cx + r; x++) {
+              if (x < 0 || x >= w) continue;
+              const dx = x - cx;
+              const dy = y - cy;
+              if ((dx * dx + dy * dy) <= r2) grid[y * w + x] = mode;
+            }
+          }
+          continue;
+        }
+
+        if (kind === 'poly') {
+          const pts = Array.isArray(s?.pts) ? s.pts : [];
+          if (pts.length < 3) continue;
+          const xs = pts.map(p => Number(p?.x) || 0);
+          const ys = pts.map(p => Number(p?.y) || 0);
+          const minX = Math.max(0, Math.floor(Math.min(...xs)));
+          const maxX = Math.min(w - 1, Math.ceil(Math.max(...xs)));
+          const minY = Math.max(0, Math.floor(Math.min(...ys)));
+          const maxY = Math.min(h - 1, Math.ceil(Math.max(...ys)));
+
+          const inside = (x, y) => {
+            // ray-casting point-in-poly (cell center)
+            const px = x + 0.5;
+            const py = y + 0.5;
+            let c = false;
+            for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+              const xi = Number(pts[i]?.x) + 0.5;
+              const yi = Number(pts[i]?.y) + 0.5;
+              const xj = Number(pts[j]?.x) + 0.5;
+              const yj = Number(pts[j]?.y) + 0.5;
+              const intersect = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / ((yj - yi) || 1e-9) + xi);
+              if (intersect) c = !c;
+            }
+            return c;
+          };
+
+          for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+              if (inside(x, y)) grid[y * w + x] = mode;
+            }
+          }
+          continue;
+        }
+
+        // brush (legacy): square brush (Chebyshev radius)
+        const cx = Math.round(Number(s?.x) || 0);
+        const cy = Math.round(Number(s?.y) || 0);
+        const r = Math.max(1, Math.round(Number(s?.r) || 1));
+        const spread = Math.max(0, r - 1);
         for (let dy = -spread; dy <= spread; dy++) {
           for (let dx = -spread; dx <= spread; dx++) {
             const x = cx + dx;
@@ -529,132 +592,200 @@
       } catch {}
     },
 
-    _wireManualPainting(canvas) {
-      let painting = false;
-      let lastStampKey = '';
+_wireManualPainting(canvas) {
+  // Manual fog painting tools (GM only):
+  // - brush: square brush (as before)
+  // - rect: click-drag rectangle
+  // - circle: click-drag circle (radius by drag distance)
+  // - poly: click points, double click to finish
+  let painting = false;
+  let lastStampKey = '';
+  let dragStart = null; // {x,y}
+  let tool = String(document.getElementById('fog-tool')?.value || 'brush');
+  let polyPts = [];
 
-      const getCellFromEvent = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const px = (e.clientX - rect.left);
-        const py = (e.clientY - rect.top);
-        const x = clampInt(Math.floor(px / CELL), 0, (Number(this._lastState?.boardWidth) || 10) - 1);
-        const y = clampInt(Math.floor(py / CELL), 0, (Number(this._lastState?.boardHeight) || 10) - 1);
-        return { x, y };
-      };
+  const getCellFromEvent = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left);
+    const py = (e.clientY - rect.top);
+    const x = clampInt(Math.floor(px / CELL), 0, (Number(this._lastState?.boardWidth) || 10) - 1);
+    const y = clampInt(Math.floor(py / CELL), 0, (Number(this._lastState?.boardHeight) || 10) - 1);
+    return { x, y };
+  };
 
-      const stamp = (e) => {
-        const st = this._lastState;
-        if (!st || !st.fog || !st.fog.enabled) return;
-        if (st.fog.mode !== 'manual') return;
-        // GM only
-        try {
-          if (typeof myRole === 'undefined' || String(myRole) !== 'GM') return;
-        } catch { return; }
+  const canPaint = () => {
+    const st = this._lastState;
+    if (!st || !st.fog || !st.fog.enabled) return false;
+    if (st.fog.mode !== 'manual') return false;
+    try {
+      if (typeof myRole === 'undefined' || String(myRole) !== 'GM') return false;
+    } catch { return false; }
+    return true;
+  };
 
-        const { x, y } = getCellFromEvent(e);
-        const r = clampInt(Number(document.getElementById('fog-brush')?.value) || 4, 1, 20);
-        const mode = String(document.getElementById('fog-brush-mode')?.value || 'reveal');
+  const getMode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
+  const getBrushR = () => clampInt(Number(document.getElementById('fog-brush')?.value) || 4, 1, 20);
 
-        const key = `${x},${y},${r},${mode}`;
-        if (key === lastStampKey) return;
-        lastStampKey = key;
+  const sendBrushStamp = (x, y) => {
+    const r = getBrushR();
+    const mode = getMode();
+    const key = `${tool}|${x},${y},${r},${mode}`;
+    if (key === lastStampKey) return;
+    lastStampKey = key;
+    try { sendMessage?.({ type: 'fogStamp', x, y, r, mode }); } catch {}
+  };
 
-        try {
-          if (typeof sendMessage === 'function') {
-            sendMessage({ type: 'fogStamp', x, y, r, mode });
-          }
-        } catch {}
-      };
+  const sendRect = (a, b) => {
+    const mode = getMode();
+    const x1 = Math.min(a.x, b.x), y1 = Math.min(a.y, b.y);
+    const x2 = Math.max(a.x, b.x), y2 = Math.max(a.y, b.y);
+    try { sendMessage?.({ type: 'fogShape', kind: 'rect', x1, y1, x2, y2, mode }); } catch {}
+  };
 
-      // We keep pointer-events none for players; for GM painting we temporarily enable.
-      const updatePointerEvents = () => {
-        const st = this._lastState;
-        if (!st || !st.fog || !st.fog.enabled) {
-          canvas.style.pointerEvents = 'none';
-          return;
-        }
-        const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
-        canvas.style.pointerEvents = (isGm && st.fog.mode === 'manual') ? 'auto' : 'none';
-      };
+  const sendCircle = (a, b) => {
+    const mode = getMode();
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const r = Math.max(1, Math.round(Math.sqrt(dx*dx + dy*dy)));
+    try { sendMessage?.({ type: 'fogShape', kind: 'circle', x: a.x, y: a.y, r, mode }); } catch {}
+  };
 
-      // Called on each board render
-      this._togglePointerEvents = updatePointerEvents;
+  const sendPoly = (pts) => {
+    const mode = getMode();
+    if (!Array.isArray(pts) || pts.length < 3) return;
+    try { sendMessage?.({ type: 'fogShape', kind: 'poly', pts, mode }); } catch {}
+  };
 
-      canvas.addEventListener('mousedown', (e) => {
-        updatePointerEvents();
-        if (canvas.style.pointerEvents !== 'auto') return;
-        painting = true;
-        lastStampKey = '';
-        stamp(e);
-      });
-      window.addEventListener('mouseup', () => { painting = false; lastStampKey = ''; });
-      canvas.addEventListener('mousemove', (e) => { if (painting) stamp(e); });
+  const updatePointerEvents = () => {
+    if (!canPaint()) {
+      canvas.style.pointerEvents = 'none';
+      return;
+    }
+    canvas.style.pointerEvents = 'auto';
+  };
 
-      // Touch support
-      canvas.addEventListener('touchstart', (e) => {
-        updatePointerEvents();
-        if (canvas.style.pointerEvents !== 'auto') return;
-        painting = true;
-        lastStampKey = '';
-        const t = e.touches?.[0];
-        if (t) stamp(t);
-        e.preventDefault();
-      }, { passive: false });
-      canvas.addEventListener('touchmove', (e) => {
-        if (!painting) return;
-        const t = e.touches?.[0];
-        if (t) stamp(t);
-        e.preventDefault();
-      }, { passive: false });
-      window.addEventListener('touchend', () => { painting = false; lastStampKey = ''; });
+  // Called on each board render
+  this._togglePointerEvents = updatePointerEvents;
 
-      // UI actions
-      const bindBtn = (id, fn) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('click', fn);
-      };
+  const refreshTool = () => {
+    tool = String(document.getElementById('fog-tool')?.value || 'brush');
+  };
+  document.getElementById('fog-tool')?.addEventListener('change', () => {
+    refreshTool();
+    // cancel any in-progress gesture when switching tool
+    painting = false;
+    dragStart = null;
+    polyPts = [];
+    lastStampKey = '';
+  });
 
-      bindBtn('fog-hide-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'hideAll' }); } catch {} });
-      bindBtn('fog-reveal-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'revealAll' }); } catch {} });
-      bindBtn('fog-clear-explored', () => {
-        // IMPORTANT: after clearing explored on the server, we must also clear the local cache
-        // and cancel any pending debounce sync. Otherwise, an old scheduled sync can
-        // overwrite fresh exploration or keep clients stuck until a full fog toggle.
-        try {
-          this._exploredSet = new Set();
-          this._cancelExploredSync();
-          // Force dynamic recompute on next token update (exploration depends on it).
-          this._dynKey = '';
-          this._render();
-        } catch {}
-        try { sendMessage?.({ type: 'fogClearExplored' }); } catch {}
-      });
+  // Mouse
+  canvas.addEventListener('mousedown', (e) => {
+    updatePointerEvents();
+    if (canvas.style.pointerEvents !== 'auto') return;
+    refreshTool();
 
-      const onSettingsChange = () => {
-        try {
-          if (typeof myRole === 'undefined' || String(myRole) !== 'GM') return;
-          const enabled = !!document.getElementById('fog-enabled')?.checked;
-          const gmOpen = !!document.getElementById('fog-open-for-gm')?.checked;
-          const mode = String(document.getElementById('fog-mode')?.value || 'manual');
-          const gmViewMode = String(document.getElementById('fog-gm-view')?.value || 'gm');
-          const visionRadius = clampInt(Number(document.getElementById('fog-vision')?.value) || 8, 1, 60);
-          const useWalls = !!document.getElementById('fog-use-walls')?.checked;
-          const exploredEnabled = !!document.getElementById('fog-explored')?.checked;
-          const moveOnlyExplored = !!document.getElementById('fog-move-only-open')?.checked;
-          sendMessage?.({ type: 'setFogSettings', enabled, gmOpen, mode, gmViewMode, visionRadius, useWalls, exploredEnabled, moveOnlyExplored });
-        } catch {}
-      };
+    if (tool === 'brush') {
+      painting = true;
+      lastStampKey = '';
+      const { x, y } = getCellFromEvent(e);
+      sendBrushStamp(x, y);
+      return;
+    }
 
-      ['fog-enabled','fog-open-for-gm','fog-mode','fog-gm-view','fog-vision','fog-use-walls','fog-explored','fog-move-only-open'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('change', onSettingsChange);
-      });
+    if (tool === 'rect' || tool === 'circle') {
+      painting = true;
+      dragStart = getCellFromEvent(e);
+      return;
+    }
 
-      // Keep pointer-events updated
-      setInterval(updatePointerEvents, 500);
-    },
+    if (tool === 'poly') {
+      const p = getCellFromEvent(e);
+      polyPts.push({ x: p.x, y: p.y });
+      // no auto-send until double click
+      return;
+    }
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!painting) return;
+    refreshTool();
+    if (tool !== 'brush') return;
+    const { x, y } = getCellFromEvent(e);
+    sendBrushStamp(x, y);
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (!painting) return;
+    refreshTool();
+    if (tool === 'rect' && dragStart) {
+      const end = getCellFromEvent(e);
+      sendRect(dragStart, end);
+    } else if (tool === 'circle' && dragStart) {
+      const end = getCellFromEvent(e);
+      sendCircle(dragStart, end);
+    }
+    painting = false;
+    dragStart = null;
+    lastStampKey = '';
+  });
+
+  canvas.addEventListener('dblclick', (e) => {
+    refreshTool();
+    if (!canPaint()) return;
+    if (tool !== 'poly') return;
+    // Use double click as "finish"
+    if (polyPts.length >= 3) sendPoly(polyPts);
+    polyPts = [];
+    e.preventDefault();
+  });
+
+  // Touch (simplified): brush only
+  canvas.addEventListener('touchstart', (e) => {
+    updatePointerEvents();
+    if (canvas.style.pointerEvents !== 'auto') return;
+    refreshTool();
+    if (tool !== 'brush') return; // keep touch simple
+    painting = true;
+    lastStampKey = '';
+    const t = e.touches?.[0];
+    if (t) {
+      const { x, y } = getCellFromEvent(t);
+      sendBrushStamp(x, y);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (!painting) return;
+    refreshTool();
+    if (tool !== 'brush') return;
+    const t = e.touches?.[0];
+    if (t) {
+      const { x, y } = getCellFromEvent(t);
+      sendBrushStamp(x, y);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener('touchend', () => { painting = false; dragStart = null; lastStampKey = ''; });
+
+  // UI actions
+  const bindBtn = (id, fn) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('click', fn);
+  };
+
+  bindBtn('fog-hide-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'hideAll' }); } catch {} });
+  bindBtn('fog-reveal-all', () => { try { sendMessage?.({ type: 'fogFill', value: 'revealAll' }); } catch {} });
+  bindBtn('fog-clear-explored', () => {
+    try {
+      if (typeof sendMessage === 'function') sendMessage({ type: 'fogClearExplored' });
+    } catch {}
+  });
+},
+,
 
     _syncUiFromState() {
       // Update UI inputs based on state (GM only)
