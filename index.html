@@ -347,10 +347,11 @@
                   <option value="reveal">Открывать</option>
                   <option value="hide">Закрывать</option>
                 </select>
-                <label class="fog-inline" title="Размер области (NxN)">
-                  Размер:
-                  <input id="fog-brush-size" type="number" min="1" max="10" value="1" style="width:60px;">
-                </label>
+                <select id="fog-manual-tool" title="Инструмент">
+                  <option value="circle">Круг</option>
+                  <option value="rect">Прямоугольник</option>
+                  <option value="poly">Поли</option>
+                </select>
               </div>
               <div class="fog-row fog-row--manual">
                 <button id="fog-hide-all" type="button">Скрыть всё</button>
