@@ -27,6 +27,7 @@ function createInitialGameState() {
       manualBase: 'hide', // 'hide' | 'reveal'
       // Manual stamps are stored as {x,y,r,mode} in cell coordinates (r in cells)
       manualStamps: [],
+      manualShapes: [],
       // Dynamic settings
       visionRadius: 8,
       useWalls: true,
@@ -92,6 +93,7 @@ function ensureStateHasMaps(state) {
           mode: 'manual',
           manualBase: 'hide',
           manualStamps: [],
+      manualShapes: [],
           visionRadius: 8,
           useWalls: true,
           exploredEnabled: true,
@@ -105,6 +107,7 @@ function ensureStateHasMaps(state) {
         if (m.fog.mode !== 'manual' && m.fog.mode !== 'dynamic') m.fog.mode = 'manual';
         if (m.fog.manualBase !== 'hide' && m.fog.manualBase !== 'reveal') m.fog.manualBase = 'hide';
         if (!Array.isArray(m.fog.manualStamps)) m.fog.manualStamps = [];
+        if (!Array.isArray(m.fog.manualShapes)) m.fog.manualShapes = [];
         if (!Number.isFinite(Number(m.fog.visionRadius))) m.fog.visionRadius = 8;
         if (typeof m.fog.useWalls !== 'boolean') m.fog.useWalls = true;
         if (typeof m.fog.exploredEnabled !== 'boolean') m.fog.exploredEnabled = true;
@@ -146,6 +149,7 @@ function ensureStateHasMaps(state) {
       mode: 'manual',
       manualBase: 'hide',
       manualStamps: [],
+      manualShapes: [],
       visionRadius: 8,
       useWalls: true,
       exploredEnabled: true,
@@ -237,6 +241,7 @@ function loadMapToRoot(state, mapId) {
     mode: 'manual',
     manualBase: 'hide',
     manualStamps: [],
+      manualShapes: [],
     visionRadius: 8,
     useWalls: true,
     exploredEnabled: true,
@@ -2082,13 +2087,15 @@ else if (type === "addWall") {
           // - 'player' : GM sees exactly what players see
           if (msg.gmViewMode === 'gm' || msg.gmViewMode === 'player') f.gmViewMode = msg.gmViewMode;
           if (!Array.isArray(f.manualStamps)) f.manualStamps = [];
+          if (!Array.isArray(f.manualShapes)) f.manualShapes = [];
           if (!Array.isArray(f.explored)) f.explored = [];
           logEventToState(next, `Туман войны: ${f.enabled ? 'ВКЛ' : 'ВЫКЛ'} (${f.mode === 'dynamic' ? 'динамический' : 'ручной'})`);
         }
 
         else if (type === "fogStamp") {
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] };
+          if (!next.fog || typeof next.fog !== 'object') next.fog = { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [],
+      manualShapes: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] };
           const f = next.fog;
           if (!Array.isArray(f.manualStamps)) f.manualStamps = [];
           const x = Number(msg.x), y = Number(msg.y), r = Number(msg.r);
@@ -2097,6 +2104,37 @@ else if (type === "addWall") {
           f.manualStamps.push({ x, y, r: clamp(r, 1, 40), mode: (mode === 'hide' ? 'hide' : 'reveal') });
         }
 
+        else if (type === "fogAddShape") {
+          if (!isGM) return;
+          if (!next.fog || typeof next.fog !== "object") next.fog = { enabled: true, mode: "manual", manualBase: "hide", manualStamps: [], manualShapes: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] };
+          const f = next.fog;
+          if (!Array.isArray(f.manualShapes)) f.manualShapes = [];
+          const sh = (msg && typeof msg.shape === "object") ? msg.shape : null;
+          if (!sh) return;
+          const kind = String(sh.kind || "");
+          const mode = (String(sh.mode || "reveal") === "hide") ? "hide" : "reveal";
+          if (kind === "rect") {
+            const x0 = Number(sh.x0), y0 = Number(sh.y0), x1 = Number(sh.x1), y1 = Number(sh.y1);
+            if (!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(x1) || !Number.isFinite(y1)) return;
+            f.manualShapes.push({ kind: "rect", x0, y0, x1, y1, mode });
+          } else if (kind === "circle") {
+            const cx = Number(sh.cx), cy = Number(sh.cy), r = Number(sh.r);
+            if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r)) return;
+            f.manualShapes.push({ kind: "circle", cx, cy, r: clamp(r, 0, 80), mode });
+          } else if (kind === "poly") {
+            const pts = Array.isArray(sh.pts) ? sh.pts : [];
+            const cleaned = pts
+              .map(p => ({ x: Number(p?.x), y: Number(p?.y) }))
+              .filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
+            if (cleaned.length < 3) return;
+            f.manualShapes.push({ kind: "poly", pts: cleaned, mode });
+          } else {
+            return;
+          }
+        }
+
+        
+
         else if (type === "fogFill") {
           if (!isGM) return;
           if (!next.fog || typeof next.fog !== 'object') next.fog = {};
@@ -2104,6 +2142,8 @@ else if (type === "addWall") {
           if (String(msg.value) === 'revealAll') f.manualBase = 'reveal';
           else f.manualBase = 'hide';
           f.manualStamps = [];
+          f.manualShapes = [];
+          f.manualShapes = [];
           logEventToState(next, `Туман войны: ${f.manualBase === 'reveal' ? 'Открыто всё' : 'Скрыто всё'}`);
         }
 
