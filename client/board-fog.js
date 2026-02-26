@@ -611,7 +611,7 @@
       try {
         if (isGm && String(fog.mode || 'manual') === 'manual') {
           const draw = !!document.getElementById('fog-draw')?.checked;
-          const tool = String(document.getElementById('fog-manual-tool')?.value || 'circle');
+          const tool = String(document.getElementById('fog-manual-tool')?.value || 'brush');
           if (draw && tool === 'brush' && this._hoverCell) {
             const nRaw = Number(document.getElementById('fog-brush')?.value);
             const n = clampInt(Number.isFinite(nRaw) ? nRaw : 1, 1, 10);
@@ -660,7 +660,7 @@
       };
 
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
-      const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'circle');
+      const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'brush');
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
       const brushSize = () => {
         // "Размер" для кисти (в клетках)
