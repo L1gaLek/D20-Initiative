@@ -43,7 +43,7 @@
   pointer-events: none;
 }
 
-/* Manual-paint preview for fog-of-war (green/red selection) */
+/* Fog manual paint preview (green/red selection) */
 #fog-preview-layer {
   position: absolute;
   inset: 0;
