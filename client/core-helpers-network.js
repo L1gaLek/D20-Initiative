@@ -2137,6 +2137,14 @@ else if (type === "addWall") {
             return;
           }
 
+          if (kind === 'square') {
+            const x = Number(s.x), y = Number(s.y);
+            const n = Number(s.n ?? s.size ?? s.r);
+            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(n)) return;
+            f.manualStamps.push({ kind: 'square', x: Math.floor(x), y: Math.floor(y), n: clamp(n, 1, 40), mode });
+            return;
+          }
+
           // fallback: ignore unknown kind
         }
 

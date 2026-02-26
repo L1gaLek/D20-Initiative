@@ -16,6 +16,8 @@
     _dynNpcVisible: null, // Uint8Array (GM-created non-allies vision, GM-only overlay)
     _exploredSet: new Set(),
     _pendingExploredSync: null,
+    _manualPreview: null, // {x,y,n,mode}
+    _manualPreviewRaf: 0,
 
     isEnabled() {
       const s = this._lastState;
@@ -272,18 +274,24 @@
           continue;
         }
 
-        // ===== Legacy stamp (square brush) =====
-        const cx = Math.round(Number(s?.x) || 0);
-        const cy = Math.round(Number(s?.y) || 0);
-        const r = Math.max(1, Math.round(Number(s?.r) || 1));
-        const spread = Math.max(0, r - 1);
-
-        for (let dy = -spread; dy <= spread; dy++) {
-          for (let dx = -spread; dx <= spread; dx++) {
-            const x = cx + dx;
-            const y = cy + dy;
-            markCell(x, y, mode);
+        if (kind === 'square') {
+          const x0 = Math.floor(Number(s?.x));
+          const y0 = Math.floor(Number(s?.y));
+          const n = Math.max(1, Math.min(40, Math.floor(Number(s?.n ?? s?.size ?? s?.r) || 1)));
+          if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
+          for (let y = y0; y < y0 + n; y++) {
+            for (let x = x0; x < x0 + n; x++) markCell(x, y, mode);
           }
+          continue;
+        }
+
+        // ===== Legacy stamp (now treated as NxN square) =====
+        const x0 = Math.floor(Number(s?.x));
+        const y0 = Math.floor(Number(s?.y));
+        const n = Math.max(1, Math.min(40, Math.floor(Number(s?.r) || 1)));
+        if (!Number.isFinite(x0) || !Number.isFinite(y0)) continue;
+        for (let y = y0; y < y0 + n; y++) {
+          for (let x = x0; x < x0 + n; x++) markCell(x, y, mode);
         }
       }
 
@@ -593,6 +601,37 @@
         }
       }
 
+      // Manual brush preview (GM, manual mode, only when "Рисовать" включено)
+      try {
+        const st = this._lastState;
+        const fog = st?.fog;
+        const isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM');
+        const drawOn = !!document.getElementById('fog-draw')?.checked;
+        if (isGm && fog?.enabled && String(fog?.mode || '') === 'manual' && drawOn && this._manualPreview) {
+          const pv = this._manualPreview;
+          const n = Math.max(1, Math.min(20, Math.floor(Number(pv.n) || 1)));
+          const x0 = Math.floor(Number(pv.x) || 0);
+          const y0 = Math.floor(Number(pv.y) || 0);
+          const fill = (String(pv.mode || 'reveal') === 'hide') ? 'rgba(255,80,80,0.16)' : 'rgba(90,220,140,0.16)';
+          const stroke = (String(pv.mode || 'reveal') === 'hide') ? 'rgba(255,80,80,0.55)' : 'rgba(90,220,140,0.55)';
+          ctx.fillStyle = fill;
+          ctx.strokeStyle = stroke;
+          ctx.lineWidth = 2;
+          for (let y = y0; y < y0 + n; y++) {
+            for (let x = x0; x < x0 + n; x++) {
+              if (x < 0 || y < 0 || x >= wCells || y >= hCells) continue;
+              ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+            }
+          }
+          // outline bbox
+          const bx1 = Math.max(0, x0) * CELL;
+          const by1 = Math.max(0, y0) * CELL;
+          const bx2 = Math.min(wCells, x0 + n) * CELL;
+          const by2 = Math.min(hCells, y0 + n) * CELL;
+          ctx.strokeRect(bx1 + 1, by1 + 1, Math.max(0, bx2 - bx1 - 2), Math.max(0, by2 - by1 - 2));
+        }
+      } catch {}
+
       // GM-only overlay: show FOV for GM-created non-allies in red tint (dynamic mode only).
       try {
         if (isGm && gmView !== 'player' && String(fog.mode || '') === 'dynamic' && this._dynNpcVisible && this._dynNpcVisible.length === wCells * hCells) {
@@ -609,9 +648,7 @@
     },
 
     _wireManualPainting(canvas) {
-      // Manual drawing (GM): circle/rect/poly like "Обозначения".
-      let start = null;      // {x,y}
-      let poly = [];         // [{x,y}, ...]
+      // Manual drawing (GM): NxN square brush with preview.
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -627,8 +664,8 @@
       };
 
       const drawEnabled = () => !!document.getElementById('fog-draw')?.checked;
-      const tool = () => String(document.getElementById('fog-manual-tool')?.value || 'circle');
       const mode = () => String(document.getElementById('fog-brush-mode')?.value || 'reveal');
+      const brushSize = () => clampInt(Number(document.getElementById('fog-brush')?.value) || 1, 1, 20);
 
       const canDrawNow = () => {
         const st = this._lastState;
@@ -653,8 +690,8 @@
       this._togglePointerEvents = updatePointerEvents;
 
       const reset = () => {
-        start = null;
-        poly = [];
+        this._manualPreview = null;
+        this._requestPreviewRender?.();
       };
 
       window.addEventListener('keydown', (e) => {
@@ -664,52 +701,48 @@
       const onClick = (e) => {
         updatePointerEvents();
         if (!canDrawNow()) return;
-        const st = this._lastState;
-        if (!st) return;
         const p = getCellFromEvent(e);
         const m = mode();
-        const t = tool();
-
-        if (t === 'circle') {
-          if (!start) { start = p; return; }
-          // radius in cells (center-to-center)
-          const cx = start.x + 0.5;
-          const cy = start.y + 0.5;
-          const dx = (p.x + 0.5) - cx;
-          const dy = (p.y + 0.5) - cy;
-          const r = Math.max(0.5, Math.sqrt(dx * dx + dy * dy));
-          sendStamp({ kind: 'circle', cx, cy, r, mode: m });
-          start = null;
-          return;
-        }
-
-        if (t === 'rect') {
-          if (!start) { start = p; return; }
-          sendStamp({ kind: 'rect', x1: start.x, y1: start.y, x2: p.x, y2: p.y, mode: m });
-          start = null;
-          return;
-        }
-
-        // poly: clicks add points, double click finalizes
-        if (t === 'poly') {
-          poly.push({ x: p.x + 0.5, y: p.y + 0.5 });
-          return;
-        }
+        const n = brushSize();
+        // x,y are top-left cell of NxN square
+        sendStamp({ kind: 'square', x: p.x, y: p.y, n, mode: m });
       };
 
-      const onDblClick = (e) => {
+      const onMove = (e) => {
         updatePointerEvents();
-        if (!canDrawNow()) return;
-        if (tool() !== 'poly') return;
-        if (poly.length < 3) { reset(); return; }
+        if (!canDrawNow()) {
+          if (this._manualPreview) {
+            this._manualPreview = null;
+            this._requestPreviewRender?.();
+          }
+          return;
+        }
+        const p = getCellFromEvent(e);
+        const n = brushSize();
         const m = mode();
-        sendStamp({ kind: 'poly', pts: poly.slice(), mode: m });
-        reset();
-        e.preventDefault();
+        const prev = this._manualPreview;
+        if (prev && prev.x === p.x && prev.y === p.y && prev.n === n && prev.mode === m) return;
+        this._manualPreview = { x: p.x, y: p.y, n, mode: m };
+        this._requestPreviewRender?.();
+      };
+
+      // rAF render for preview
+      this._requestPreviewRender = () => {
+        if (this._manualPreviewRaf) return;
+        this._manualPreviewRaf = requestAnimationFrame(() => {
+          this._manualPreviewRaf = 0;
+          try { this._render(); } catch {}
+        });
       };
 
       canvas.addEventListener('click', onClick);
-      canvas.addEventListener('dblclick', onDblClick);
+      canvas.addEventListener('mousemove', onMove);
+      canvas.addEventListener('mouseleave', () => {
+        if (this._manualPreview) {
+          this._manualPreview = null;
+          this._requestPreviewRender?.();
+        }
+      });
 
       // Touch: emulate click on touchstart
       canvas.addEventListener('touchstart', (e) => {
@@ -717,6 +750,12 @@
         if (!canDrawNow()) return;
         const t = e.touches?.[0];
         if (t) onClick(t);
+        e.preventDefault();
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        const t = e.touches?.[0];
+        if (t) onMove(t);
         e.preventDefault();
       }, { passive: false });
 
