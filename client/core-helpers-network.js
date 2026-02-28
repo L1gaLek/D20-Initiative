@@ -5,34 +5,6 @@ function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj || null));
 }
 
-// ===== Password helpers (rooms) =====
-async function sha256Hex(str) {
-  const s = String(str || "");
-  try {
-    if (!crypto?.subtle) return s;
-    const enc = new TextEncoder();
-    const buf = await crypto.subtle.digest("SHA-256", enc.encode(s));
-    const arr = Array.from(new Uint8Array(buf));
-    return arr.map(b => b.toString(16).padStart(2, "0")).join("");
-  } catch {
-    return s;
-  }
-}
-
-function roomHasPassword(room) {
-  if (!room) return false;
-  if (typeof room.has_password === "boolean") return room.has_password;
-  if (typeof room.hasPassword === "boolean") return room.hasPassword;
-  const ph = String(room.password_hash || room.passwordHash || "").trim();
-  const p = String(room.password || "").trim();
-  return !!(ph || p);
-}
-
-function roomPasswordHash(room) {
-  const ph = String(room?.password_hash || room?.passwordHash || "").trim();
-  return ph || "";
-}
-
 function createInitialGameState() {
   const sectionId = (crypto?.randomUUID ? crypto.randomUUID() : ("sec-" + Math.random().toString(16).slice(2)));
   const mapId = (crypto?.randomUUID ? crypto.randomUUID() : ("map-" + Math.random().toString(16).slice(2)));
@@ -834,7 +806,8 @@ async function sendMessage(msg) {
       case "listRooms": {
         const { data, error } = await sbClient
           .from("rooms")
-          .select("*")
+          // include password column so UI can show lock state
+          .select("id,name,scenario,created_at,password")
           .order("created_at", { ascending: false });
         if (error) throw error;
 
@@ -864,7 +837,8 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            hasPassword: roomHasPassword(r)
+            // room can be protected by a password (stored in rooms.password)
+            hasPassword: !!(r && typeof r === 'object' && String(r.password || '').trim())
           };
         });
 
@@ -876,31 +850,11 @@ async function sendMessage(msg) {
         const roomId = (crypto?.randomUUID ? crypto.randomUUID() : ("r-" + Math.random().toString(16).slice(2)));
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
-        const passwordRaw = String(msg.password || "").trim();
-
-        let roomPayload = { id: roomId, name, scenario };
-        if (passwordRaw) {
-          const ph = await sha256Hex(passwordRaw);
-          roomPayload = { ...roomPayload, password_hash: ph, has_password: true };
-        }
-
-        let roomInsertError = null;
-        try {
-          const { error } = await sbClient.from("rooms").insert(roomPayload);
-          roomInsertError = error;
-        } catch (e) { roomInsertError = e; }
-
-        // Fallbacks for older DB schema
-        if (roomInsertError && passwordRaw) {
-          try {
-            const { error: ePlain } = await sbClient.from("rooms").insert({ id: roomId, name, scenario, password: passwordRaw });
-            if (!ePlain) roomInsertError = null;
-          } catch {}
-        }
-        if (roomInsertError) {
-          const { error: eMin } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
-          if (eMin) throw eMin;
-        }
+        const password = String(msg.password || '').trim();
+        // IMPORTANT: password must actually be persisted so the room becomes protected.
+        // Schema expects column: rooms.password (text).
+        const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario, password: password || null });
+        if (e1) throw e1;
 
         const initState = createInitialGameState();
         const { error: e2 } = await sbClient.from("room_state").insert({
@@ -923,27 +877,17 @@ async function sendMessage(msg) {
         const { data: room, error: er } = await sbClient.from("rooms").select("*").eq("id", roomId).single();
         if (er) throw er;
 
-        // ===== Room password check (if enabled) =====
+        // ===== Room password check (if set) =====
         try {
-          if (roomHasPassword(room)) {
-            const provided = String(msg.password || "").trim();
-            if (!provided) {
-              handleMessage({ type: "roomsError", message: "Нужен пароль для входа в эту комнату." });
+          const roomPass = String(room?.password || '').trim();
+          if (roomPass) {
+            const provided = String(msg.password || '').trim();
+            if (!provided || provided !== roomPass) {
+              handleMessage({
+                type: "roomsError",
+                message: "Неверный пароль комнаты"
+              });
               return;
-            }
-            const ph = roomPasswordHash(room);
-            if (ph) {
-              const inHash = await sha256Hex(provided);
-              if (String(inHash) !== String(ph)) {
-                handleMessage({ type: "roomsError", message: "Неверный пароль." });
-                return;
-              }
-            } else {
-              const plain = String(room?.password || "").trim();
-              if (plain && provided !== plain) {
-                handleMessage({ type: "roomsError", message: "Неверный пароль." });
-                return;
-              }
             }
           }
         } catch {}

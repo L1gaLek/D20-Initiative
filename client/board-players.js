@@ -79,15 +79,138 @@ function renderBoard(state) {
 
   players.forEach(p => setPlayerPosition(p));
 
-  // Direction hint to your 'Основа' token (when off-screen)
-  try { updateBaseHintArrow(state); } catch {}
-
+  // Base token locator arrow (helps players find their "Основа" token on large maps)
+  try { updateBaseLocatorArrow(state); } catch {}
 
   // Fog of war overlay needs to match board size and state.
   try { window.FogWar?.onBoardRendered?.(state); } catch {}
 
   // Board marks/areas (rect/circle/poly overlays)
   try { window.BoardMarks?.onBoardRendered?.(state); } catch {}
+}
+
+// ================== BASE TOKEN LOCATOR ARROW ==================
+let __baseLocatorArrowEl = null;
+let __baseLocatorInit = false;
+
+function ensureBaseLocatorArrowEl() {
+  const wrap = (typeof boardWrapper !== 'undefined' && boardWrapper)
+    ? boardWrapper
+    : document.getElementById('board-wrapper');
+  if (!wrap) return null;
+
+  if (!__baseLocatorArrowEl) {
+    const el = document.createElement('div');
+    el.id = 'base-locator-arrow';
+    el.className = 'base-locator-arrow';
+    el.innerHTML = '<div class="base-locator-arrow-shape"></div>';
+    el.style.display = 'none';
+    wrap.appendChild(el);
+    __baseLocatorArrowEl = el;
+  }
+  return __baseLocatorArrowEl;
+}
+
+function getMyBaseToken() {
+  const uid = String(localStorage.getItem('dnd_user_id') || (typeof myId !== 'undefined' ? myId : '') || '').trim();
+  const list = Array.isArray(players) ? players : [];
+  if (!list.length) return null;
+
+  // Prefer base token that belongs to current user
+  if (uid) {
+    const mine = list.find(p => p && p.isBase && (String(p.id) === uid || String(p.userId || '') === uid));
+    if (mine) return mine;
+  }
+
+  // Fallback: if there is exactly one base token on the map, use it.
+  const bases = list.filter(p => p && p.isBase);
+  if (bases.length === 1) return bases[0];
+  return null;
+}
+
+function updateBaseLocatorArrow(state) {
+  const wrap = (typeof boardWrapper !== 'undefined' && boardWrapper)
+    ? boardWrapper
+    : document.getElementById('board-wrapper');
+  if (!wrap) return;
+
+  // Init listeners once
+  if (!__baseLocatorInit) {
+    __baseLocatorInit = true;
+    try {
+      wrap.addEventListener('scroll', () => {
+        try { updateBaseLocatorArrow(window.lastState || state); } catch {}
+      }, { passive: true });
+      window.addEventListener('resize', () => {
+        try { updateBaseLocatorArrow(window.lastState || state); } catch {}
+      });
+    } catch {}
+  }
+
+  const arrow = ensureBaseLocatorArrowEl();
+  if (!arrow) return;
+
+  // Do not show locator for GM if desired? (leave enabled for everyone)
+  const baseToken = getMyBaseToken();
+  const baseEl = baseToken ? playerElements.get(baseToken.id) : null;
+  if (!baseToken || !baseEl) {
+    arrow.style.display = 'none';
+    return;
+  }
+
+  // If token is not yet positioned/visible in DOM, hide.
+  const wrapRect = wrap.getBoundingClientRect();
+  const tokRect = baseEl.getBoundingClientRect();
+
+  const tokCx = tokRect.left + tokRect.width / 2;
+  const tokCy = tokRect.top + tokRect.height / 2;
+  const viewCx = wrapRect.left + wrapRect.width / 2;
+  const viewCy = wrapRect.top + wrapRect.height / 2;
+
+  // Determine if token is fully visible within wrapper viewport
+  const fullyVisible =
+    tokRect.left >= wrapRect.left &&
+    tokRect.top >= wrapRect.top &&
+    tokRect.right <= wrapRect.right &&
+    tokRect.bottom <= wrapRect.bottom;
+
+  if (fullyVisible) {
+    arrow.style.display = 'none';
+    return;
+  }
+
+  // Direction vector from viewport center to token center
+  let dx = tokCx - viewCx;
+  let dy = tokCy - viewCy;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len;
+  dy /= len;
+
+  // Place arrow along this direction, clamped to inside edges of wrapper
+  const pad = 22;
+  const halfW = wrapRect.width / 2 - pad;
+  const halfH = wrapRect.height / 2 - pad;
+  const t = Math.min(
+    halfW / Math.max(0.0001, Math.abs(dx)),
+    halfH / Math.max(0.0001, Math.abs(dy))
+  );
+
+  const px = viewCx + dx * t;
+  const py = viewCy + dy * t;
+
+  // Convert to wrapper-local coordinates (because arrow is positioned inside wrapper)
+  const localX = px - wrapRect.left;
+  const localY = py - wrapRect.top;
+
+  arrow.style.left = `${localX}px`;
+  arrow.style.top = `${localY}px`;
+
+  // Rotate arrow to point towards token
+  const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  const shape = arrow.querySelector('.base-locator-arrow-shape');
+  if (shape) shape.style.transform = `translate(-50%, -50%) rotate(${ang + 90}deg)`;
+
+  arrow.style.display = '';
 }
 
 // ================== WALL EDGES RENDER ==================
@@ -1519,152 +1642,3 @@ if (S === 20 && C === 1 && B === 0) {
   return { sides: S, count: C, bonus: B, rolls: finals, sum, total };
 };
 
-
-
-// ================== BASE TOKEN DIRECTION HINT ==================
-let __baseHintArrowEl = null;
-let __baseHintScrollBound = false;
-
-function getBoardZoom() {
-  try {
-    const b = document.getElementById('game-board');
-    const tr = b?.style?.transform || '';
-    const m = tr.match(/scale\(([^\)]+)\)/i);
-    const z = m ? Number(m[1]) : 1;
-    return (Number.isFinite(z) && z > 0) ? z : 1;
-  } catch { return 1; }
-}
-
-function ensureBaseHintArrow() {
-  if (__baseHintArrowEl) return __baseHintArrowEl;
-  const wrap = document.getElementById('board-wrapper');
-  if (!wrap) return null;
-  // wrapper must be positioning context
-  try { if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative'; } catch {}
-  const el = document.createElement('div');
-  el.id = 'base-hint-arrow';
-  el.innerHTML = `
-    <div class="bha" aria-hidden="true">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3l8 8h-5v10H9V11H4l8-8z" fill="rgb(255,165,0)"></path>
-      </svg>
-    </div>
-  `;
-  wrap.appendChild(el);
-  __baseHintArrowEl = el;
-
-  if (!__baseHintScrollBound) {
-    __baseHintScrollBound = true;
-    wrap.addEventListener('scroll', () => {
-      try { updateBaseHintArrow(window.lastState || null); } catch {}
-    }, { passive: true });
-
-    // also update on resize (viewport / window)
-    window.addEventListener('resize', () => {
-      try { updateBaseHintArrow(window.lastState || null); } catch {}
-    });
-  }
-  return el;
-}
-
-function findMyBasePlayer(state) {
-  const stPlayers = Array.isArray(state?.players) ? state.players : (Array.isArray(window.players) ? window.players : []);
-  const myUserId = String(localStorage.getItem('dnd_user_id') || window.myId || '');
-  if (!myUserId) return stPlayers.find(p => p && p.isBase) || null;
-  return stPlayers.find(p => p && p.isBase && String(p.ownerId || '') === myUserId) || stPlayers.find(p => p && p.isBase) || null;
-}
-
-function updateBaseHintArrow(state) {
-  const st = state || window.lastState || null;
-  const wrap = document.getElementById('board-wrapper');
-  if (!wrap) return;
-  const el = ensureBaseHintArrow();
-  if (!el) return;
-
-  // don't show in lobby or if no base token
-  const base = findMyBasePlayer(st);
-  if (!base || base.x === null || base.y === null || typeof base.x === 'undefined' || typeof base.y === 'undefined') {
-    el.style.display = 'none';
-    return;
-  }
-
-  const z = getBoardZoom();
-  const CELL = 50;
-
-  // token center in unscaled board coords (px)
-  const tx = (Number(base.x) + 0.5) * CELL;
-  const ty = (Number(base.y) + 0.5) * CELL;
-
-  // visible rect in unscaled coords
-  const viewLeft = wrap.scrollLeft;
-  const viewTop = wrap.scrollTop;
-  const viewW = wrap.clientWidth / z;
-  const viewH = wrap.clientHeight / z;
-  const viewRight = viewLeft + viewW;
-  const viewBottom = viewTop + viewH;
-
-  const inside = (tx >= viewLeft && tx <= viewRight && ty >= viewTop && ty <= viewBottom);
-  if (inside) {
-    el.style.display = 'none';
-    return;
-  }
-
-  // direction from viewport center to token
-  const cx = viewLeft + viewW / 2;
-  const cy = viewTop + viewH / 2;
-  const dx = tx - cx;
-  const dy = ty - cy;
-
-  // choose edge
-  const adx = Math.abs(dx);
-  const ady = Math.abs(dy);
-  let leftPx = wrap.clientWidth / 2;
-  let topPx = wrap.clientHeight / 2;
-  let rot = 0;
-
-  const pad = 12;
-
-  if (adx * viewH > ady * viewW) {
-    // left/right
-    if (dx > 0) {
-      leftPx = wrap.clientWidth - pad - 34;
-      topPx = wrap.clientHeight / 2 - 17;
-      rot = 90; // arrow points down by default? our svg points up, so rotate to right: 90?
-    } else {
-      leftPx = pad;
-      topPx = wrap.clientHeight / 2 - 17;
-      rot = -90;
-    }
-  } else {
-    // top/bottom
-    if (dy > 0) {
-      leftPx = wrap.clientWidth / 2 - 17;
-      topPx = wrap.clientHeight - pad - 34;
-      rot = 180;
-    } else {
-      leftPx = wrap.clientWidth / 2 - 17;
-      topPx = pad;
-      rot = 0;
-    }
-  }
-
-  // if diagonal, slightly nudge towards corner
-  try {
-    if (adx > viewW * 0.35 && ady > viewH * 0.35) {
-      leftPx = dx > 0 ? (wrap.clientWidth - pad - 34) : pad;
-      topPx = dy > 0 ? (wrap.clientHeight - pad - 34) : pad;
-      // rotate to diagonal
-      const ang = Math.atan2(dy, dx) * 180 / Math.PI;
-      // svg points up; convert so 0=up
-      rot = ang + 90;
-    } else {
-      // for axis cases above, fix rotation mapping: svg points up (0)
-      // Want right: 90, left: -90, down: 180, up: 0 (already set)
-    }
-  } catch {}
-
-  el.style.display = 'block';
-  el.style.left = `${Math.round(leftPx)}px`;
-  el.style.top = `${Math.round(topPx)}px`;
-  el.style.transform = `rotate(${rot}deg)`;
-}
