@@ -796,6 +796,23 @@ async function subscribeRoomMembersDb(roomId) {
   await roomMembersDbChannel.subscribe();
 }
 
+
+async function hashRoomPassword(pw) {
+  const s = String(pw || "").trim();
+  if (!s) return "";
+  try {
+    const enc = new TextEncoder();
+    const buf = await crypto.subtle.digest("SHA-256", enc.encode(s));
+    const arr = Array.from(new Uint8Array(buf));
+    return arr.map(b => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) {
+    // Fallback (non-crypto environments) — not ideal but prevents crashes.
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i) | 0;
+    return String(h);
+  }
+}
+
 async function sendMessage(msg) {
   try {
     await ensureSupabaseReady();
@@ -806,9 +823,30 @@ async function sendMessage(msg) {
       case "listRooms": {
         const { data, error } = await sbClient
           .from("rooms")
-          .select("id,name,scenario,created_at,password")
+          .select("id,name,scenario,created_at")
           .order("created_at", { ascending: false });
         if (error) throw error;
+
+        const roomIds = (data || []).map(r => String(r.id)).filter(Boolean);
+
+        // Fetch password flags from room_state (stored in JSON state)
+        const passMap = new Map(); // roomId -> boolean
+        if (roomIds.length) {
+          try {
+            const { data: rsRows, error: rsErr } = await sbClient
+              .from("room_state")
+              .select("room_id,state")
+              .in("room_id", roomIds);
+            if (!rsErr && Array.isArray(rsRows)) {
+              for (const row of rsRows) {
+                const rid = String(row?.room_id || "");
+                const st = row?.state || {};
+                const hasPw = !!(st && (st.roomPasswordHash || st.room_password_hash || (st.meta && st.meta.roomPasswordHash)));
+                if (rid) passMap.set(rid, hasPw);
+              }
+            }
+          } catch {}
+        }
 
         // Unique users per room + total unique users on server (across all rooms)
         let members = [];
@@ -836,7 +874,7 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            hasPassword: !!(r && String(r.password || "").trim())
+            hasPassword: !!passMap.get(rid)
           };
         });
 
@@ -848,25 +886,20 @@ async function sendMessage(msg) {
         const roomId = (crypto?.randomUUID ? crypto.randomUUID() : ("r-" + Math.random().toString(16).slice(2)));
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
-const password = String(msg.password || "").trim();
-// Try to persist password into `rooms.password` if the column exists.
-let e1 = null;
-try {
-  const ins = { id: roomId, name, scenario, password: password || null };
-  const { error } = await sbClient.from("rooms").insert(ins);
-  e1 = error || null;
-} catch (err) {
-  e1 = err || null;
-}
-// Fallback for older schemas without `password` column.
-if (e1 && String(e1.message || e1).includes('password') && String(e1.message || e1).includes('does not exist')) {
-  const { error: e1b } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
-  if (e1b) throw e1b;
-  e1 = null;
-}
-if (e1) throw e1;
+        const password = String(msg.password || "").trim();
+
+        const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
+        if (e1) throw e1;
 
         const initState = createInitialGameState();
+
+        // Store password hash inside room_state.state JSON (so DB schema does not need rooms.password column)
+        if (password) {
+          initState.roomPasswordHash = await hashRoomPassword(password);
+        } else {
+          try { delete initState.roomPasswordHash; } catch {}
+        }
+
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
           phase: initState.phase,
@@ -885,17 +918,29 @@ if (e1) throw e1;
         if (!roomId) return;
 
         const { data: room, error: er } = await sbClient.from("rooms").select("*").eq("id", roomId).single();
-if (er) throw er;
+        if (er) throw er;
 
-// Password protection (client-side enforcement)
-const roomPass = String(room?.password || "").trim();
-if (roomPass) {
-  const provided = String(msg.password || "").trim();
-  if (provided !== roomPass) {
-    handleMessage({ type: "roomsError", message: "Неверный пароль комнаты." });
-    return;
-  }
-}
+
+        // ===== Password gate (stored in room_state.state.roomPasswordHash) =====
+        try {
+          const provided = String(msg.password || "").trim();
+          const { data: rsRow, error: rsErr } = await sbClient
+            .from("room_state")
+            .select("state")
+            .eq("room_id", roomId)
+            .maybeSingle();
+          if (!rsErr && rsRow && rsRow.state) {
+            const st = rsRow.state || {};
+            const stored = String(st.roomPasswordHash || st.room_password_hash || (st.meta && st.meta.roomPasswordHash) || "").trim();
+            if (stored) {
+              const provHash = await hashRoomPassword(provided);
+              if (!provHash || provHash !== stored) {
+                handleMessage({ type: "roomsError", message: "Неверный пароль комнаты" });
+                return;
+              }
+            }
+          }
+        } catch {}
 
         // ===== Enforce roles: register membership + prevent multiple GMs =====
         const userId = String(localStorage.getItem("dnd_user_id") || myId || "");

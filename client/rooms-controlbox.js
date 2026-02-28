@@ -68,9 +68,12 @@ function renderRooms(rooms) {
 }
 
 // ================== ROLE PICK MODAL ==================
-let pendingJoinRoom = null;
+let pendingJoinRoomId = null;
+  pendingJoinRoomHasPassword = false;
+let pendingJoinRoomHasPassword = false;
 function openRoleModalForRoom(room) {
-  pendingJoinRoom = { id: String(room?.id || ''), name: String(room?.name || 'Комната'), hasPassword: !!room?.hasPassword };
+  pendingJoinRoomId = String(room?.id || '');
+  pendingJoinRoomHasPassword = !!room?.hasPassword;
   const modal = document.getElementById('roleModal');
   const err = document.getElementById('roleModalError');
   const rn = document.getElementById('roleModalRoomName');
@@ -84,11 +87,12 @@ function closeRoleModal() {
   const err = document.getElementById('roleModalError');
   if (err) err.textContent = '';
   if (modal) modal.classList.add('hidden');
-  pendingJoinRoom = null;
+  pendingJoinRoomId = null;
+  pendingJoinRoomHasPassword = false;
 }
 
 function pickRoleAndJoin(roleDb) {
-  const rid = String(pendingJoinRoom?.id || '');
+  const rid = String(pendingJoinRoomId || '');
   if (!rid) return;
   try {
     // store role for this session
@@ -102,15 +106,14 @@ function pickRoleAndJoin(roleDb) {
   } catch {}
 
   closeRoleModal();
-let password = '';
-try {
-  if (pendingJoinRoom?.hasPassword) {
-    const p = prompt('Введите пароль комнаты:', '');
-    if (p === null) return; // cancel
-    password = String(p || '');
+  let password = '';
+  if (pendingJoinRoomHasPassword) {
+    try {
+      const p = prompt('Введите пароль комнаты:');
+      password = String(p || '');
+    } catch {}
   }
-} catch {}
-sendMessage({ type: 'joinRoom', roomId: rid, password });
+  sendMessage({ type: 'joinRoom', roomId: rid, password });
 }
 
 // wire modal buttons
