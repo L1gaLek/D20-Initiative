@@ -84,6 +84,88 @@ function renderBoard(state) {
 
   // Board marks/areas (rect/circle/poly overlays)
   try { window.BoardMarks?.onBoardRendered?.(state); } catch {}
+
+  // Update helper arrow for player's base token
+  try { _updateMyBaseArrow(state); } catch {}
+}
+
+
+// === "My Base" direction arrow (helps find your token when it's out of view) ===
+let __myBaseArrowEl = null;
+let __myBaseArrowBound = false;
+
+function _getMyIdForBaseArrow() {
+  try { return String(window.myId || localStorage.getItem('dnd_user_id') || ''); } catch { return ''; }
+}
+
+function _ensureMyBaseArrow() {
+  if (__myBaseArrowEl) return __myBaseArrowEl;
+  const host = (typeof boardWrapper !== 'undefined' && boardWrapper) ? boardWrapper : document.getElementById('board-wrapper');
+  if (!host) return null;
+
+  __myBaseArrowEl = document.createElement('div');
+  __myBaseArrowEl.id = 'my-base-arrow';
+  __myBaseArrowEl.className = 'my-base-arrow is-hidden';
+  __myBaseArrowEl.innerHTML = '<div class="my-base-arrow__tri"></div>';
+  host.appendChild(__myBaseArrowEl);
+
+  if (!__myBaseArrowBound) {
+    __myBaseArrowBound = true;
+    try { host.addEventListener('scroll', () => { try { _updateMyBaseArrow(window.lastState || null); } catch {} }, { passive: true }); } catch {}
+    try { window.addEventListener('resize', () => { try { _updateMyBaseArrow(window.lastState || null); } catch {} }, { passive: true }); } catch {}
+  }
+
+  return __myBaseArrowEl;
+}
+
+function _updateMyBaseArrow(state) {
+  const el = _ensureMyBaseArrow();
+  const host = (typeof boardWrapper !== 'undefined' && boardWrapper) ? boardWrapper : document.getElementById('board-wrapper');
+  if (!el || !host) return;
+
+  const st = state || window.lastState || null;
+  const myId = _getMyIdForBaseArrow();
+  const pos = st?.playersPos?.[myId];
+  const x = Number(pos?.x);
+  const y = Number(pos?.y);
+  if (!myId || !Number.isFinite(x) || !Number.isFinite(y)) {
+    el.classList.add('is-hidden');
+    return;
+  }
+
+  const CELL = 50;
+  const baseX = (x + 0.5) * CELL;
+  const baseY = (y + 0.5) * CELL;
+
+  const left = host.scrollLeft;
+  const top = host.scrollTop;
+  const vw = host.clientWidth;
+  const vh = host.clientHeight;
+
+  const vx = baseX - left;
+  const vy = baseY - top;
+
+  const inView = (vx >= 0 && vy >= 0 && vx <= vw && vy <= vh);
+  if (inView) {
+    el.classList.add('is-hidden');
+    return;
+  }
+
+  // Place arrow clamped to the visible viewport edges
+  const pad = 14;
+  const clampedX = Math.max(pad, Math.min(vw - pad, vx));
+  const clampedY = Math.max(pad, Math.min(vh - pad, vy));
+
+  el.style.left = clampedX + 'px';
+  el.style.top = clampedY + 'px';
+
+  // Rotate arrow towards the base position
+  const cx = vw / 2;
+  const cy = vh / 2;
+  const ang = Math.atan2(vy - cy, vx - cx) * 180 / Math.PI;
+  el.style.transform = `translate(-50%, -50%) rotate(${ang}deg)`;
+
+  el.classList.remove('is-hidden');
 }
 
 // ================== WALL EDGES RENDER ==================

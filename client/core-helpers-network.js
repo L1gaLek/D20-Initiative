@@ -806,7 +806,7 @@ async function sendMessage(msg) {
       case "listRooms": {
         const { data, error } = await sbClient
           .from("rooms")
-          .select("id,name,scenario,created_at")
+          .select("id,name,scenario,created_at,password")
           .order("created_at", { ascending: false });
         if (error) throw error;
 
@@ -836,7 +836,7 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            hasPassword: false
+            hasPassword: !!(r && String(r.password || "").trim())
           };
         });
 
@@ -848,8 +848,23 @@ async function sendMessage(msg) {
         const roomId = (crypto?.randomUUID ? crypto.randomUUID() : ("r-" + Math.random().toString(16).slice(2)));
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
-        const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
-        if (e1) throw e1;
+const password = String(msg.password || "").trim();
+// Try to persist password into `rooms.password` if the column exists.
+let e1 = null;
+try {
+  const ins = { id: roomId, name, scenario, password: password || null };
+  const { error } = await sbClient.from("rooms").insert(ins);
+  e1 = error || null;
+} catch (err) {
+  e1 = err || null;
+}
+// Fallback for older schemas without `password` column.
+if (e1 && String(e1.message || e1).includes('password') && String(e1.message || e1).includes('does not exist')) {
+  const { error: e1b } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
+  if (e1b) throw e1b;
+  e1 = null;
+}
+if (e1) throw e1;
 
         const initState = createInitialGameState();
         const { error: e2 } = await sbClient.from("room_state").insert({
@@ -870,7 +885,17 @@ async function sendMessage(msg) {
         if (!roomId) return;
 
         const { data: room, error: er } = await sbClient.from("rooms").select("*").eq("id", roomId).single();
-        if (er) throw er;
+if (er) throw er;
+
+// Password protection (client-side enforcement)
+const roomPass = String(room?.password || "").trim();
+if (roomPass) {
+  const provided = String(msg.password || "").trim();
+  if (provided !== roomPass) {
+    handleMessage({ type: "roomsError", message: "Неверный пароль комнаты." });
+    return;
+  }
+}
 
         // ===== Enforce roles: register membership + prevent multiple GMs =====
         const userId = String(localStorage.getItem("dnd_user_id") || myId || "");
