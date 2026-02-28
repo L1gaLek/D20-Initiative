@@ -153,55 +153,66 @@ function updateBaseLocatorArrow(state) {
 
   // Do not show locator for GM if desired? (leave enabled for everyone)
   const baseToken = getMyBaseToken();
-  const baseEl = baseToken ? playerElements.get(baseToken.id) : null;
-  if (!baseToken || !baseEl) {
+  if (!baseToken) {
     arrow.style.display = 'none';
     return;
   }
 
-  // If token is not yet positioned/visible in DOM, hide.
-  const wrapRect = wrap.getBoundingClientRect();
-  const tokRect = baseEl.getBoundingClientRect();
+  // Use grid coordinates instead of DOM rects.
+  // DOM approach fails when token element isn't mounted/positioned yet.
+  const CELL = 50;
+  const x = Number(baseToken.x);
+  const y = Number(baseToken.y);
+  const bw = Number(state?.boardWidth) || boardWidth || 10;
+  const bh = Number(state?.boardHeight) || boardHeight || 10;
 
-  const tokCx = tokRect.left + tokRect.width / 2;
-  const tokCy = tokRect.top + tokRect.height / 2;
-  const viewCx = wrapRect.left + wrapRect.width / 2;
-  const viewCy = wrapRect.top + wrapRect.height / 2;
+  // If token not placed (no finite coords) or out of board bounds — hide.
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= bw || y >= bh) {
+    arrow.style.display = 'none';
+    return;
+  }
 
-  // Determine if token is fully visible within wrapper viewport
-  const fullyVisible =
-    tokRect.left >= wrapRect.left &&
-    tokRect.top >= wrapRect.top &&
-    tokRect.right <= wrapRect.right &&
-    tokRect.bottom <= wrapRect.bottom;
+  // Token center in content coordinates (pixels inside the scrollable board)
+  const tokX = x * CELL + CELL / 2;
+  const tokY = y * CELL + CELL / 2;
 
+  // Viewport rectangle in content coordinates
+  const viewLeft = wrap.scrollLeft;
+  const viewTop = wrap.scrollTop;
+  const viewW = wrap.clientWidth;
+  const viewH = wrap.clientHeight;
+  const viewRight = viewLeft + viewW;
+  const viewBottom = viewTop + viewH;
+
+  const fullyVisible = tokX >= viewLeft && tokX <= viewRight && tokY >= viewTop && tokY <= viewBottom;
   if (fullyVisible) {
     arrow.style.display = 'none';
     return;
   }
 
-  // Direction vector from viewport center to token center
-  let dx = tokCx - viewCx;
-  let dy = tokCy - viewCy;
+  // View center in content coords
+  const viewCx = viewLeft + viewW / 2;
+  const viewCy = viewTop + viewH / 2;
+
+  // Direction vector from viewport center to token center (content coords)
+  let dx = tokX - viewCx;
+  let dy = tokY - viewCy;
   const len = Math.hypot(dx, dy) || 1;
   dx /= len;
   dy /= len;
 
-  // Place arrow along this direction, clamped to inside edges of wrapper
+  // Place arrow inside wrapper viewport (client coords)
   const pad = 22;
-  const halfW = wrapRect.width / 2 - pad;
-  const halfH = wrapRect.height / 2 - pad;
+  const halfW = viewW / 2 - pad;
+  const halfH = viewH / 2 - pad;
   const t = Math.min(
     halfW / Math.max(0.0001, Math.abs(dx)),
     halfH / Math.max(0.0001, Math.abs(dy))
   );
 
-  const px = viewCx + dx * t;
-  const py = viewCy + dy * t;
-
-  // Convert to wrapper-local coordinates (because arrow is positioned inside wrapper)
-  const localX = px - wrapRect.left;
-  const localY = py - wrapRect.top;
+  // Position in wrapper-local (client) coordinates
+  const localX = (viewW / 2) + dx * t;
+  const localY = (viewH / 2) + dy * t;
 
   arrow.style.left = `${localX}px`;
   arrow.style.top = `${localY}px`;
