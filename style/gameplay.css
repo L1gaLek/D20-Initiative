@@ -739,7 +739,8 @@
 
 /* ================== BOARD MARKS (обозначения) ================== */
 .marks-toolbar{
-  margin-top:10px;
+  /* closer to board size controls (requested) */
+  margin-top:4px;
   padding:10px;
   border:1px solid #555;
   border-radius:6px;
