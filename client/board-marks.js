@@ -71,8 +71,7 @@
   let label = '';
 
   const LS_KEY = 'dnd_marks_toolbar';
-  const LS_COLLAPSE_KEY = 'dnd_marks_toolbar_collapsed';
-  let collapsed = false;
+  const LS_COLLAPSED = 'dnd_marks_collapsed';
 
   function isGM() { try { return !!ctx?.isGM?.(); } catch { return false; } }
   function isSpectator() { try { return !!ctx?.isSpectator?.(); } catch { return false; } }
@@ -95,11 +94,10 @@
     toolbar.className = 'marks-toolbar';
     toolbar.innerHTML = `
       <div class="marks-toolbar__head">
-        <div class="marks-toolbar__title" id="marks-toolbar-toggle" role="button" tabindex="0" aria-expanded="true">Обозначения</div>
+        <button class="marks-toolbar__title" type="button" data-marks-toggle title="Свернуть/развернуть">Обозначения</button>
         <label class="marks-switch"><input type="checkbox" id="marks-enabled"> <span>Рисовать</span></label>
         <button class="marks-btn" type="button" id="marks-clear" title="Удалить выбранную метку (или все ваши)">Очистить</button>
       </div>
-      <div class="marks-toolbar__body">
       <div class="marks-toolbar__row">
         <div class="marks-seg" role="group" aria-label="Инструмент">
           <button class="marks-seg__btn" type="button" data-tool="select">Выбор</button>
@@ -116,14 +114,25 @@
         <input id="marks-label" class="marks-label" type="text" placeholder="Подпись (необязательно)">
         <div class="marks-hint">Двойной клик — завершить многоугольник.</div>
       </div>
-      </div>
     `;
 
-    host.appendChild(toolbar);
+    // collapse/expand toolbar (title acts like a button)
+    function applyMarksCollapsedState() {
+      const collapsed = (localStorage.getItem(LS_COLLAPSED) === '1');
+      toolbar.classList.toggle('is-collapsed', collapsed);
+    }
+    try { applyMarksCollapsedState(); } catch {}
 
-    try {
-      collapsed = (localStorage.getItem(LS_COLLAPSE_KEY) === '1');
-    } catch {}
+    toolbar.querySelector('[data-marks-toggle]')?.addEventListener('click', () => {
+      try {
+        const cur = toolbar.classList.contains('is-collapsed');
+        const next = !cur;
+        toolbar.classList.toggle('is-collapsed', next);
+        localStorage.setItem(LS_COLLAPSED, next ? '1' : '0');
+      } catch {}
+    });
+
+    host.appendChild(toolbar);
 
     try {
       const raw = localStorage.getItem(LS_KEY);
@@ -147,39 +156,18 @@
     const strokeInp = toolbar.querySelector('#marks-stroke');
     const strokeWInp = toolbar.querySelector('#marks-stroke-w');
     const labelInp = toolbar.querySelector('#marks-label');
-    const toggleEl = toolbar.querySelector('#marks-toolbar-toggle');
 
     if (enabled) enabled.checked = !!drawMode;
     if (colorInp) colorInp.value = String(color || '#ffa500');
     if (fillInp) fillInp.value = String(fillPct);
     if (strokeInp) strokeInp.value = String(strokePct);
     if (strokeWInp) strokeWInp.value = String(strokeW);
-    try {
-      toolbar.classList.toggle('is-collapsed', !!collapsed);
-      if (toggleEl) toggleEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    } catch {}
 
     toolbar.querySelectorAll('[data-tool]').forEach(btn => {
       btn.classList.toggle('is-active', String(btn.getAttribute('data-tool')) === tool);
     });
 
-const setCollapsed = (v) => {
-  collapsed = !!v;
-  try { localStorage.setItem(LS_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch {}
-  try {
-    toolbar.classList.toggle('is-collapsed', collapsed);
-    if (toggleEl) toggleEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-  } catch {}
-};
-
-if (toggleEl) {
-  toggleEl.addEventListener('click', () => setCollapsed(!collapsed));
-  toggleEl.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setCollapsed(!collapsed); }
-  });
-}
-
-const persist = () => {
+    const persist = () => {
       try { localStorage.setItem(LS_KEY, JSON.stringify({ tool, drawMode, color, fillPct, strokePct, strokeW })); } catch {}
     };
 
