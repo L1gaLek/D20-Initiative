@@ -118,7 +118,8 @@ function getMyBaseToken() {
 
   // Prefer base token that belongs to current user
   if (uid) {
-    const mine = list.find(p => p && p.isBase && (String(p.id) === uid || String(p.userId || '') === uid));
+    // In this project the owner id is stored in p.ownerId (token id is separate)
+    const mine = list.find(p => p && p.isBase && String(p.ownerId || '') === uid);
     if (mine) return mine;
   }
 

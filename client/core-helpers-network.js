@@ -806,10 +806,30 @@ async function sendMessage(msg) {
       case "listRooms": {
         const { data, error } = await sbClient
           .from("rooms")
-          // include password column so UI can show lock state
-          .select("id,name,scenario,created_at,password")
+          // NOTE: rooms table in this project does NOT have a password column.
+          // Password (if any) is stored inside room_state.state.roomPassword.
+          .select("id,name,scenario,created_at")
           .order("created_at", { ascending: false });
         if (error) throw error;
+
+        // Build a map roomId -> hasPassword by peeking into room_state.state.roomPassword
+        const roomIds = (data || []).map(r => String(r?.id || '')).filter(Boolean);
+        const hasPassByRoom = new Map();
+        try {
+          if (roomIds.length) {
+            const { data: rs, error: rse } = await sbClient
+              .from('room_state')
+              .select('room_id,state')
+              .in('room_id', roomIds);
+            if (!rse && Array.isArray(rs)) {
+              for (const row of rs) {
+                const rid = String(row?.room_id || '');
+                const pass = String(row?.state?.roomPassword || '').trim();
+                if (rid) hasPassByRoom.set(rid, !!pass);
+              }
+            }
+          }
+        } catch {}
 
         // Unique users per room + total unique users on server (across all rooms)
         let members = [];
@@ -837,8 +857,8 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            // room can be protected by a password (stored in rooms.password)
-            hasPassword: !!(r && typeof r === 'object' && String(r.password || '').trim())
+            // room can be protected by a password (stored in room_state.state.roomPassword)
+            hasPassword: !!hasPassByRoom.get(rid)
           };
         });
 
@@ -851,12 +871,13 @@ async function sendMessage(msg) {
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
         const password = String(msg.password || '').trim();
-        // IMPORTANT: password must actually be persisted so the room becomes protected.
-        // Schema expects column: rooms.password (text).
-        const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario, password: password || null });
+        // IMPORTANT: rooms table has no password column in this project.
+        // We persist password inside room_state.state.roomPassword.
+        const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
         if (e1) throw e1;
 
         const initState = createInitialGameState();
+        if (password) initState.roomPassword = password;
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
           phase: initState.phase,
@@ -879,14 +900,18 @@ async function sendMessage(msg) {
 
         // ===== Room password check (if set) =====
         try {
-          const roomPass = String(room?.password || '').trim();
+          const { data: rs, error: ers } = await sbClient
+            .from('room_state')
+            .select('state')
+            .eq('room_id', roomId)
+            .maybeSingle();
+          if (ers) throw ers;
+
+          const roomPass = String(rs?.state?.roomPassword || '').trim();
           if (roomPass) {
             const provided = String(msg.password || '').trim();
             if (!provided || provided !== roomPass) {
-              handleMessage({
-                type: "roomsError",
-                message: "Неверный пароль комнаты"
-              });
+              handleMessage({ type: 'roomsError', message: 'Неверный пароль комнаты' });
               return;
             }
           }
