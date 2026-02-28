@@ -787,3 +787,49 @@
 /* spectators: hide draw controls visually */
 .marks-toolbar.is-spectator{ opacity:.55; }
 .marks-toolbar.is-spectator .marks-switch{ display:none; }
+
+
+/* ===== Marks toolbar collapse ===== */
+.marks-toolbar .marks-toolbar__title{
+  cursor:pointer;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-weight: 700;
+  padding: 0;
+}
+.marks-toolbar.is-collapsed{
+  width: auto;
+  padding: 8px 10px;
+}
+.marks-toolbar.is-collapsed .marks-switch,
+.marks-toolbar.is-collapsed #marks-clear,
+.marks-toolbar.is-collapsed .marks-toolbar__row,
+.marks-toolbar.is-collapsed .marks-toolbar__head > :not(.marks-toolbar__title){
+  display:none !important;
+}
+.marks-toolbar.is-collapsed .marks-toolbar__head{
+  margin:0;
+}
+
+/* ===== Base token direction hint (orange arrow) ===== */
+#base-hint-arrow{
+  position:absolute;
+  z-index: 60;
+  width: 34px;
+  height: 34px;
+  display:none;
+  pointer-events:none;
+  filter: drop-shadow(0 0 6px rgba(0,0,0,0.45));
+}
+#base-hint-arrow .bha{
+  width:100%;
+  height:100%;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,165,0,0.8);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#base-hint-arrow svg{ width:20px; height:20px; }
