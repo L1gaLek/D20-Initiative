@@ -125,7 +125,31 @@ try {
   
 function ensureMainUiLayout() {
   if (!musicBox) return;
-  if (musicBox._bgmLayoutDone) return;
+  // Even if layout was done before, re-apply alignment patch (hot reload / cached DOM).
+  const applyAlignPatch = () => {
+    try {
+      const controlsRow = toggleBtn ? toggleBtn.parentElement : null;
+      if (!controlsRow) return;
+      controlsRow.style.alignItems = 'center';
+      controlsRow.querySelectorAll('button').forEach((b) => {
+        try {
+          b.style.height = '28px';
+          b.style.display = 'inline-flex';
+          b.style.alignItems = 'center';
+          b.style.justifyContent = 'center';
+          b.style.lineHeight = '1';
+          b.style.padding = '4px 10px';
+        } catch {}
+      });
+      if (stopBtn) {
+        stopBtn.style.transform = 'translateY(-1px)';
+      }
+    } catch {}
+  };
+  if (musicBox._bgmLayoutDone) {
+    applyAlignPatch();
+    return;
+  }
   musicBox._bgmLayoutDone = true;
 
   // Layout goal (per latest request):
@@ -186,18 +210,21 @@ function ensureMainUiLayout() {
 
         openBtn.style.width = 'auto';
         openBtn.style.padding = '4px 10px';
-        openBtn.style.lineHeight = '1.1';
+        openBtn.style.lineHeight = '1';
+        openBtn.style.display = 'inline-flex';
+        openBtn.style.alignItems = 'center';
+        openBtn.style.justifyContent = 'center';
       }
 
       // equal compact height for all buttons in row
       const btns = controlsRow.querySelectorAll('button');
       btns.forEach(b => {
         try {
+          b.style.padding = '4px 10px';
+          b.style.lineHeight = '1';
           b.style.display = 'inline-flex';
           b.style.alignItems = 'center';
           b.style.justifyContent = 'center';
-          b.style.padding = '4px 10px';
-          b.style.lineHeight = '1.1';
           b.style.height = '28px';
         } catch {}
       });
