@@ -105,36 +105,24 @@ function ensureBaseLocatorArrowEl() {
     el.className = 'base-locator-arrow';
     el.innerHTML = '<div class="base-locator-arrow-shape"></div>';
     el.style.display = 'none';
+    // important: wrapper must be positioning context (CSS sets #board-wrapper{position:relative})
     wrap.appendChild(el);
     __baseLocatorArrowEl = el;
   }
   return __baseLocatorArrowEl;
 }
 
-function getMyBaseToken() {
-  const uid = String(localStorage.getItem('dnd_user_id') || (typeof myId !== 'undefined' ? myId : '') || '').trim();
-  const list = Array.isArray(players) ? players : [];
-  if (!list.length) return null;
 
-  // Prefer base token that belongs to current user.
-  // Different builds may store ownership in different fields, so we check a few.
-  if (uid) {
-    const mine = list.find(p => p && p.isBase && (
-      String(p.ownerId || '') === uid ||
-      String(p.userId || '') === uid ||
-      String(p.playerId || '') === uid ||
-      String(p.id || '') === uid
-    ));
-    if (mine) return mine;
-  }
+/* getMyBaseToken replaced by findMyBaseTokenFromState */
 
-  // Fallback: if there is exactly one base token on the map, use it.
-  const bases = list.filter(p => p && p.isBase);
-  if (bases.length === 1) return bases[0];
-  return null;
-}
 
 function updateBaseLocatorArrow(state) {
+  // choose most reliable latest state
+  const st = state
+    || ((typeof lastState !== 'undefined' && lastState) ? lastState : null)
+    || (window.lastState || null)
+    || (window.gameState || null);
+
   const wrap = (typeof boardWrapper !== 'undefined' && boardWrapper)
     ? boardWrapper
     : document.getElementById('board-wrapper');
@@ -145,10 +133,10 @@ function updateBaseLocatorArrow(state) {
     __baseLocatorInit = true;
     try {
       wrap.addEventListener('scroll', () => {
-        try { updateBaseLocatorArrow(window.lastState || state); } catch {}
+        try { updateBaseLocatorArrow((typeof lastState !== 'undefined' && lastState) ? lastState : (window.lastState || st)); } catch {}
       }, { passive: true });
       window.addEventListener('resize', () => {
-        try { updateBaseLocatorArrow(window.lastState || state); } catch {}
+        try { updateBaseLocatorArrow((typeof lastState !== 'undefined' && lastState) ? lastState : (window.lastState || st)); } catch {}
       });
     } catch {}
   }
@@ -156,35 +144,35 @@ function updateBaseLocatorArrow(state) {
   const arrow = ensureBaseLocatorArrowEl();
   if (!arrow) return;
 
-  // Do not show locator for GM if desired? (leave enabled for everyone)
-  const baseToken = getMyBaseToken();
+  const baseToken = findMyBaseTokenFromState(st);
   if (!baseToken) {
     arrow.style.display = 'none';
     return;
   }
 
-  // Use grid coordinates instead of DOM rects.
-  // DOM approach fails when token element isn't mounted/positioned yet.
   const CELL = 50;
-  const x = Number(baseToken.x);
-  const y = Number(baseToken.y);
-  const size = Math.max(1, Number(baseToken.size) || 1);
-  const bw = Number(state?.boardWidth) || boardWidth || 10;
-  const bh = Number(state?.boardHeight) || boardHeight || 10;
 
-  // If token not placed (no finite coords) or out of board bounds — hide.
+  // Coordinates may be stored as x/y or col/row in some builds; support both.
+  const x = Number(baseToken.x ?? baseToken.col ?? baseToken.cx);
+  const y = Number(baseToken.y ?? baseToken.row ?? baseToken.cy);
+  const size = Math.max(1, Number(baseToken.size) || 1);
+
+  const bw = Number(st?.boardWidth) || (typeof boardWidth !== 'undefined' ? boardWidth : 10) || 10;
+  const bh = Number(st?.boardHeight) || (typeof boardHeight !== 'undefined' ? boardHeight : 10) || 10;
+
+  // If token not placed or out of bounds — hide.
   if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= bw || y >= bh) {
     arrow.style.display = 'none';
     return;
   }
 
-  // Token bounds in content coordinates (pixels inside the scrollable board)
+  // Token bounds in content coordinates
   const tokLeft = x * CELL;
   const tokTop = y * CELL;
   const tokRight = tokLeft + CELL * size;
   const tokBottom = tokTop + CELL * size;
 
-  // Viewport rectangle in content coordinates
+  // Viewport rectangle in content coords
   const viewLeft = wrap.scrollLeft;
   const viewTop = wrap.scrollTop;
   const viewW = wrap.clientWidth;
@@ -192,52 +180,48 @@ function updateBaseLocatorArrow(state) {
   const viewRight = viewLeft + viewW;
   const viewBottom = viewTop + viewH;
 
-  const intersects =
-    !(tokRight < viewLeft || tokLeft > viewRight || tokBottom < viewTop || tokTop > viewBottom);
+  const intersects = !(tokRight < viewLeft || tokLeft > viewRight || tokBottom < viewTop || tokTop > viewBottom);
 
   if (intersects) {
-    // if any part of base is visible, hide arrow
     arrow.style.display = 'none';
     return;
   }
 
-  // Token center in content coords
+  // Centers
   const tokX = (tokLeft + tokRight) / 2;
   const tokY = (tokTop + tokBottom) / 2;
-// View center in content coords
   const viewCx = viewLeft + viewW / 2;
   const viewCy = viewTop + viewH / 2;
 
-  // Direction vector from viewport center to token center (content coords)
+  // Direction from viewport center to token center
   let dx = tokX - viewCx;
   let dy = tokY - viewCy;
   const len = Math.hypot(dx, dy) || 1;
-  dx /= len;
-  dy /= len;
+  dx /= len; dy /= len;
 
-  // Place arrow inside wrapper viewport (client coords)
-  const pad = 22;
-  const halfW = viewW / 2 - pad;
-  const halfH = viewH / 2 - pad;
+  // Clamp arrow inside viewport
+  const pad = 26;
+  const halfW = (viewW / 2) - pad;
+  const halfH = (viewH / 2) - pad;
   const t = Math.min(
     halfW / Math.max(0.0001, Math.abs(dx)),
     halfH / Math.max(0.0001, Math.abs(dy))
   );
 
-  // Position in wrapper-local (client) coordinates
   const localX = (viewW / 2) + dx * t;
   const localY = (viewH / 2) + dy * t;
 
   arrow.style.left = `${localX}px`;
   arrow.style.top = `${localY}px`;
 
-  // Rotate arrow to point towards token
+  // Rotate shape
   const ang = Math.atan2(dy, dx) * 180 / Math.PI;
   const shape = arrow.querySelector('.base-locator-arrow-shape');
   if (shape) shape.style.transform = `translate(-50%, -50%) rotate(${ang + 90}deg)`;
 
   arrow.style.display = '';
 }
+
 
 // ================== WALL EDGES RENDER ==================
 function renderWallEdges(state, layerEl) {
