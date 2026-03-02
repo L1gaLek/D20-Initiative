@@ -94,7 +94,7 @@
     toolbar.className = 'marks-toolbar';
     toolbar.innerHTML = `
       <div class="marks-toolbar__head">
-        <button class="marks-toolbar__title" id="marks-toolbar-toggle" type="button" aria-expanded="true">Обозначения</button>
+        <button class="marks-toolbar__title" id="marks-toolbar-toggle" type="button" aria-expanded="true">Обозначение</button>
         <label class="marks-switch"><input type="checkbox" id="marks-enabled"> <span>Рисовать</span></label>
         <button class="marks-btn" type="button" id="marks-clear" title="Удалить выбранную метку (или все ваши)">Очистить</button>
       </div>
