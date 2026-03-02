@@ -1,4 +1,114 @@
 // ================== BOARD ==================
+// ===== Offscreen "Основа" locator (orange arrow at edge of viewport) =====
+let _baseLocatorEl = null;
+let _baseLocatorTri = null;
+let _baseLocatorInited = false;
+
+function ensureBaseLocator() {
+  if (_baseLocatorEl && _baseLocatorTri) return;
+  const bwEl = document.getElementById('board-wrapper');
+  const boardEl = document.getElementById('game-board');
+  if (!bwEl || !boardEl) return;
+
+  // Make sure board-wrapper is a positioned scroll container.
+  try {
+    const cs = window.getComputedStyle(bwEl);
+    if (cs.position === 'static') bwEl.style.position = 'relative';
+  } catch {}
+
+  const el = document.createElement('div');
+  el.id = 'base-locator';
+  el.className = 'base-locator hidden';
+  el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = `<div class="base-locator__tri"></div>`;
+  bwEl.appendChild(el);
+
+  _baseLocatorEl = el;
+  _baseLocatorTri = el.querySelector('.base-locator__tri');
+
+  if (!_baseLocatorInited) {
+    _baseLocatorInited = true;
+    try {
+      bwEl.addEventListener('scroll', () => {
+        try { updateBaseLocator(); } catch {}
+      }, { passive: true });
+    } catch {}
+    try {
+      window.addEventListener('resize', () => {
+        try { updateBaseLocator(); } catch {}
+      });
+    } catch {}
+  }
+}
+
+function updateBaseLocator() {
+  ensureBaseLocator();
+  if (!_baseLocatorEl || !_baseLocatorTri) return;
+  const bwEl = document.getElementById('board-wrapper');
+  if (!bwEl) return;
+
+  // Identify "my" base token (Основа): isBase && ownerId === myId
+  const myIdStr = (typeof myId !== 'undefined' && myId !== null)
+    ? String(myId)
+    : String(window.myId || localStorage.getItem('dnd_user_id') || '');
+
+  const baseP = (Array.isArray(players) ? players : []).find(p => p && p.isBase && String(p.ownerId) === myIdStr);
+  if (!baseP) {
+    _baseLocatorEl.classList.add('hidden');
+    return;
+  }
+
+  const tokenEl = (typeof playerElements !== 'undefined') ? playerElements.get(baseP.id) : null;
+  if (!tokenEl || tokenEl.style.display === 'none') {
+    _baseLocatorEl.classList.add('hidden');
+    return;
+  }
+
+  // Center of token in board content coordinates (within board-wrapper scroll content).
+  const baseCx = (tokenEl.offsetLeft || 0) + (tokenEl.offsetWidth || 0) / 2;
+  const baseCy = (tokenEl.offsetTop || 0) + (tokenEl.offsetHeight || 0) / 2;
+
+  const vx0 = bwEl.scrollLeft;
+  const vy0 = bwEl.scrollTop;
+  const vx1 = vx0 + bwEl.clientWidth;
+  const vy1 = vy0 + bwEl.clientHeight;
+
+  const outLeft = baseCx < vx0;
+  const outRight = baseCx > vx1;
+  const outTop = baseCy < vy0;
+  const outBottom = baseCy > vy1;
+
+  // If token is visible — hide.
+  if (!outLeft && !outRight && !outTop && !outBottom) {
+    _baseLocatorEl.classList.add('hidden');
+    return;
+  }
+
+  // Place on the edge (or corner) of the visible viewport.
+  const pad = 18; // distance from edge
+  let px = vx0 + (bwEl.clientWidth / 2);
+  let py = vy0 + (bwEl.clientHeight / 2);
+  if (outLeft) px = vx0 + pad;
+  if (outRight) px = vx1 - pad;
+  if (outTop) py = vy0 + pad;
+  if (outBottom) py = vy1 - pad;
+
+  // Direction (8-way) for rotation.
+  let deg = 0;
+  if (outTop && !outLeft && !outRight) deg = 0;
+  else if (outTop && outRight) deg = 45;
+  else if (outRight && !outTop && !outBottom) deg = 90;
+  else if (outBottom && outRight) deg = 135;
+  else if (outBottom && !outLeft && !outRight) deg = 180;
+  else if (outBottom && outLeft) deg = -135;
+  else if (outLeft && !outTop && !outBottom) deg = -90;
+  else if (outTop && outLeft) deg = -45;
+
+  _baseLocatorEl.classList.remove('hidden');
+  _baseLocatorEl.style.left = `${px}px`;
+  _baseLocatorEl.style.top = `${py}px`;
+  _baseLocatorTri.style.transform = `rotate(${deg}deg)`;
+}
 function renderBoard(state) {
   const CELL = 50;
   const bw = Number(state?.boardWidth) || boardWidth || 10;
@@ -79,95 +189,14 @@ function renderBoard(state) {
 
   players.forEach(p => setPlayerPosition(p));
 
+  // Update offscreen base arrow (if needed)
+  try { updateBaseLocator(); } catch {}
+
   // Fog of war overlay needs to match board size and state.
   try { window.FogWar?.onBoardRendered?.(state); } catch {}
 
   // Board marks/areas (rect/circle/poly overlays)
   try { window.BoardMarks?.onBoardRendered?.(state); } catch {}
-
-  // Base token locator arrow (for large boards)
-  try { scheduleBaseLocatorUpdate(); } catch {}
-}
-
-// ================== BASE TOKEN LOCATOR (arrow when "Основа" is offscreen) ==================
-let baseLocatorArrowEl = null;
-let baseLocatorRaf = 0;
-let baseLocatorWired = false;
-
-function ensureBaseLocatorArrow() {
-  if (baseLocatorArrowEl) return baseLocatorArrowEl;
-  const bw = document.getElementById('board-wrapper');
-  if (!bw) return null;
-  const el = document.createElement('div');
-  el.id = 'base-locator-arrow';
-  el.className = '';
-  bw.appendChild(el);
-  baseLocatorArrowEl = el;
-
-  if (!baseLocatorWired) {
-    baseLocatorWired = true;
-    try {
-      bw.addEventListener('scroll', scheduleBaseLocatorUpdate, { passive: true });
-      window.addEventListener('resize', scheduleBaseLocatorUpdate);
-    } catch {}
-  }
-  return el;
-}
-
-function findMyBaseTokenEl() {
-  const my = String(window.myId || localStorage.getItem('dnd_user_id') || '');
-  if (!my) return null;
-  try {
-    const p = (Array.isArray(players) ? players : []).find(pp => pp && pp.isBase && String(pp.ownerId || '') === my);
-    if (!p) return null;
-    return playerElements.get(p.id) || p.element || null;
-  } catch {
-    return null;
-  }
-}
-
-function scheduleBaseLocatorUpdate() {
-  try {
-    if (baseLocatorRaf) return;
-    baseLocatorRaf = requestAnimationFrame(() => {
-      baseLocatorRaf = 0;
-      try { updateBaseLocatorArrow(); } catch {}
-    });
-  } catch {}
-}
-
-function updateBaseLocatorArrow() {
-  const arrow = ensureBaseLocatorArrow();
-  if (!arrow) return;
-
-  const tokenEl = findMyBaseTokenEl();
-  const bw = document.getElementById('board-wrapper');
-  if (!bw || !tokenEl || tokenEl.style.display === 'none') {
-    arrow.classList.remove('is-visible');
-    return;
-  }
-
-  const wRect = bw.getBoundingClientRect();
-  const tRect = tokenEl.getBoundingClientRect();
-
-  // token полностью внутри видимой области рамки
-  const inside = (tRect.left >= wRect.left) && (tRect.right <= wRect.right) && (tRect.top >= wRect.top) && (tRect.bottom <= wRect.bottom);
-  if (inside) {
-    arrow.classList.remove('is-visible');
-    return;
-  }
-
-  const wcx = wRect.left + (wRect.width / 2);
-  const wcy = wRect.top + (wRect.height / 2);
-  const tcx = tRect.left + (tRect.width / 2);
-  const tcy = tRect.top + (tRect.height / 2);
-  const dx = tcx - wcx;
-  const dy = tcy - wcy;
-
-  // CSS-треугольник по умолчанию смотрит ВВЕРХ, поэтому +90° к atan2
-  const ang = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
-  arrow.style.transform = `translateX(-50%) rotate(${ang}deg)`;
-  arrow.classList.add('is-visible');
 }
 
 // ================== WALL EDGES RENDER ==================
@@ -1056,9 +1085,6 @@ function setPlayerPosition(player) {
   if (tokenMiniEl && tokenMiniPlayerId === player.id) {
     positionTokenMini(el);
   }
-
-  // Update "Основа" locator arrow (if needed)
-  try { scheduleBaseLocatorUpdate(); } catch {}
 }
 
 // ================== NO-OVERLAP HELPERS (CLIENT SIDE) ==================
