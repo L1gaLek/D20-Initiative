@@ -1,5 +1,6 @@
 // client/bg-music.js
-// Полная механика фоновой музыки (Supabase Storage + синхронизация state)
+// Фоновая музыка (Supabase Storage + синхронизация состояния)
+// Разрешены ЛЮБЫЕ расширения, ограничение только 50 МБ и максимум 10 треков
 
 (function () {
   const MAX_TRACKS = 10;
@@ -9,33 +10,33 @@
   let currentState = null;
   let audio = new Audio();
   audio.loop = true;
+  audio.volume = 0.4;
 
-  // ================= UI ELEMENTS =================
-  const box = document.getElementById("bg-music-box");
+  // ================= UI =================
   const openBtn = document.getElementById("bg-music-open");
   const toggleBtn = document.getElementById("bg-music-toggle");
   const stopBtn = document.getElementById("bg-music-stop");
   const volumeSlider = document.getElementById("bg-music-volume");
   const nowLabel = document.getElementById("bg-music-now");
 
-  // ===== Modal =====
   let modal = null;
 
-  function createModal() {
+  // ================= MODAL =================
+  function openModal() {
+    if (modal) return;
+
     modal = document.createElement("div");
     modal.className = "modal-overlay";
 
     modal.innerHTML = `
       <div class="modal" style="max-width:600px;">
         <div class="modal-header">
-          <div>
-            <div class="modal-title">Список музыки</div>
-          </div>
+          <div class="modal-title">Список музыки</div>
           <button class="modal-close">✕</button>
         </div>
         <div class="modal-body">
-          <button id="bgm-upload">Загрузить</button>
-          <input type="file" id="bgm-file" multiple style="display:none;">
+          <button id="bgm-upload-btn">Загрузить</button>
+          <input type="file" id="bgm-file-input" multiple style="display:none;">
           <div id="bgm-list" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;"></div>
         </div>
       </div>
@@ -43,32 +44,30 @@
 
     document.body.appendChild(modal);
 
-    modal.querySelector(".modal-close").onclick = () => {
-      modal.remove();
-      modal = null;
-    };
+    modal.querySelector(".modal-close").onclick = closeModal;
 
-    const uploadBtn = modal.querySelector("#bgm-upload");
-    const fileInput = modal.querySelector("#bgm-file");
+    const uploadBtn = modal.querySelector("#bgm-upload-btn");
+    const fileInput = modal.querySelector("#bgm-file-input");
 
-    // ⬇️ ВАЖНО: accept НЕ указываем — можно любые расширения
+    // ВАЖНО: нет accept — можно загружать любые расширения
     uploadBtn.onclick = () => fileInput.click();
 
     fileInput.onchange = async (e) => {
       const files = Array.from(e.target.files || []);
       if (!files.length) return;
 
-      if ((currentState?.bgMusic?.tracks?.length || 0) + files.length > MAX_TRACKS) {
-        alert("Максимум 10 треков.");
+      const existing = currentState?.bgMusic?.tracks?.length || 0;
+
+      if (existing + files.length > MAX_TRACKS) {
+        alert("Максимум 10 треков на комнату.");
         return;
       }
 
       for (const file of files) {
         if (file.size > MAX_FILE_SIZE) {
-          alert(`Файл ${file.name} больше 50 МБ.`);
+          alert(`Файл "${file.name}" больше 50 МБ.`);
           continue;
         }
-
         await uploadTrack(file);
       }
 
@@ -78,8 +77,16 @@
     renderList();
   }
 
+  function closeModal() {
+    if (modal) {
+      modal.remove();
+      modal = null;
+    }
+  }
+
   function renderList() {
     if (!modal) return;
+
     const list = modal.querySelector("#bgm-list");
     list.innerHTML = "";
 
@@ -107,18 +114,18 @@
         syncState();
       };
 
-      item.querySelector("[data-play]")?.addEventListener("click", () => {
+      item.querySelector("[data-play]").onclick = () => {
         setCurrent(track.id, true);
-      });
+      };
 
-      item.querySelector("[data-set]")?.addEventListener("click", () => {
+      item.querySelector("[data-set]").onclick = () => {
         setCurrent(track.id, false);
-      });
+      };
 
-      item.querySelector("[data-del]")?.addEventListener("click", async () => {
+      item.querySelector("[data-del]").onclick = async () => {
         await deleteTrack(track);
         renderList();
-      });
+      };
 
       list.appendChild(item);
     });
@@ -127,7 +134,7 @@
   // ================= UPLOAD =================
   async function uploadTrack(file) {
     if (!window.supabase) {
-      alert("Supabase не найден.");
+      alert("Supabase не инициализирован.");
       return;
     }
 
@@ -155,16 +162,24 @@
       url: data.publicUrl
     };
 
+    if (!currentState.bgMusic) {
+      currentState.bgMusic = {
+        tracks: [],
+        currentTrackId: null,
+        isPlaying: false,
+        startedAt: 0
+      };
+    }
+
     currentState.bgMusic.tracks.push(track);
     syncState();
   }
 
   async function deleteTrack(track) {
-    const urlParts = track.url.split(`${BUCKET}/`);
-    if (urlParts.length < 2) return;
+    const parts = track.url.split(`${BUCKET}/`);
+    if (parts.length < 2) return;
 
-    const path = urlParts[1];
-
+    const path = parts[1];
     await supabase.storage.from(BUCKET).remove([path]);
 
     currentState.bgMusic.tracks =
@@ -189,10 +204,10 @@
   function applyState(state) {
     currentState = state;
 
-    const music = state.bgMusic;
-    if (!music) return;
+    if (!state?.bgMusic) return;
 
-    const track = music.tracks.find(t => t.id === music.currentTrackId);
+    const music = state.bgMusic;
+    const track = music.tracks?.find(t => t.id === music.currentTrackId);
 
     if (!track) {
       audio.pause();
@@ -228,7 +243,7 @@
   }
 
   // ================= BUTTONS =================
-  openBtn?.addEventListener("click", createModal);
+  openBtn?.addEventListener("click", openModal);
 
   toggleBtn?.addEventListener("click", () => {
     const music = currentState.bgMusic;
