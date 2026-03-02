@@ -1,23 +1,6 @@
 /* Auto-split from style.css — do not edit here if you still maintain the monolith. */
 /* Section: gameplay */
 
-/* ===== Base token locator arrow (shows direction to player's "Основа" if off-screen) ===== */
-#board-wrapper{ position: relative; }
-.base-locator-arrow{
-  position: fixed;
-  z-index: 9999;
-  pointer-events:none;
-}
-.base-locator-arrow-shape{
-  width: 0;
-  height: 0;
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-bottom: 18px solid orange;
-  filter: drop-shadow(0 0 2px rgba(0,0,0,0.9));
-  transform: translate(-50%, -50%);
-}
-
 /* Fog controls (GM: environment editor) */
 .fog-controls {
   margin-top: 12px;
@@ -772,7 +755,18 @@
   font-weight:700;
   color:#eee;
   margin-right:auto;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
 }
+.marks-toolbar__title:hover{ text-decoration: underline; }
+
+.marks-toolbar.is-collapsed{ padding: 8px 10px; }
+.marks-toolbar.is-collapsed .marks-toolbar__body{ display:none; }
+.marks-toolbar.is-collapsed .marks-switch,
+.marks-toolbar.is-collapsed .marks-btn{ display:none; }
 .marks-switch{ display:flex; align-items:center; gap:8px; font-size:12px; opacity:.95; }
 .marks-btn{ padding:5px 10px; font-size:12px; }
 .marks-toolbar__row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
@@ -804,25 +798,3 @@
 /* spectators: hide draw controls visually */
 .marks-toolbar.is-spectator{ opacity:.55; }
 .marks-toolbar.is-spectator .marks-switch{ display:none; }
-
-
-/* ===== BASE LOCATOR ARROW (ОСНОВА) ===== */
-.base-locator-arrow{
-  position: fixed;
-  z-index: 9999;
-  pointer-events:none;
-  width:0;
-  height:0;
-}
-.base-locator-arrow-shape{
-  position:absolute;
-  left:0;
-  top:0;
-  width: 0;
-  height: 0;
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-bottom: 18px solid orange;
-  filter: drop-shadow(0 0 2px rgba(0,0,0,0.9));
-  transform: translate(-50%, -50%);
-}
