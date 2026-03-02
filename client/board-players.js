@@ -107,16 +107,16 @@ function updateBaseLocator() {
   }
 
   // IMPORTANT:
-  // The locator is an overlay that must sit on the *visible* edge of the board-wrapper.
-  // Therefore its left/top are in wrapper-local viewport coordinates (0..clientWidth/Height),
-  // NOT in scrolled content coordinates.
+  // #board-wrapper is a scroll container. Any absolutely-positioned child is placed in
+  // the *scrollable content* coordinate space. To pin the locator to the visible edge
+  // of the wrapper, we must offset by scrollLeft/scrollTop.
   const pad = 18; // distance from edge
-  let px = (bwEl.clientWidth / 2);
-  let py = (bwEl.clientHeight / 2);
-  if (outLeft) px = pad;
-  if (outRight) px = bwEl.clientWidth - pad;
-  if (outTop) py = pad;
-  if (outBottom) py = bwEl.clientHeight - pad;
+  let px = vx0 + (bwEl.clientWidth / 2);
+  let py = vy0 + (bwEl.clientHeight / 2);
+  if (outLeft) px = vx0 + pad;
+  if (outRight) px = vx1 - pad;
+  if (outTop) py = vy0 + pad;
+  if (outBottom) py = vy1 - pad;
 
   // Direction (8-way) for rotation.
   let deg = 0;
