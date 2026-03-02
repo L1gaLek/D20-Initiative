@@ -98,6 +98,161 @@
   const nowLabel = document.getElementById("bg-music-now");
   const musicBox = document.getElementById("bg-music-box");
 
+  // Seek ("эквалайзер") UI (created dynamically under track label)
+  let seekWrap = null;
+  let seekSlider = null;
+  let seekTime = null;
+  let _isSeeking = false;
+  let _lastSeekSyncAt = 0;
+
+  function fmtTime(sec) {
+    const s = Math.max(0, Math.floor(Number(sec) || 0));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+  }
+
+  function ensureMainUiLayout() {
+    if (!musicBox) return;
+    if (musicBox._bgmLayoutDone) return;
+    musicBox._bgmLayoutDone = true;
+
+    // 1) Put "Список" + volume in one row, and make "Список" button tightly fit text.
+    try {
+      if (openBtn) {
+        openBtn.style.width = 'auto';
+        openBtn.style.padding = '4px 10px';
+        openBtn.style.lineHeight = '1.1';
+      }
+      if (volumeSlider) {
+        volumeSlider.style.width = '140px';
+      }
+
+      const volLabel = volumeSlider ? volumeSlider.closest('label') : null;
+
+      const h3 = musicBox.querySelector('h3');
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.justifyContent = 'space-between';
+      row.style.gap = '10px';
+      row.style.flexWrap = 'nowrap';
+      row.style.marginTop = '6px';
+
+      const left = document.createElement('div');
+      left.style.display = 'flex';
+      left.style.alignItems = 'center';
+      left.style.gap = '10px';
+      left.style.flex = '0 0 auto';
+
+      const right = document.createElement('div');
+      right.style.display = 'flex';
+      right.style.alignItems = 'center';
+      right.style.gap = '8px';
+      right.style.flex = '1 1 auto';
+      right.style.justifyContent = 'flex-end';
+
+      if (openBtn) left.appendChild(openBtn);
+      if (volLabel) {
+        try {
+          const span = volLabel.querySelector('span');
+          if (span) {
+            span.textContent = 'Громк.';
+            span.style.minWidth = 'auto';
+            span.style.fontSize = '12px';
+          }
+          volLabel.style.marginTop = '0';
+          volLabel.style.gap = '6px';
+        } catch {}
+        right.appendChild(volLabel);
+      }
+
+      row.appendChild(left);
+      row.appendChild(right);
+
+      if (h3 && h3.parentNode) {
+        if (h3.nextSibling) h3.parentNode.insertBefore(row, h3.nextSibling);
+        else h3.parentNode.appendChild(row);
+      } else {
+        musicBox.insertBefore(row, musicBox.firstChild);
+      }
+
+      // 3) Ensure Start/Pause + Stop are in one row (already, but force no wrap).
+      const controlsRow = toggleBtn ? toggleBtn.parentElement : null;
+      if (controlsRow && controlsRow.style) {
+        controlsRow.style.display = 'flex';
+        controlsRow.style.gap = '8px';
+        controlsRow.style.flexWrap = 'nowrap';
+        controlsRow.style.marginTop = '8px';
+      }
+    } catch {}
+
+    // 2) Add seek bar ("эквалайзер") right under the track label.
+    try {
+      if (!nowLabel) return;
+      seekWrap = document.createElement('div');
+      seekWrap.style.marginTop = '6px';
+      seekWrap.style.display = 'flex';
+      seekWrap.style.flexDirection = 'column';
+      seekWrap.style.gap = '4px';
+
+      const top = document.createElement('div');
+      top.style.display = 'flex';
+      top.style.alignItems = 'center';
+      top.style.justifyContent = 'space-between';
+      top.style.gap = '8px';
+
+      seekTime = document.createElement('div');
+      seekTime.style.fontSize = '11px';
+      seekTime.style.opacity = '0.85';
+      seekTime.textContent = '0:00 / 0:00';
+      top.appendChild(seekTime);
+
+      seekSlider = document.createElement('input');
+      seekSlider.id = 'bg-music-seek';
+      seekSlider.type = 'range';
+      seekSlider.min = '0';
+      seekSlider.max = '0';
+      seekSlider.value = '0';
+      seekSlider.step = '0.1';
+      seekSlider.disabled = true;
+
+      seekWrap.appendChild(top);
+      seekWrap.appendChild(seekSlider);
+
+      if (nowLabel.parentNode) {
+        if (nowLabel.nextSibling) nowLabel.parentNode.insertBefore(seekWrap, nowLabel.nextSibling);
+        else nowLabel.parentNode.appendChild(seekWrap);
+      }
+
+      seekSlider.addEventListener('input', () => {
+        _isSeeking = true;
+        const dur = Number(audio.duration) || 0;
+        const cur = Number(seekSlider.value) || 0;
+        if (seekTime) seekTime.textContent = `${fmtTime(cur)} / ${fmtTime(dur)}`;
+      });
+      seekSlider.addEventListener('change', () => {
+        const dur = Number(audio.duration) || 0;
+        const cur = Math.max(0, Math.min(dur || 0, Number(seekSlider.value) || 0));
+        try { audio.currentTime = cur; } catch {}
+
+        // GM seeks are synced to everyone by shifting startedAt.
+        if (isGM()) {
+          const now = Date.now();
+          if (now - _lastSeekSyncAt > 250) {
+            _lastSeekSyncAt = now;
+            try {
+              const bg = ensureBgMusic(currentState || {});
+              bg.startedAt = Date.now() - Math.round(cur * 1000);
+              syncState();
+            } catch {}
+          }
+        }
+        _isSeeking = false;
+      });
+    } catch {}
+  }
+
   let unlockBtn = null;
   function showUnlockBtn() {
     if (!musicBox) return;
@@ -195,6 +350,14 @@
 
   function renderList() {
     if (!modal) return;
+
+    // If GM is typing in a textarea, don't rerender the whole list.
+    // Otherwise the DOM rebuild resets the caret and can "eat" the typed text.
+    try {
+      const ae = document.activeElement;
+      if (ae && modal.contains(ae) && ae.tagName === 'TEXTAREA') return;
+    } catch {}
+
     const listEl = modal.querySelector("#bgm-list");
     if (!listEl) return;
     listEl.innerHTML = "";
@@ -236,12 +399,26 @@
         </div>
       `;
 
+      // Dark textarea (requested)
+      try {
+        const ta = item.querySelector('textarea[data-act="desc"]');
+        if (ta) {
+          ta.style.background = '#222';
+          ta.style.color = '#fff';
+          ta.style.border = '1px solid rgba(255,255,255,0.18)';
+          ta.style.borderRadius = '8px';
+          ta.style.padding = '8px 10px';
+        }
+      } catch {}
+
       const desc = item.querySelector('textarea[data-act="desc"]');
       if (desc) {
-        desc.addEventListener("input", () => {
-          t.description = desc.value;
+        const handler = () => {
+          t.description = String(desc.value || '');
           debounceSync();
-        });
+        };
+        desc.addEventListener("input", handler);
+        desc.addEventListener("change", handler);
       }
 
       item.querySelector('[data-act="play"]')?.addEventListener("click", () => setCurrent(t.id, true));
@@ -373,11 +550,23 @@
   function applyState(state) {
     currentState = state || currentState || {};
 
+    // Ensure layout once DOM is available
+    try { ensureMainUiLayout(); } catch {}
+
     const bg = ensureBgMusic(currentState || {});
     const tracks = safeArr(bg.tracks);
     const cur = tracks.find(t => String(t?.id || "") === String(bg.currentTrackId || ""));
 
     if (nowLabel) nowLabel.textContent = "Трек: " + (cur ? String(cur.name || "—") : "—");
+
+    // Seek bar enable/disable
+    try {
+      if (seekSlider) {
+        const has = !!(cur && cur.url);
+        // Seeking is GM-only to keep all clients in sync.
+        seekSlider.disabled = !has || !isGM();
+      }
+    } catch {}
 
     if (toggleBtn) toggleBtn.disabled = !isGM() || !cur;
     if (stopBtn) stopBtn.disabled = !isGM() || !cur;
@@ -395,6 +584,16 @@
 
     if (!cur || !cur.url) {
       try { audio.pause(); } catch {}
+
+      // Reset seek UI
+      try {
+        if (seekSlider) {
+          seekSlider.max = '0';
+          seekSlider.value = '0';
+          seekSlider.disabled = true;
+        }
+        if (seekTime) seekTime.textContent = '0:00 / 0:00';
+      } catch {}
       return;
     }
 
@@ -402,6 +601,27 @@
       audio.src = cur.url;
       unlocked = false;
     }
+
+    // Keep seek bar in sync with playback.
+    try {
+      const syncSeekUi = () => {
+        if (!seekSlider || !seekTime) return;
+        const dur = Number(audio.duration) || 0;
+        const t = Number(audio.currentTime) || 0;
+        seekSlider.max = String(dur > 0 ? dur : 0);
+        if (!_isSeeking) seekSlider.value = String(t);
+        seekTime.textContent = `${fmtTime(_isSeeking ? Number(seekSlider.value) || 0 : t)} / ${fmtTime(dur)}`;
+      };
+
+      if (!audio._bgmSeekBound) {
+        audio._bgmSeekBound = true;
+        audio.addEventListener('loadedmetadata', syncSeekUi);
+        audio.addEventListener('timeupdate', syncSeekUi);
+        audio.addEventListener('durationchange', syncSeekUi);
+        audio.addEventListener('ended', syncSeekUi);
+      }
+      syncSeekUi();
+    } catch {}
 
     if (bg.isPlaying) {
       tryUnlock().then((ok) => {
@@ -455,48 +675,6 @@
       syncState();
     });
   }
-
-  // ---------- Passive sync for ALL clients ----------
-  // В проекте lastState обновляется в message-ui.js / core-helpers-network.js.
-  // Чтобы не править эти файлы, делаем лёгкий "наблюдатель" за глобальным состоянием
-  // и применяем bgMusic на каждом клиенте (включая игроков).
-  let _lastAppliedSig = null;
-  function _stateSig(st) {
-    try {
-      const bg = ensureBgMusic(st || {});
-      const tracks = safeArr(bg.tracks).map(t => `${String(t?.id||'')}:${String(t?.url||'')}`).join('|');
-      return [
-        String(bg.currentTrackId || ''),
-        bg.isPlaying ? '1' : '0',
-        String(Number(bg.startedAt) || 0),
-        tracks
-      ].join('::');
-    } catch {
-      return null;
-    }
-  }
-  function _getGlobalState() {
-    try {
-      // основной глобальный стейт проекта
-      if (window.lastState) return window.lastState;
-    } catch {}
-    try {
-      // fallback (если где-то хранится иначе)
-      if (typeof lastState !== 'undefined') return lastState;
-    } catch {}
-    return null;
-  }
-  function _tickApplyFromGlobal() {
-    const st = _getGlobalState();
-    if (!st) return;
-    const sig = _stateSig(st);
-    if (!sig || sig === _lastAppliedSig) return;
-    _lastAppliedSig = sig;
-    try { applyState(st); } catch {}
-  }
-  // периодически проверяем изменения; интервал небольшой, нагрузка минимальная
-  try { setInterval(_tickApplyFromGlobal, 500); } catch {}
-  try { setTimeout(_tickApplyFromGlobal, 80); } catch {}
 
   // Export
   window.MusicManager = { applyState };
