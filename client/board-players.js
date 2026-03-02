@@ -1,139 +1,4 @@
 // ================== BOARD ==================
-// ===== Offscreen "Основа" locator (orange arrow at edge of viewport) =====
-let _baseLocatorEl = null;
-let _baseLocatorTri = null;
-let _baseLocatorInited = false;
-
-function ensureBaseLocator() {
-  if (_baseLocatorEl && _baseLocatorTri) return;
-  const bwEl = document.getElementById('board-wrapper');
-  const boardEl = document.getElementById('game-board');
-  if (!bwEl || !boardEl) return;
-
-  // Make sure board-wrapper is a positioned scroll container.
-  try {
-    const cs = window.getComputedStyle(bwEl);
-    if (cs.position === 'static') bwEl.style.position = 'relative';
-  } catch {}
-
-  const el = document.createElement('div');
-  el.id = 'base-locator';
-  el.className = 'base-locator hidden';
-  el.setAttribute('aria-hidden', 'true');
-  el.innerHTML = `<div class="base-locator__tri"></div>`;
-  bwEl.appendChild(el);
-
-  _baseLocatorEl = el;
-  _baseLocatorTri = el.querySelector('.base-locator__tri');
-
-  if (!_baseLocatorInited) {
-    _baseLocatorInited = true;
-    try {
-      bwEl.addEventListener('scroll', () => {
-        try { updateBaseLocator(); } catch {}
-      }, { passive: true });
-    } catch {}
-    try {
-      window.addEventListener('resize', () => {
-        try { updateBaseLocator(); } catch {}
-      });
-    } catch {}
-  }
-}
-
-function updateBaseLocator() {
-  ensureBaseLocator();
-  if (!_baseLocatorEl || !_baseLocatorTri) return;
-  const bwEl = document.getElementById('board-wrapper');
-  if (!bwEl) return;
-
-  // Identify "my" base token (Основа). We try several id fields because the project
-  // historically used different naming (ownerId/userId/etc.).
-  const myIdStr = (typeof myId !== 'undefined' && myId !== null)
-    ? String(myId)
-    : String(window.myId || localStorage.getItem('dnd_user_id') || localStorage.getItem('userId') || '');
-
-  const plist = Array.isArray(players) ? players : [];
-  const baseCandidates = plist.filter(p => p && (p.isBase || String(p.role || '').toLowerCase() === 'base'));
-
-  const idMatches = (p) => {
-    const v = [p.ownerId, p.userId, p.owner, p.playerId, p.controllerId].map(x => (x === undefined || x === null) ? '' : String(x));
-    return v.includes(myIdStr);
-  };
-
-  let baseP = baseCandidates.find(p => p && idMatches(p));
-
-  // Fallback: if the currently selected token is a base — use it.
-  try {
-    if (!baseP && selectedPlayer && (selectedPlayer.isBase || String(selectedPlayer.role || '').toLowerCase() === 'base')) {
-      baseP = selectedPlayer;
-    }
-  } catch {}
-
-  // Fallback for GM convenience: if there is exactly one base token on the board.
-  try {
-    const isGm = !!(window.isGM || window.isGm || window.isMaster || (typeof role !== 'undefined' && String(role).toLowerCase() === 'gm'));
-    if (!baseP && isGm && baseCandidates.length === 1) baseP = baseCandidates[0];
-  } catch {}
-  if (!baseP) {
-    _baseLocatorEl.classList.add('hidden');
-    return;
-  }
-
-  const tokenEl = (typeof playerElements !== 'undefined') ? playerElements.get(baseP.id) : null;
-  if (!tokenEl || tokenEl.style.display === 'none') {
-    _baseLocatorEl.classList.add('hidden');
-    return;
-  }
-
-  // Center of token in board content coordinates (within board-wrapper scroll content).
-  const baseCx = (tokenEl.offsetLeft || 0) + (tokenEl.offsetWidth || 0) / 2;
-  const baseCy = (tokenEl.offsetTop || 0) + (tokenEl.offsetHeight || 0) / 2;
-
-  const vx0 = bwEl.scrollLeft;
-  const vy0 = bwEl.scrollTop;
-  const vx1 = vx0 + bwEl.clientWidth;
-  const vy1 = vy0 + bwEl.clientHeight;
-
-  const outLeft = baseCx < vx0;
-  const outRight = baseCx > vx1;
-  const outTop = baseCy < vy0;
-  const outBottom = baseCy > vy1;
-
-  // If token is visible — hide.
-  if (!outLeft && !outRight && !outTop && !outBottom) {
-    _baseLocatorEl.classList.add('hidden');
-    return;
-  }
-
-  // IMPORTANT:
-  // #board-wrapper is a scroll container. Any absolutely-positioned child is placed in
-  // the *scrollable content* coordinate space. To pin the locator to the visible edge
-  // of the wrapper, we must offset by scrollLeft/scrollTop.
-  const pad = 18; // distance from edge
-  let px = vx0 + (bwEl.clientWidth / 2);
-  let py = vy0 + (bwEl.clientHeight / 2);
-  if (outLeft) px = vx0 + pad;
-  if (outRight) px = vx1 - pad;
-  if (outTop) py = vy0 + pad;
-  if (outBottom) py = vy1 - pad;
-
-  // Direction (8-way) for rotation.
-  let deg = 0;
-  if (outTop && !outLeft && !outRight) deg = 0;
-  else if (outTop && outRight) deg = 45;
-  else if (outRight && !outTop && !outBottom) deg = 90;
-  else if (outBottom && outRight) deg = 135;
-  else if (outBottom && !outLeft && !outRight) deg = 180;
-  else if (outBottom && outLeft) deg = -135;
-  else if (outLeft && !outTop && !outBottom) deg = -90;
-  else if (outTop && outLeft) deg = -45;
-
-  _baseLocatorEl.classList.remove('hidden');
-  _baseLocatorEl.style.left = `${px}px`;
-  _baseLocatorEl.style.top = `${py}px`;
-  _baseLocatorTri.style.transform = `rotate(${deg}deg)`;
-}
 function renderBoard(state) {
   const CELL = 50;
   const bw = Number(state?.boardWidth) || boardWidth || 10;
@@ -213,9 +78,6 @@ function renderBoard(state) {
   } catch {}
 
   players.forEach(p => setPlayerPosition(p));
-
-  // Update offscreen base arrow (if needed)
-  try { updateBaseLocator(); } catch {}
 
   // Fog of war overlay needs to match board size and state.
   try { window.FogWar?.onBoardRendered?.(state); } catch {}
@@ -1216,6 +1078,178 @@ board.addEventListener('click', e => {
 
 // ===== Dice Viz (panel + canvas animation) =====
 const diceVizKind = document.getElementById("dice-viz-kind");
+
+// ================== BASE TOKEN NAV ARROW (find "Основа" if off-screen) ==================
+// Shows a small orange triangle on the edge of the visible board area pointing toward
+// the player's "Основа" token when it is outside the current viewport.
+(function wireBaseNavArrow() {
+  const CELL = 50;
+  const ARROW_SIZE = 14; // px
+  const EDGE_PAD = 10;   // px from edge
+  const Z = 999999;
+
+  function getBoardWrapper() {
+    return document.getElementById('board-wrapper');
+  }
+
+  function getBoardEl() {
+    // In this project, global "board" is #game-board.
+    try { return board || document.getElementById('game-board'); } catch { return document.getElementById('game-board'); }
+  }
+
+  function ensureArrowEl() {
+    const b = getBoardEl();
+    if (!b) return null;
+    let el = document.getElementById('base-nav-arrow');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'base-nav-arrow';
+
+      // Triangle pointing up by default; we rotate it.
+      el.style.width = '0px';
+      el.style.height = '0px';
+      el.style.borderLeft = `${ARROW_SIZE}px solid transparent`;
+      el.style.borderRight = `${ARROW_SIZE}px solid transparent`;
+      el.style.borderBottom = `${ARROW_SIZE * 1.4}px solid rgba(255, 165, 0, 0.95)`;
+
+      el.style.position = 'absolute';
+      el.style.zIndex = String(Z);
+      el.style.pointerEvents = 'none';
+      el.style.filter = 'drop-shadow(0 0 6px rgba(0,0,0,0.75))';
+      el.style.display = 'none';
+
+      // Ensure board is positioned so absolute works
+      try { b.style.position = b.style.position || 'relative'; } catch {}
+      b.appendChild(el);
+    }
+    return el;
+  }
+
+  function findMyBasePlayer() {
+    try {
+      const list = Array.isArray(players) ? players : [];
+      const myIdStr = (typeof myId !== 'undefined') ? String(myId) : '';
+      const myNameStr = (typeof myName !== 'undefined') ? String(myName) : '';
+
+      // Prefer explicit ownerId match.
+      let p = list.find(pp => pp && pp.isBase && myIdStr && String(pp.ownerId || '') === myIdStr);
+      if (p) return p;
+
+      // Fallback: base token with name == myName.
+      p = list.find(pp => pp && pp.isBase && myNameStr && String(pp.name || '') === myNameStr);
+      if (p) return p;
+
+      // Last fallback: if there is exactly one base token, use it.
+      const bases = list.filter(pp => pp && pp.isBase);
+      if (bases.length === 1) return bases[0];
+    } catch {}
+    return null;
+  }
+
+  function clamp(v, a, b) {
+    return Math.max(a, Math.min(b, v));
+  }
+
+  function updateArrowNow() {
+    const wrap = getBoardWrapper();
+    const b = getBoardEl();
+    const arrow = ensureArrowEl();
+    if (!wrap || !b || !arrow) return;
+
+    const baseP = findMyBasePlayer();
+    if (!baseP || baseP.x === null || baseP.y === null) {
+      arrow.style.display = 'none';
+      return;
+    }
+
+    // Token center in CONTENT coordinates (same system as scrollLeft/Top)
+    const size = Number(baseP.size) || 1;
+    const tokenCx = (Number(baseP.x) + size / 2) * CELL;
+    const tokenCy = (Number(baseP.y) + size / 2) * CELL;
+
+    const viewL = wrap.scrollLeft;
+    const viewT = wrap.scrollTop;
+    const viewR = viewL + wrap.clientWidth;
+    const viewB = viewT + wrap.clientHeight;
+
+    const outLeft = tokenCx < viewL;
+    const outRight = tokenCx > viewR;
+    const outTop = tokenCy < viewT;
+    const outBottom = tokenCy > viewB;
+
+    // If visible - hide.
+    if (!outLeft && !outRight && !outTop && !outBottom) {
+      arrow.style.display = 'none';
+      return;
+    }
+
+    // Place arrow ON THE EDGE of the visible viewport (in CONTENT coordinates).
+    const minX = viewL + EDGE_PAD;
+    const maxX = viewR - EDGE_PAD;
+    const minY = viewT + EDGE_PAD;
+    const maxY = viewB - EDGE_PAD;
+
+    let ax;
+    let ay;
+
+    if (outLeft) ax = minX;
+    else if (outRight) ax = maxX;
+    else ax = clamp(tokenCx, minX, maxX);
+
+    if (outTop) ay = minY;
+    else if (outBottom) ay = maxY;
+    else ay = clamp(tokenCy, minY, maxY);
+
+    // Compute direction from arrow position toward token.
+    const dx = tokenCx - ax;
+    const dy = tokenCy - ay;
+    const ang = Math.atan2(dy, dx); // radians
+    // Our triangle points UP by default; angle 0 is to the right.
+    const deg = (ang * 180 / Math.PI) + 90;
+
+    // Center the triangle around (ax, ay)
+    const w = ARROW_SIZE * 2;
+    const h = ARROW_SIZE * 1.4;
+    arrow.style.left = `${ax - w / 2}px`;
+    arrow.style.top = `${ay - h / 2}px`;
+    arrow.style.transform = `rotate(${deg}deg)`;
+    arrow.style.transformOrigin = '50% 60%';
+    arrow.style.display = 'block';
+  }
+
+  let rafId = 0;
+  function scheduleUpdate() {
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = 0;
+      try { updateArrowNow(); } catch {}
+    });
+  }
+
+  function wire() {
+    const wrap = getBoardWrapper();
+    if (!wrap) return;
+
+    // Update on scroll/resize.
+    wrap.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+    try { document.addEventListener('visibilitychange', scheduleUpdate); } catch {}
+
+    // Periodic safety update.
+    setInterval(scheduleUpdate, 300);
+
+    scheduleUpdate();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
+
+  // Expose manual trigger for other modules.
+  window.__updateBaseNavArrow = scheduleUpdate;
+})();
 const diceVizValue = document.getElementById("dice-viz-value");
 const diceCanvas = document.getElementById("dice-canvas");
 const diceCtx = diceCanvas?.getContext?.("2d");
