@@ -193,6 +193,9 @@ function ensureMainUiLayout() {
       const btns = controlsRow.querySelectorAll('button');
       btns.forEach(b => {
         try {
+          b.style.display = 'inline-flex';
+          b.style.alignItems = 'center';
+          b.style.justifyContent = 'center';
           b.style.padding = '4px 10px';
           b.style.lineHeight = '1.1';
           b.style.height = '28px';

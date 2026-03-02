@@ -1119,6 +1119,8 @@ function updatePlayerList() {
         removeCompletelyBtn.classList.add('mini-action-btn','mini-action-btn--danger');
         removeCompletelyBtn.onclick = (e) => {
           e.stopPropagation();
+          // Safety: prevent accidental deletion
+          if (!confirm(`Удалить персонажа "${p.name}"?`)) return;
           sendMessage({ type: 'removePlayerCompletely', id: p.id });
         };
 
