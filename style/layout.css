@@ -58,7 +58,7 @@
   gap: 10px;
   justify-content: center;
   align-items: flex-start;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 /* UI: строка URL подложки */
@@ -200,8 +200,7 @@
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
-  /* keep both boxes perfectly aligned vertically */
-  align-items: stretch;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -211,12 +210,10 @@
   background: #141414;
   padding: 6px 8px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
   flex-wrap: nowrap;
   font-size: 13px;
-  line-height: 1.2;
-  margin-top: 0;
 }
 
 .board-settings-box label {
