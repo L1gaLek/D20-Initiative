@@ -79,153 +79,96 @@ function renderBoard(state) {
 
   players.forEach(p => setPlayerPosition(p));
 
-  // Base token locator arrow (helps players find their "Основа" token on large maps)
-  try { updateBaseLocatorArrow(state); } catch {}
-
   // Fog of war overlay needs to match board size and state.
   try { window.FogWar?.onBoardRendered?.(state); } catch {}
 
   // Board marks/areas (rect/circle/poly overlays)
   try { window.BoardMarks?.onBoardRendered?.(state); } catch {}
+
+  // Base token locator arrow (for large boards)
+  try { scheduleBaseLocatorUpdate(); } catch {}
 }
 
-// ================== BASE TOKEN LOCATOR ARROW ==================
-let __baseLocatorArrowEl = null;
-let __baseLocatorInit = false;
+// ================== BASE TOKEN LOCATOR (arrow when "Основа" is offscreen) ==================
+let baseLocatorArrowEl = null;
+let baseLocatorRaf = 0;
+let baseLocatorWired = false;
 
-function ensureBaseLocatorArrowEl() {
-  if (__baseLocatorArrowEl && document.body.contains(__baseLocatorArrowEl)) return __baseLocatorArrowEl;
-
+function ensureBaseLocatorArrow() {
+  if (baseLocatorArrowEl) return baseLocatorArrowEl;
+  const bw = document.getElementById('board-wrapper');
+  if (!bw) return null;
   const el = document.createElement('div');
   el.id = 'base-locator-arrow';
-  el.className = 'base-locator-arrow';
-  el.innerHTML = '<div class="base-locator-arrow-shape"></div>';
-  el.style.display = 'none';
+  el.className = '';
+  bw.appendChild(el);
+  baseLocatorArrowEl = el;
 
-  // Put overlay on <body> so it never scrolls away with the board content
-  document.body.appendChild(el);
-
-  __baseLocatorArrowEl = el;
+  if (!baseLocatorWired) {
+    baseLocatorWired = true;
+    try {
+      bw.addEventListener('scroll', scheduleBaseLocatorUpdate, { passive: true });
+      window.addEventListener('resize', scheduleBaseLocatorUpdate);
+    } catch {}
+  }
   return el;
 }
 
-
-
-/* getMyBaseToken replaced by findMyBaseTokenFromState */
-
-
-function updateBaseLocatorArrow(state) {
-  // choose most reliable latest state
-  const st = state
-    || ((typeof lastState !== 'undefined' && lastState) ? lastState : null)
-    || (window.lastState || null)
-    || (window.gameState || null);
-
-  const wrap = (typeof boardWrapper !== 'undefined' && boardWrapper)
-    ? boardWrapper
-    : document.getElementById('board-wrapper');
-  if (!wrap) return;
-
-  // Init listeners once
-  if (!__baseLocatorInit) {
-    __baseLocatorInit = true;
-    try {
-      wrap.addEventListener('scroll', () => {
-        try { updateBaseLocatorArrow((typeof lastState !== 'undefined' && lastState) ? lastState : (window.lastState || st)); } catch {}
-      }, { passive: true });
-      window.addEventListener('resize', () => {
-        try { updateBaseLocatorArrow((typeof lastState !== 'undefined' && lastState) ? lastState : (window.lastState || st)); } catch {}
-      });
-    } catch {}
+function findMyBaseTokenEl() {
+  const my = String(window.myId || localStorage.getItem('dnd_user_id') || '');
+  if (!my) return null;
+  try {
+    const p = (Array.isArray(players) ? players : []).find(pp => pp && pp.isBase && String(pp.ownerId || '') === my);
+    if (!p) return null;
+    return playerElements.get(p.id) || p.element || null;
+  } catch {
+    return null;
   }
-
-  const arrow = ensureBaseLocatorArrowEl();
-  if (!arrow) return;
-
-  const baseToken = findMyBaseTokenFromState(st);
-  if (!baseToken) {
-    arrow.style.display = 'none';
-    return;
-  }
-
-  const CELL = 50;
-
-  // Coordinates may be stored as x/y or col/row in some builds; support both.
-  const x = Number(baseToken.x ?? baseToken.col ?? baseToken.cx);
-  const y = Number(baseToken.y ?? baseToken.row ?? baseToken.cy);
-  const size = Math.max(1, Number(baseToken.size) || 1);
-
-  const bw = Number(st?.boardWidth) || (typeof boardWidth !== 'undefined' ? boardWidth : 10) || 10;
-  const bh = Number(st?.boardHeight) || (typeof boardHeight !== 'undefined' ? boardHeight : 10) || 10;
-
-  // If token not placed or out of bounds — hide.
-  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x >= bw || y >= bh) {
-    arrow.style.display = 'none';
-    return;
-  }
-
-  // Token bounds in content coordinates
-  const tokLeft = x * CELL;
-  const tokTop = y * CELL;
-  const tokRight = tokLeft + CELL * size;
-  const tokBottom = tokTop + CELL * size;
-
-  // Viewport rectangle in content coords
-  const viewLeft = wrap.scrollLeft;
-  const viewTop = wrap.scrollTop;
-  const viewW = wrap.clientWidth;
-  const viewH = wrap.clientHeight;
-  const viewRight = viewLeft + viewW;
-  const viewBottom = viewTop + viewH;
-
-  const intersects = !(tokRight < viewLeft || tokLeft > viewRight || tokBottom < viewTop || tokTop > viewBottom);
-
-  if (intersects) {
-    arrow.style.display = 'none';
-    return;
-  }
-
-  // Centers in content coords
-  const tokX = (tokLeft + tokRight) / 2;
-  const tokY = (tokTop + tokBottom) / 2;
-  const viewCx = viewLeft + viewW / 2;
-  const viewCy = viewTop + viewH / 2;
-
-  // Direction vector from viewport center to token center (content coords)
-  let dx = tokX - viewCx;
-  let dy = tokY - viewCy;
-  const len = Math.hypot(dx, dy) || 1;
-  dx /= len; dy /= len;
-
-  // Arrow position inside the board viewport (local coords)
-  const pad = 26;
-  const halfW = (viewW / 2) - pad;
-  const halfH = (viewH / 2) - pad;
-  const t = Math.min(
-    halfW / Math.max(0.0001, Math.abs(dx)),
-    halfH / Math.max(0.0001, Math.abs(dy))
-  );
-
-  const localX = (viewW / 2) + dx * t;
-  const localY = (viewH / 2) + dy * t;
-
-  // Convert to screen coords using wrapper bounding rect
-  const r = wrap.getBoundingClientRect();
-  const screenX = r.left + localX;
-  const screenY = r.top + localY;
-
-  arrow.style.left = `${screenX}px`;
-  arrow.style.top = `${screenY}px`;
-
-  // Rotate shape
-  const ang = Math.atan2(dy, dx) * 180 / Math.PI;
-  const shape = arrow.querySelector('.base-locator-arrow-shape');
-  if (shape) shape.style.transform = `translate(-50%, -50%) rotate(${ang + 90}deg)`;
-
-  arrow.style.display = 'block';
 }
 
+function scheduleBaseLocatorUpdate() {
+  try {
+    if (baseLocatorRaf) return;
+    baseLocatorRaf = requestAnimationFrame(() => {
+      baseLocatorRaf = 0;
+      try { updateBaseLocatorArrow(); } catch {}
+    });
+  } catch {}
+}
 
+function updateBaseLocatorArrow() {
+  const arrow = ensureBaseLocatorArrow();
+  if (!arrow) return;
+
+  const tokenEl = findMyBaseTokenEl();
+  const bw = document.getElementById('board-wrapper');
+  if (!bw || !tokenEl || tokenEl.style.display === 'none') {
+    arrow.classList.remove('is-visible');
+    return;
+  }
+
+  const wRect = bw.getBoundingClientRect();
+  const tRect = tokenEl.getBoundingClientRect();
+
+  // token полностью внутри видимой области рамки
+  const inside = (tRect.left >= wRect.left) && (tRect.right <= wRect.right) && (tRect.top >= wRect.top) && (tRect.bottom <= wRect.bottom);
+  if (inside) {
+    arrow.classList.remove('is-visible');
+    return;
+  }
+
+  const wcx = wRect.left + (wRect.width / 2);
+  const wcy = wRect.top + (wRect.height / 2);
+  const tcx = tRect.left + (tRect.width / 2);
+  const tcy = tRect.top + (tRect.height / 2);
+  const dx = tcx - wcx;
+  const dy = tcy - wcy;
+
+  // CSS-треугольник по умолчанию смотрит ВВЕРХ, поэтому +90° к atan2
+  const ang = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+  arrow.style.transform = `translateX(-50%) rotate(${ang}deg)`;
+  arrow.classList.add('is-visible');
+}
 
 // ================== WALL EDGES RENDER ==================
 function renderWallEdges(state, layerEl) {
@@ -1113,6 +1056,9 @@ function setPlayerPosition(player) {
   if (tokenMiniEl && tokenMiniPlayerId === player.id) {
     positionTokenMini(el);
   }
+
+  // Update "Основа" locator arrow (if needed)
+  try { scheduleBaseLocatorUpdate(); } catch {}
 }
 
 // ================== NO-OVERLAP HELPERS (CLIENT SIDE) ==================

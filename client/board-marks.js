@@ -71,7 +71,7 @@
   let label = '';
 
   const LS_KEY = 'dnd_marks_toolbar';
-  const LS_COLLAPSED = 'dnd_marks_collapsed';
+  const LS_COLLAPSE_KEY = 'dnd_marks_toolbar_collapsed';
 
   function isGM() { try { return !!ctx?.isGM?.(); } catch { return false; } }
   function isSpectator() { try { return !!ctx?.isSpectator?.(); } catch { return false; } }
@@ -94,45 +94,48 @@
     toolbar.className = 'marks-toolbar';
     toolbar.innerHTML = `
       <div class="marks-toolbar__head">
-        <button class="marks-toolbar__title" type="button" data-marks-toggle title="Свернуть/развернуть">Обозначения</button>
+        <button class="marks-toolbar__title" id="marks-toolbar-toggle" type="button" aria-expanded="true">Обозначения</button>
         <label class="marks-switch"><input type="checkbox" id="marks-enabled"> <span>Рисовать</span></label>
         <button class="marks-btn" type="button" id="marks-clear" title="Удалить выбранную метку (или все ваши)">Очистить</button>
       </div>
-      <div class="marks-toolbar__row">
-        <div class="marks-seg" role="group" aria-label="Инструмент">
-          <button class="marks-seg__btn" type="button" data-tool="select">Выбор</button>
-          <button class="marks-seg__btn" type="button" data-tool="rect">Прямоуг.</button>
-          <button class="marks-seg__btn" type="button" data-tool="circle">Круг</button>
-          <button class="marks-seg__btn" type="button" data-tool="poly">Поли</button>
+      <div class="marks-toolbar__body">
+        <div class="marks-toolbar__row">
+          <div class="marks-seg" role="group" aria-label="Инструмент">
+            <button class="marks-seg__btn" type="button" data-tool="select">Выбор</button>
+            <button class="marks-seg__btn" type="button" data-tool="rect">Прямоуг.</button>
+            <button class="marks-seg__btn" type="button" data-tool="circle">Круг</button>
+            <button class="marks-seg__btn" type="button" data-tool="poly">Поли</button>
+          </div>
+          <label class="marks-field"><span>Цвет</span><input id="marks-color" type="color" value="#ffa500"></label>
+          <label class="marks-field"><span>Заливка</span><input id="marks-fill" type="range" min="0" max="90" value="30"></label>
+          <label class="marks-field"><span>Контур</span><input id="marks-stroke" type="range" min="0" max="100" value="60"></label>
+          <label class="marks-field"><span>Линия</span><input id="marks-stroke-w" type="number" min="1" max="10" value="2"></label>
         </div>
-        <label class="marks-field"><span>Цвет</span><input id="marks-color" type="color" value="#ffa500"></label>
-        <label class="marks-field"><span>Заливка</span><input id="marks-fill" type="range" min="0" max="90" value="30"></label>
-        <label class="marks-field"><span>Контур</span><input id="marks-stroke" type="range" min="0" max="100" value="60"></label>
-        <label class="marks-field"><span>Линия</span><input id="marks-stroke-w" type="number" min="1" max="10" value="2"></label>
-      </div>
-      <div class="marks-toolbar__row marks-toolbar__row--sub">
-        <input id="marks-label" class="marks-label" type="text" placeholder="Подпись (необязательно)">
-        <div class="marks-hint">Двойной клик — завершить многоугольник.</div>
+        <div class="marks-toolbar__row marks-toolbar__row--sub">
+          <input id="marks-label" class="marks-label" type="text" placeholder="Подпись (необязательно)">
+          <div class="marks-hint">Двойной клик — завершить многоугольник.</div>
+        </div>
       </div>
     `;
 
-    // collapse/expand toolbar (title acts like a button)
-    function applyMarksCollapsedState() {
-      const collapsed = (localStorage.getItem(LS_COLLAPSED) === '1');
-      toolbar.classList.toggle('is-collapsed', collapsed);
-    }
-    try { applyMarksCollapsedState(); } catch {}
-
-    toolbar.querySelector('[data-marks-toggle]')?.addEventListener('click', () => {
-      try {
-        const cur = toolbar.classList.contains('is-collapsed');
-        const next = !cur;
-        toolbar.classList.toggle('is-collapsed', next);
-        localStorage.setItem(LS_COLLAPSED, next ? '1' : '0');
-      } catch {}
-    });
-
     host.appendChild(toolbar);
+
+    // ===== Collapsible ("Обозначения") =====
+    try {
+      const toggleBtn = toolbar.querySelector('#marks-toolbar-toggle');
+      const applyCollapsed = (collapsed) => {
+        toolbar.classList.toggle('is-collapsed', !!collapsed);
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        try { localStorage.setItem(LS_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch {}
+      };
+      const savedCollapsed = String(localStorage.getItem(LS_COLLAPSE_KEY) || '') === '1';
+      applyCollapsed(savedCollapsed);
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+          applyCollapsed(!toolbar.classList.contains('is-collapsed'));
+        });
+      }
+    } catch {}
 
     try {
       const raw = localStorage.getItem(LS_KEY);
