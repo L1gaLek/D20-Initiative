@@ -116,10 +116,15 @@ function getMyBaseToken() {
   const list = Array.isArray(players) ? players : [];
   if (!list.length) return null;
 
-  // Prefer base token that belongs to current user
+  // Prefer base token that belongs to current user.
+  // Different builds may store ownership in different fields, so we check a few.
   if (uid) {
-    // In this project the owner id is stored in p.ownerId (token id is separate)
-    const mine = list.find(p => p && p.isBase && String(p.ownerId || '') === uid);
+    const mine = list.find(p => p && p.isBase && (
+      String(p.ownerId || '') === uid ||
+      String(p.userId || '') === uid ||
+      String(p.playerId || '') === uid ||
+      String(p.id || '') === uid
+    ));
     if (mine) return mine;
   }
 
@@ -163,6 +168,7 @@ function updateBaseLocatorArrow(state) {
   const CELL = 50;
   const x = Number(baseToken.x);
   const y = Number(baseToken.y);
+  const size = Math.max(1, Number(baseToken.size) || 1);
   const bw = Number(state?.boardWidth) || boardWidth || 10;
   const bh = Number(state?.boardHeight) || boardHeight || 10;
 
@@ -172,9 +178,11 @@ function updateBaseLocatorArrow(state) {
     return;
   }
 
-  // Token center in content coordinates (pixels inside the scrollable board)
-  const tokX = x * CELL + CELL / 2;
-  const tokY = y * CELL + CELL / 2;
+  // Token bounds in content coordinates (pixels inside the scrollable board)
+  const tokLeft = x * CELL;
+  const tokTop = y * CELL;
+  const tokRight = tokLeft + CELL * size;
+  const tokBottom = tokTop + CELL * size;
 
   // Viewport rectangle in content coordinates
   const viewLeft = wrap.scrollLeft;
@@ -184,13 +192,19 @@ function updateBaseLocatorArrow(state) {
   const viewRight = viewLeft + viewW;
   const viewBottom = viewTop + viewH;
 
-  const fullyVisible = tokX >= viewLeft && tokX <= viewRight && tokY >= viewTop && tokY <= viewBottom;
-  if (fullyVisible) {
+  const intersects =
+    !(tokRight < viewLeft || tokLeft > viewRight || tokBottom < viewTop || tokTop > viewBottom);
+
+  if (intersects) {
+    // if any part of base is visible, hide arrow
     arrow.style.display = 'none';
     return;
   }
 
-  // View center in content coords
+  // Token center in content coords
+  const tokX = (tokLeft + tokRight) / 2;
+  const tokY = (tokTop + tokBottom) / 2;
+// View center in content coords
   const viewCx = viewLeft + viewW / 2;
   const viewCy = viewTop + viewH / 2;
 

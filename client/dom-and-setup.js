@@ -635,3 +635,43 @@ window.SUPABASE_FETCH_FN = "fetch";
   sendMessage({ type: 'listRooms' });
 });
 
+
+
+// ===== MARKS (ОБОЗНАЧЕНИЯ) COLLAPSE/EXPAND =====
+(function initMarksLegendToggle(){
+  const LS_KEY = 'dnd_marks_legend_collapsed';
+
+  function applyCollapsed(root){
+    const toolbar = (root && root.closest) ? root.closest('.marks-toolbar') : document.querySelector('.marks-toolbar');
+    if (!toolbar) return;
+    const collapsed = localStorage.getItem(LS_KEY) === '1';
+    toolbar.classList.toggle('marks-toolbar--collapsed', collapsed);
+  }
+
+  // apply on DOM ready (and also shortly after to handle late-rendered UI)
+  function applySoon(){
+    applyCollapsed(document.querySelector('.marks-toolbar'));
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    applySoon();
+    setTimeout(applySoon, 50);
+    setTimeout(applySoon, 250);
+  });
+
+  // event delegation: UI can be rerendered
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t) return;
+
+    // Click on title or header area
+    const title = t.closest && (t.closest('.marks-toolbar__title') || t.closest('.marks-toolbar__head'));
+    if (!title) return;
+
+    const toolbar = title.closest('.marks-toolbar');
+    if (!toolbar) return;
+
+    const isCollapsed = toolbar.classList.toggle('marks-toolbar--collapsed');
+    localStorage.setItem(LS_KEY, isCollapsed ? '1' : '0');
+  });
+})();
