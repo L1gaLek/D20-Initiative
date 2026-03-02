@@ -48,6 +48,16 @@
       state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0 };
     }
     if (!Array.isArray(state.bgMusic.tracks)) state.bgMusic.tracks = [];
+
+// Normalize legacy/new fields for track description.
+try {
+  (state.bgMusic.tracks || []).forEach((t) => {
+    if (!t || typeof t !== 'object') return;
+    if (typeof t.desc === 'undefined' && typeof t.description !== 'undefined') t.desc = t.description;
+    if (typeof t.description === 'undefined' && typeof t.desc !== 'undefined') t.description = t.desc;
+  });
+} catch {}
+
     if (typeof state.bgMusic.isPlaying !== "boolean") state.bgMusic.isPlaying = false;
     if (!Number.isFinite(Number(state.bgMusic.startedAt))) state.bgMusic.startedAt = 0;
     return state.bgMusic;
@@ -112,146 +122,150 @@
     return `${m}:${String(r).padStart(2, '0')}`;
   }
 
-  function ensureMainUiLayout() {
-    if (!musicBox) return;
-    if (musicBox._bgmLayoutDone) return;
-    musicBox._bgmLayoutDone = true;
+  
+function ensureMainUiLayout() {
+  if (!musicBox) return;
+  if (musicBox._bgmLayoutDone) return;
+  musicBox._bgmLayoutDone = true;
 
-    // 1) Put "Список" + volume in one row, and make "Список" button tightly fit text.
-    try {
+  // Layout goal (per latest request):
+  // - Volume stays in the top row (under title), but occupies the place where "Список" used to be.
+  // - "Список" goes into the same row as "Пуск/Пауза" and "Стоп".
+  // - Buttons are same height and compact.
+  try {
+    const h3 = musicBox.querySelector('h3');
+
+    // ----- Top row: Volume only (left aligned) -----
+    if (volumeSlider) {
+      volumeSlider.style.width = '150px';
+    }
+    const volLabel = volumeSlider ? volumeSlider.closest('label') : null;
+
+    const topRow = document.createElement('div');
+    topRow.style.display = 'flex';
+    topRow.style.alignItems = 'center';
+    topRow.style.justifyContent = 'flex-start';
+    topRow.style.gap = '10px';
+    topRow.style.flexWrap = 'nowrap';
+    topRow.style.marginTop = '6px';
+
+    if (volLabel) {
+      try {
+        const span = volLabel.querySelector('span');
+        if (span) {
+          span.textContent = 'Громк.';
+          span.style.minWidth = 'auto';
+          span.style.fontSize = '12px';
+        }
+        volLabel.style.marginTop = '0';
+        volLabel.style.gap = '6px';
+      } catch {}
+      topRow.appendChild(volLabel);
+    }
+
+    if (h3 && h3.parentNode) {
+      if (h3.nextSibling) h3.parentNode.insertBefore(topRow, h3.nextSibling);
+      else h3.parentNode.appendChild(topRow);
+    } else {
+      musicBox.insertBefore(topRow, musicBox.firstChild);
+    }
+
+    // ----- Controls row: Список + Пуск/Пауза + Стоп -----
+    const controlsRow = toggleBtn ? toggleBtn.parentElement : null;
+    if (controlsRow) {
+      controlsRow.style.display = 'flex';
+      controlsRow.style.gap = '8px';
+      controlsRow.style.flexWrap = 'nowrap';
+      controlsRow.style.alignItems = 'center';
+      controlsRow.style.marginTop = '8px';
+
       if (openBtn) {
+        // move button into controls row (first)
+        try { openBtn.remove(); } catch {}
+        controlsRow.insertBefore(openBtn, controlsRow.firstChild);
+
         openBtn.style.width = 'auto';
         openBtn.style.padding = '4px 10px';
         openBtn.style.lineHeight = '1.1';
       }
-      if (volumeSlider) {
-        volumeSlider.style.width = '140px';
-      }
 
-      const volLabel = volumeSlider ? volumeSlider.closest('label') : null;
-
-      const h3 = musicBox.querySelector('h3');
-      const row = document.createElement('div');
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.justifyContent = 'space-between';
-      row.style.gap = '10px';
-      row.style.flexWrap = 'nowrap';
-      row.style.marginTop = '6px';
-
-      const left = document.createElement('div');
-      left.style.display = 'flex';
-      left.style.alignItems = 'center';
-      left.style.gap = '10px';
-      left.style.flex = '0 0 auto';
-
-      const right = document.createElement('div');
-      right.style.display = 'flex';
-      right.style.alignItems = 'center';
-      right.style.gap = '8px';
-      right.style.flex = '1 1 auto';
-      right.style.justifyContent = 'flex-end';
-
-      if (openBtn) left.appendChild(openBtn);
-      if (volLabel) {
+      // equal compact height for all buttons in row
+      const btns = controlsRow.querySelectorAll('button');
+      btns.forEach(b => {
         try {
-          const span = volLabel.querySelector('span');
-          if (span) {
-            span.textContent = 'Громк.';
-            span.style.minWidth = 'auto';
-            span.style.fontSize = '12px';
-          }
-          volLabel.style.marginTop = '0';
-          volLabel.style.gap = '6px';
+          b.style.padding = '4px 10px';
+          b.style.lineHeight = '1.1';
+          b.style.height = '28px';
         } catch {}
-        right.appendChild(volLabel);
-      }
-
-      row.appendChild(left);
-      row.appendChild(right);
-
-      if (h3 && h3.parentNode) {
-        if (h3.nextSibling) h3.parentNode.insertBefore(row, h3.nextSibling);
-        else h3.parentNode.appendChild(row);
-      } else {
-        musicBox.insertBefore(row, musicBox.firstChild);
-      }
-
-      // 3) Ensure Start/Pause + Stop are in one row (already, but force no wrap).
-      const controlsRow = toggleBtn ? toggleBtn.parentElement : null;
-      if (controlsRow && controlsRow.style) {
-        controlsRow.style.display = 'flex';
-        controlsRow.style.gap = '8px';
-        controlsRow.style.flexWrap = 'nowrap';
-        controlsRow.style.marginTop = '8px';
-      }
-    } catch {}
-
-    // 2) Add seek bar ("эквалайзер") right under the track label.
-    try {
-      if (!nowLabel) return;
-      seekWrap = document.createElement('div');
-      seekWrap.style.marginTop = '6px';
-      seekWrap.style.display = 'flex';
-      seekWrap.style.flexDirection = 'column';
-      seekWrap.style.gap = '4px';
-
-      const top = document.createElement('div');
-      top.style.display = 'flex';
-      top.style.alignItems = 'center';
-      top.style.justifyContent = 'space-between';
-      top.style.gap = '8px';
-
-      seekTime = document.createElement('div');
-      seekTime.style.fontSize = '11px';
-      seekTime.style.opacity = '0.85';
-      seekTime.textContent = '0:00 / 0:00';
-      top.appendChild(seekTime);
-
-      seekSlider = document.createElement('input');
-      seekSlider.id = 'bg-music-seek';
-      seekSlider.type = 'range';
-      seekSlider.min = '0';
-      seekSlider.max = '0';
-      seekSlider.value = '0';
-      seekSlider.step = '0.1';
-      seekSlider.disabled = true;
-
-      seekWrap.appendChild(top);
-      seekWrap.appendChild(seekSlider);
-
-      if (nowLabel.parentNode) {
-        if (nowLabel.nextSibling) nowLabel.parentNode.insertBefore(seekWrap, nowLabel.nextSibling);
-        else nowLabel.parentNode.appendChild(seekWrap);
-      }
-
-      seekSlider.addEventListener('input', () => {
-        _isSeeking = true;
-        const dur = Number(audio.duration) || 0;
-        const cur = Number(seekSlider.value) || 0;
-        if (seekTime) seekTime.textContent = `${fmtTime(cur)} / ${fmtTime(dur)}`;
       });
-      seekSlider.addEventListener('change', () => {
-        const dur = Number(audio.duration) || 0;
-        const cur = Math.max(0, Math.min(dur || 0, Number(seekSlider.value) || 0));
-        try { audio.currentTime = cur; } catch {}
+    }
+  } catch {}
 
-        // GM seeks are synced to everyone by shifting startedAt.
-        if (isGM()) {
-          const now = Date.now();
-          if (now - _lastSeekSyncAt > 250) {
-            _lastSeekSyncAt = now;
-            try {
-              const bg = ensureBgMusic(currentState || {});
-              bg.startedAt = Date.now() - Math.round(cur * 1000);
-              syncState();
-            } catch {}
-          }
+  // ----- Seek bar ("эквалайзер") under the track label -----
+  try {
+    if (!nowLabel) return;
+    seekWrap = document.createElement('div');
+    seekWrap.style.marginTop = '6px';
+    seekWrap.style.display = 'flex';
+    seekWrap.style.flexDirection = 'column';
+    seekWrap.style.gap = '4px';
+
+    const top = document.createElement('div');
+    top.style.display = 'flex';
+    top.style.alignItems = 'center';
+    top.style.justifyContent = 'space-between';
+    top.style.gap = '8px';
+
+    seekTime = document.createElement('div');
+    seekTime.style.fontSize = '12px';
+    seekTime.style.opacity = '0.85';
+    seekTime.textContent = '0:00 / 0:00';
+
+    seekSlider = document.createElement('input');
+    seekSlider.type = 'range';
+    seekSlider.min = '0';
+    seekSlider.max = '0';
+    seekSlider.value = '0';
+    seekSlider.step = '0.01';
+    seekSlider.style.width = '100%';
+    seekSlider.disabled = true;
+
+    top.appendChild(seekTime);
+    seekWrap.appendChild(top);
+    seekWrap.appendChild(seekSlider);
+
+    if (nowLabel.parentNode) {
+      if (nowLabel.nextSibling) nowLabel.parentNode.insertBefore(seekWrap, nowLabel.nextSibling);
+      else nowLabel.parentNode.appendChild(seekWrap);
+    }
+
+    seekSlider.addEventListener('input', () => {
+      _isSeeking = true;
+      const dur = Number(audio.duration) || 0;
+      const cur = Number(seekSlider.value) || 0;
+      if (seekTime) seekTime.textContent = `${fmtTime(cur)} / ${fmtTime(dur)}`;
+    });
+    seekSlider.addEventListener('change', () => {
+      const dur = Number(audio.duration) || 0;
+      const cur = Math.max(0, Math.min(dur || 0, Number(seekSlider.value) || 0));
+      try { audio.currentTime = cur; } catch {}
+
+      // GM seeks are synced to everyone by shifting startedAt.
+      if (isGM()) {
+        const now = Date.now();
+        if (now - _lastSeekSyncAt > 250) {
+          _lastSeekSyncAt = now;
+          try {
+            const bg = ensureBgMusic(currentState || {});
+            bg.startedAt = Date.now() - Math.round(cur * 1000);
+            syncState();
+          } catch {}
         }
-        _isSeeking = false;
-      });
-    } catch {}
-  }
+      }
+      _isSeeking = false;
+    });
+  } catch {}
+}
 
   let unlockBtn = null;
   function showUnlockBtn() {
@@ -395,7 +409,7 @@
         </div>
         <div style="margin-top:8px;">
           <div style="font-size:12px; opacity:.85; margin-bottom:4px;">Описание (вручную):</div>
-          <textarea data-act="desc" rows="3" style="width:100%; resize:vertical;">${escapeHtml(String(t.description || ""))}</textarea>
+          <textarea data-act="desc" rows="3" style="width:100%; resize:vertical;">${escapeHtml(String((t.desc ?? t.description) || ""))}</textarea>
         </div>
       `;
 
@@ -414,7 +428,8 @@
       const desc = item.querySelector('textarea[data-act="desc"]');
       if (desc) {
         const handler = () => {
-          t.description = String(desc.value || '');
+          t.desc = String(desc.value || '');
+          t.description = t.desc; // backward compat
           debounceSync();
         };
         desc.addEventListener("input", handler);
@@ -478,6 +493,7 @@
     bg.tracks.push({
       id,
       name: safeName,
+      desc: "",
       description: "",
       url: publicUrl,
       path
@@ -535,14 +551,33 @@
     sm({ type: "bgMusicSet", bgMusic: bg });
   }
 
-  function setCurrent(trackId, play) {
-    if (!isGM()) return;
-    const bg = ensureBgMusic(currentState || {});
-    bg.currentTrackId = String(trackId || "");
-    bg.isPlaying = !!play;
-    bg.startedAt = Date.now();
-    syncState();
+  
+function setCurrent(trackId, play) {
+  if (!isGM()) return;
+  const bg = ensureBgMusic(currentState || {});
+  const nextId = String(trackId || "");
+  const changed = String(bg.currentTrackId || "") !== nextId;
+
+  bg.currentTrackId = nextId;
+  bg.isPlaying = !!play;
+
+  // When switching track: start from 0.
+  // When just "play current": keep currentTime (rarely used here).
+  if (bg.isPlaying) {
+    if (changed) {
+      bg.startedAt = Date.now();
+      try { audio.currentTime = 0; } catch {}
+    } else {
+      const t = Number(audio.currentTime) || 0;
+      bg.startedAt = Date.now() - Math.round(t * 1000);
+    }
+  } else {
+    // paused
+    // keep startedAt as-is (not important while paused)
   }
+
+  syncState();
+}
 
   // ---------- Apply state (called from message-ui on each snapshot) ----------
   let currentState = null;
@@ -657,24 +692,40 @@
   if (openBtn) openBtn.addEventListener("click", openModal);
 
   if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
-      if (!isGM()) return;
-      const bg = ensureBgMusic(currentState || {});
-      bg.isPlaying = !bg.isPlaying;
-      bg.startedAt = Date.now();
-      syncState();
-    });
-  }
+  toggleBtn.addEventListener("click", () => {
+    if (!isGM()) return;
+    const bg = ensureBgMusic(currentState || {});
+    if (!bg.currentTrackId) return;
 
-  if (stopBtn) {
-    stopBtn.addEventListener("click", () => {
-      if (!isGM()) return;
-      const bg = ensureBgMusic(currentState || {});
+    if (bg.isPlaying) {
+      // Pause: keep current position locally, just stop playback for everyone.
       bg.isPlaying = false;
-      bg.startedAt = Date.now();
       syncState();
-    });
-  }
+      return;
+    }
+
+    // Resume: keep position (do NOT restart from 0).
+    // We sync by shifting startedAt so that (now - startedAt) == currentTime.
+    const t = Number(audio.currentTime) || 0;
+    bg.isPlaying = true;
+    bg.startedAt = Date.now() - Math.round(t * 1000);
+    syncState();
+  });
+}
+
+  
+if (stopBtn) {
+  stopBtn.addEventListener("click", () => {
+    if (!isGM()) return;
+    const bg = ensureBgMusic(currentState || {});
+    bg.isPlaying = false;
+
+    // Stop resets position to 0 for the next play.
+    try { audio.pause(); audio.currentTime = 0; } catch {}
+    bg.startedAt = Date.now();
+    syncState();
+  });
+}
 
   // Export
   window.MusicManager = { applyState };
