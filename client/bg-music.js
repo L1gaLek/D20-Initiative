@@ -456,6 +456,48 @@
     });
   }
 
+  // ---------- Passive sync for ALL clients ----------
+  // В проекте lastState обновляется в message-ui.js / core-helpers-network.js.
+  // Чтобы не править эти файлы, делаем лёгкий "наблюдатель" за глобальным состоянием
+  // и применяем bgMusic на каждом клиенте (включая игроков).
+  let _lastAppliedSig = null;
+  function _stateSig(st) {
+    try {
+      const bg = ensureBgMusic(st || {});
+      const tracks = safeArr(bg.tracks).map(t => `${String(t?.id||'')}:${String(t?.url||'')}`).join('|');
+      return [
+        String(bg.currentTrackId || ''),
+        bg.isPlaying ? '1' : '0',
+        String(Number(bg.startedAt) || 0),
+        tracks
+      ].join('::');
+    } catch {
+      return null;
+    }
+  }
+  function _getGlobalState() {
+    try {
+      // основной глобальный стейт проекта
+      if (window.lastState) return window.lastState;
+    } catch {}
+    try {
+      // fallback (если где-то хранится иначе)
+      if (typeof lastState !== 'undefined') return lastState;
+    } catch {}
+    return null;
+  }
+  function _tickApplyFromGlobal() {
+    const st = _getGlobalState();
+    if (!st) return;
+    const sig = _stateSig(st);
+    if (!sig || sig === _lastAppliedSig) return;
+    _lastAppliedSig = sig;
+    try { applyState(st); } catch {}
+  }
+  // периодически проверяем изменения; интервал небольшой, нагрузка минимальная
+  try { setInterval(_tickApplyFromGlobal, 500); } catch {}
+  try { setTimeout(_tickApplyFromGlobal, 80); } catch {}
+
   // Export
   window.MusicManager = { applyState };
 })();
