@@ -4,7 +4,7 @@
 /* ===== Base token locator arrow (shows direction to player's "Основа" if off-screen) ===== */
 #board-wrapper{ position: relative; }
 .base-locator-arrow{
-  position:absolute;
+  position: fixed;
   z-index: 9999;
   pointer-events:none;
 }
@@ -808,7 +808,7 @@
 
 /* ===== BASE LOCATOR ARROW (ОСНОВА) ===== */
 .base-locator-arrow{
-  position:absolute;
+  position: fixed;
   z-index: 9999;
   pointer-events:none;
   width:0;
