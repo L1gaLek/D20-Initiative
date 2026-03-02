@@ -47,12 +47,34 @@ function updateBaseLocator() {
   const bwEl = document.getElementById('board-wrapper');
   if (!bwEl) return;
 
-  // Identify "my" base token (Основа): isBase && ownerId === myId
+  // Identify "my" base token (Основа). We try several id fields because the project
+  // historically used different naming (ownerId/userId/etc.).
   const myIdStr = (typeof myId !== 'undefined' && myId !== null)
     ? String(myId)
-    : String(window.myId || localStorage.getItem('dnd_user_id') || '');
+    : String(window.myId || localStorage.getItem('dnd_user_id') || localStorage.getItem('userId') || '');
 
-  const baseP = (Array.isArray(players) ? players : []).find(p => p && p.isBase && String(p.ownerId) === myIdStr);
+  const plist = Array.isArray(players) ? players : [];
+  const baseCandidates = plist.filter(p => p && (p.isBase || String(p.role || '').toLowerCase() === 'base'));
+
+  const idMatches = (p) => {
+    const v = [p.ownerId, p.userId, p.owner, p.playerId, p.controllerId].map(x => (x === undefined || x === null) ? '' : String(x));
+    return v.includes(myIdStr);
+  };
+
+  let baseP = baseCandidates.find(p => p && idMatches(p));
+
+  // Fallback: if the currently selected token is a base — use it.
+  try {
+    if (!baseP && selectedPlayer && (selectedPlayer.isBase || String(selectedPlayer.role || '').toLowerCase() === 'base')) {
+      baseP = selectedPlayer;
+    }
+  } catch {}
+
+  // Fallback for GM convenience: if there is exactly one base token on the board.
+  try {
+    const isGm = !!(window.isGM || window.isGm || window.isMaster || (typeof role !== 'undefined' && String(role).toLowerCase() === 'gm'));
+    if (!baseP && isGm && baseCandidates.length === 1) baseP = baseCandidates[0];
+  } catch {}
   if (!baseP) {
     _baseLocatorEl.classList.add('hidden');
     return;
@@ -84,14 +106,17 @@ function updateBaseLocator() {
     return;
   }
 
-  // Place on the edge (or corner) of the visible viewport.
+  // IMPORTANT:
+  // The locator is an overlay that must sit on the *visible* edge of the board-wrapper.
+  // Therefore its left/top are in wrapper-local viewport coordinates (0..clientWidth/Height),
+  // NOT in scrolled content coordinates.
   const pad = 18; // distance from edge
-  let px = vx0 + (bwEl.clientWidth / 2);
-  let py = vy0 + (bwEl.clientHeight / 2);
-  if (outLeft) px = vx0 + pad;
-  if (outRight) px = vx1 - pad;
-  if (outTop) py = vy0 + pad;
-  if (outBottom) py = vy1 - pad;
+  let px = (bwEl.clientWidth / 2);
+  let py = (bwEl.clientHeight / 2);
+  if (outLeft) px = pad;
+  if (outRight) px = bwEl.clientWidth - pad;
+  if (outTop) py = pad;
+  if (outBottom) py = bwEl.clientHeight - pad;
 
   // Direction (8-way) for rotation.
   let deg = 0;
