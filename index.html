@@ -247,6 +247,23 @@
             <button id="start-exploration">Фаза исследования</button>
             <button id="start-initiative">Фаза инициативы</button>
             <button id="start-combat">Фаза бой</button>
+
+          <div id="bg-music-box" class="side-box">
+            <h3>Фоновая музыка</h3>
+            <button id="bg-music-open" type="button">Список</button>
+            <div id="bg-music-now" style="margin-top:8px; font-size:12px; opacity:.9;">Трек: —</div>
+            <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
+              <button id="bg-music-toggle" type="button" disabled>▶/⏸</button>
+              <button id="bg-music-stop" type="button" disabled>⏹</button>
+            </div>
+            <div style="margin-top:8px;">
+              <label style="display:flex; align-items:center; gap:8px;">
+                <span style="min-width:64px; font-size:12px; opacity:.9;">Громк.</span>
+                <input id="bg-music-volume" type="range" min="0" max="100" value="40" />
+              </label>
+            </div>
+          </div>
+
           </div>
 
           <div id="env-editor" class="side-box">
@@ -513,6 +530,7 @@
   <script src="client/board-players.js"></script>
   <script src="client/gameplay-ui.js"></script>
   <script src="client/core-helpers-network.js"></script>
+  <script src="client/bg-music.js"></script>
   <script src="client/rooms-controlbox.js"></script>
   <!-- Character sheet (split from info-dnd-player.js) -->
   <script src="char_sheet/sheet-utils.js"></script>
