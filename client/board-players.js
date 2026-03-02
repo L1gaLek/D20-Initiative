@@ -94,23 +94,21 @@ let __baseLocatorArrowEl = null;
 let __baseLocatorInit = false;
 
 function ensureBaseLocatorArrowEl() {
-  const wrap = (typeof boardWrapper !== 'undefined' && boardWrapper)
-    ? boardWrapper
-    : document.getElementById('board-wrapper');
-  if (!wrap) return null;
+  if (__baseLocatorArrowEl && document.body.contains(__baseLocatorArrowEl)) return __baseLocatorArrowEl;
 
-  if (!__baseLocatorArrowEl) {
-    const el = document.createElement('div');
-    el.id = 'base-locator-arrow';
-    el.className = 'base-locator-arrow';
-    el.innerHTML = '<div class="base-locator-arrow-shape"></div>';
-    el.style.display = 'none';
-    // important: wrapper must be positioning context (CSS sets #board-wrapper{position:relative})
-    wrap.appendChild(el);
-    __baseLocatorArrowEl = el;
-  }
-  return __baseLocatorArrowEl;
+  const el = document.createElement('div');
+  el.id = 'base-locator-arrow';
+  el.className = 'base-locator-arrow';
+  el.innerHTML = '<div class="base-locator-arrow-shape"></div>';
+  el.style.display = 'none';
+
+  // Put overlay on <body> so it never scrolls away with the board content
+  document.body.appendChild(el);
+
+  __baseLocatorArrowEl = el;
+  return el;
 }
+
 
 
 /* getMyBaseToken replaced by findMyBaseTokenFromState */
@@ -187,19 +185,19 @@ function updateBaseLocatorArrow(state) {
     return;
   }
 
-  // Centers
+  // Centers in content coords
   const tokX = (tokLeft + tokRight) / 2;
   const tokY = (tokTop + tokBottom) / 2;
   const viewCx = viewLeft + viewW / 2;
   const viewCy = viewTop + viewH / 2;
 
-  // Direction from viewport center to token center
+  // Direction vector from viewport center to token center (content coords)
   let dx = tokX - viewCx;
   let dy = tokY - viewCy;
   const len = Math.hypot(dx, dy) || 1;
   dx /= len; dy /= len;
 
-  // Clamp arrow inside viewport
+  // Arrow position inside the board viewport (local coords)
   const pad = 26;
   const halfW = (viewW / 2) - pad;
   const halfH = (viewH / 2) - pad;
@@ -211,16 +209,22 @@ function updateBaseLocatorArrow(state) {
   const localX = (viewW / 2) + dx * t;
   const localY = (viewH / 2) + dy * t;
 
-  arrow.style.left = `${localX}px`;
-  arrow.style.top = `${localY}px`;
+  // Convert to screen coords using wrapper bounding rect
+  const r = wrap.getBoundingClientRect();
+  const screenX = r.left + localX;
+  const screenY = r.top + localY;
+
+  arrow.style.left = `${screenX}px`;
+  arrow.style.top = `${screenY}px`;
 
   // Rotate shape
   const ang = Math.atan2(dy, dx) * 180 / Math.PI;
   const shape = arrow.querySelector('.base-locator-arrow-shape');
   if (shape) shape.style.transform = `translate(-50%, -50%) rotate(${ang + 90}deg)`;
 
-  arrow.style.display = '';
+  arrow.style.display = 'block';
 }
+
 
 
 // ================== WALL EDGES RENDER ==================
