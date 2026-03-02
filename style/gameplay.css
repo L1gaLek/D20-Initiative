@@ -806,8 +806,23 @@
 .marks-toolbar.is-spectator .marks-switch{ display:none; }
 
 
-/* ===== MARKS (ОБОЗНАЧЕНИЯ) COLLAPSED STATE ===== */
-.marks-toolbar__title{ cursor:pointer; }
-.marks-toolbar--collapsed .marks-toolbar__row{ display:none !important; }
-.marks-toolbar--collapsed .marks-toolbar__row--sub{ display:none !important; }
-.marks-toolbar--collapsed .marks-toolbar__head{ margin-bottom:0 !important; }
+/* ===== BASE LOCATOR ARROW (ОСНОВА) ===== */
+.base-locator-arrow{
+  position:absolute;
+  z-index: 9999;
+  pointer-events:none;
+  width:0;
+  height:0;
+}
+.base-locator-arrow-shape{
+  position:absolute;
+  left:0;
+  top:0;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 18px solid orange;
+  filter: drop-shadow(0 0 2px rgba(0,0,0,0.9));
+  transform: translate(-50%, -50%);
+}
