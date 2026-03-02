@@ -394,6 +394,9 @@ loginDiv.style.display = 'none';
       // обновим GM-инпуты (если controlbox подключен)
       try { window.ControlBox?.refreshGmInputsFromState?.(); } catch {}
 
+      // Sync background music from room_state
+      try { window.MusicManager?.applyState?.(normalized); } catch {}
+
       // Apply visibility rules (GM-only ally, GM NPC visibility, per-map list scoping)
       const allPlayers = Array.isArray(normalized.players) ? normalized.players : [];
       const visiblePlayers = allPlayers.filter(p => isPlayerVisibleToMe(p, normalized));

@@ -64,7 +64,15 @@ function createInitialGameState() {
     turnOrder: [],
     currentTurnIndex: 0,
     round: 1,
-    log: []
+    log: [],
+
+    // Background music (GM-controlled, synced to all)
+    bgMusic: {
+      tracks: [], // [{id,name,desc,url,path,createdAt}]
+      currentTrackId: null,
+      isPlaying: false,
+      volume: 40 // 0..100
+    }
   };
 }
 
@@ -176,6 +184,17 @@ function ensureStateHasMaps(state) {
 
   // keep root mirror
   state.fog = migratedMap.fog;
+
+  // Ensure background music defaults
+  if (!state.bgMusic || typeof state.bgMusic !== 'object') {
+    state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+  } else {
+    if (!Array.isArray(state.bgMusic.tracks)) state.bgMusic.tracks = [];
+    if (typeof state.bgMusic.currentTrackId === 'undefined') state.bgMusic.currentTrackId = null;
+    if (typeof state.bgMusic.isPlaying !== 'boolean') state.bgMusic.isPlaying = false;
+    const v = Number(state.bgMusic.volume);
+    state.bgMusic.volume = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 40;
+  }
 
   return state;
 }
@@ -806,30 +825,9 @@ async function sendMessage(msg) {
       case "listRooms": {
         const { data, error } = await sbClient
           .from("rooms")
-          // NOTE: rooms table in this project does NOT have a password column.
-          // Password (if any) is stored inside room_state.state.roomPassword.
           .select("id,name,scenario,created_at")
           .order("created_at", { ascending: false });
         if (error) throw error;
-
-        // Build a map roomId -> hasPassword by peeking into room_state.state.roomPassword
-        const roomIds = (data || []).map(r => String(r?.id || '')).filter(Boolean);
-        const hasPassByRoom = new Map();
-        try {
-          if (roomIds.length) {
-            const { data: rs, error: rse } = await sbClient
-              .from('room_state')
-              .select('room_id,state')
-              .in('room_id', roomIds);
-            if (!rse && Array.isArray(rs)) {
-              for (const row of rs) {
-                const rid = String(row?.room_id || '');
-                const pass = String(row?.state?.roomPassword || '').trim();
-                if (rid) hasPassByRoom.set(rid, !!pass);
-              }
-            }
-          }
-        } catch {}
 
         // Unique users per room + total unique users on server (across all rooms)
         let members = [];
@@ -857,8 +855,7 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            // room can be protected by a password (stored in room_state.state.roomPassword)
-            hasPassword: !!hasPassByRoom.get(rid)
+            hasPassword: false
           };
         });
 
@@ -870,14 +867,10 @@ async function sendMessage(msg) {
         const roomId = (crypto?.randomUUID ? crypto.randomUUID() : ("r-" + Math.random().toString(16).slice(2)));
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
-        const password = String(msg.password || '').trim();
-        // IMPORTANT: rooms table has no password column in this project.
-        // We persist password inside room_state.state.roomPassword.
         const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
         if (e1) throw e1;
 
         const initState = createInitialGameState();
-        if (password) initState.roomPassword = password;
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
           phase: initState.phase,
@@ -897,25 +890,6 @@ async function sendMessage(msg) {
 
         const { data: room, error: er } = await sbClient.from("rooms").select("*").eq("id", roomId).single();
         if (er) throw er;
-
-        // ===== Room password check (if set) =====
-        try {
-          const { data: rs, error: ers } = await sbClient
-            .from('room_state')
-            .select('state')
-            .eq('room_id', roomId)
-            .maybeSingle();
-          if (ers) throw ers;
-
-          const roomPass = String(rs?.state?.roomPassword || '').trim();
-          if (roomPass) {
-            const provided = String(msg.password || '').trim();
-            if (!provided || provided !== roomPass) {
-              handleMessage({ type: 'roomsError', message: 'Неверный пароль комнаты' });
-              return;
-            }
-          }
-        } catch {}
 
         // ===== Enforce roles: register membership + prevent multiple GMs =====
         const userId = String(localStorage.getItem("dnd_user_id") || myId || "");
@@ -1998,6 +1972,43 @@ else if (type === "addWall") {
           const a = Number(msg.alpha);
           next.wallAlpha = Number.isFinite(a) ? clamp(a, 0, 1) : 1;
           logEventToState(next, `Прозрачность стен: ${Math.round((1 - next.wallAlpha) * 100)}%`);
+        }
+
+
+
+        // ===== Background Music (GM) =====
+        else if (type === "bgMusicSet") {
+          if (!isGM) return;
+          if (!next.bgMusic || typeof next.bgMusic !== 'object') {
+            next.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+          }
+          const incoming = msg.bgMusic || {};
+          if (Array.isArray(incoming.tracks)) {
+            // hard limit 10
+            next.bgMusic.tracks = incoming.tracks.slice(0, 10).map(t => ({
+              id: String(t?.id || ''),
+              name: String(t?.name || ''),
+              desc: String(t?.desc || ''),
+              url: String(t?.url || ''),
+              path: String(t?.path || ''),
+              createdAt: String(t?.createdAt || '')
+            })).filter(t => t.id && t.url);
+          }
+          if ('currentTrackId' in incoming) next.bgMusic.currentTrackId = incoming.currentTrackId ? String(incoming.currentTrackId) : null;
+          if (typeof incoming.isPlaying === 'boolean') next.bgMusic.isPlaying = incoming.isPlaying;
+          if ('volume' in incoming) {
+            const v = Number(incoming.volume);
+            next.bgMusic.volume = Number.isFinite(v) ? clamp(v, 0, 100) : (Number(next.bgMusic.volume) || 40);
+          }
+          // If current track removed — stop
+          if (next.bgMusic.currentTrackId) {
+            const ok = (next.bgMusic.tracks || []).some(t => String(t.id) === String(next.bgMusic.currentTrackId));
+            if (!ok) {
+              next.bgMusic.currentTrackId = null;
+              next.bgMusic.isPlaying = false;
+            }
+          }
+          logEventToState(next, "Фоновая музыка обновлена");
         }
 
         // ===== Marks / Areas (everyone can draw; GM can remove all) =====
