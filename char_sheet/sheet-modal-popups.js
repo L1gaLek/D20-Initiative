@@ -1125,6 +1125,11 @@ function ensureWiredCloseHandlers() {
     scheduleSheetSave(player);
     if (sheetContent) updateHeroChips(sheetContent, sheet);
     hideShortRestPopup();
+
+    // Force immediate UI refresh (rest changes should appear without closing the sheet)
+    try { document.activeElement?.blur?.(); } catch {}
+    try { const st = (typeof getUiState === 'function') ? getUiState(player.id) : null; if (st) st.lastInteractAt = 0; } catch {}
+    try { window.InfoModal?.refresh?.([player]); } catch {}
   }
 
   
@@ -1230,6 +1235,11 @@ function applyLongRest(){
     if (sheetContent) updateHeroChips(sheetContent, sheet);
     // закрываем короткий отдых если был открыт
     hideShortRestPopup();
+
+    // Force immediate UI refresh (rest changes should appear without closing the sheet)
+    try { document.activeElement?.blur?.(); } catch {}
+    try { const st = (typeof getUiState === 'function') ? getUiState(player.id) : null; if (st) st.lastInteractAt = 0; } catch {}
+    try { window.InfoModal?.refresh?.([player]); } catch {}
   }
 
   // keep condition chip highlight in sync when user edits the field manually
