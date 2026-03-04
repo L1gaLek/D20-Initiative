@@ -512,7 +512,7 @@ function startMembersPolling() {
   membersPollTimer = setInterval(() => {
     if (!currentRoomId) return;
     refreshRoomMembers(currentRoomId);
-  }, 5000);
+  }, 30_000);
 }
 
 function stopMembersPolling() {

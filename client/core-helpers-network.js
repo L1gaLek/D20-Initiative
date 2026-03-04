@@ -234,6 +234,76 @@ function syncActiveToMap(state) {
   return st;
 }
 
+// ===== Fog explored packing (to reduce room_state payload size) =====
+// We store a compact RLE-packed string in fog.exploredPacked and keep fog.explored
+// decoded in-memory for the UI. This keeps compatibility with existing logic
+// while drastically reducing DB egress when explored grows large.
+function packFogExplored(cells, w, h) {
+  try {
+    const W = Math.max(1, Number(w) || 1);
+    const H = Math.max(1, Number(h) || 1);
+    const set = new Set();
+    (Array.isArray(cells) ? cells : []).forEach((c) => {
+      const s = String(c || '');
+      const parts = s.split(',');
+      if (parts.length !== 2) return;
+      const x = Number(parts[0]);
+      const y = Number(parts[1]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      if (x < 0 || y < 0 || x >= W || y >= H) return;
+      set.add((y * W + x) | 0);
+    });
+    const idx = Array.from(set).sort((a, b) => a - b);
+    if (!idx.length) return `${W}x${H}:`;
+    const ranges = [];
+    let start = idx[0];
+    let prev = idx[0];
+    for (let i = 1; i < idx.length; i++) {
+      const v = idx[i];
+      if (v === prev + 1) {
+        prev = v;
+        continue;
+      }
+      const len = prev - start + 1;
+      ranges.push(`${start.toString(36)}.${len.toString(36)}`);
+      start = prev = v;
+    }
+    ranges.push(`${start.toString(36)}.${(prev - start + 1).toString(36)}`);
+    return `${W}x${H}:${ranges.join(',')}`;
+  } catch {
+    return null;
+  }
+}
+
+function unpackFogExplored(packed) {
+  try {
+    const s = String(packed || '');
+    const [wh, rest = ''] = s.split(':');
+    const [wStr, hStr] = wh.split('x');
+    const W = Math.max(1, parseInt(wStr, 10) || 1);
+    const H = Math.max(1, parseInt(hStr, 10) || 1);
+    if (!rest) return [];
+    const out = [];
+    const parts = rest.split(',').filter(Boolean);
+    for (const p of parts) {
+      const [a, b] = p.split('.');
+      const start = parseInt(a, 36);
+      const len = parseInt(b, 36);
+      if (!Number.isFinite(start) || !Number.isFinite(len) || len <= 0) continue;
+      for (let i = 0; i < len; i++) {
+        const idx = start + i;
+        const x = idx % W;
+        const y = Math.floor(idx / W);
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        out.push(`${x},${y}`);
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 function loadMapToRoot(state, mapId) {
   const st = ensureStateHasMaps(state);
   const targetId = String(mapId || "");
@@ -264,6 +334,17 @@ function loadMapToRoot(state, mapId) {
     moveOnlyExplored: false,
     explored: []
   };
+
+  // Decode packed explored cells if present
+  try {
+    if (st.fog && typeof st.fog === 'object') {
+      const packed = st.fog.exploredPacked;
+      const hasArr = Array.isArray(st.fog.explored) && st.fog.explored.length;
+      if (packed && !hasArr) {
+        st.fog.explored = unpackFogExplored(packed);
+      }
+    }
+  } catch {}
 
   // IMPORTANT (architecture v4): do NOT apply token positions from map snapshot.
   // Positions are authoritative in room_tokens and arrive via realtime.
@@ -436,6 +517,26 @@ async function upsertRoomState(roomId, nextState) {
     });
   } catch {}
 
+  // Compress fog.explored when it becomes large to reduce DB payload / egress.
+  // We keep exploredPacked in DB and decode it back to fog.explored on load.
+  try {
+    const f = stSafe?.fog;
+    if (f && typeof f === 'object') {
+      const arr = Array.isArray(f.explored) ? f.explored : [];
+      const w = Number(stSafe.boardWidth) || 10;
+      const h = Number(stSafe.boardHeight) || 10;
+      // pack once it's non-trivial; threshold chosen to avoid overhead for small sets
+      if (arr.length >= 80) {
+        const packed = packFogExplored(arr, w, h);
+        if (packed) {
+          f.exploredPacked = packed;
+          // keep DB small: drop the raw array
+          f.explored = [];
+        }
+      }
+    }
+  } catch {}
+
   // Also clear legacy per-map mirrors if present.
   try {
     const maps = Array.isArray(stSafe.maps) ? stSafe.maps : [];
@@ -453,6 +554,34 @@ async function upsertRoomState(roomId, nextState) {
   };
   const { error } = await sbClient.from("room_state").upsert(payload);
   if (error) throw error;
+}
+
+// ===== Coalesced room_state writes (reduces egress & avoids DB hammering) =====
+let __pendingRoomStateTimer = null;
+let __pendingRoomState = null;
+let __pendingRoomId = null;
+let __pendingRoomStateDelay = 0;
+
+function scheduleRoomStateUpsert(roomId, nextState, delayMs = 180) {
+  try {
+    __pendingRoomId = roomId;
+    __pendingRoomState = deepClone(nextState);
+    __pendingRoomStateDelay = Math.max(50, Number(delayMs) || 180);
+
+    if (__pendingRoomStateTimer) return;
+    __pendingRoomStateTimer = setTimeout(async () => {
+      const rid = __pendingRoomId;
+      const st = __pendingRoomState;
+      __pendingRoomStateTimer = null;
+      __pendingRoomId = null;
+      __pendingRoomState = null;
+      try {
+        if (rid && st) await upsertRoomState(rid, st);
+      } catch (e) {
+        console.warn('coalesced upsert failed', e);
+      }
+    }, __pendingRoomStateDelay);
+  } catch {}
 }
 
 
@@ -809,7 +938,30 @@ async function subscribeRoomMembersDb(roomId) {
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` },
-      () => refreshRoomMembers(roomId)
+      (payload) => {
+        try {
+          const ev = String(payload?.eventType || payload?.event_type || '').toUpperCase();
+          const rowNew = payload?.new;
+          const rowOld = payload?.old;
+
+          if (ev === 'DELETE') {
+            const uid = String(rowOld?.user_id || '');
+            if (uid) usersById.delete(uid);
+          } else {
+            const uid = String(rowNew?.user_id || '');
+            if (uid) {
+              usersById.set(uid, {
+                name: rowNew?.name || 'Unknown',
+                role: normalizeRoleForUi(rowNew?.role)
+              });
+            }
+          }
+          updatePlayerList();
+        } catch {
+          // Fallback to full refresh if realtime payload shape changes
+          refreshRoomMembers(roomId);
+        }
+      }
     );
 
   await roomMembersDbChannel.subscribe();
@@ -1068,7 +1220,25 @@ async function sendMessage(msg) {
           if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
         } catch {}
 
-        await upsertRoomState(currentRoomId, next);
+        // High-frequency operations (fog painting / exploration) are coalesced to reduce
+        // DB writes and realtime egress. We still update local UI immediately.
+        const coalescedTypes = new Set([
+          'fogStamp',
+          'fogStamp2',
+          'fogStampBatch',
+          'fogFill',
+          'fogClearExplored',
+          'fogSetExplored',
+          'fogAddExplored'
+        ]);
+
+        if (coalescedTypes.has(String(type))) {
+          try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
+          const d = (String(type) === 'fogStamp' || String(type) === 'fogStamp2' || String(type) === 'fogStampBatch') ? 140 : 320;
+          scheduleRoomStateUpsert(currentRoomId, next, d);
+        } else {
+          await upsertRoomState(currentRoomId, next);
+        }
         handleMessage({ type: "savedBaseApplied", playerId: p.id, savedId });
         break;
       }
@@ -2153,6 +2323,21 @@ else if (type === "addWall") {
           f.manualStamps.push({ x, y, r: clamp(r, 1, 40), mode: (mode === 'hide' ? 'hide' : 'reveal') });
         }
 
+        else if (type === "fogStampBatch") {
+          if (!isGM) return;
+          if (!next.fog || typeof next.fog !== 'object') next.fog = { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] };
+          const f = next.fog;
+          if (!Array.isArray(f.manualStamps)) f.manualStamps = [];
+          const stamps = Array.isArray(msg.stamps) ? msg.stamps : [];
+          for (const s of stamps) {
+            const x = Number(s?.x), y = Number(s?.y), r = Number(s?.r);
+            const mode = (String(s?.mode || 'reveal') === 'hide') ? 'hide' : 'reveal';
+            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(r)) continue;
+            f.manualStamps.push({ x, y, r: clamp(r, 1, 40), mode });
+            if (f.manualStamps.length > 5000) break; // safety
+          }
+        }
+
         else if (type === "fogStamp2") {
           // New manual shapes: rect/circle/poly (stored in fog.manualStamps)
           if (!isGM) return;
@@ -2227,6 +2412,27 @@ else if (type === "addWall") {
           if (!next.fog || typeof next.fog !== 'object') next.fog = {};
           const arr = Array.isArray(msg.cells) ? msg.cells.map(String) : [];
           next.fog.explored = arr;
+        }
+
+        else if (type === "fogAddExplored") {
+          // GM appends explored cells (delta) – much cheaper than sending full list
+          if (!isGM) return;
+          if (!next.fog || typeof next.fog !== 'object') next.fog = {};
+          const f = next.fog;
+          const cur = new Set();
+          // Prefer decoded array if present; otherwise decode packed.
+          if (Array.isArray(f.explored) && f.explored.length) {
+            f.explored.forEach((c) => cur.add(String(c)));
+          } else if (f.exploredPacked) {
+            unpackFogExplored(f.exploredPacked).forEach((c) => cur.add(String(c)));
+          }
+          const add = Array.isArray(msg.cells) ? msg.cells : [];
+          for (const c of add) {
+            const s = String(c || '');
+            if (!s || !s.includes(',')) continue;
+            cur.add(s);
+          }
+          f.explored = Array.from(cur);
         }
 
 

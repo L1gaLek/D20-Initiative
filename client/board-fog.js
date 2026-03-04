@@ -419,6 +419,8 @@
             const k = `${x},${y}`;
             if (!this._exploredSet.has(k)) {
               this._exploredSet.add(k);
+              if (!this._exploredDelta) this._exploredDelta = new Set();
+              this._exploredDelta.add(k);
               changed = true;
             }
           }
@@ -433,10 +435,14 @@
         this._pendingExploredSync = null;
         try {
           if (typeof sendMessage === 'function') {
-            sendMessage({ type: 'fogSetExplored', cells: Array.from(this._exploredSet) });
+            const delta = Array.from(this._exploredDelta || []);
+            this._exploredDelta = new Set();
+            if (delta.length) {
+              sendMessage({ type: 'fogAddExplored', cells: delta });
+            }
           }
         } catch {}
-      }, 250);
+      }, 450);
     },
 
     _cancelExploredSync() {
@@ -558,6 +564,28 @@
       let painting = false;
       let lastStampKey = '';
 
+      // Batch fog stamps to reduce network chatter / DB writes.
+      // While painting, we collect stamps and send them every ~120ms.
+      if (!this._stampQueue) this._stampQueue = [];
+      if (!this._stampFlushTimer) this._stampFlushTimer = null;
+      const flushStamps = () => {
+        try {
+          if (!this._stampQueue || this._stampQueue.length === 0) return;
+          const stamps = this._stampQueue.slice(0, 200);
+          this._stampQueue = this._stampQueue.slice(200);
+          sendMessage?.({ type: 'fogStampBatch', stamps });
+        } catch {}
+      };
+      const scheduleFlush = () => {
+        if (this._stampFlushTimer) return;
+        this._stampFlushTimer = setTimeout(() => {
+          this._stampFlushTimer = null;
+          flushStamps();
+          // If more pending, keep flushing.
+          if (this._stampQueue && this._stampQueue.length) scheduleFlush();
+        }, 120);
+      };
+
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
         const px = (e.clientX - rect.left);
@@ -591,7 +619,9 @@
         try {
           if (typeof sendMessage === 'function') {
             // NOTE: server field name is "r" for legacy reasons; we store square size in it.
-            sendMessage({ type: 'fogStamp', x, y, r: n, mode });
+            // We batch stamps to reduce DB spam.
+            this._stampQueue.push({ x, y, r: n, mode });
+            scheduleFlush();
           }
         } catch {}
       };
@@ -694,6 +724,7 @@
         // overwrite fresh exploration or keep clients stuck until a full fog toggle.
         try {
           this._exploredSet = new Set();
+          this._exploredDelta = new Set();
           this._cancelExploredSync();
           // Force dynamic recompute on next token update (exploration depends on it).
           this._dynKey = '';
