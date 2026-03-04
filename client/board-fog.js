@@ -5,6 +5,33 @@
 (function () {
   const CELL = 50;
 
+
+  // ===== Explored packing helpers (bitset -> base64) =====
+  function _bitBytesLen(w, h) {
+    const W = Math.max(1, Number(w) || 1);
+    const H = Math.max(1, Number(h) || 1);
+    return Math.ceil((W * H) / 8);
+  }
+  function _b64ToBytes(b64, expectedLen) {
+    try {
+      const s = String(b64 || '');
+      const out = new Uint8Array(expectedLen);
+      if (!s) return out;
+      const bin = atob(s);
+      const n = Math.min(bin.length, expectedLen);
+      for (let i = 0; i < n; i++) out[i] = bin.charCodeAt(i) & 255;
+      return out;
+    } catch {
+      return new Uint8Array(expectedLen);
+    }
+  }
+  function _isExploredBit(bytes, idx) {
+    const bi = idx >> 3;
+    const mask = 1 << (idx & 7);
+    return !!(bytes[bi] & mask);
+  }
+
+
   const FogWar = {
     _canvas: null,
     _ctx: null,
@@ -52,7 +79,7 @@
         if (visible) return true;
         // explored counts only in dynamic mode (as requested)
         const exploredOn = !!(st?.fog?.exploredEnabled);
-        if (String(st?.fog?.mode || '') === 'dynamic' && exploredOn && this._exploredSet?.has(`${cx},${cy}`)) return true;
+        if (String(st?.fog?.mode || '') === 'dynamic' && exploredOn && this._isExplored(cx, cy)) return true;
         return false;
       }
 
@@ -157,6 +184,29 @@
       this._toggleUiRows();
     },
 
+    _isExplored(x, y) {
+      try {
+        const st = this._lastState || {};
+        const w = Number(st.boardWidth) || 10;
+        const h = Number(st.boardHeight) || 10;
+        const ix = Number(x), iy = Number(y);
+        if (!Number.isFinite(ix) || !Number.isFinite(iy)) return false;
+        if (ix < 0 || iy < 0 || ix >= w || iy >= h) return false;
+
+        if (this._exploredBits && this._exploredBits.length) {
+          const idx = iy * w + ix;
+          return _isExploredBit(this._exploredBits, idx);
+        }
+        if (this._exploredSet && typeof this._exploredSet.has === 'function') {
+          return this._exploredSet.has(`${ix},${iy}`);
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    },
+
+
     // Called when only token positions changed (v4: positions come from room_tokens realtime).
     // Avoid full board rerender; just recompute dynamic visibility and repaint.
     onTokenPositionsChanged(state) {
@@ -215,6 +265,26 @@
 
     _syncExploredFromState() {
       const fog = this._fogObj();
+      const st = this._lastState || {};
+      const w = Number(st.boardWidth) || 10;
+      const h = Number(st.boardHeight) || 10;
+
+      // Prefer compact packed form
+      if (fog && fog.exploredPacked) {
+        const bytes = _b64ToBytes(fog.exploredPacked, _bitBytesLen(w, h));
+        this._exploredBits = bytes;
+
+        // For GM we keep local delta-set more authoritative to avoid "rollback" before debounce sync.
+        let isGm = false;
+        try { isGm = (typeof myRole !== 'undefined' && String(myRole) === 'GM'); } catch {}
+        if (isGm) return;
+
+        // Players: replace explored set from bits (we don't keep a huge Set for speed; use bits)
+        this._exploredSet = null;
+        return;
+      }
+
+      // Legacy fallback (older states)
       const arr = Array.isArray(fog.explored) ? fog.explored : [];
       const incoming = new Set();
       for (const k of arr) {
@@ -232,16 +302,20 @@
       if (isGm) {
         if (incoming.size === 0) {
           this._exploredSet = new Set();
+          this._exploredBits = null;
           return;
         }
         const merged = new Set(this._exploredSet || []);
         for (const k of incoming) merged.add(k);
         this._exploredSet = merged;
+        this._exploredBits = null;
         return;
       }
 
       this._exploredSet = incoming;
+      this._exploredBits = null;
     },
+
 
     _wallEdgesSet() {
       const st = this._lastState || {};
@@ -417,8 +491,24 @@
             const x = i % w;
             const y = Math.floor(i / w);
             const k = `${x},${y}`;
-            if (!this._exploredSet.has(k)) {
-              this._exploredSet.add(k);
+            let already = false;
+            try {
+              if (this._exploredBits && this._exploredBits.length) {
+                const idx = y * w + x;
+                already = _isExploredBit(this._exploredBits, idx);
+                if (!already) {
+                  // mark locally
+                  const bi = idx >> 3;
+                  const mask = 1 << (idx & 7);
+                  this._exploredBits[bi] = this._exploredBits[bi] | mask;
+                }
+              } else {
+                if (!this._exploredSet) this._exploredSet = new Set();
+                already = this._exploredSet.has(k);
+                if (!already) this._exploredSet.add(k);
+              }
+            } catch {}
+            if (!already) {
               if (!this._exploredDelta) this._exploredDelta = new Set();
               this._exploredDelta.add(k);
               changed = true;
@@ -511,7 +601,7 @@
           }
 
           // explored but not currently visible
-          if (fog.mode === 'dynamic' && exploredOn && explored.has(`${x},${y}`)) {
+          if (fog.mode === 'dynamic' && exploredOn && this._isExplored(x, y)) {
             alpha = 0.55;
           }
 
