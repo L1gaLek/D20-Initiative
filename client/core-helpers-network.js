@@ -607,17 +607,6 @@ async function upsertRoomState(roomId, nextState) {
     }
   } catch {}
 
-
-// Do not persist marks inside room_state (they live in room_marks table).
-try {
-  stSafe.marks = [];
-  const maps = Array.isArray(stSafe.maps) ? stSafe.maps : [];
-  maps.forEach((m) => {
-    if (!m || typeof m !== 'object') return;
-    if (Array.isArray(m.marks)) m.marks = [];
-  });
-} catch {}
-
   // Also clear legacy per-map mirrors if present.
   try {
     const maps = Array.isArray(stSafe.maps) ? stSafe.maps : [];
@@ -723,17 +712,7 @@ async function subscribeRoomDb(roomId) {
       (payload) => {
         const row = payload.new;
         if (row && row.state) {
-          // room_marks live in a separate table to avoid room_state bloat.
-          // Merge marks for the active map before rendering.
-          (async () => {
-            try {
-              const merged = await ensureMarksForState(roomId, row.state);
-              handleMessage({ type: "state", state: merged });
-            } catch (e) {
-              // fallback
-              handleMessage({ type: "state", state: row.state });
-            }
-          })();
+          handleMessage({ type: "state", state: row.state });
         }
       }
     );
@@ -780,151 +759,6 @@ async function loadRoomTokens(roomId, mapId) {
   const { data, error } = await q;
   if (error) throw error;
   return data || [];
-}
-
-
-// ================== v4: MARKS (dedicated table room_marks) ==================
-// Marks are removed from room_state to reduce realtime payload (egress).
-// We keep them in public.room_marks and merge into state on load / realtime changes.
-
-window.__roomMarksCacheByMap = window.__roomMarksCacheByMap || new Map();
-  window.__roomMarksLoadedByMap = window.__roomMarksLoadedByMap || new Set();
-
-function __marksCacheGet(mapId) {
-  try { return window.__roomMarksCacheByMap.get(String(mapId || '')) || []; } catch { return []; }
-}
-function __marksCacheSet(mapId, arr) {
-  try { window.__roomMarksCacheByMap.set(String(mapId || ''), Array.isArray(arr) ? arr : []);
-      try { window.__roomMarksLoadedByMap.add(String(mapId || '')); } catch {} } catch {}
-}
-
-function applyMarksToState(state, marksArr) {
-  const st = ensureStateHasMaps(state || {});
-  const map = getActiveMap(st);
-  const arr = Array.isArray(marksArr) ? marksArr : [];
-  if (map) map.marks = deepClone(arr);
-  st.marks = deepClone(arr);
-  return st;
-}
-
-async function loadRoomMarks(roomId, mapId) {
-  await ensureSupabaseReady();
-  if (!roomId || !mapId) return [];
-  const { data, error } = await sbClient
-    .from('room_marks')
-    .select('mark_id,mark,owner_id,map_id,updated_at,created_at')
-    .eq('room_id', roomId)
-    .eq('map_id', mapId)
-    .order('created_at', { ascending: true });
-  if (error) throw error;
-  const rows = data || [];
-  return rows
-    .map(r => r?.mark)
-    .filter(m => m && typeof m === 'object' && String(m.id || '').trim());
-}
-
-async function ensureMarksForState(roomId, state) {
-  const st = ensureStateHasMaps(state || {});
-  const mapId = String(st.currentMapId || '').trim();
-  if (!mapId) return st;
-
-  const cached = __marksCacheGet(mapId);
-  if (!cached || !cached.length) {
-    try {
-      const fresh = await loadRoomMarks(roomId, mapId);
-      __marksCacheSet(mapId, fresh);
-    } catch {}
-  }
-  return applyMarksToState(st, __marksCacheGet(mapId));
-}
-
-async function upsertRoomMark(roomId, mapId, markObj, ownerId) {
-  await ensureSupabaseReady();
-  if (!roomId || !mapId || !markObj) return;
-  const markId = String(markObj.id || '').trim();
-  if (!markId) return;
-  const payload = {
-    room_id: roomId,
-    map_id: mapId,
-    mark_id: markId,
-    owner_id: String(ownerId || markObj.ownerId || ''),
-    mark: markObj,
-    updated_at: new Date().toISOString()
-  };
-  const { error } = await sbClient.from('room_marks').upsert(payload, { onConflict: 'room_id,map_id,mark_id' });
-  if (error) throw error;
-}
-
-async function deleteRoomMark(roomId, mapId, markId) {
-  await ensureSupabaseReady();
-  if (!roomId || !mapId || !markId) return;
-  const { error } = await sbClient
-    .from('room_marks')
-    .delete()
-    .eq('room_id', roomId)
-    .eq('map_id', mapId)
-    .eq('mark_id', String(markId));
-  if (error) throw error;
-}
-
-async function clearRoomMarks(roomId, mapId, scope, ownerId) {
-  await ensureSupabaseReady();
-  if (!roomId || !mapId) return;
-  let q = sbClient.from('room_marks').delete().eq('room_id', roomId).eq('map_id', mapId);
-  if (String(scope) !== 'all') q = q.eq('owner_id', String(ownerId || ''));
-  const { error } = await q;
-  if (error) throw error;
-}
-
-async function subscribeRoomMarksDb(roomId) {
-  await ensureSupabaseReady();
-  if (window.roomMarksDbChannel) {
-    try { await window.roomMarksDbChannel.unsubscribe(); } catch {}
-    window.roomMarksDbChannel = null;
-  }
-  window.roomMarksDbChannel = sbClient
-    .channel(`db-room_marks-${roomId}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'room_marks', filter: `room_id=eq.${roomId}` },
-      (payload) => {
-        try {
-          const ev = String(payload.eventType || '').toUpperCase();
-          const rowNew = payload.new || null;
-          const rowOld = payload.old || null;
-          const mapId = String((rowNew?.map_id ?? rowOld?.map_id) || '').trim();
-          const markId = String((rowNew?.mark_id ?? rowOld?.mark_id) || '').trim();
-          if (!mapId) return;
-
-          let arr = __marksCacheGet(mapId).slice();
-          if (ev === 'DELETE') {
-            if (markId) arr = arr.filter(m => String(m?.id) !== markId);
-          } else {
-            const mk = rowNew?.mark;
-            if (mk && typeof mk === 'object' && String(mk.id || '').trim()) {
-              const i = arr.findIndex(m => String(m?.id) === String(mk.id));
-              if (i >= 0) arr[i] = mk;
-              else arr.push(mk);
-            }
-          }
-          __marksCacheSet(mapId, arr);
-
-          // If affects current map — re-render by emitting a synthetic state update.
-          try {
-            const cur = window.lastState || null;
-            if (!cur) return;
-            const curMap = String(cur.currentMapId || '').trim();
-            if (curMap && curMap === mapId) {
-              const next = applyMarksToState(deepClone(cur), __marksCacheGet(mapId));
-              handleMessage({ type: 'state', state: syncActiveToMap(next) });
-            }
-          } catch {}
-        } catch (e) {
-          console.warn('room_marks realtime apply failed', e);
-        }
-      }
-    );
-  await window.roomMarksDbChannel.subscribe();
 }
 
 async function subscribeRoomLogDb(roomId) {
@@ -1337,13 +1171,11 @@ async function sendMessage(msg) {
         await subscribeRoomDb(roomId);
         // v4: dedicated realtime tables
         try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
-        try { await subscribeRoomMarksDb(roomId); } catch (e) { console.warn('marks subscribe failed', e); }
         try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
         try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
         await refreshRoomMembers(roomId);
         await subscribeRoomMembersDb(roomId);
-        const __stateWithMarks = await ensureMarksForState(roomId, rs.state);
-        handleMessage({ type: "state", state: __stateWithMarks });
+        handleMessage({ type: "state", state: rs.state });
 
         // v4 init: load logs + tokens snapshot after state is applied
         try {
@@ -2420,120 +2252,113 @@ else if (type === "addWall") {
         }
 
         // ===== Marks / Areas (everyone can draw; GM can remove all) =====
-                else if (type === 'addMark') {
-                  handled = true;
-                  const raw = msg.mark;
-                  if (!raw || typeof raw !== 'object') return;
+        else if (type === 'addMark') {
+          const raw = msg.mark;
+          if (!raw || typeof raw !== 'object') return;
 
-                  const active = getActiveMap(next);
-                  if (!active) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
+          if (!Array.isArray(next.marks)) next.marks = [];
 
-                  const id = String(raw.id || '').trim();
-                  const kind = String(raw.kind || '').trim();
-                  if (!id) return;
-                  if (!(kind === 'rect' || kind === 'circle' || kind === 'poly')) return;
+          const id = String(raw.id || '').trim();
+          const kind = String(raw.kind || '').trim();
+          if (!id) return;
+          if (!(kind === 'rect' || kind === 'circle' || kind === 'poly')) return;
 
-                  const ownerId = String(raw.ownerId || myId || '').trim();
-                  const color = String(raw.color || '#ffa500').trim();
-                  const alphaFill = Number.isFinite(Number(raw.alphaFill)) ? clamp(Number(raw.alphaFill), 0, 1) : 0.7;
-                  const alphaStroke = Number.isFinite(Number(raw.alphaStroke)) ? clamp(Number(raw.alphaStroke), 0, 1) : 0.6;
-                  const strokeW = Number.isFinite(Number(raw.strokeW)) ? clamp(Number(raw.strokeW), 1, 10) : 2;
-                  const label = String(raw.label || '').slice(0, 80);
+          // Avoid duplicates
+          if (m.marks.some(mm => String(mm?.id) === id)) return;
 
-                  const safe = {
-                    id,
-                    mapId: String(next.currentMapId || active.id || ''),
-                    ownerId,
-                    kind,
-                    color,
-                    alphaFill,
-                    alphaStroke,
-                    strokeW,
-                    label
-                  };
+          const ownerId = String(raw.ownerId || myId || '').trim();
+          const color = String(raw.color || '#ffa500').trim();
+          const alphaFill = Number.isFinite(Number(raw.alphaFill)) ? clamp(Number(raw.alphaFill), 0, 1) : 0.7;
+          const alphaStroke = Number.isFinite(Number(raw.alphaStroke)) ? clamp(Number(raw.alphaStroke), 0, 1) : 0.6;
+          const strokeW = Number.isFinite(Number(raw.strokeW)) ? clamp(Number(raw.strokeW), 1, 10) : 2;
+          const label = String(raw.label || '').slice(0, 80);
 
-                  if (kind === 'rect') {
-                    const x = Number(raw.x), y = Number(raw.y), w = Number(raw.w), h = Number(raw.h);
-                    if (![x, y, w, h].every(Number.isFinite)) return;
-                    if (w <= 0 || h <= 0) return;
-                    safe.x = clamp(x, 0, Math.max(0, next.boardWidth - 0.01));
-                    safe.y = clamp(y, 0, Math.max(0, next.boardHeight - 0.01));
-                    safe.w = clamp(w, 0.01, next.boardWidth * 2);
-                    safe.h = clamp(h, 0.01, next.boardHeight * 2);
-                  } else if (kind === 'circle') {
-                    const cx = Number(raw.cx), cy = Number(raw.cy), r = Number(raw.r);
-                    if (![cx, cy, r].every(Number.isFinite)) return;
-                    if (r <= 0) return;
-                    safe.cx = clamp(cx, 0, Math.max(0, next.boardWidth));
-                    safe.cy = clamp(cy, 0, Math.max(0, next.boardHeight));
-                    safe.r = clamp(r, 0.05, Math.max(next.boardWidth, next.boardHeight) * 2);
-                  } else if (kind === 'poly') {
-                    const pts = Array.isArray(raw.pts) ? raw.pts : [];
-                    if (pts.length < 3) return;
-                    safe.pts = pts.slice(0, 64).map(p => ({
-                      x: clamp(Number(p?.x) || 0, 0, Math.max(0, next.boardWidth)),
-                      y: clamp(Number(p?.y) || 0, 0, Math.max(0, next.boardHeight))
-                    }));
-                  }
+          const safe = {
+            id,
+            mapId: String(next.currentMapId || m.id || ''),
+            ownerId,
+            kind,
+            color,
+            alphaFill,
+            alphaStroke,
+            strokeW,
+            label
+          };
 
-                  // Optimistic UI update (marks are NOT stored in room_state)
-                  if (!Array.isArray(active.marks)) active.marks = [];
-                  if (!active.marks.some(mm => String(mm?.id) === id)) active.marks.push(safe);
-                  next.marks = deepClone(active.marks);
-                  try { __marksCacheSet(safe.mapId, active.marks); } catch {}
+          if (kind === 'rect') {
+            const x = Number(raw.x), y = Number(raw.y), w = Number(raw.w), h = Number(raw.h);
+            if (![x, y, w, h].every(Number.isFinite)) return;
+            if (w <= 0 || h <= 0) return;
+            safe.x = clamp(x, 0, Math.max(0, next.boardWidth - 0.01));
+            safe.y = clamp(y, 0, Math.max(0, next.boardHeight - 0.01));
+            safe.w = clamp(w, 0.01, next.boardWidth * 2);
+            safe.h = clamp(h, 0.01, next.boardHeight * 2);
+          } else if (kind === 'circle') {
+            const cx = Number(raw.cx), cy = Number(raw.cy), r = Number(raw.r);
+            if (![cx, cy, r].every(Number.isFinite)) return;
+            if (r <= 0) return;
+            safe.cx = clamp(cx, 0, Math.max(0, next.boardWidth));
+            safe.cy = clamp(cy, 0, Math.max(0, next.boardHeight));
+            safe.r = clamp(r, 0.05, Math.max(next.boardWidth, next.boardHeight) * 2);
+          } else if (kind === 'poly') {
+            const pts = Array.isArray(raw.pts) ? raw.pts : [];
+            if (pts.length < 3) return;
+            safe.pts = pts.slice(0, 64).map(p => ({
+              x: clamp(Number(p?.x) || 0, 0, Math.max(0, next.boardWidth)),
+              y: clamp(Number(p?.y) || 0, 0, Math.max(0, next.boardHeight))
+            }));
+          }
 
-                  try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
-                  try { await upsertRoomMark(currentRoomId, safe.mapId, safe, ownerId); } catch (e) { console.warn('addMark db failed', e); }
-                  return; // IMPORTANT: do not upsert room_state for marks
-                }
+          m.marks.push(safe);
+          next.marks = deepClone(m.marks);
+          logEventToState(next, `Обозначение добавлено`);
+        }
 
-                else if (type === 'removeMark') {
-                  handled = true;
-                  const id = String(msg.id || '').trim();
-                  if (!id) return;
-                  const active = getActiveMap(next);
-                  if (!active) return;
-                  if (!Array.isArray(active.marks)) active.marks = [];
+        else if (type === 'removeMark') {
+          const id = String(msg.id || '').trim();
+          if (!id) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
 
-                  const mark = active.marks.find(mm => String(mm?.id) === id);
-                  if (!mark) return;
+          const mark = m.marks.find(mm => String(mm?.id) === id);
+          if (!mark) return;
 
-                  // GM может удалить всё, игрок — только своё
-                  if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
+          // GM может удалить всё, игрок — только своё
+          if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
 
-                  active.marks = active.marks.filter(mm => String(mm?.id) !== id);
-                  next.marks = deepClone(active.marks);
-                  try { __marksCacheSet(String(next.currentMapId || active.id || ''), active.marks); } catch {}
+          const before = m.marks.length;
+          m.marks = m.marks.filter(mm => String(mm?.id) !== id);
+          if (m.marks.length !== before) {
+            next.marks = deepClone(m.marks);
+            logEventToState(next, `Обозначение удалено`);
+          }
+        }
 
-                  try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
-                  try { await deleteRoomMark(currentRoomId, String(next.currentMapId || active.id || ''), id); } catch (e) { console.warn('removeMark db failed', e); }
-                  return;
-                }
-
-                else if (type === 'clearMarks') {
-                  handled = true;
-                  const active = getActiveMap(next);
-                  if (!active) return;
-                  if (!Array.isArray(active.marks)) active.marks = [];
-                  const scope = String(msg.scope || 'mine');
-                  const mapId = String(next.currentMapId || active.id || '');
-
-                  if (scope === 'all') {
-                    if (!isGM) return;
-                    active.marks = [];
-                  } else {
-                    active.marks = active.marks.filter(mm => String(mm?.ownerId || '') !== String(myId || ''));
-                  }
-
-                  next.marks = deepClone(active.marks);
-                  try { __marksCacheSet(mapId, active.marks); } catch {}
-                  try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
-
-                  try { await clearRoomMarks(currentRoomId, mapId, scope, myId); } catch (e) { console.warn('clearMarks db failed', e); }
-                  return;
-                }
-
-
+        else if (type === 'clearMarks') {
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
+          const scope = String(msg.scope || 'mine');
+          if (scope === 'all') {
+            if (!isGM) return;
+            if (m.marks.length) {
+              m.marks = [];
+              next.marks = [];
+              logEventToState(next, `Обозначения очищены`);
+            }
+          } else {
+            const before = m.marks.length;
+            m.marks = m.marks.filter(mm => String(mm?.ownerId || '') !== String(myId || ''));
+            if (m.marks.length !== before) {
+              next.marks = deepClone(m.marks);
+              logEventToState(next, `Обозначения очищены (локально)`);
+            }
+          }
+        }
 
         // ===== Fog of war (GM controls) =====
         else if (type === "setFogSettings") {
