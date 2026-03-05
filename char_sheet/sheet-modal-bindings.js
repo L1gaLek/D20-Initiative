@@ -3785,22 +3785,18 @@ function deleteSpellSaved(sheet, href, onlyLevel) {
     const plainKey = `spells-level-${lvl}-plain`;
     const cur = String(sheet.text?.[plainKey]?.value ?? "");
     if (cur) {
-      const lines = cur.split(/?
-/).map(s => s.trim()).filter(Boolean);
+      const lines = cur.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
       const next = lines.filter(l => !l.includes(href));
-      if (next.length) sheet.text[plainKey] = { value: next.join("
-") };
+      if (next.length) sheet.text[plainKey] = { value: next.join("\n") };
       else delete sheet.text[plainKey];
     }
   }
 
-  // Back-compat: если onlyLevel не указан — удаляем везде (как раньше)
+  // Back-compat: если уровень не указан — удаляем везде (как раньше)
   const lvlNum = (onlyLevel === undefined || onlyLevel === null || onlyLevel === "") ? null : safeInt(onlyLevel, -1);
 
   if (lvlNum === null) {
     for (let lvl = 0; lvl <= 9; lvl++) removeFromLevel(lvl);
-
-    // remove meta (manual name/desc)
     delete sheet.text[`spell-name:${href}`];
     delete sheet.text[`spell-desc:${href}`];
     return;
@@ -3833,7 +3829,6 @@ function deleteSpellSaved(sheet, href, onlyLevel) {
   }
 }
 
-function makeManualHref() {
 function makeManualHref() {
   // псевдо-ссылка для "ручных" заклинаний, чтобы хранить описание в sheet.text
   return `manual:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -4395,7 +4390,7 @@ function bindSpellAddAndDesc(root, player, canEdit) {
       if (!href) return;
       if (!confirm("Удалить это заклинание?")) return;
 
-      deleteSpellSaved(sheet, href, safeInt(item?.getAttribute?.("data-spell-level"), 0));
+      deleteSpellSaved(sheet, href, item?.getAttribute?.("data-spell-level"));
       scheduleSheetSave(curPlayer);
       rerenderSpellsTabInPlace(root, curPlayer, sheet, curCanEdit);
       return;
