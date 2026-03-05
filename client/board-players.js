@@ -1176,10 +1176,11 @@ const diceVizKind = document.getElementById("dice-viz-kind");
     const tokenCy = tokRect.top + tokRect.height / 2;
 
     // Visible area (in screen coordinates), slightly inset so arrow doesn't overlap borders.
+    // IMPORTANT: use clientWidth/clientHeight to exclude scrollbars, otherwise the arrow can end up under the scrollbar.
     const left = wrapRect.left + EDGE_PAD;
-    const right = wrapRect.right - EDGE_PAD;
     const top = wrapRect.top + EDGE_PAD;
-    const bottom = wrapRect.bottom - EDGE_PAD;
+    const right = wrapRect.left + (wrap.clientWidth || (wrapRect.width || 0)) - EDGE_PAD;
+    const bottom = wrapRect.top + (wrap.clientHeight || (wrapRect.height || 0)) - EDGE_PAD;
 
     const inside = (tokenCx >= left && tokenCx <= right && tokenCy >= top && tokenCy <= bottom);
     if (inside) {
