@@ -1150,68 +1150,100 @@ const diceVizKind = document.getElementById("dice-viz-kind");
     return Math.max(a, Math.min(b, v));
   }
 
-  function updateArrowNow() {
+    function updateArrowNow() {
     const wrap = getBoardWrapper();
     const b = getBoardEl();
     const arrow = ensureArrowEl();
     if (!wrap || !b || !arrow) return;
 
     const baseP = findMyBasePlayer();
-    if (!baseP || baseP.x === null || baseP.y === null) {
+    if (!baseP) {
       arrow.style.display = 'none';
       return;
     }
 
-    // Token center in CONTENT coordinates (same system as scrollLeft/Top)
-    const size = Number(baseP.size) || 1;
-    const tokenCx = (Number(baseP.x) + size / 2) * CELL;
-    const tokenCy = (Number(baseP.y) + size / 2) * CELL;
-
-    const viewL = wrap.scrollLeft;
-    const viewT = wrap.scrollTop;
-    const viewR = viewL + wrap.clientWidth;
-    const viewB = viewT + wrap.clientHeight;
-
-    const outLeft = tokenCx < viewL;
-    const outRight = tokenCx > viewR;
-    const outTop = tokenCy < viewT;
-    const outBottom = tokenCy > viewB;
-
-    // If visible - hide.
-    if (!outLeft && !outRight && !outTop && !outBottom) {
+    // Find the DOM element of the base token (more robust with zoom/transform than using scrollLeft math).
+    const tokenEl = (baseP && baseP.element) ? baseP.element : (playerElements.get(baseP.id) || null);
+    if (!tokenEl) {
       arrow.style.display = 'none';
       return;
     }
 
-    // Place arrow ON THE EDGE of the visible viewport (in CONTENT coordinates).
-    const minX = viewL + EDGE_PAD;
-    const maxX = viewR - EDGE_PAD;
-    const minY = viewT + EDGE_PAD;
-    const maxY = viewB - EDGE_PAD;
+    const wrapRect = wrap.getBoundingClientRect();
+    const tokRect = tokenEl.getBoundingClientRect();
 
-    let ax;
-    let ay;
+    const tokenCx = tokRect.left + tokRect.width / 2;
+    const tokenCy = tokRect.top + tokRect.height / 2;
 
-    if (outLeft) ax = minX;
-    else if (outRight) ax = maxX;
-    else ax = clamp(tokenCx, minX, maxX);
+    // Visible area (in screen coordinates), slightly inset so arrow doesn't overlap borders.
+    const left = wrapRect.left + EDGE_PAD;
+    const right = wrapRect.right - EDGE_PAD;
+    const top = wrapRect.top + EDGE_PAD;
+    const bottom = wrapRect.bottom - EDGE_PAD;
 
-    if (outTop) ay = minY;
-    else if (outBottom) ay = maxY;
-    else ay = clamp(tokenCy, minY, maxY);
+    const inside = (tokenCx >= left && tokenCx <= right && tokenCy >= top && tokenCy <= bottom);
+    if (inside) {
+      arrow.style.display = 'none';
+      return;
+    }
 
-    // Compute direction from arrow position toward token.
-    const dx = tokenCx - ax;
-    const dy = tokenCy - ay;
-    const ang = Math.atan2(dy, dx); // radians
-    // Our triangle points UP by default; angle 0 is to the right.
+    // Ray from viewport center toward token center; intersect with inset rectangle.
+    const cx = (left + right) / 2;
+    const cy = (top + bottom) / 2;
+    const dx = tokenCx - cx;
+    const dy = tokenCy - cy;
+
+    // Degenerate case (shouldn't happen)
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6)) {
+      arrow.style.display = 'none';
+      return;
+    }
+
+    let bestT = Infinity;
+    let hitX = cx;
+    let hitY = cy;
+
+    function consider(t, x, y) {
+      if (!(t > 0) || t >= bestT) return;
+      if (x < left - 0.5 || x > right + 0.5) return;
+      if (y < top - 0.5 || y > bottom + 0.5) return;
+      bestT = t;
+      hitX = x;
+      hitY = y;
+    }
+
+    // Vertical sides
+    if (Math.abs(dx) > 1e-6) {
+      let t = (left - cx) / dx;
+      consider(t, left, cy + t * dy);
+      t = (right - cx) / dx;
+      consider(t, right, cy + t * dy);
+    }
+    // Horizontal sides
+    if (Math.abs(dy) > 1e-6) {
+      let t = (top - cy) / dy;
+      consider(t, cx + t * dx, top);
+      t = (bottom - cy) / dy;
+      consider(t, cx + t * dx, bottom);
+    }
+
+    // Angle toward token (screen space)
+    const ang = Math.atan2(tokenCy - hitY, tokenCx - hitX);
     const deg = (ang * 180 / Math.PI) + 90;
 
-    // Center the triangle around (ax, ay)
+    // Convert screen point -> board local (unscaled) coords so the arrow stays glued to the correct edge under zoom.
+    const bRect = b.getBoundingClientRect();
+    const ow = b.offsetWidth || 1;
+    const scale = (bRect.width && ow) ? (bRect.width / ow) : (window.ControlBox?.getZoom?.() || 1);
+
+    const localX = (hitX - bRect.left) / scale;
+    const localY = (hitY - bRect.top) / scale;
+
+    // Center the triangle around (localX, localY)
     const w = ARROW_SIZE * 2;
     const h = ARROW_SIZE * 1.4;
-    arrow.style.left = `${ax - w / 2}px`;
-    arrow.style.top = `${ay - h / 2}px`;
+    arrow.style.left = `${localX - w / 2}px`;
+    arrow.style.top = `${localY - h / 2}px`;
     arrow.style.transform = `rotate(${deg}deg)`;
     arrow.style.transformOrigin = '50% 60%';
     arrow.style.display = 'block';
