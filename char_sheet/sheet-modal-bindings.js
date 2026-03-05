@@ -3587,11 +3587,11 @@ function bindSlotEditors(root, player, canEdit) {
 function normalizeDndSuUrl(url) {
   const u = String(url || "").trim();
   if (!u) return "";
-  // accept dnd.su links only (spells)
+  // accept  links only (spells)
   try {
     const parsed = new URL(u);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
-    if (!parsed.hostname.endsWith("dnd.su")) return "";
+    
     // normalize trailing slash
     let href = parsed.href;
     if (!href.endsWith("/")) href += "/";
@@ -3602,12 +3602,12 @@ function normalizeDndSuUrl(url) {
 }
 
 async function fetchSpellHtml(url) {
-  // GitHub Pages = статик: прямой fetch к dnd.su блокируется CORS.
+  // GitHub Pages = статик: прямой fetch к  блокируется CORS.
   // Поэтому порядок такой:
   // 1) Supabase Edge Function (invoke) если доступен
   // 2) Supabase Edge Function по полному URL (если так задано)
   // 3) Fallback через r.jina.ai (read-only прокси)
-  // НИКАКИХ /api/fetch и НИКАКИХ прямых запросов к dnd.su на статике.
+  // НИКАКИХ /api/fetch и НИКАКИХ прямых запросов к  на статике.
 
   const targetUrl = normalizeDndSuUrl(url);
 
@@ -3835,7 +3835,7 @@ function parseSpellClassesFromHtml(html) {
   try {
     const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
 
-    // 0) актуальная разметка dnd.su (список классов):
+    // 0) актуальная разметка  (список классов):
     // <li class="if-list__item" data-value="21"><div class="if-list__item-title">Волшебник</div></li>
     // выбранный класс: class="if-list__item active"
     const liItems = Array.from(doc.querySelectorAll('li.if-list__item[data-value]'));
@@ -3844,7 +3844,7 @@ function parseSpellClassesFromHtml(html) {
         const val = String(li.getAttribute('data-value') || '').trim();
         const label = (li.querySelector('.if-list__item-title')?.textContent || li.textContent || '').trim();
         if (!val || !label) return;
-        out.push({ value: val, label, url: `https://dnd.su/spells/?class=${encodeURIComponent(val)}` });
+        out.push({ value: val, label, url: `/spells/?class=${encodeURIComponent(val)}` });
       });
     }
 
@@ -3857,7 +3857,7 @@ function parseSpellClassesFromHtml(html) {
         if (!val) return;
         // часто есть "Все" — пропускаем
         if (/^все/i.test(label)) return;
-        out.push({ value: val, label, url: `https://dnd.su/spells/?class=${encodeURIComponent(val)}` });
+        out.push({ value: val, label, url: `/spells/?class=${encodeURIComponent(val)}` });
       });
     }
 
@@ -3867,13 +3867,13 @@ function parseSpellClassesFromHtml(html) {
       doc.querySelectorAll('a[href*="?class="]').forEach(a => {
         const href = a.getAttribute("href") || "";
         try {
-          const u = new URL(href, "https://dnd.su");
+          const u = new URL(href, "");
           const val = u.searchParams.get("class");
           const label = (a.textContent || "").trim();
           if (!val || !label) return;
           if (seen.has(val)) return;
           seen.add(val);
-          out.push({ value: val, label, url: `https://dnd.su/spells/?class=${encodeURIComponent(val)}` });
+          out.push({ value: val, label, url: `/spells/?class=${encodeURIComponent(val)}` });
         } catch {}
       });
     }
@@ -3910,7 +3910,7 @@ function getSpellLevelFromText(text) {
 
 function normalizeAnyUrlToAbs(href) {
   try {
-    const u = new URL(String(href || ""), "https://dnd.su");
+    const u = new URL(String(href || ""), "");
     let s = u.href;
     if (!s.endsWith("/")) s += "/";
     return s;
@@ -4000,8 +4000,8 @@ function openAddSpellPopup({ root, player, sheet, canEdit, level }) {
     const mode = modeBtn.getAttribute("data-add-mode");
     if (mode === "link") {
       body.innerHTML = `
-        <div class="sheet-note">Вставь ссылку на dnd.su (пример: https://dnd.su/spells/9-bless/)</div>
-        <input class="popup-field" type="text" placeholder="https://dnd.su/spells/..." data-link-input>
+        <div class="sheet-note">Вставь ссылку на  (пример: /spells/9-bless/)</div>
+        <input class="popup-field" type="text" placeholder="/spells/..." data-link-input>
         <div class="popup-actions" style="margin-top:10px;">
           <button class="popup-btn primary" type="button" data-link-ok>Добавить</button>
           <button class="popup-btn" type="button" data-popup-close>Отмена</button>
@@ -4045,7 +4045,7 @@ function openAddSpellPopup({ root, player, sheet, canEdit, level }) {
       const rawUrl = inp?.value || "";
       const href = normalizeDndSuUrl(rawUrl);
       if (!href || !href.includes("/spells/")) {
-        alert("Нужна ссылка на dnd.su/spells/... (пример: https://dnd.su/spells/9-bless/)");
+        alert("Нужна корректная ссылка/spells/... (пример: /spells/9-bless/)");
         return;
       }
 
@@ -4061,7 +4061,7 @@ function openAddSpellPopup({ root, player, sheet, canEdit, level }) {
         close();
       } catch (err) {
         console.error(err);
-        alert("Не удалось получить/распарсить описание с dnd.su. Проверь ссылку.");
+        alert("Не удалось получить описание по ссылке. Проверь ссылку.");
       } finally {
         okLink.disabled = false;
         if (inp) inp.disabled = false;

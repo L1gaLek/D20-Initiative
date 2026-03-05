@@ -407,7 +407,7 @@ function renderSpellCard({ level, name, href, desc }) {
           <div class="spells-list-header"><h3 style="margin:0">Заклинания</h3><button class="spell-db-btn" type="button" data-spell-db>База SRD</button></div>
           ${renderSpellsByLevel(vm)}
           <div class="sheet-note" style="margin-top:8px;">
-            Подсказка: если в твоём .json ссылки на dnd.su — они кликабельны.
+            Подсказка: если в твоём .json ссылки на  — они кликабельны.
           </div>
         </div>
       </div>
