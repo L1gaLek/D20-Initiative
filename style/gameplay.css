@@ -263,8 +263,11 @@
 
 #roll{
   order: 3;
-  flex: 1 1 auto;     /* занимает остаток строки */
-  min-width: 88px;    /* чтобы не схлопывалась */
+  flex: 0 0 auto;     /* ширина по содержимому */
+  width: auto;
+  min-width: 0;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 .dice-viz-select,
@@ -756,7 +759,14 @@
   font-weight:700;
   color:#eee;
   margin-right:auto;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
 }
+.marks-toolbar__title:hover{ text-decoration: underline; }
+.marks-toolbar.is-collapsed .marks-toolbar__body{ display:none; }
+.marks-toolbar.is-collapsed .marks-toolbar__head{ margin-bottom:0; }
 .marks-switch{ display:flex; align-items:center; gap:8px; font-size:12px; opacity:.95; }
 .marks-btn{ padding:5px 10px; font-size:12px; }
 .marks-toolbar__row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
