@@ -3740,24 +3740,12 @@ function ensureSpellSaved(sheet, level, name, href, desc) {
 
 
 
-function deleteSpellSaved(sheet, href) {
+function deleteSpellSaved(sheet, href, level) {
   if (!sheet || !href) return;
 
   if (!sheet.text || typeof sheet.text !== "object") sheet.text = {};
 
-  // remove meta (manual name/desc)
-  delete sheet.text[`spell-name:${href}`];
-  delete sheet.text[`spell-desc:${href}`];
-
-  // remove from tiptap docs (imported from .json)
-  function docHasHref(node) {
-    if (!node || typeof node !== "object") return false;
-    if (node.type === "text" && Array.isArray(node.marks)) {
-      return node.marks.some(m => m?.type === "link" && String(m?.attrs?.href || "") === String(href));
-    }
-    if (Array.isArray(node.content)) return node.content.some(ch => docHasHref(ch));
-    return false;
-  }
+  const lvlOnly = Number.isFinite(Number(level)) ? Math.max(0, Math.min(9, Math.floor(Number(level)))) : null;
 
   function normalizeDoc(maybeDoc) {
     if (!maybeDoc) return null;
@@ -3768,7 +3756,16 @@ function deleteSpellSaved(sheet, href) {
     return null;
   }
 
-  for (let lvl = 0; lvl <= 9; lvl++) {
+  function docHasHref(node) {
+    if (!node || typeof node !== "object") return false;
+    if (node.type === "text" && Array.isArray(node.marks)) {
+      return node.marks.some(m => m?.type === "link" && String(m?.attrs?.href || "") === String(href));
+    }
+    if (Array.isArray(node.content)) return node.content.some(ch => docHasHref(ch));
+    return false;
+  }
+
+  function stripHrefFromLevel(lvl) {
     // tiptap: sheet.text["spells-level-N"].value.data
     const tipKey = `spells-level-${lvl}`;
     const tip = sheet.text?.[tipKey];
@@ -3795,9 +3792,36 @@ function deleteSpellSaved(sheet, href) {
       else delete sheet.text[plainKey];
     }
   }
+
+  if (lvlOnly === null) {
+    for (let lvl = 0; lvl <= 9; lvl++) stripHrefFromLevel(lvl);
+  } else {
+    stripHrefFromLevel(lvlOnly);
+  }
+
+  // remove meta (manual name/desc) ONLY if this href no longer exists in ANY level
+  let stillUsed = false;
+  for (let lvl = 0; lvl <= 9; lvl++) {
+    // plain
+    const plainKey = `spells-level-${lvl}-plain`;
+    const curPlain = String(sheet.text?.[plainKey]?.value ?? "");
+    if (curPlain && curPlain.includes(href)) { stillUsed = true; break; }
+
+    // tiptap
+    const tipKey = `spells-level-${lvl}`;
+    const tip = sheet.text?.[tipKey];
+    const docRaw = tip?.value?.data;
+    const doc = normalizeDoc(docRaw);
+    if (doc && Array.isArray(doc.content) && doc.content.some(block => docHasHref(block))) { stillUsed = true; break; }
+  }
+
+  if (!stillUsed) {
+    delete sheet.text[`spell-name:${href}`];
+    delete sheet.text[`spell-desc:${href}`];
+  }
 }
 
-function makeManualHref() {
+function makeManualHref() {() {
   // псевдо-ссылка для "ручных" заклинаний, чтобы хранить описание в sheet.text
   return `manual:${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -4358,7 +4382,9 @@ function bindSpellAddAndDesc(root, player, canEdit) {
       if (!href) return;
       if (!confirm("Удалить это заклинание?")) return;
 
-      deleteSpellSaved(sheet, href);
+      const lvl = safeInt(item?.getAttribute?.("data-spell-level"), 0);
+
+      deleteSpellSaved(sheet, href, lvl);
       scheduleSheetSave(curPlayer);
       rerenderSpellsTabInPlace(root, curPlayer, sheet, curCanEdit);
       return;
