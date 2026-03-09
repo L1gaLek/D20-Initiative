@@ -140,6 +140,8 @@
   const resolvedUrlCache = new Map(); // key -> { url, expiresAt }
   const trackBlobUrlCache = new Map(); // key -> { objectUrl, sourceUrl }
   let currentObjectUrl = '';
+  let currentTrackKey = '';
+  let currentResolvedUrl = '';
 
   function normalizeAudioOutput() {
     try { audio.muted = false; } catch {}
@@ -277,33 +279,11 @@
 
 
   async function materializePlayableUrl(track) {
-    const key = String(track?.id || track?.path || track?.url || '');
-    const sourceUrl = await resolveTrackUrl(track);
-    if (!sourceUrl) return '';
-
-    const cached = key ? trackBlobUrlCache.get(key) : null;
-    if (cached && cached.objectUrl && cached.sourceUrl === sourceUrl) {
-      return cached.objectUrl;
-    }
-
-    try {
-      const resp = await fetch(sourceUrl, { mode: 'cors', credentials: 'omit', cache: 'force-cache' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const blob = await resp.blob();
-      if (!blob || !blob.size) throw new Error('empty blob');
-      const objectUrl = URL.createObjectURL(blob);
-      if (key) {
-        const prev = trackBlobUrlCache.get(key);
-        if (prev?.objectUrl && prev.objectUrl !== objectUrl) {
-          try { URL.revokeObjectURL(prev.objectUrl); } catch {}
-        }
-        trackBlobUrlCache.set(key, { objectUrl, sourceUrl });
-      }
-      return objectUrl;
-    } catch (e) {
-      console.warn('bg-music: blob materialize failed, fallback to direct url', e);
-      return sourceUrl;
-    }
+    // Важно: не пересобирать URL в blob на каждом клиентском апдейте.
+    // Из-за этого у remote-клиентов трек мог на пару секунд стартовать,
+    // затем src/audio pipeline пересоздавался и звук снова пропадал.
+    // Для стабильного непрерывного воспроизведения используем прямой storage URL.
+    return await resolveTrackUrl(track);
   }
 
   function cleanupBlobUrls(keepKey = '') {
@@ -867,6 +847,8 @@
         if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
       } catch {}
       currentObjectUrl = '';
+      currentTrackKey = '';
+      currentResolvedUrl = '';
       cleanupBlobUrls('');
       try {
         if (seekSlider) {
@@ -888,7 +870,13 @@
       return;
     }
 
-    if (audio.src !== resolvedUrl) {
+    const nextTrackKey = String(cur?.id || cur?.path || cur?.url || '');
+    const shouldReplaceSrc = !audio.src || currentTrackKey !== nextTrackKey;
+
+    // Для того же самого трека не дергаем src повторно, даже если signed URL был обновлён.
+    // Иначе браузер начинает заново буферизовать поток, из-за чего музыка может
+    // на несколько секунд появляться и снова пропадать у других игроков.
+    if (shouldReplaceSrc) {
       try {
         audio.pause();
       } catch {}
@@ -896,9 +884,12 @@
         try { URL.revokeObjectURL(currentObjectUrl); } catch {}
       }
       currentObjectUrl = String(resolvedUrl || '');
+      currentResolvedUrl = String(resolvedUrl || '');
+      currentTrackKey = nextTrackKey;
       audio.src = resolvedUrl;
       try { audio.load(); } catch {}
-      unlocked = false;
+    } else {
+      currentResolvedUrl = String(resolvedUrl || currentResolvedUrl || '');
     }
 
     try { cleanupBlobUrls(String(cur?.id || cur?.path || cur?.url || '')); } catch {}
