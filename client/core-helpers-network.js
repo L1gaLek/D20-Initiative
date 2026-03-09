@@ -15,9 +15,6 @@ function createInitialGameState() {
     boardWidth: 10,
     boardHeight: 10,
     boardBgDataUrl: null,
-    boardBgUrl: null,
-    boardBgStoragePath: null,
-    boardBgStorageBucket: null,
     gridAlpha: 1,
     wallAlpha: 1,
     walls: [],
@@ -56,9 +53,6 @@ function createInitialGameState() {
     boardWidth: base.boardWidth,
     boardHeight: base.boardHeight,
     boardBgDataUrl: base.boardBgDataUrl,
-    boardBgUrl: base.boardBgUrl,
-    boardBgStoragePath: base.boardBgStoragePath,
-    boardBgStorageBucket: base.boardBgStorageBucket,
     walls: base.walls,
     marks: base.marks,
 
@@ -99,9 +93,6 @@ function ensureStateHasMaps(state) {
     state.maps.forEach(m => {
       if (m && !m.sectionId) m.sectionId = firstSid;
       if (m && !Array.isArray(m.marks)) m.marks = [];
-      if (m && typeof m.boardBgUrl === 'undefined') m.boardBgUrl = m.boardBgDataUrl || null;
-      if (m && typeof m.boardBgStoragePath === 'undefined') m.boardBgStoragePath = null;
-      if (m && typeof m.boardBgStorageBucket === 'undefined') m.boardBgStorageBucket = null;
       // ensure fog defaults on every map
       if (m && (!m.fog || typeof m.fog !== 'object')) {
         m.fog = {
@@ -134,26 +125,6 @@ function ensureStateHasMaps(state) {
     }
     state.schemaVersion = Math.max(Number(state.schemaVersion) || 0, 3);
 
-    // root mirror for map background (active map)
-    if (typeof state.boardBgUrl === 'undefined') {
-      const id = String(state.currentMapId || "");
-      const maps = Array.isArray(state.maps) ? state.maps : [];
-      const m = maps.find(mm => String(mm?.id) === id) || maps[0] || null;
-      state.boardBgUrl = (m && (m.boardBgUrl || m.boardBgDataUrl)) ? (m.boardBgUrl || m.boardBgDataUrl) : null;
-    }
-    if (typeof state.boardBgStoragePath === 'undefined') {
-      const id = String(state.currentMapId || "");
-      const maps = Array.isArray(state.maps) ? state.maps : [];
-      const m = maps.find(mm => String(mm?.id) === id) || maps[0] || null;
-      state.boardBgStoragePath = m?.boardBgStoragePath || null;
-    }
-    if (typeof state.boardBgStorageBucket === 'undefined') {
-      const id = String(state.currentMapId || "");
-      const maps = Array.isArray(state.maps) ? state.maps : [];
-      const m = maps.find(mm => String(mm?.id) === id) || maps[0] || null;
-      state.boardBgStorageBucket = m?.boardBgStorageBucket || null;
-    }
-
     // root mirror for marks (active map)
     if (!Array.isArray(state.marks)) {
       const id = String(state.currentMapId || "");
@@ -174,9 +145,6 @@ function ensureStateHasMaps(state) {
     boardWidth: Number(state.boardWidth) || 10,
     boardHeight: Number(state.boardHeight) || 10,
     boardBgDataUrl: state.boardBgDataUrl || null,
-    boardBgUrl: state.boardBgUrl || state.boardBgDataUrl || null,
-    boardBgStoragePath: state.boardBgStoragePath || null,
-    boardBgStorageBucket: state.boardBgStorageBucket || null,
     gridAlpha: (typeof state.gridAlpha !== 'undefined') ? state.gridAlpha : 1,
     wallAlpha: (typeof state.wallAlpha !== 'undefined') ? state.wallAlpha : 1,
     walls: Array.isArray(state.walls) ? state.walls : [],
@@ -209,9 +177,6 @@ function ensureStateHasMaps(state) {
   state.boardWidth = migratedMap.boardWidth;
   state.boardHeight = migratedMap.boardHeight;
   state.boardBgDataUrl = migratedMap.boardBgDataUrl;
-  state.boardBgUrl = migratedMap.boardBgUrl;
-  state.boardBgStoragePath = migratedMap.boardBgStoragePath;
-  state.boardBgStorageBucket = migratedMap.boardBgStorageBucket;
   state.gridAlpha = migratedMap.gridAlpha ?? 1;
   state.wallAlpha = migratedMap.wallAlpha ?? 1;
   state.walls = migratedMap.walls;
@@ -249,9 +214,6 @@ function syncActiveToMap(state) {
   m.boardWidth = Number(st.boardWidth) || 10;
   m.boardHeight = Number(st.boardHeight) || 10;
   m.boardBgDataUrl = st.boardBgDataUrl || null;
-  m.boardBgUrl = st.boardBgUrl || st.boardBgDataUrl || null;
-  m.boardBgStoragePath = st.boardBgStoragePath || null;
-  m.boardBgStorageBucket = st.boardBgStorageBucket || null;
   m.gridAlpha = (typeof st.gridAlpha !== 'undefined') ? st.gridAlpha : 1;
   m.wallAlpha = (typeof st.wallAlpha !== 'undefined') ? st.wallAlpha : 1;
 
@@ -354,9 +316,6 @@ function loadMapToRoot(state, mapId) {
   st.boardWidth = Number(m.boardWidth) || 10;
   st.boardHeight = Number(m.boardHeight) || 10;
   st.boardBgDataUrl = m.boardBgDataUrl || null;
-  st.boardBgUrl = m.boardBgUrl || m.boardBgDataUrl || null;
-  st.boardBgStoragePath = m.boardBgStoragePath || null;
-  st.boardBgStorageBucket = m.boardBgStorageBucket || null;
   st.gridAlpha = (typeof m.gridAlpha !== 'undefined') ? m.gridAlpha : 1;
   st.wallAlpha = (typeof m.wallAlpha !== 'undefined') ? m.wallAlpha : 1;
 
@@ -1552,9 +1511,6 @@ async function sendMessage(msg) {
             boardWidth: 10,
             boardHeight: 10,
             boardBgDataUrl: null,
-            boardBgUrl: null,
-            boardBgStoragePath: null,
-            boardBgStorageBucket: null,
             gridAlpha: 1,
             wallAlpha: 1,
             walls: [],
@@ -2233,22 +2189,14 @@ else if (type === "addWall") {
 
         else if (type === "setBoardBg") {
           if (!isGM) return;
-          const bgUrl = String(msg.bgUrl || msg.dataUrl || "").trim();
-          const bgStoragePath = String(msg.bgStoragePath || "").trim() || null;
-          const bgStorageBucket = String(msg.bgStorageBucket || "").trim() || null;
-          next.boardBgUrl = bgUrl || null;
-          next.boardBgDataUrl = bgUrl || null;
-          next.boardBgStoragePath = bgStoragePath;
-          next.boardBgStorageBucket = bgStorageBucket;
-          logEventToState(next, next.boardBgUrl ? "Подложка карты загружена" : "Подложка карты очищена");
+          const dataUrl = String(msg.dataUrl || "").trim();
+          next.boardBgDataUrl = dataUrl ? dataUrl : null;
+          logEventToState(next, next.boardBgDataUrl ? "Подложка карты загружена" : "Подложка карты очищена");
         }
 
         else if (type === "clearBoardBg") {
           if (!isGM) return;
           next.boardBgDataUrl = null;
-          next.boardBgUrl = null;
-          next.boardBgStoragePath = null;
-          next.boardBgStorageBucket = null;
           logEventToState(next, "Подложка карты очищена");
         }
 
