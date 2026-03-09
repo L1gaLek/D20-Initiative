@@ -326,7 +326,7 @@ async function ensureMonstersLibrary() {
 
 // ================== MAP BACKGROUND (GM) ==================
 const BOARD_BG_BUCKET = 'room-board-bg';
-const BOARD_BG_PREFIX = 'rooms';
+const BOARD_BG_PREFIX = 'board-bg';
 const BOARD_BG_MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 const BOARD_BG_ALLOWED_TYPES = new Set([
   'image/png',
@@ -374,7 +374,11 @@ async function uploadBoardBackgroundToStorage(file) {
     contentType: file?.type || undefined
   });
   if (up?.error) {
-    throw new Error(up.error.message || String(up.error));
+    const rawMsg = String(up.error.message || up.error || '');
+    if (/row-level security|violates row-level security policy/i.test(rawMsg)) {
+      throw new Error('Нет прав на загрузку в Storage для bucket ' + BOARD_BG_BUCKET + '.');
+    }
+    throw new Error(rawMsg || String(up.error));
   }
 
   const pub = sbClient.storage.from(BOARD_BG_BUCKET).getPublicUrl(path);
