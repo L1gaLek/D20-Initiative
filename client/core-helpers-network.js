@@ -71,8 +71,6 @@ function createInitialGameState() {
       tracks: [], // [{id,name,desc,url,path,createdAt}]
       currentTrackId: null,
       isPlaying: false,
-      startedAt: 0,
-      pausedAt: 0,
       volume: 40 // 0..100
     }
   };
@@ -189,13 +187,11 @@ function ensureStateHasMaps(state) {
 
   // Ensure background music defaults
   if (!state.bgMusic || typeof state.bgMusic !== 'object') {
-    state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 };
+    state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
   } else {
     if (!Array.isArray(state.bgMusic.tracks)) state.bgMusic.tracks = [];
     if (typeof state.bgMusic.currentTrackId === 'undefined') state.bgMusic.currentTrackId = null;
     if (typeof state.bgMusic.isPlaying !== 'boolean') state.bgMusic.isPlaying = false;
-    if (!Number.isFinite(Number(state.bgMusic.startedAt))) state.bgMusic.startedAt = 0;
-    if (!Number.isFinite(Number(state.bgMusic.pausedAt))) state.bgMusic.pausedAt = 0;
     const v = Number(state.bgMusic.volume);
     state.bgMusic.volume = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 40;
   }
@@ -2232,23 +2228,14 @@ else if (type === "addWall") {
             next.bgMusic.tracks = incoming.tracks.slice(0, 10).map(t => ({
               id: String(t?.id || ''),
               name: String(t?.name || ''),
-              desc: String(t?.desc ?? t?.description ?? ''),
-              description: String(t?.description ?? t?.desc ?? ''),
+              desc: String(t?.desc || ''),
               url: String(t?.url || ''),
               path: String(t?.path || ''),
               createdAt: String(t?.createdAt || '')
-            })).filter(t => t.id && (t.url || t.path));
+            })).filter(t => t.id && t.url);
           }
           if ('currentTrackId' in incoming) next.bgMusic.currentTrackId = incoming.currentTrackId ? String(incoming.currentTrackId) : null;
           if (typeof incoming.isPlaying === 'boolean') next.bgMusic.isPlaying = incoming.isPlaying;
-          if ('startedAt' in incoming) {
-            const started = Number(incoming.startedAt);
-            next.bgMusic.startedAt = Number.isFinite(started) ? Math.max(0, started) : 0;
-          }
-          if ('pausedAt' in incoming) {
-            const paused = Number(incoming.pausedAt);
-            next.bgMusic.pausedAt = Number.isFinite(paused) ? Math.max(0, paused) : 0;
-          }
           if ('volume' in incoming) {
             const v = Number(incoming.volume);
             next.bgMusic.volume = Number.isFinite(v) ? clamp(v, 0, 100) : (Number(next.bgMusic.volume) || 40);
@@ -2259,8 +2246,6 @@ else if (type === "addWall") {
             if (!ok) {
               next.bgMusic.currentTrackId = null;
               next.bgMusic.isPlaying = false;
-              next.bgMusic.startedAt = 0;
-              next.bgMusic.pausedAt = 0;
             }
           }
           logEventToState(next, "Фоновая музыка обновлена");
