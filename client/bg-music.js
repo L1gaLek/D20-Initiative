@@ -106,7 +106,46 @@
   let _isSeeking = false;
   let _lastSeekSyncAt = 0;
   let _applyToken = 0;
+  let _globalUnlockBound = false;
   const resolvedUrlCache = new Map(); // key -> { url, expiresAt }
+
+  function normalizeAudioOutput() {
+    try { audio.muted = false; } catch {}
+    try { audio.defaultMuted = false; } catch {}
+    try { audio.volume = clamp01(loadLocalVol()); } catch {}
+    try {
+      const ap = Number(audio.playbackRate);
+      if (!Number.isFinite(ap) || ap <= 0) audio.playbackRate = 1;
+    } catch {}
+  }
+
+  function bindGlobalUnlockHandlers() {
+    if (_globalUnlockBound) return;
+    _globalUnlockBound = true;
+
+    const onGesture = async () => {
+      normalizeAudioOutput();
+      const bg = ensureBgMusic(currentState || {});
+      const cur = getCurTrackFromState(currentState || {});
+      if (!bg?.isPlaying || !cur) return;
+      await tryUnlock({ resumeAfter: true });
+    };
+
+    const opts = { capture: true, passive: true };
+    window.addEventListener('pointerdown', onGesture, opts);
+    window.addEventListener('click', onGesture, opts);
+    window.addEventListener('touchstart', onGesture, opts);
+    window.addEventListener('keydown', onGesture, { capture: true });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        normalizeAudioOutput();
+        const bg = ensureBgMusic(currentState || {});
+        if (bg?.isPlaying) {
+          Promise.resolve(applyState(currentState || {})).catch(() => {});
+        }
+      }
+    });
+  }
 
   function fmtTime(sec) {
     const s = Math.max(0, Math.floor(Number(sec) || 0));
@@ -664,6 +703,19 @@
     audio.addEventListener('timeupdate', syncSeekUi);
     audio.addEventListener('durationchange', syncSeekUi);
     audio.addEventListener('ended', syncSeekUi);
+    audio.addEventListener('canplay', async () => {
+      normalizeAudioOutput();
+      const bg = ensureBgMusic(currentState || {});
+      if (!bg?.isPlaying) return;
+      if (!unlocked) return;
+      try {
+        normalizeAudioOutput();
+        await audio.play();
+        hideUnlockBtn();
+      } catch {
+        showUnlockBtn();
+      }
+    });
   }
 
   // ---------- Apply state (called from message-ui on each snapshot) ----------
@@ -672,6 +724,8 @@
     const applyToken = ++_applyToken;
 
     try { ensureMainUiLayout(); } catch {}
+    try { bindGlobalUnlockHandlers(); } catch {}
+    normalizeAudioOutput();
 
     const bg = ensureBgMusic(currentState || {});
     const cur = getCurTrackFromState(currentState);
@@ -726,7 +780,11 @@
     }
 
     if (audio.src !== resolvedUrl) {
+      try {
+        audio.pause();
+      } catch {}
       audio.src = resolvedUrl;
+      try { audio.load(); } catch {}
       unlocked = false;
     }
 
@@ -751,6 +809,7 @@
       } catch {}
 
       const ok = await tryUnlock();
+      normalizeAudioOutput();
       if (!ok || applyToken !== _applyToken) return;
       try {
         await audio.play();
@@ -759,6 +818,7 @@
         showUnlockBtn();
       }
     } else {
+      normalizeAudioOutput();
       try { audio.pause(); } catch {}
       const pausedAt = Math.max(0, safeNum(bg.pausedAt, 0));
       try {
