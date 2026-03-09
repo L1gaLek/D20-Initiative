@@ -1042,7 +1042,9 @@ async function sendMessage(msg) {
     await ensureSupabaseReady();
     if (!msg || typeof msg !== "object") return;
 
-    switch (msg.type) {
+    const type = String(msg.type || "");
+
+    switch (type) {
       // ===== Rooms =====
       case "listRooms": {
         const { data, error } = await sbClient
