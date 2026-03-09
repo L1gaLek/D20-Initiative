@@ -208,19 +208,77 @@
   }
 
   async function tryUnlock({ resumeAfter = false } = {}) {
+    const state = currentState || {};
+    const bg = ensureBgMusic(state);
+    const cur = getCurTrackFromState(state);
+
     if (unlocked) {
       await resumeAudioPipeline().catch(() => {});
-      if (resumeAfter) applyState(currentState || {});
+      if (resumeAfter) {
+        // ВАЖНО: если это вызвано из пользовательского жеста и музыка уже должна играть,
+        // запускаем реальное воспроизведение прямо здесь, пока у браузера ещё есть user activation.
+        if (bg?.isPlaying && cur) {
+          try {
+            const resolvedUrl = await materializePlayableUrl(cur);
+            const nextTrackKey = String(cur?.id || cur?.path || cur?.url || '');
+            if (resolvedUrl && (!audio.src || currentTrackKey !== nextTrackKey)) {
+              currentObjectUrl = String(resolvedUrl || '');
+              currentResolvedUrl = String(resolvedUrl || '');
+              currentTrackKey = nextTrackKey;
+              audio.src = resolvedUrl;
+              try { audio.load(); } catch {}
+            }
+            const offset = Math.max(0, (Date.now() - safeNum(bg.startedAt, Date.now())) / 1000);
+            try {
+              if (Number.isFinite(audio.duration) && audio.duration > 0) {
+                audio.currentTime = (offset % audio.duration);
+              } else if (offset > 0) {
+                audio.currentTime = offset;
+              }
+            } catch {}
+            normalizeAudioOutput();
+            await audio.play();
+            hideUnlockBtn();
+            return true;
+          } catch {}
+        }
+        applyState(state);
+      }
       return true;
     }
     try {
       await resumeAudioPipeline().catch(() => {});
       normalizeAudioOutput();
+
+      if (resumeAfter && bg?.isPlaying && cur) {
+        const resolvedUrl = await materializePlayableUrl(cur);
+        const nextTrackKey = String(cur?.id || cur?.path || cur?.url || '');
+        if (resolvedUrl && (!audio.src || currentTrackKey !== nextTrackKey)) {
+          currentObjectUrl = String(resolvedUrl || '');
+          currentResolvedUrl = String(resolvedUrl || '');
+          currentTrackKey = nextTrackKey;
+          audio.src = resolvedUrl;
+          try { audio.load(); } catch {}
+        }
+        const offset = Math.max(0, (Date.now() - safeNum(bg.startedAt, Date.now())) / 1000);
+        try {
+          if (Number.isFinite(audio.duration) && audio.duration > 0) {
+            audio.currentTime = (offset % audio.duration);
+          } else if (offset > 0) {
+            audio.currentTime = offset;
+          }
+        } catch {}
+        await audio.play();
+        unlocked = true;
+        hideUnlockBtn();
+        return true;
+      }
+
       await audio.play();
       audio.pause();
       unlocked = true;
       hideUnlockBtn();
-      if (resumeAfter) applyState(currentState || {});
+      if (resumeAfter) applyState(state);
       return true;
     } catch {
       showUnlockBtn();
