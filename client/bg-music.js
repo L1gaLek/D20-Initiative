@@ -13,6 +13,7 @@
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
   const BUCKET = "room-audio";
   const STORAGE_PREFIX = "music"; // path: music/<roomId>/<trackId>_<name>
+  const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h
 
   // ---------- Helpers ----------
   function getSb() {
@@ -41,25 +42,38 @@
   }
 
   function safeArr(x) { return Array.isArray(x) ? x : []; }
+  function safeNum(x, fb = 0) {
+    const n = Number(x);
+    return Number.isFinite(n) ? n : fb;
+  }
 
   function ensureBgMusic(state) {
     if (!state || typeof state !== "object") return null;
     if (!state.bgMusic || typeof state.bgMusic !== "object") {
-      state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0 };
+      state.bgMusic = {
+        tracks: [],
+        currentTrackId: null,
+        isPlaying: false,
+        startedAt: 0,
+        pausedAt: 0,
+        volume: 40
+      };
     }
     if (!Array.isArray(state.bgMusic.tracks)) state.bgMusic.tracks = [];
 
-// Normalize legacy/new fields for track description.
-try {
-  (state.bgMusic.tracks || []).forEach((t) => {
-    if (!t || typeof t !== 'object') return;
-    if (typeof t.desc === 'undefined' && typeof t.description !== 'undefined') t.desc = t.description;
-    if (typeof t.description === 'undefined' && typeof t.desc !== 'undefined') t.description = t.desc;
-  });
-} catch {}
+    try {
+      (state.bgMusic.tracks || []).forEach((t) => {
+        if (!t || typeof t !== 'object') return;
+        if (typeof t.desc === 'undefined' && typeof t.description !== 'undefined') t.desc = t.description;
+        if (typeof t.description === 'undefined' && typeof t.desc !== 'undefined') t.description = t.desc;
+      });
+    } catch {}
 
     if (typeof state.bgMusic.isPlaying !== "boolean") state.bgMusic.isPlaying = false;
     if (!Number.isFinite(Number(state.bgMusic.startedAt))) state.bgMusic.startedAt = 0;
+    if (!Number.isFinite(Number(state.bgMusic.pausedAt))) state.bgMusic.pausedAt = 0;
+    const v = Number(state.bgMusic.volume);
+    state.bgMusic.volume = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 40;
     return state.bgMusic;
   }
 
@@ -71,6 +85,8 @@ try {
   // ---------- Audio ----------
   const audio = new Audio();
   audio.loop = true;
+  audio.preload = 'auto';
+  try { audio.crossOrigin = 'anonymous'; } catch {}
 
   // local volume (per user)
   const LS_VOL = "dnd_bg_music_volume";
@@ -84,20 +100,92 @@ try {
   }
   audio.volume = loadLocalVol();
 
-  // Autoplay unlock UX (players may need it)
   let unlocked = false;
-  async function tryUnlock() {
-    if (unlocked) return true;
+  let modal = null;
+  let currentState = null;
+  let _isSeeking = false;
+  let _lastSeekSyncAt = 0;
+  let _applyToken = 0;
+  const resolvedUrlCache = new Map(); // key -> { url, expiresAt }
+
+  function fmtTime(sec) {
+    const s = Math.max(0, Math.floor(Number(sec) || 0));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+  }
+
+  function getCurTrackFromState(state) {
+    const bg = ensureBgMusic(state || {});
+    const tracks = safeArr(bg?.tracks);
+    return tracks.find(t => String(t?.id || "") === String(bg?.currentTrackId || "")) || null;
+  }
+
+  async function tryUnlock({ resumeAfter = false } = {}) {
+    if (unlocked) {
+      if (resumeAfter) applyState(currentState || {});
+      return true;
+    }
     try {
       await audio.play();
       audio.pause();
       unlocked = true;
       hideUnlockBtn();
+      if (resumeAfter) applyState(currentState || {});
       return true;
     } catch {
       showUnlockBtn();
       return false;
     }
+  }
+
+  async function resolveTrackUrl(track) {
+    const t = track || {};
+    const directUrl = String(t.url || '').trim();
+    const path = String(t.path || '').trim();
+    const now = Date.now();
+    const cacheKey = String(t.id || path || directUrl || '');
+    const cached = cacheKey ? resolvedUrlCache.get(cacheKey) : null;
+    if (cached && cached.url && cached.expiresAt > now + 5000) {
+      return cached.url;
+    }
+
+    const sb = getSb();
+    if (path && sb?.storage?.from) {
+      try {
+        const signed = await sb.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SEC);
+        const signedUrl = String(signed?.data?.signedUrl || '').trim();
+        if (signedUrl) {
+          if (cacheKey) resolvedUrlCache.set(cacheKey, {
+            url: signedUrl,
+            expiresAt: now + (SIGNED_URL_TTL_SEC * 1000)
+          });
+          return signedUrl;
+        }
+      } catch {}
+
+      try {
+        const pub = sb.storage.from(BUCKET).getPublicUrl(path);
+        const publicUrl = String(pub?.data?.publicUrl || '').trim();
+        if (publicUrl) {
+          if (cacheKey) resolvedUrlCache.set(cacheKey, {
+            url: publicUrl,
+            expiresAt: now + (12 * 60 * 60 * 1000)
+          });
+          return publicUrl;
+        }
+      } catch {}
+    }
+
+    if (directUrl) {
+      if (cacheKey) resolvedUrlCache.set(cacheKey, {
+        url: directUrl,
+        expiresAt: now + (60 * 60 * 1000)
+      });
+      return directUrl;
+    }
+
+    return '';
   }
 
   // ---------- UI ----------
@@ -108,177 +196,153 @@ try {
   const nowLabel = document.getElementById("bg-music-now");
   const musicBox = document.getElementById("bg-music-box");
 
-  // Seek ("эквалайзер") UI (created dynamically under track label)
   let seekWrap = null;
   let seekSlider = null;
   let seekTime = null;
-  let _isSeeking = false;
-  let _lastSeekSyncAt = 0;
 
-  function fmtTime(sec) {
-    const s = Math.max(0, Math.floor(Number(sec) || 0));
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}:${String(r).padStart(2, '0')}`;
-  }
+  function ensureMainUiLayout() {
+    if (!musicBox) return;
+    if (musicBox._bgmLayoutDone) return;
+    musicBox._bgmLayoutDone = true;
 
-  
-function ensureMainUiLayout() {
-  if (!musicBox) return;
-  if (musicBox._bgmLayoutDone) return;
-  musicBox._bgmLayoutDone = true;
+    try {
+      const h3 = musicBox.querySelector('h3');
 
-  // Layout goal (per latest request):
-  // - Volume stays in the top row (under title), but occupies the place where "Список" used to be.
-  // - "Список" goes into the same row as "Пуск/Пауза" and "Стоп".
-  // - Buttons are same height and compact.
-  try {
-    const h3 = musicBox.querySelector('h3');
+      if (volumeSlider) volumeSlider.style.width = '150px';
+      const volLabel = volumeSlider ? volumeSlider.closest('label') : null;
 
-    // ----- Top row: Volume only (left aligned) -----
-    if (volumeSlider) {
-      volumeSlider.style.width = '150px';
-    }
-    const volLabel = volumeSlider ? volumeSlider.closest('label') : null;
+      const topRow = document.createElement('div');
+      topRow.style.display = 'flex';
+      topRow.style.alignItems = 'center';
+      topRow.style.justifyContent = 'flex-start';
+      topRow.style.gap = '10px';
+      topRow.style.flexWrap = 'nowrap';
+      topRow.style.marginTop = '6px';
 
-    const topRow = document.createElement('div');
-    topRow.style.display = 'flex';
-    topRow.style.alignItems = 'center';
-    topRow.style.justifyContent = 'flex-start';
-    topRow.style.gap = '10px';
-    topRow.style.flexWrap = 'nowrap';
-    topRow.style.marginTop = '6px';
+      if (volLabel) {
+        try {
+          const span = volLabel.querySelector('span');
+          if (span) {
+            span.textContent = 'Громк.';
+            span.style.minWidth = 'auto';
+            span.style.fontSize = '12px';
+          }
+          volLabel.style.marginTop = '0';
+          volLabel.style.gap = '6px';
+        } catch {}
+        topRow.appendChild(volLabel);
+      }
 
-    if (volLabel) {
-      try {
-        const span = volLabel.querySelector('span');
-        if (span) {
-          span.textContent = 'Громк.';
-          span.style.minWidth = 'auto';
-          span.style.fontSize = '12px';
+      if (h3 && h3.parentNode) {
+        if (h3.nextSibling) h3.parentNode.insertBefore(topRow, h3.nextSibling);
+        else h3.parentNode.appendChild(topRow);
+      } else {
+        musicBox.insertBefore(topRow, musicBox.firstChild);
+      }
+
+      const controlsRow = toggleBtn ? toggleBtn.parentElement : null;
+      if (controlsRow) {
+        controlsRow.style.display = 'flex';
+        controlsRow.style.gap = '8px';
+        controlsRow.style.flexWrap = 'nowrap';
+        controlsRow.style.alignItems = 'center';
+        controlsRow.style.marginTop = '8px';
+
+        if (openBtn) {
+          try { openBtn.remove(); } catch {}
+          controlsRow.insertBefore(openBtn, controlsRow.firstChild);
+          openBtn.style.width = 'auto';
+          openBtn.style.padding = '4px 10px';
+          openBtn.style.lineHeight = '1.1';
         }
-        volLabel.style.marginTop = '0';
-        volLabel.style.gap = '6px';
-      } catch {}
-      topRow.appendChild(volLabel);
-    }
 
-    if (h3 && h3.parentNode) {
-      if (h3.nextSibling) h3.parentNode.insertBefore(topRow, h3.nextSibling);
-      else h3.parentNode.appendChild(topRow);
-    } else {
-      musicBox.insertBefore(topRow, musicBox.firstChild);
-    }
-
-    // ----- Controls row: Список + Пуск/Пауза + Стоп -----
-    const controlsRow = toggleBtn ? toggleBtn.parentElement : null;
-    if (controlsRow) {
-      controlsRow.style.display = 'flex';
-      controlsRow.style.gap = '8px';
-      controlsRow.style.flexWrap = 'nowrap';
-      controlsRow.style.alignItems = 'center';
-      controlsRow.style.marginTop = '8px';
-
-      if (openBtn) {
-        // move button into controls row (first)
-        try { openBtn.remove(); } catch {}
-        controlsRow.insertBefore(openBtn, controlsRow.firstChild);
-
-        openBtn.style.width = 'auto';
-        openBtn.style.padding = '4px 10px';
-        openBtn.style.lineHeight = '1.1';
-      }
-
-      // equal compact height for all buttons in row
-      const btns = controlsRow.querySelectorAll('button');
-      btns.forEach(b => {
-        try {
-          b.style.padding = '4px 10px';
-          b.style.lineHeight = '1';
-          b.style.height = '28px';
-          b.style.display = 'inline-flex';
-          b.style.alignItems = 'center';
-          b.style.justifyContent = 'center';
-          b.style.margin = '0';
-        } catch {}
-      });
-
-      // NOTE: emoji "⏹" often sits lower visually due to font metrics.
-      // We compensate only for the stop button to make it perfectly level.
-      if (stopBtn) {
-        try {
-          stopBtn.style.fontSize = '16px';
-          stopBtn.style.transform = 'translateY(-2px)';
-        } catch {}
-      }
-    }
-  } catch {}
-
-  // ----- Seek bar ("эквалайзер") under the track label -----
-  try {
-    if (!nowLabel) return;
-    seekWrap = document.createElement('div');
-    seekWrap.style.marginTop = '6px';
-    seekWrap.style.display = 'flex';
-    seekWrap.style.flexDirection = 'column';
-    seekWrap.style.gap = '4px';
-
-    const top = document.createElement('div');
-    top.style.display = 'flex';
-    top.style.alignItems = 'center';
-    top.style.justifyContent = 'space-between';
-    top.style.gap = '8px';
-
-    seekTime = document.createElement('div');
-    seekTime.style.fontSize = '12px';
-    seekTime.style.opacity = '0.85';
-    seekTime.textContent = '0:00 / 0:00';
-
-    seekSlider = document.createElement('input');
-    seekSlider.type = 'range';
-    seekSlider.min = '0';
-    seekSlider.max = '0';
-    seekSlider.value = '0';
-    seekSlider.step = '0.01';
-    seekSlider.style.width = '100%';
-    seekSlider.disabled = true;
-
-    top.appendChild(seekTime);
-    seekWrap.appendChild(top);
-    seekWrap.appendChild(seekSlider);
-
-    if (nowLabel.parentNode) {
-      if (nowLabel.nextSibling) nowLabel.parentNode.insertBefore(seekWrap, nowLabel.nextSibling);
-      else nowLabel.parentNode.appendChild(seekWrap);
-    }
-
-    seekSlider.addEventListener('input', () => {
-      _isSeeking = true;
-      const dur = Number(audio.duration) || 0;
-      const cur = Number(seekSlider.value) || 0;
-      if (seekTime) seekTime.textContent = `${fmtTime(cur)} / ${fmtTime(dur)}`;
-    });
-    seekSlider.addEventListener('change', () => {
-      const dur = Number(audio.duration) || 0;
-      const cur = Math.max(0, Math.min(dur || 0, Number(seekSlider.value) || 0));
-      try { audio.currentTime = cur; } catch {}
-
-      // GM seeks are synced to everyone by shifting startedAt.
-      if (isGM()) {
-        const now = Date.now();
-        if (now - _lastSeekSyncAt > 250) {
-          _lastSeekSyncAt = now;
+        const btns = controlsRow.querySelectorAll('button');
+        btns.forEach(b => {
           try {
-            const bg = ensureBgMusic(currentState || {});
-            bg.startedAt = Date.now() - Math.round(cur * 1000);
-            syncState();
+            b.style.padding = '4px 10px';
+            b.style.lineHeight = '1';
+            b.style.height = '28px';
+            b.style.display = 'inline-flex';
+            b.style.alignItems = 'center';
+            b.style.justifyContent = 'center';
+            b.style.margin = '0';
+          } catch {}
+        });
+
+        if (stopBtn) {
+          try {
+            stopBtn.style.fontSize = '16px';
+            stopBtn.style.transform = 'translateY(-2px)';
           } catch {}
         }
       }
-      _isSeeking = false;
-    });
-  } catch {}
-}
+    } catch {}
+
+    try {
+      if (!nowLabel) return;
+      seekWrap = document.createElement('div');
+      seekWrap.style.marginTop = '6px';
+      seekWrap.style.display = 'flex';
+      seekWrap.style.flexDirection = 'column';
+      seekWrap.style.gap = '4px';
+
+      const top = document.createElement('div');
+      top.style.display = 'flex';
+      top.style.alignItems = 'center';
+      top.style.justifyContent = 'space-between';
+      top.style.gap = '8px';
+
+      seekTime = document.createElement('div');
+      seekTime.style.fontSize = '12px';
+      seekTime.style.opacity = '0.85';
+      seekTime.textContent = '0:00 / 0:00';
+
+      seekSlider = document.createElement('input');
+      seekSlider.type = 'range';
+      seekSlider.min = '0';
+      seekSlider.max = '0';
+      seekSlider.value = '0';
+      seekSlider.step = '0.01';
+      seekSlider.style.width = '100%';
+      seekSlider.disabled = true;
+
+      top.appendChild(seekTime);
+      seekWrap.appendChild(top);
+      seekWrap.appendChild(seekSlider);
+
+      if (nowLabel.parentNode) {
+        if (nowLabel.nextSibling) nowLabel.parentNode.insertBefore(seekWrap, nowLabel.nextSibling);
+        else nowLabel.parentNode.appendChild(seekWrap);
+      }
+
+      seekSlider.addEventListener('input', () => {
+        _isSeeking = true;
+        const dur = Number(audio.duration) || 0;
+        const cur = Number(seekSlider.value) || 0;
+        if (seekTime) seekTime.textContent = `${fmtTime(cur)} / ${fmtTime(dur)}`;
+      });
+
+      seekSlider.addEventListener('change', () => {
+        const dur = Number(audio.duration) || 0;
+        const cur = Math.max(0, Math.min(dur || 0, Number(seekSlider.value) || 0));
+        try { audio.currentTime = cur; } catch {}
+
+        if (isGM()) {
+          const now = Date.now();
+          if (now - _lastSeekSyncAt > 250) {
+            _lastSeekSyncAt = now;
+            try {
+              const bg = ensureBgMusic(currentState || {});
+              bg.pausedAt = cur;
+              if (bg.isPlaying) bg.startedAt = Date.now() - Math.round(cur * 1000);
+              syncState();
+            } catch {}
+          }
+        }
+        _isSeeking = false;
+      });
+    } catch {}
+  }
 
   let unlockBtn = null;
   function showUnlockBtn() {
@@ -288,7 +352,9 @@ function ensureMainUiLayout() {
     unlockBtn.type = "button";
     unlockBtn.textContent = "Включить звук";
     unlockBtn.style.marginTop = "8px";
-    unlockBtn.addEventListener("click", async () => { await tryUnlock(); });
+    unlockBtn.addEventListener("click", async () => {
+      await tryUnlock({ resumeAfter: true });
+    });
     musicBox.appendChild(unlockBtn);
   }
   function hideUnlockBtn() {
@@ -297,9 +363,6 @@ function ensureMainUiLayout() {
       unlockBtn = null;
     }
   }
-
-  // Modal
-  let modal = null;
 
   function openModal() {
     if (!isGM()) return;
@@ -353,7 +416,6 @@ function ensureMainUiLayout() {
 
       for (const f of files) {
         if ((ensureBgMusic(currentState).tracks || []).length >= MAX_TRACKS) break;
-
         if (f.size > MAX_FILE_SIZE) {
           alert(`Файл "${f.name}" больше 50 МБ и не будет загружен.`);
           continue;
@@ -378,8 +440,6 @@ function ensureMainUiLayout() {
   function renderList() {
     if (!modal) return;
 
-    // If GM is typing in a textarea, don't rerender the whole list.
-    // Otherwise the DOM rebuild resets the caret and can "eat" the typed text.
     try {
       const ae = document.activeElement;
       if (ae && modal.contains(ae) && ae.tagName === 'TEXTAREA') return;
@@ -426,7 +486,6 @@ function ensureMainUiLayout() {
         </div>
       `;
 
-      // Dark textarea (requested)
       try {
         const ta = item.querySelector('textarea[data-act="desc"]');
         if (ta) {
@@ -442,7 +501,7 @@ function ensureMainUiLayout() {
       if (desc) {
         const handler = () => {
           t.desc = String(desc.value || '');
-          t.description = t.desc; // backward compat
+          t.description = t.desc;
           debounceSync();
         };
         desc.addEventListener("input", handler);
@@ -496,24 +555,20 @@ function ensureMainUiLayout() {
       return;
     }
 
-    const pub = sb.storage.from(BUCKET).getPublicUrl(path);
-    const publicUrl = pub?.data?.publicUrl || null;
-    if (!publicUrl) {
-      alert("Не удалось получить publicUrl. Проверь: bucket public или getPublicUrl доступен.");
-      return;
-    }
+    let bestUrl = '';
+    try { bestUrl = await resolveTrackUrl({ id, path }); } catch {}
 
     bg.tracks.push({
       id,
       name: safeName,
       desc: "",
       description: "",
-      url: publicUrl,
-      path
+      url: bestUrl || '',
+      path,
+      createdAt: new Date().toISOString()
     });
 
     if (!bg.currentTrackId) bg.currentTrackId = id;
-
     syncState();
   }
 
@@ -535,11 +590,13 @@ function ensureMainUiLayout() {
     }
 
     bg.tracks = safeArr(bg.tracks).filter(t => String(t?.id || "") !== id);
+    try { resolvedUrlCache.delete(String(id)); } catch {}
 
     if (String(bg.currentTrackId || "") === id) {
       bg.currentTrackId = bg.tracks.length ? String(bg.tracks[0].id) : null;
       bg.isPlaying = false;
       bg.startedAt = 0;
+      bg.pausedAt = 0;
     }
 
     syncState();
@@ -564,54 +621,66 @@ function ensureMainUiLayout() {
     sm({ type: "bgMusicSet", bgMusic: bg });
   }
 
-  
-function setCurrent(trackId, play) {
-  if (!isGM()) return;
-  const bg = ensureBgMusic(currentState || {});
-  const nextId = String(trackId || "");
-  const changed = String(bg.currentTrackId || "") !== nextId;
+  function setCurrent(trackId, play) {
+    if (!isGM()) return;
+    const bg = ensureBgMusic(currentState || {});
+    const nextId = String(trackId || "");
+    const changed = String(bg.currentTrackId || "") !== nextId;
 
-  bg.currentTrackId = nextId;
-  bg.isPlaying = !!play;
+    bg.currentTrackId = nextId;
+    bg.isPlaying = !!play;
 
-  // When switching track: start from 0.
-  // When just "play current": keep currentTime (rarely used here).
-  if (bg.isPlaying) {
-    if (changed) {
-      bg.startedAt = Date.now();
-      try { audio.currentTime = 0; } catch {}
+    if (bg.isPlaying) {
+      if (changed) {
+        bg.pausedAt = 0;
+        bg.startedAt = Date.now();
+        try { audio.currentTime = 0; } catch {}
+      } else {
+        const t = Number(audio.currentTime) || Number(bg.pausedAt) || 0;
+        bg.pausedAt = t;
+        bg.startedAt = Date.now() - Math.round(t * 1000);
+      }
     } else {
-      const t = Number(audio.currentTime) || 0;
-      bg.startedAt = Date.now() - Math.round(t * 1000);
+      const t = changed ? 0 : (Number(audio.currentTime) || 0);
+      bg.pausedAt = Math.max(0, t);
+      if (changed) bg.startedAt = 0;
     }
-  } else {
-    // paused
-    // keep startedAt as-is (not important while paused)
+
+    syncState();
   }
 
-  syncState();
-}
+  function syncSeekUi() {
+    if (!seekSlider || !seekTime) return;
+    const dur = Number(audio.duration) || 0;
+    const t = Number(audio.currentTime) || 0;
+    seekSlider.max = String(dur > 0 ? dur : 0);
+    if (!_isSeeking) seekSlider.value = String(t);
+    seekTime.textContent = `${fmtTime(_isSeeking ? Number(seekSlider.value) || 0 : t)} / ${fmtTime(dur)}`;
+  }
+
+  if (!audio._bgmSeekBound) {
+    audio._bgmSeekBound = true;
+    audio.addEventListener('loadedmetadata', syncSeekUi);
+    audio.addEventListener('timeupdate', syncSeekUi);
+    audio.addEventListener('durationchange', syncSeekUi);
+    audio.addEventListener('ended', syncSeekUi);
+  }
 
   // ---------- Apply state (called from message-ui on each snapshot) ----------
-  let currentState = null;
-
-  function applyState(state) {
+  async function applyState(state) {
     currentState = state || currentState || {};
+    const applyToken = ++_applyToken;
 
-    // Ensure layout once DOM is available
     try { ensureMainUiLayout(); } catch {}
 
     const bg = ensureBgMusic(currentState || {});
-    const tracks = safeArr(bg.tracks);
-    const cur = tracks.find(t => String(t?.id || "") === String(bg.currentTrackId || ""));
+    const cur = getCurTrackFromState(currentState);
 
     if (nowLabel) nowLabel.textContent = "Трек: " + (cur ? String(cur.name || "—") : "—");
 
-    // Seek bar enable/disable
     try {
       if (seekSlider) {
-        const has = !!(cur && cur.url);
-        // Seeking is GM-only to keep all clients in sync.
+        const has = !!cur;
         seekSlider.disabled = !has || !isGM();
       }
     } catch {}
@@ -630,10 +699,12 @@ function setCurrent(trackId, play) {
       });
     }
 
-    if (!cur || !cur.url) {
+    if (!cur) {
       try { audio.pause(); } catch {}
-
-      // Reset seek UI
+      try {
+        audio.removeAttribute('src');
+        audio.load();
+      } catch {}
       try {
         if (seekSlider) {
           seekSlider.max = '0';
@@ -645,57 +716,66 @@ function setCurrent(trackId, play) {
       return;
     }
 
-    if (audio.src !== cur.url) {
-      audio.src = cur.url;
+    const resolvedUrl = await resolveTrackUrl(cur);
+    if (applyToken !== _applyToken) return;
+
+    if (!resolvedUrl) {
+      try { audio.pause(); } catch {}
+      showUnlockBtn();
+      return;
+    }
+
+    if (audio.src !== resolvedUrl) {
+      audio.src = resolvedUrl;
       unlocked = false;
     }
 
-    // Keep seek bar in sync with playback.
-    try {
-      const syncSeekUi = () => {
-        if (!seekSlider || !seekTime) return;
-        const dur = Number(audio.duration) || 0;
-        const t = Number(audio.currentTime) || 0;
-        seekSlider.max = String(dur > 0 ? dur : 0);
-        if (!_isSeeking) seekSlider.value = String(t);
-        seekTime.textContent = `${fmtTime(_isSeeking ? Number(seekSlider.value) || 0 : t)} / ${fmtTime(dur)}`;
-      };
-
-      if (!audio._bgmSeekBound) {
-        audio._bgmSeekBound = true;
-        audio.addEventListener('loadedmetadata', syncSeekUi);
-        audio.addEventListener('timeupdate', syncSeekUi);
-        audio.addEventListener('durationchange', syncSeekUi);
-        audio.addEventListener('ended', syncSeekUi);
-      }
-      syncSeekUi();
-    } catch {}
+    syncSeekUi();
 
     if (bg.isPlaying) {
-      tryUnlock().then((ok) => {
-        if (!ok) return;
-        try {
-          const offset = (Date.now() - (Number(bg.startedAt) || Date.now())) / 1000;
-          if (Number.isFinite(audio.duration) && audio.duration > 0) {
-            audio.currentTime = (offset % audio.duration);
-          } else {
-            const handler = () => {
-              audio.removeEventListener("loadedmetadata", handler);
-              try {
-                if (Number.isFinite(audio.duration) && audio.duration > 0) {
-                  audio.currentTime = (offset % audio.duration);
-                }
-              } catch {}
-            };
-            audio.addEventListener("loadedmetadata", handler);
-          }
-          audio.play().catch(() => showUnlockBtn());
-        } catch {
-          showUnlockBtn();
+      const offset = Math.max(0, (Date.now() - safeNum(bg.startedAt, Date.now())) / 1000);
+      try {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          audio.currentTime = (offset % audio.duration);
+        } else {
+          const handler = () => {
+            audio.removeEventListener("loadedmetadata", handler);
+            try {
+              if (Number.isFinite(audio.duration) && audio.duration > 0) {
+                audio.currentTime = (offset % audio.duration);
+              }
+            } catch {}
+          };
+          audio.addEventListener("loadedmetadata", handler);
         }
-      });
+      } catch {}
+
+      const ok = await tryUnlock();
+      if (!ok || applyToken !== _applyToken) return;
+      try {
+        await audio.play();
+        hideUnlockBtn();
+      } catch {
+        showUnlockBtn();
+      }
     } else {
       try { audio.pause(); } catch {}
+      const pausedAt = Math.max(0, safeNum(bg.pausedAt, 0));
+      try {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          audio.currentTime = Math.min(pausedAt, audio.duration);
+        } else if (pausedAt > 0) {
+          const handler = () => {
+            audio.removeEventListener('loadedmetadata', handler);
+            try {
+              if (Number.isFinite(audio.duration) && audio.duration > 0) {
+                audio.currentTime = Math.min(pausedAt, audio.duration);
+              }
+            } catch {}
+          };
+          audio.addEventListener('loadedmetadata', handler);
+        }
+      } catch {}
     }
 
     try { if (modal) renderList(); } catch {}
@@ -705,41 +785,37 @@ function setCurrent(trackId, play) {
   if (openBtn) openBtn.addEventListener("click", openModal);
 
   if (toggleBtn) {
-  toggleBtn.addEventListener("click", () => {
-    if (!isGM()) return;
-    const bg = ensureBgMusic(currentState || {});
-    if (!bg.currentTrackId) return;
+    toggleBtn.addEventListener("click", () => {
+      if (!isGM()) return;
+      const bg = ensureBgMusic(currentState || {});
+      if (!bg.currentTrackId) return;
 
-    if (bg.isPlaying) {
-      // Pause: keep current position locally, just stop playback for everyone.
-      bg.isPlaying = false;
+      if (bg.isPlaying) {
+        bg.pausedAt = Number(audio.currentTime) || Number(bg.pausedAt) || 0;
+        bg.isPlaying = false;
+        syncState();
+        return;
+      }
+
+      const t = Number(audio.currentTime) || Number(bg.pausedAt) || 0;
+      bg.pausedAt = t;
+      bg.isPlaying = true;
+      bg.startedAt = Date.now() - Math.round(t * 1000);
       syncState();
-      return;
-    }
+    });
+  }
 
-    // Resume: keep position (do NOT restart from 0).
-    // We sync by shifting startedAt so that (now - startedAt) == currentTime.
-    const t = Number(audio.currentTime) || 0;
-    bg.isPlaying = true;
-    bg.startedAt = Date.now() - Math.round(t * 1000);
-    syncState();
-  });
-}
+  if (stopBtn) {
+    stopBtn.addEventListener("click", () => {
+      if (!isGM()) return;
+      const bg = ensureBgMusic(currentState || {});
+      bg.isPlaying = false;
+      bg.pausedAt = 0;
+      try { audio.pause(); audio.currentTime = 0; } catch {}
+      bg.startedAt = Date.now();
+      syncState();
+    });
+  }
 
-  
-if (stopBtn) {
-  stopBtn.addEventListener("click", () => {
-    if (!isGM()) return;
-    const bg = ensureBgMusic(currentState || {});
-    bg.isPlaying = false;
-
-    // Stop resets position to 0 for the next play.
-    try { audio.pause(); audio.currentTime = 0; } catch {}
-    bg.startedAt = Date.now();
-    syncState();
-  });
-}
-
-  // Export
   window.MusicManager = { applyState };
 })();
