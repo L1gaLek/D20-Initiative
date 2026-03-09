@@ -325,13 +325,95 @@ async function ensureMonstersLibrary() {
 }
 
 // ================== MAP BACKGROUND (GM) ==================
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result || ""));
-    fr.onerror = () => reject(fr.error || new Error("FileReader error"));
-    fr.readAsDataURL(file);
+const BOARD_BG_BUCKET = 'room-board-bg';
+const BOARD_BG_PREFIX = 'rooms';
+const BOARD_BG_MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+const BOARD_BG_ALLOWED_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
+  'video/mp4',
+  'video/webm'
+]);
+const BOARD_BG_ALLOWED_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.mp4', '.webm'];
+
+function sanitizeStorageName(name) {
+  return String(name || 'board-bg')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    || 'board-bg';
+}
+
+function isAllowedBoardBgFile(file) {
+  const type = String(file?.type || '').toLowerCase();
+  const name = String(file?.name || '').toLowerCase();
+  if (BOARD_BG_ALLOWED_TYPES.has(type)) return true;
+  return BOARD_BG_ALLOWED_EXTS.some(ext => name.endsWith(ext));
+}
+
+async function uploadBoardBackgroundToStorage(file) {
+  if (!sbClient || !sbClient.storage) {
+    throw new Error('Supabase client не инициализирован.');
+  }
+  if (!currentRoomId) {
+    throw new Error('Комната не выбрана.');
+  }
+
+  const id = (crypto?.randomUUID ? crypto.randomUUID() : ('bg-' + Math.random().toString(16).slice(2)));
+  const safeName = sanitizeStorageName(file?.name || 'board-bg');
+  const path = `${BOARD_BG_PREFIX}/${currentRoomId}/${id}_${safeName}`;
+
+  const up = await sbClient.storage.from(BOARD_BG_BUCKET).upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+    contentType: file?.type || undefined
   });
+  if (up?.error) {
+    throw new Error(up.error.message || String(up.error));
+  }
+
+  const pub = sbClient.storage.from(BOARD_BG_BUCKET).getPublicUrl(path);
+  const publicUrl = pub?.data?.publicUrl || null;
+  if (!publicUrl) {
+    throw new Error('Не удалось получить public URL для подложки.');
+  }
+
+  return {
+    url: publicUrl,
+    path,
+    bucket: BOARD_BG_BUCKET,
+    mime: String(file?.type || ''),
+    fileName: String(file?.name || safeName)
+  };
+}
+
+async function removeBoardBackgroundFromStorage(bucket, path) {
+  try {
+    if (!sbClient || !sbClient.storage) return;
+    const b = String(bucket || '').trim();
+    const p = String(path || '').trim();
+    if (!b || !p) return;
+    const rm = await sbClient.storage.from(b).remove([p]);
+    if (rm?.error) {
+      console.warn('Board background remove failed:', rm.error);
+    }
+  } catch (err) {
+    console.warn('Board background remove failed:', err);
+  }
+}
+
+function getCurrentBoardBackgroundMeta() {
+  const st = (typeof lastState !== 'undefined' && lastState) ? lastState : null;
+  return {
+    bucket: String(st?.boardBgStorageBucket || '').trim(),
+    path: String(st?.boardBgStoragePath || '').trim(),
+    url: String(st?.boardBgUrl || st?.boardBgDataUrl || '').trim()
+  };
 }
 
 if (boardBgFileInput) {
@@ -341,19 +423,39 @@ if (boardBgFileInput) {
       const file = e?.target?.files?.[0];
       if (!file) return;
 
-      // мягкий лимит, чтобы не раздувать room_state
-      if (file.size > 8 * 1024 * 1024) {
-        alert('Файл слишком большой. Рекомендуется до 8 МБ.');
+      if (!isAllowedBoardBgFile(file)) {
+        alert('Неподдерживаемый формат. Разрешены PNG, JPG, WEBP, GIF, SVG, MP4 и WEBM.');
         e.target.value = '';
         return;
       }
 
-      const dataUrl = await readFileAsDataUrl(file);
-      await sendMessage({ type: 'setBoardBg', dataUrl });
+      if (file.size > BOARD_BG_MAX_FILE_SIZE) {
+        alert('Файл слишком большой. Максимальный размер — 100 МБ.');
+        e.target.value = '';
+        return;
+      }
+
+      const prev = getCurrentBoardBackgroundMeta();
+      const uploaded = await uploadBoardBackgroundToStorage(file);
+      await sendMessage({
+        type: 'setBoardBg',
+        bgUrl: uploaded.url,
+        bgStoragePath: uploaded.path,
+        bgStorageBucket: uploaded.bucket,
+        bgMime: uploaded.mime,
+        bgFileName: uploaded.fileName,
+        dataUrl: uploaded.url
+      });
+
+      if (prev.path && prev.path !== uploaded.path && prev.bucket) {
+        await removeBoardBackgroundFromStorage(prev.bucket, prev.path);
+      }
+
       e.target.value = '';
     } catch (err) {
       console.error(err);
-      alert('Не удалось загрузить подложку');
+      alert('Не удалось загрузить подложку: ' + (err?.message || err));
+      try { e.target.value = ''; } catch {}
     }
   });
 }
@@ -361,22 +463,29 @@ if (boardBgFileInput) {
 if (boardBgClearBtn) {
   boardBgClearBtn.addEventListener('click', async () => {
     if (!isGM()) return;
+    const prev = getCurrentBoardBackgroundMeta();
     await sendMessage({ type: 'clearBoardBg' });
+    if (prev.path && prev.bucket) {
+      await removeBoardBackgroundFromStorage(prev.bucket, prev.path);
+    }
   });
 }
 
-// Подложка по ссылке (https://...jpg/png/gif/webp)
+// Подложка по ссылке (https://...jpg/png/gif/webp/mp4/webm)
 if (boardBgUrlApplyBtn) {
   boardBgUrlApplyBtn.addEventListener('click', async () => {
     if (!isGM()) return;
     const url = String(boardBgUrlInput?.value || "").trim();
     if (!url) return;
-    // простая проверка; фон станет виден на всех клиентах, если URL доступен браузеру
-    if (!/^https?:\/\//i.test(url) && !/^data:/i.test(url)) {
-      alert("Ссылка должна начинаться с http(s):// (или data:)");
+    if (!/^https?:\/\//i.test(url)) {
+      alert("Ссылка должна начинаться с http(s)://");
       return;
     }
-    await sendMessage({ type: 'setBoardBg', dataUrl: url });
+    const prev = getCurrentBoardBackgroundMeta();
+    await sendMessage({ type: 'setBoardBg', bgUrl: url, dataUrl: url, bgStoragePath: null, bgStorageBucket: null });
+    if (prev.path && prev.bucket) {
+      await removeBoardBackgroundFromStorage(prev.bucket, prev.path);
+    }
   });
 }
 
@@ -426,15 +535,15 @@ function applyBoardBackgroundToDom(state) {
 
   if (!bg || !board) return;
 
-  const dataUrl = state?.boardBgDataUrl || null;
-  bg.style.backgroundImage = dataUrl ? `url(${dataUrl})` : 'none';
+  const bgUrl = state?.boardBgUrl || state?.boardBgDataUrl || null;
+  bg.style.backgroundImage = bgUrl ? `url(${bgUrl})` : 'none';
 
   // Важно: размеры берем из актуального состояния, а не из глобальных переменных
   const bw = Number(state?.boardWidth) || 10;
   const bh = Number(state?.boardHeight) || 10;
   bg.style.width = `${bw * 50}px`;
   bg.style.height = `${bh * 50}px`;
-  board.classList.toggle('has-bg', !!dataUrl);
+  board.classList.toggle('has-bg', !!bgUrl);
 }
 
 function clamp01(n) {
