@@ -98,20 +98,11 @@
   let gainNode = null;
 
   function ensureAudioPipeline() {
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return null;
-      if (!audioCtx) audioCtx = new Ctx();
-      if (!mediaSourceNode) mediaSourceNode = audioCtx.createMediaElementSource(audio);
-      if (!gainNode) gainNode = audioCtx.createGain();
-      try { mediaSourceNode.disconnect(); } catch {}
-      try { gainNode.disconnect(); } catch {}
-      mediaSourceNode.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      return audioCtx;
-    } catch {
-      return null;
-    }
+    // Deliberately disabled by default: some browsers/devices report media as
+    // 'playing' but keep it silent when the element is routed through WebAudio
+    // from a cross-origin or signed Storage URL. Plain HTMLAudioElement output
+    // is more reliable for remote players.
+    return null;
   }
 
   async function resumeAudioPipeline() {
@@ -147,6 +138,8 @@
   let _applyToken = 0;
   let _globalUnlockBound = false;
   const resolvedUrlCache = new Map(); // key -> { url, expiresAt }
+  const trackBlobUrlCache = new Map(); // key -> { objectUrl, sourceUrl }
+  let currentObjectUrl = '';
 
   function normalizeAudioOutput() {
     try { audio.muted = false; } catch {}
@@ -280,6 +273,45 @@
     }
 
     return '';
+  }
+
+
+  async function materializePlayableUrl(track) {
+    const key = String(track?.id || track?.path || track?.url || '');
+    const sourceUrl = await resolveTrackUrl(track);
+    if (!sourceUrl) return '';
+
+    const cached = key ? trackBlobUrlCache.get(key) : null;
+    if (cached && cached.objectUrl && cached.sourceUrl === sourceUrl) {
+      return cached.objectUrl;
+    }
+
+    try {
+      const resp = await fetch(sourceUrl, { mode: 'cors', credentials: 'omit', cache: 'force-cache' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      if (!blob || !blob.size) throw new Error('empty blob');
+      const objectUrl = URL.createObjectURL(blob);
+      if (key) {
+        const prev = trackBlobUrlCache.get(key);
+        if (prev?.objectUrl && prev.objectUrl !== objectUrl) {
+          try { URL.revokeObjectURL(prev.objectUrl); } catch {}
+        }
+        trackBlobUrlCache.set(key, { objectUrl, sourceUrl });
+      }
+      return objectUrl;
+    } catch (e) {
+      console.warn('bg-music: blob materialize failed, fallback to direct url', e);
+      return sourceUrl;
+    }
+  }
+
+  function cleanupBlobUrls(keepKey = '') {
+    for (const [k, v] of trackBlobUrlCache.entries()) {
+      if (keepKey && String(k) === String(keepKey)) continue;
+      try { if (v?.objectUrl) URL.revokeObjectURL(v.objectUrl); } catch {}
+      trackBlobUrlCache.delete(k);
+    }
   }
 
   // ---------- UI ----------
@@ -685,6 +717,11 @@
 
     bg.tracks = safeArr(bg.tracks).filter(t => String(t?.id || "") !== id);
     try { resolvedUrlCache.delete(String(id)); } catch {}
+    try {
+      const prev = trackBlobUrlCache.get(String(id));
+      if (prev?.objectUrl) URL.revokeObjectURL(prev.objectUrl);
+      trackBlobUrlCache.delete(String(id));
+    } catch {}
 
     if (String(bg.currentTrackId || "") === id) {
       bg.currentTrackId = bg.tracks.length ? String(bg.tracks[0].id) : null;
@@ -827,6 +864,11 @@
         audio.load();
       } catch {}
       try {
+        if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+      } catch {}
+      currentObjectUrl = '';
+      cleanupBlobUrls('');
+      try {
         if (seekSlider) {
           seekSlider.max = '0';
           seekSlider.value = '0';
@@ -837,7 +879,7 @@
       return;
     }
 
-    const resolvedUrl = await resolveTrackUrl(cur);
+    const resolvedUrl = await materializePlayableUrl(cur);
     if (applyToken !== _applyToken) return;
 
     if (!resolvedUrl) {
@@ -850,11 +892,16 @@
       try {
         audio.pause();
       } catch {}
+      if (currentObjectUrl && currentObjectUrl !== resolvedUrl && !Array.from(trackBlobUrlCache.values()).some(v => v?.objectUrl === currentObjectUrl)) {
+        try { URL.revokeObjectURL(currentObjectUrl); } catch {}
+      }
+      currentObjectUrl = String(resolvedUrl || '');
       audio.src = resolvedUrl;
       try { audio.load(); } catch {}
       unlocked = false;
     }
 
+    try { cleanupBlobUrls(String(cur?.id || cur?.path || cur?.url || '')); } catch {}
     syncSeekUi();
 
     if (bg.isPlaying) {
