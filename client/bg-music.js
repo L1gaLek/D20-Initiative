@@ -87,6 +87,45 @@
   audio.loop = true;
   audio.preload = 'auto';
   try { audio.crossOrigin = 'anonymous'; } catch {}
+  try { audio.playsInline = true; } catch {}
+  try { audio.setAttribute('playsinline', ''); } catch {}
+  try { audio.setAttribute('webkit-playsinline', ''); } catch {}
+
+  // WebAudio pipeline helps some browsers/devices actually output the sound
+  // after the first user gesture, even when the tab already shows that media is playing.
+  let audioCtx = null;
+  let mediaSourceNode = null;
+  let gainNode = null;
+
+  function ensureAudioPipeline() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      if (!audioCtx) audioCtx = new Ctx();
+      if (!mediaSourceNode) mediaSourceNode = audioCtx.createMediaElementSource(audio);
+      if (!gainNode) gainNode = audioCtx.createGain();
+      try { mediaSourceNode.disconnect(); } catch {}
+      try { gainNode.disconnect(); } catch {}
+      mediaSourceNode.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      return audioCtx;
+    } catch {
+      return null;
+    }
+  }
+
+  async function resumeAudioPipeline() {
+    const ctx = ensureAudioPipeline();
+    if (!ctx) return true;
+    try {
+      if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
+        await ctx.resume();
+      }
+      return ctx.state === 'running';
+    } catch {
+      return false;
+    }
+  }
 
   // local volume (per user)
   const LS_VOL = "dnd_bg_music_volume";
@@ -112,7 +151,20 @@
   function normalizeAudioOutput() {
     try { audio.muted = false; } catch {}
     try { audio.defaultMuted = false; } catch {}
-    try { audio.volume = clamp01(loadLocalVol()); } catch {}
+
+    const localVol = clamp01(loadLocalVol());
+    const roomVol = clamp01(safeNum(currentState?.bgMusic?.volume, 40) / 100);
+    const finalVol = Math.max(0, Math.min(1, localVol * roomVol));
+
+    try { audio.volume = 1; } catch {}
+    try {
+      const ctx = ensureAudioPipeline();
+      if (ctx && gainNode) gainNode.gain.value = finalVol;
+      else audio.volume = finalVol;
+    } catch {
+      try { audio.volume = finalVol; } catch {}
+    }
+
     try {
       const ap = Number(audio.playbackRate);
       if (!Number.isFinite(ap) || ap <= 0) audio.playbackRate = 1;
@@ -162,10 +214,13 @@
 
   async function tryUnlock({ resumeAfter = false } = {}) {
     if (unlocked) {
+      await resumeAudioPipeline().catch(() => {});
       if (resumeAfter) applyState(currentState || {});
       return true;
     }
     try {
+      await resumeAudioPipeline().catch(() => {});
+      normalizeAudioOutput();
       await audio.play();
       audio.pause();
       unlocked = true;
@@ -709,12 +764,24 @@
       if (!bg?.isPlaying) return;
       if (!unlocked) return;
       try {
+        await resumeAudioPipeline().catch(() => {});
         normalizeAudioOutput();
         await audio.play();
         hideUnlockBtn();
       } catch {
         showUnlockBtn();
       }
+    });
+    audio.addEventListener('canplaythrough', async () => {
+      const bg = ensureBgMusic(currentState || {});
+      if (!bg?.isPlaying || !unlocked) return;
+      try {
+        await resumeAudioPipeline().catch(() => {});
+        normalizeAudioOutput();
+      } catch {}
+    });
+    audio.addEventListener('playing', () => {
+      try { hideUnlockBtn(); } catch {}
     });
   }
 
@@ -748,8 +815,8 @@
       volumeSlider.value = String(Math.round(v * 100));
       volumeSlider.addEventListener("input", () => {
         const vv = clamp01(Number(volumeSlider.value) / 100);
-        audio.volume = vv;
         saveLocalVol(vv);
+        normalizeAudioOutput();
       });
     }
 
@@ -812,6 +879,7 @@
       normalizeAudioOutput();
       if (!ok || applyToken !== _applyToken) return;
       try {
+        await resumeAudioPipeline().catch(() => {});
         await audio.play();
         hideUnlockBtn();
       } catch {
