@@ -1,73 +1,3 @@
-
-/* --- Added WebSocket realtime transport (VPS) --- */
-const WS_URL = "ws://5.42.106.75:8080";
-let wsClient = null;
-let wsRoomId = null;
-let wsReconnectTimer = null;
-
-function shouldUseWsForMessage(type){
-  return [
-    "moveToken","tokenMove","updateToken","setTokenPos",
-    "fogPatch","fogSet",
-    "wallAdd","wallRemove",
-    "markAdd","markUpdate","markRemove",
-    "bgMusicSet","musicPlay","musicPause","musicStop","musicSeek"
-  ].includes(String(type||""));
-}
-
-function connectRoomWs(roomId){
-  wsRoomId = String(roomId||"");
-  if(!wsRoomId) return;
-
-  if(wsClient && (wsClient.readyState===WebSocket.OPEN || wsClient.readyState===WebSocket.CONNECTING)){
-    return;
-  }
-
-  wsClient = new WebSocket(WS_URL);
-
-  wsClient.onopen = ()=>{
-    console.log("[WS] connected:", wsRoomId);
-  };
-
-  wsClient.onmessage = (event)=>{
-    try{
-      const msg = JSON.parse(event.data);
-      if(!msg || !msg.type) return;
-      if(typeof handleMessage === "function"){
-        handleMessage(msg);
-      }
-    }catch(e){
-      console.warn("[WS] bad message", e);
-    }
-  };
-
-  wsClient.onclose = ()=>{
-    console.log("[WS] closed");
-    wsClient = null;
-    clearTimeout(wsReconnectTimer);
-    wsReconnectTimer = setTimeout(()=>{
-      if(wsRoomId) connectRoomWs(wsRoomId);
-    },2000);
-  };
-
-  wsClient.onerror = (e)=>{
-    console.warn("[WS] error", e);
-  };
-}
-
-function sendWsMessage(msg){
-  if(!msg || !wsRoomId) return false;
-  if(!wsClient || wsClient.readyState!==WebSocket.OPEN) return false;
-
-  wsClient.send(JSON.stringify({
-    ...msg,
-    roomId: msg.roomId || wsRoomId
-  }));
-  return true;
-}
-/* --- End WS transport --- */
-
-
 // ================== HELPER ==================
 
 function deepClone(obj) {
@@ -726,15 +656,19 @@ async function upsertRoomState(roomId, nextState) {
       if (m.playersPos && typeof m.playersPos === 'object') m.playersPos = {};
     });
   } catch {}
+  const syncedState = syncActiveToMap(stSafe);
   const payload = {
     room_id: roomId,
     phase: String(stSafe?.phase || "lobby"),
     current_actor_id: stSafe?.turnOrder?.[stSafe?.currentTurnIndex] ?? null,
-    state: syncActiveToMap(stSafe),
+    state: syncedState,
     updated_at: new Date().toISOString()
   };
   const { error } = await sbClient.from("room_state").upsert(payload);
   if (error) throw error;
+  try {
+    sendWsEnvelope({ type: 'state', roomId, state: syncedState }, { optimisticApplied: true });
+  } catch {}
 }
 
 // ===== Coalesced room_state writes (reduces egress & avoids DB hammering) =====
@@ -807,6 +741,218 @@ async function deleteCampaignSave(saveId) {
     .delete()
     .eq('id', saveId);
   if (error) throw error;
+}
+
+
+
+// ================== OPTIONAL VPS WEBSOCKET RELAY ==================
+// Supabase remains the source of truth for DB/storage.
+// This WS layer is used as a low-latency relay via the user's VPS.
+const WS_URL = "ws://5.42.106.75:8080";
+const WS_CLIENT_ID = (() => {
+  try {
+    const key = 'dnd_ws_client_id';
+    let id = String(localStorage.getItem(key) || '').trim();
+    if (!id) {
+      id = (crypto?.randomUUID ? crypto.randomUUID() : ('ws-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
+      localStorage.setItem(key, id);
+    }
+    return id;
+  } catch {
+    return (crypto?.randomUUID ? crypto.randomUUID() : ('ws-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
+  }
+})();
+
+let wsClient = null;
+let wsRoomId = '';
+let wsReconnectTimer = null;
+let wsWantConnected = false;
+const wsSeenNonces = new Map();
+
+function wsMakeNonce() {
+  return (crypto?.randomUUID ? crypto.randomUUID() : ('n-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
+}
+
+function wsRememberNonce(nonce) {
+  const key = String(nonce || '').trim();
+  if (!key) return;
+  wsSeenNonces.set(key, Date.now());
+  if (wsSeenNonces.size > 500) {
+    const now = Date.now();
+    for (const [k, ts] of wsSeenNonces.entries()) {
+      if (now - Number(ts || 0) > 30000) wsSeenNonces.delete(k);
+    }
+    while (wsSeenNonces.size > 500) {
+      const first = wsSeenNonces.keys().next();
+      if (first.done) break;
+      wsSeenNonces.delete(first.value);
+    }
+  }
+}
+
+function wsWasSeen(nonce) {
+  const key = String(nonce || '').trim();
+  if (!key) return false;
+  const ts = Number(wsSeenNonces.get(key) || 0);
+  if (!ts) return false;
+  if (Date.now() - ts > 30000) {
+    wsSeenNonces.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function disconnectRoomWs() {
+  wsWantConnected = false;
+  wsRoomId = '';
+  try { clearTimeout(wsReconnectTimer); } catch {}
+  wsReconnectTimer = null;
+  if (wsClient) {
+    try { wsClient.close(); } catch {}
+    wsClient = null;
+  }
+}
+
+function connectRoomWs(roomId) {
+  const rid = String(roomId || '').trim();
+  if (!rid || typeof WebSocket === 'undefined') return;
+
+  wsWantConnected = true;
+  wsRoomId = rid;
+
+  if (wsClient) {
+    const state = Number(wsClient.readyState);
+    if ((state === WebSocket.OPEN || state === WebSocket.CONNECTING) && wsClient.__roomId === rid) {
+      return;
+    }
+    try { wsClient.close(); } catch {}
+    wsClient = null;
+  }
+
+  try { clearTimeout(wsReconnectTimer); } catch {}
+  wsReconnectTimer = null;
+
+  const sock = new WebSocket(WS_URL);
+  sock.__roomId = rid;
+  wsClient = sock;
+
+  sock.onopen = async () => {
+    try {
+      sock.send(JSON.stringify({
+        type: 'joinRoom',
+        roomId: rid,
+        clientId: WS_CLIENT_ID,
+        transport: 'ws'
+      }));
+    } catch {}
+    try { await stopSupabaseRoomRealtime(); } catch {}
+  };
+
+  sock.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (!msg || typeof msg !== 'object') return;
+      const nonce = String(msg.__wsNonce || '').trim();
+      if (nonce && wsWasSeen(nonce)) return;
+      if (nonce) wsRememberNonce(nonce);
+
+      const from = String(msg.__fromWsClient || '').trim();
+      if (from && from === WS_CLIENT_ID && msg.__optimisticApplied) return;
+
+      const msgRoomId = String(msg.roomId || '').trim();
+      if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
+
+      if (msg.type === 'ping' || msg.type === 'pong' || msg.type === 'joinedWsRoom') return;
+      handleMessage(msg);
+    } catch (e) {
+      console.warn('[WS] bad message', e);
+    }
+  };
+
+  sock.onclose = () => {
+    if (wsClient === sock) wsClient = null;
+    if (wsRoomId) {
+      try { startSupabaseRoomRealtime(wsRoomId); } catch {}
+    }
+    if (!wsWantConnected || !wsRoomId) return;
+    try { clearTimeout(wsReconnectTimer); } catch {}
+    wsReconnectTimer = setTimeout(() => {
+      if (wsWantConnected && wsRoomId) connectRoomWs(wsRoomId);
+    }, 2000);
+  };
+
+  sock.onerror = (e) => {
+    console.warn('[WS] error', e);
+  };
+}
+
+function sendWsEnvelope(msg, opts = {}) {
+  try {
+    if (!msg || typeof msg !== 'object') return false;
+    if (!wsRoomId || !wsClient || wsClient.readyState !== WebSocket.OPEN) return false;
+    const nonce = String(opts.nonce || wsMakeNonce());
+    const payload = {
+      ...msg,
+      roomId: String(msg.roomId || wsRoomId),
+      __wsNonce: nonce,
+      __fromWsClient: WS_CLIENT_ID,
+      __optimisticApplied: !!opts.optimisticApplied
+    };
+    wsRememberNonce(nonce);
+    wsClient.send(JSON.stringify(payload));
+    return true;
+  } catch (e) {
+    console.warn('[WS] send failed', e);
+    return false;
+  }
+}
+
+
+function isWsRealtimeReady() {
+  return !!(wsClient && wsClient.readyState === WebSocket.OPEN && wsWantConnected && wsRoomId);
+}
+
+async function stopSupabaseRoomRealtime() {
+  try {
+    if (roomDbChannel) {
+      try { await roomDbChannel.unsubscribe(); } catch {}
+      roomDbChannel = null;
+    }
+  } catch {}
+  try {
+    if (roomChannel) {
+      try { await roomChannel.unsubscribe(); } catch {}
+      roomChannel = null;
+    }
+  } catch {}
+  try {
+    if (window.roomTokensDbChannel) {
+      try { await window.roomTokensDbChannel.unsubscribe(); } catch {}
+      window.roomTokensDbChannel = null;
+    }
+  } catch {}
+  try {
+    if (window.roomLogDbChannel) {
+      try { await window.roomLogDbChannel.unsubscribe(); } catch {}
+      window.roomLogDbChannel = null;
+    }
+  } catch {}
+  try {
+    if (window.roomDiceDbChannel) {
+      try { await window.roomDiceDbChannel.unsubscribe(); } catch {}
+      window.roomDiceDbChannel = null;
+    }
+  } catch {}
+}
+
+async function startSupabaseRoomRealtime(roomId) {
+  const rid = String(roomId || '').trim();
+  if (!rid) return;
+  if (isWsRealtimeReady()) return;
+  await subscribeRoomDb(rid);
+  try { await subscribeRoomTokensDb(rid); } catch (e) { console.warn('tokens subscribe failed', e); }
+  try { await subscribeRoomLogDb(rid); } catch (e) { console.warn('log subscribe failed', e); }
+  try { await subscribeRoomDiceDb(rid); } catch (e) { console.warn('dice subscribe failed', e); }
 }
 
 async function subscribeRoomDb(roomId) {
@@ -992,9 +1138,12 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
       .update({ is_public: pub })
       .eq('room_id', roomId)
       .eq('token_id', tokenId)
-      .select('room_id')
+      .select('room_id,map_id,token_id,x,y,size,color,is_public')
       .limit(1);
-    if (!uErr && Array.isArray(upd) && upd.length) return;
+    if (!uErr && Array.isArray(upd) && upd.length) {
+      try { sendWsEnvelope({ type: 'tokenRow', roomId, row: upd[0] }, { optimisticApplied: true }); } catch {}
+      return;
+    }
 
     // If there is no row yet (token not placed), create a stub on current map.
     const mapId = String(lastState?.currentMapId || '') || null;
@@ -1010,6 +1159,7 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
       is_public: pub
     };
     await sbClient.from('room_tokens').upsert(payload);
+    try { sendWsEnvelope({ type: 'tokenRow', roomId, row: payload }, { optimisticApplied: true }); } catch {}
   } catch (e) {
     console.warn('upsertTokenVisibility failed', e);
   }
@@ -1020,7 +1170,9 @@ async function insertRoomLog(roomId, text) {
     await ensureSupabaseReady();
     const t = String(text || '').trim();
     if (!roomId || !t) return;
+    const row = { room_id: roomId, text: t, created_at: new Date().toISOString() };
     await sbClient.from('room_log').insert({ room_id: roomId, text: t });
+    try { sendWsEnvelope({ type: 'logRow', roomId, row }, { optimisticApplied: true }); } catch {}
   } catch (e) {
     console.warn('room_log insert failed', e);
   }
@@ -1043,10 +1195,41 @@ async function insertDiceEvent(roomId, ev) {
       p_total: Number(ev.total) || null,
       p_crit: String(ev.crit || '')
     };
+
+    const row = {
+      room_id: roomId,
+      from_id: args.p_from_id,
+      from_name: args.p_from_name,
+      kind_text: args.p_kind_text,
+      sides: args.p_sides,
+      count: args.p_count,
+      bonus: args.p_bonus,
+      rolls: args.p_rolls,
+      total: args.p_total,
+      crit: args.p_crit,
+      created_at: new Date().toISOString()
+    };
+
+    const who = (args.p_from_name || '').trim() || 'Игрок';
+    const kind = (args.p_kind_text || '').trim() || (args.p_sides ? `d${args.p_sides}` : 'Бросок');
+    const rollsTxt = (Array.isArray(args.p_rolls) && args.p_rolls.length) ? args.p_rolls.join(',') : '';
+    const bonusTxt = (Number(args.p_bonus) === 0) ? '' : (Number(args.p_bonus) > 0 ? `+${Number(args.p_bonus)}` : String(Number(args.p_bonus)));
+    const totalTxt = (args.p_total === null || args.p_total === undefined) ? '' : ` = ${args.p_total}`;
+    const critTxt = (args.p_crit === 'crit-success') ? ' (КРИТ)' : (args.p_crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
+    const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(args.p_total ?? '');
+    const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
+
     try {
       const { error } = await sbClient.rpc('add_dice_event', args);
-      if (!error) return;
+      if (!error) {
+        try { sendWsEnvelope({ type: 'diceRow', roomId, row }, { optimisticApplied: true }); } catch {}
+        if (line) {
+          try { sendWsEnvelope({ type: 'logRow', roomId, row: { room_id: roomId, text: line, created_at: new Date().toISOString() } }, { optimisticApplied: true }); } catch {}
+        }
+        return;
+      }
     } catch {}
+
     // fallback (no RPC): insert dice row + a matching log line
     await sbClient.from('room_dice_events').insert({
       room_id: roomId,
@@ -1060,17 +1243,9 @@ async function insertDiceEvent(roomId, ev) {
       total: args.p_total,
       crit: args.p_crit
     });
+    try { sendWsEnvelope({ type: 'diceRow', roomId, row }, { optimisticApplied: true }); } catch {}
 
-    // log line (roughly same as RPC)
     try {
-      const who = (args.p_from_name || '').trim() || 'Игрок';
-      const kind = (args.p_kind_text || '').trim() || (args.p_sides ? `d${args.p_sides}` : 'Бросок');
-      const rollsTxt = (Array.isArray(args.p_rolls) && args.p_rolls.length) ? args.p_rolls.join(',') : '';
-      const bonusTxt = (Number(args.p_bonus) === 0) ? '' : (Number(args.p_bonus) > 0 ? `+${Number(args.p_bonus)}` : String(Number(args.p_bonus)));
-      const totalTxt = (args.p_total === null || args.p_total === undefined) ? '' : ` = ${args.p_total}`;
-      const critTxt = (args.p_crit === 'crit-success') ? ' (КРИТ)' : (args.p_crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
-      const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(args.p_total ?? '');
-      const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
       if (line) await insertRoomLog(roomId, line);
     } catch {}
   } catch (e) {
@@ -1268,6 +1443,7 @@ async function sendMessage(msg) {
         }
 
         currentRoomId = roomId;
+        connectRoomWs(roomId);
         handleMessage({ type: "joinedRoom", room });
 
 
@@ -1281,11 +1457,7 @@ async function sendMessage(msg) {
           rs = { state: initState };
         }
 
-        await subscribeRoomDb(roomId);
-        // v4: dedicated realtime tables
-        try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
-        try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
-        try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
+        await startSupabaseRoomRealtime(roomId);
         await refreshRoomMembers(roomId);
         await subscribeRoomMembersDb(roomId);
         handleMessage({ type: "state", state: rs.state });
@@ -1314,6 +1486,9 @@ async function sendMessage(msg) {
         // v4: dice events are append-only in room_dice_events (and log is append-only in room_log)
         const ev = msg.event || {};
         await insertDiceEvent(currentRoomId, ev);
+        try {
+          sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true });
+        } catch {}
         // apply to self instantly (others will receive via realtime INSERT)
         if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         break;
@@ -1322,14 +1497,18 @@ async function sendMessage(msg) {
       // ===== v4: append-only log entry =====
       case 'log': {
         if (!currentRoomId) return;
+        const logRow = { text: String(msg.text || ''), created_at: new Date().toISOString() };
         await insertRoomLog(currentRoomId, msg.text);
+        try {
+          sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: !msg.noOptimistic });
+        } catch {}
         // Optimistic local append (realtime INSERT will also arrive if enabled).
         // Если msg.noOptimistic = true — НЕ добавляем локально, чтобы не было дублей.
         if (!msg.noOptimistic) {
           try {
             handleMessage({
               type: 'logRow',
-              row: { text: String(msg.text || ''), created_at: new Date().toISOString() }
+              row: logRow
             });
           } catch {}
         }
@@ -2047,14 +2226,20 @@ async function sendMessage(msg) {
                 handleMessage({ type: 'error', message: 'Эта клетка занята другим персонажем' });
                 return;
               }
+              const fallbackRow = { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() };
               const { error: uErr } = await sbClient
                 .from('room_tokens')
-                .upsert({ room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() }, { onConflict: 'room_id,map_id,token_id' });
+                .upsert(fallbackRow, { onConflict: 'room_id,map_id,token_id' });
               if (uErr) throw uErr;
+              try { sendWsEnvelope({ type: 'tokenRow', roomId: currentRoomId, row: fallbackRow }, { optimisticApplied: true }); } catch {}
               await insertRoomLog(currentRoomId, `${p.name} перемещен в (${nx},${ny})`);
             } else {
               // Apply returned row instantly if provided
               if (data) applyTokenRowToLocalState(data);
+              try {
+                const relayRow = data || { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() };
+                sendWsEnvelope({ type: 'tokenRow', roomId: currentRoomId, row: relayRow }, { optimisticApplied: true });
+              } catch {}
             }
           } catch (e) {
             console.warn('move_token failed', e);
@@ -2107,6 +2292,7 @@ async function sendMessage(msg) {
                 updated_at: new Date().toISOString()
               };
               await sbClient.from('room_tokens').upsert(payload, { onConflict: 'room_id,map_id,token_id' });
+              try { sendWsEnvelope({ type: 'tokenRow', roomId, row: payload }, { optimisticApplied: true }); } catch {}
             }
           } catch (e) {
             console.warn('updatePlayerSize: room_tokens upsert failed', e);
@@ -2134,6 +2320,13 @@ async function sendMessage(msg) {
                 .eq('room_id', currentRoomId)
                 .eq('map_id', mapId)
                 .eq('token_id', String(p.id));
+              try {
+                sendWsEnvelope({
+                  type: 'tokenRow',
+                  roomId: currentRoomId,
+                  row: { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: null, y: null, size: Number(p.size) || 1, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() }
+                }, { optimisticApplied: true });
+              } catch {}
             }
           } catch (e) {
             console.warn('removePlayerFromBoard: room_tokens update failed', e);
