@@ -656,15 +656,19 @@ async function upsertRoomState(roomId, nextState) {
       if (m.playersPos && typeof m.playersPos === 'object') m.playersPos = {};
     });
   } catch {}
+  const syncedState = syncActiveToMap(stSafe);
   const payload = {
     room_id: roomId,
     phase: String(stSafe?.phase || "lobby"),
     current_actor_id: stSafe?.turnOrder?.[stSafe?.currentTurnIndex] ?? null,
-    state: syncActiveToMap(stSafe),
+    state: syncedState,
     updated_at: new Date().toISOString()
   };
   const { error } = await sbClient.from("room_state").upsert(payload);
   if (error) throw error;
+  try {
+    sendWsEnvelope({ type: 'state', roomId, state: syncedState }, { optimisticApplied: true });
+  } catch {}
 }
 
 // ===== Coalesced room_state writes (reduces egress & avoids DB hammering) =====
@@ -737,6 +741,166 @@ async function deleteCampaignSave(saveId) {
     .delete()
     .eq('id', saveId);
   if (error) throw error;
+}
+
+
+
+// ================== OPTIONAL VPS WEBSOCKET RELAY ==================
+// Supabase remains the source of truth for DB/storage.
+// This WS layer is used as a low-latency relay via the user's VPS.
+const WS_URL = "ws://5.42.106.75:8080";
+const WS_CLIENT_ID = (() => {
+  try {
+    const key = 'dnd_ws_client_id';
+    let id = String(localStorage.getItem(key) || '').trim();
+    if (!id) {
+      id = (crypto?.randomUUID ? crypto.randomUUID() : ('ws-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
+      localStorage.setItem(key, id);
+    }
+    return id;
+  } catch {
+    return (crypto?.randomUUID ? crypto.randomUUID() : ('ws-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
+  }
+})();
+
+let wsClient = null;
+let wsRoomId = '';
+let wsReconnectTimer = null;
+let wsWantConnected = false;
+const wsSeenNonces = new Map();
+
+function wsMakeNonce() {
+  return (crypto?.randomUUID ? crypto.randomUUID() : ('n-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
+}
+
+function wsRememberNonce(nonce) {
+  const key = String(nonce || '').trim();
+  if (!key) return;
+  wsSeenNonces.set(key, Date.now());
+  if (wsSeenNonces.size > 500) {
+    const now = Date.now();
+    for (const [k, ts] of wsSeenNonces.entries()) {
+      if (now - Number(ts || 0) > 30000) wsSeenNonces.delete(k);
+    }
+    while (wsSeenNonces.size > 500) {
+      const first = wsSeenNonces.keys().next();
+      if (first.done) break;
+      wsSeenNonces.delete(first.value);
+    }
+  }
+}
+
+function wsWasSeen(nonce) {
+  const key = String(nonce || '').trim();
+  if (!key) return false;
+  const ts = Number(wsSeenNonces.get(key) || 0);
+  if (!ts) return false;
+  if (Date.now() - ts > 30000) {
+    wsSeenNonces.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function disconnectRoomWs() {
+  wsWantConnected = false;
+  wsRoomId = '';
+  try { clearTimeout(wsReconnectTimer); } catch {}
+  wsReconnectTimer = null;
+  if (wsClient) {
+    try { wsClient.close(); } catch {}
+    wsClient = null;
+  }
+}
+
+function connectRoomWs(roomId) {
+  const rid = String(roomId || '').trim();
+  if (!rid || typeof WebSocket === 'undefined') return;
+
+  wsWantConnected = true;
+  wsRoomId = rid;
+
+  if (wsClient) {
+    const state = Number(wsClient.readyState);
+    if ((state === WebSocket.OPEN || state === WebSocket.CONNECTING) && wsClient.__roomId === rid) {
+      return;
+    }
+    try { wsClient.close(); } catch {}
+    wsClient = null;
+  }
+
+  try { clearTimeout(wsReconnectTimer); } catch {}
+  wsReconnectTimer = null;
+
+  const sock = new WebSocket(WS_URL);
+  sock.__roomId = rid;
+  wsClient = sock;
+
+  sock.onopen = () => {
+    try {
+      sock.send(JSON.stringify({
+        type: 'joinRoom',
+        roomId: rid,
+        clientId: WS_CLIENT_ID,
+        transport: 'ws'
+      }));
+    } catch {}
+  };
+
+  sock.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (!msg || typeof msg !== 'object') return;
+      const nonce = String(msg.__wsNonce || '').trim();
+      if (nonce && wsWasSeen(nonce)) return;
+      if (nonce) wsRememberNonce(nonce);
+
+      const from = String(msg.__fromWsClient || '').trim();
+      if (from && from === WS_CLIENT_ID && msg.__optimisticApplied) return;
+
+      const msgRoomId = String(msg.roomId || '').trim();
+      if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
+
+      if (msg.type === 'ping' || msg.type === 'pong' || msg.type === 'joinedWsRoom') return;
+      handleMessage(msg);
+    } catch (e) {
+      console.warn('[WS] bad message', e);
+    }
+  };
+
+  sock.onclose = () => {
+    if (wsClient === sock) wsClient = null;
+    if (!wsWantConnected || !wsRoomId) return;
+    try { clearTimeout(wsReconnectTimer); } catch {}
+    wsReconnectTimer = setTimeout(() => {
+      if (wsWantConnected && wsRoomId) connectRoomWs(wsRoomId);
+    }, 2000);
+  };
+
+  sock.onerror = (e) => {
+    console.warn('[WS] error', e);
+  };
+}
+
+function sendWsEnvelope(msg, opts = {}) {
+  try {
+    if (!msg || typeof msg !== 'object') return false;
+    if (!wsRoomId || !wsClient || wsClient.readyState !== WebSocket.OPEN) return false;
+    const nonce = String(opts.nonce || wsMakeNonce());
+    const payload = {
+      ...msg,
+      roomId: String(msg.roomId || wsRoomId),
+      __wsNonce: nonce,
+      __fromWsClient: WS_CLIENT_ID,
+      __optimisticApplied: !!opts.optimisticApplied
+    };
+    wsRememberNonce(nonce);
+    wsClient.send(JSON.stringify(payload));
+    return true;
+  } catch (e) {
+    console.warn('[WS] send failed', e);
+    return false;
+  }
 }
 
 async function subscribeRoomDb(roomId) {
@@ -1198,6 +1362,7 @@ async function sendMessage(msg) {
         }
 
         currentRoomId = roomId;
+        connectRoomWs(roomId);
         handleMessage({ type: "joinedRoom", room });
 
 
@@ -1244,6 +1409,9 @@ async function sendMessage(msg) {
         // v4: dice events are append-only in room_dice_events (and log is append-only in room_log)
         const ev = msg.event || {};
         await insertDiceEvent(currentRoomId, ev);
+        try {
+          sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true });
+        } catch {}
         // apply to self instantly (others will receive via realtime INSERT)
         if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         break;
@@ -1252,14 +1420,18 @@ async function sendMessage(msg) {
       // ===== v4: append-only log entry =====
       case 'log': {
         if (!currentRoomId) return;
+        const logRow = { text: String(msg.text || ''), created_at: new Date().toISOString() };
         await insertRoomLog(currentRoomId, msg.text);
+        try {
+          sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: !msg.noOptimistic });
+        } catch {}
         // Optimistic local append (realtime INSERT will also arrive if enabled).
         // Если msg.noOptimistic = true — НЕ добавляем локально, чтобы не было дублей.
         if (!msg.noOptimistic) {
           try {
             handleMessage({
               type: 'logRow',
-              row: { text: String(msg.text || ''), created_at: new Date().toISOString() }
+              row: logRow
             });
           } catch {}
         }
@@ -1977,14 +2149,20 @@ async function sendMessage(msg) {
                 handleMessage({ type: 'error', message: 'Эта клетка занята другим персонажем' });
                 return;
               }
+              const fallbackRow = { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() };
               const { error: uErr } = await sbClient
                 .from('room_tokens')
-                .upsert({ room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() }, { onConflict: 'room_id,map_id,token_id' });
+                .upsert(fallbackRow, { onConflict: 'room_id,map_id,token_id' });
               if (uErr) throw uErr;
+              try { sendWsEnvelope({ type: 'tokenRow', roomId: currentRoomId, row: fallbackRow }, { optimisticApplied: true }); } catch {}
               await insertRoomLog(currentRoomId, `${p.name} перемещен в (${nx},${ny})`);
             } else {
               // Apply returned row instantly if provided
               if (data) applyTokenRowToLocalState(data);
+              try {
+                const relayRow = data || { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() };
+                sendWsEnvelope({ type: 'tokenRow', roomId: currentRoomId, row: relayRow }, { optimisticApplied: true });
+              } catch {}
             }
           } catch (e) {
             console.warn('move_token failed', e);
@@ -2037,6 +2215,7 @@ async function sendMessage(msg) {
                 updated_at: new Date().toISOString()
               };
               await sbClient.from('room_tokens').upsert(payload, { onConflict: 'room_id,map_id,token_id' });
+              try { sendWsEnvelope({ type: 'tokenRow', roomId, row: payload }, { optimisticApplied: true }); } catch {}
             }
           } catch (e) {
             console.warn('updatePlayerSize: room_tokens upsert failed', e);
@@ -2064,6 +2243,13 @@ async function sendMessage(msg) {
                 .eq('room_id', currentRoomId)
                 .eq('map_id', mapId)
                 .eq('token_id', String(p.id));
+              try {
+                sendWsEnvelope({
+                  type: 'tokenRow',
+                  roomId: currentRoomId,
+                  row: { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: null, y: null, size: Number(p.size) || 1, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() }
+                }, { optimisticApplied: true });
+              } catch {}
             }
           } catch (e) {
             console.warn('removePlayerFromBoard: room_tokens update failed', e);
