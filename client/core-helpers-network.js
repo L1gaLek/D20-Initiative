@@ -748,7 +748,14 @@ async function deleteCampaignSave(saveId) {
 // ================== OPTIONAL VPS WEBSOCKET RELAY ==================
 // Supabase remains the source of truth for DB/storage.
 // This WS layer is used as a low-latency relay via the user's VPS.
-const WS_URL = "ws://5.42.106.75:8080";
+const WS_SERVER_HOST = "5.42.106.75";
+const WS_SERVER_PORT = "8080";
+function resolveWsUrl() {
+  const isHttpsPage = typeof location !== 'undefined' && String(location.protocol || '').toLowerCase() === 'https:';
+  const proto = isHttpsPage ? 'wss' : 'ws';
+  return `${proto}://${WS_SERVER_HOST}:${WS_SERVER_PORT}`;
+}
+const WS_URL = resolveWsUrl();
 const WS_CLIENT_ID = (() => {
   try {
     const key = 'dnd_ws_client_id';
@@ -832,7 +839,18 @@ function connectRoomWs(roomId) {
   try { clearTimeout(wsReconnectTimer); } catch {}
   wsReconnectTimer = null;
 
-  const sock = new WebSocket(WS_URL);
+  let sock = null;
+  try {
+    sock = new WebSocket(WS_URL);
+  } catch (e) {
+    console.warn('[WS] connect failed:', WS_URL, e);
+    if (!wsWantConnected || !wsRoomId) return;
+    try { clearTimeout(wsReconnectTimer); } catch {}
+    wsReconnectTimer = setTimeout(() => {
+      if (wsWantConnected && wsRoomId) connectRoomWs(wsRoomId);
+    }, 3000);
+    return;
+  }
   sock.__roomId = rid;
   wsClient = sock;
 
