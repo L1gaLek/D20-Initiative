@@ -1321,7 +1321,12 @@ async function loadRoomMarks(roomId) {
     .from('room_marks')
     .select('*')
     .eq('room_id', roomId);
-  if (error) throw error;
+  if (error) {
+    if (_isMissingColumnError(error, 'payload')) {
+      throw new Error("room_marks schema is outdated: missing 'payload' jsonb column. Run the migration SQL before using detached marks.");
+    }
+    throw error;
+  }
   return data || [];
 }
 
@@ -1671,7 +1676,12 @@ async function upsertRoomMarkRow(roomId, mark) {
   };
   if (!row.room_id || !row.map_id || !row.mark_id || !row.kind) return;
   const { error } = await sbClient.from('room_marks').upsert(row, { onConflict: 'room_id,map_id,mark_id' });
-  if (error) throw error;
+  if (error) {
+    if (_isMissingColumnError(error, 'payload')) {
+      throw new Error("room_marks schema is outdated: missing 'payload' jsonb column. Run the migration SQL before using detached marks.");
+    }
+    throw error;
+  }
   _cacheUpsertMarkRow(row);
 }
 
@@ -1717,16 +1727,43 @@ async function ensureDetachedBootstrap(roomId, fullState) {
   await ensureSupabaseReady();
   const st = ensureStateHasMaps(deepClone(fullState));
   const maps = Array.isArray(st.maps) ? st.maps : [];
+
+  // IMPORTANT: bootstrap must be idempotent.
+  // Joining a room must not overwrite already detached fog/marks/music with slim defaults from room_state.
+  const [metaRows, wallRows, markRows, fogRows, musicRow] = await Promise.all([
+    loadRoomMapMeta(roomId).catch(() => []),
+    loadRoomWalls(roomId).catch(() => []),
+    loadRoomMarks(roomId).catch(() => []),
+    loadRoomFog(roomId).catch(() => []),
+    loadRoomMusic(roomId).catch(() => null)
+  ]);
+
+  const metaMap = new Map((Array.isArray(metaRows) ? metaRows : []).map(r => [String(r?.map_id || ''), r]));
+  const fogMap = new Map((Array.isArray(fogRows) ? fogRows : []).map(r => [String(r?.map_id || ''), r]));
+  const wallMapIds = new Set((Array.isArray(wallRows) ? wallRows : []).map(r => String(r?.map_id || '')).filter(Boolean));
+  const markMapIds = new Set((Array.isArray(markRows) ? markRows : []).map(r => String(r?.map_id || '')).filter(Boolean));
+
   for (const m of maps) {
     if (!m || !m.id) continue;
-    await upsertRoomMapMetaRow(roomId, m);
-    await upsertRoomFogState(roomId, m.id, m.fog || {}, m.boardWidth, m.boardHeight);
+    const mapId = String(m.id || '');
+    if (!metaMap.has(mapId)) {
+      await upsertRoomMapMetaRow(roomId, m);
+    }
+    if (!fogMap.has(mapId)) {
+      await upsertRoomFogState(roomId, mapId, m.fog || {}, m.boardWidth, m.boardHeight);
+    }
     const walls = Array.isArray(m.walls) ? m.walls.filter(w => String(w?.dir || '').toUpperCase()) : [];
-    if (walls.length) await upsertRoomWallsEdges(roomId, m.id, 'add', walls);
+    if (walls.length && !wallMapIds.has(mapId)) {
+      await upsertRoomWallsEdges(roomId, mapId, 'add', walls);
+    }
     const marks = Array.isArray(m.marks) ? m.marks : [];
-    for (const mk of marks) { await upsertRoomMarkRow(roomId, mk); }
+    if (marks.length && !markMapIds.has(mapId)) {
+      for (const mk of marks) { await upsertRoomMarkRow(roomId, mk); }
+    }
   }
-  await upsertRoomMusicState(roomId, st.bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 });
+  if (!musicRow) {
+    await upsertRoomMusicState(roomId, st.bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 });
+  }
 }
 
 async function upsertTokenVisibility(roomId, tokenId, isPublic) {

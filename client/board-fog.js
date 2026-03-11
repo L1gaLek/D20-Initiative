@@ -25,6 +25,48 @@
       return new Uint8Array(expectedLen);
     }
   }
+
+  // Compatibility: detached fog currently may arrive in 2 formats:
+  // 1) legacy RLE string:   "<W>x<H>:<start36>.<len36>,..."
+  // 2) bitset base64 string: used by newer local helpers
+  function _looksLikeRlePackedExplored(raw) {
+    const s = String(raw || '');
+    return /^\d+x\d+:/.test(s);
+  }
+  function _unpackRleExploredToBits(raw, w, h) {
+    const W = Math.max(1, Number(w) || 1);
+    const H = Math.max(1, Number(h) || 1);
+    const out = new Uint8Array(_bitBytesLen(W, H));
+    try {
+      const s = String(raw || '');
+      const parts = s.split(':');
+      const body = String(parts[1] || '');
+      if (!body) return out;
+      const ranges = body.split(',').filter(Boolean);
+      for (const item of ranges) {
+        const [a, b] = String(item || '').split('.');
+        const start = parseInt(a, 36);
+        const length = parseInt(b, 36);
+        if (!Number.isFinite(start) || !Number.isFinite(length) || length <= 0) continue;
+        for (let i = 0; i < length; i++) {
+          const idx = start + i;
+          if (idx < 0 || idx >= W * H) continue;
+          const bi = idx >> 3;
+          const mask = 1 << (idx & 7);
+          out[bi] |= mask;
+        }
+      }
+    } catch {}
+    return out;
+  }
+  function _packedExploredToBits(raw, w, h) {
+    const W = Math.max(1, Number(w) || 1);
+    const H = Math.max(1, Number(h) || 1);
+    const s = String(raw || '');
+    if (!s) return new Uint8Array(_bitBytesLen(W, H));
+    if (_looksLikeRlePackedExplored(s)) return _unpackRleExploredToBits(s, W, H);
+    return _b64ToBytes(s, _bitBytesLen(W, H));
+  }
   function _isExploredBit(bytes, idx) {
     const bi = idx >> 3;
     const mask = 1 << (idx & 7);
@@ -269,9 +311,9 @@
       const w = Number(st.boardWidth) || 10;
       const h = Number(st.boardHeight) || 10;
 
-      // Prefer compact packed form
+      // Prefer compact packed form. Support both legacy RLE and newer bitset-base64.
       if (fog && fog.exploredPacked) {
-        const bytes = _b64ToBytes(fog.exploredPacked, _bitBytesLen(w, h));
+        const bytes = _packedExploredToBits(fog.exploredPacked, w, h);
         this._exploredBits = bytes;
 
         // For GM we keep local delta-set more authoritative to avoid "rollback" before debounce sync.
