@@ -748,7 +748,7 @@ async function deleteCampaignSave(saveId) {
 // ================== OPTIONAL VPS WEBSOCKET RELAY ==================
 // Supabase remains the source of truth for DB/storage.
 // This WS layer is used as a low-latency relay via the user's VPS.
-const WS_URL = "ws://5.42.106.75:8080";
+const WS_URL = "wss://ws.d20-initiative.fun/ws/";
 const WS_CLIENT_ID = (() => {
   try {
     const key = 'dnd_ws_client_id';
@@ -836,7 +836,7 @@ function connectRoomWs(roomId) {
   sock.__roomId = rid;
   wsClient = sock;
 
-  sock.onopen = async () => {
+  sock.onopen = () => {
     try {
       sock.send(JSON.stringify({
         type: 'joinRoom',
@@ -845,7 +845,6 @@ function connectRoomWs(roomId) {
         transport: 'ws'
       }));
     } catch {}
-    try { await stopSupabaseRoomRealtime(); } catch {}
   };
 
   sock.onmessage = (event) => {
@@ -871,9 +870,6 @@ function connectRoomWs(roomId) {
 
   sock.onclose = () => {
     if (wsClient === sock) wsClient = null;
-    if (wsRoomId) {
-      try { startSupabaseRoomRealtime(wsRoomId); } catch {}
-    }
     if (!wsWantConnected || !wsRoomId) return;
     try { clearTimeout(wsReconnectTimer); } catch {}
     wsReconnectTimer = setTimeout(() => {
@@ -905,54 +901,6 @@ function sendWsEnvelope(msg, opts = {}) {
     console.warn('[WS] send failed', e);
     return false;
   }
-}
-
-
-function isWsRealtimeReady() {
-  return !!(wsClient && wsClient.readyState === WebSocket.OPEN && wsWantConnected && wsRoomId);
-}
-
-async function stopSupabaseRoomRealtime() {
-  try {
-    if (roomDbChannel) {
-      try { await roomDbChannel.unsubscribe(); } catch {}
-      roomDbChannel = null;
-    }
-  } catch {}
-  try {
-    if (roomChannel) {
-      try { await roomChannel.unsubscribe(); } catch {}
-      roomChannel = null;
-    }
-  } catch {}
-  try {
-    if (window.roomTokensDbChannel) {
-      try { await window.roomTokensDbChannel.unsubscribe(); } catch {}
-      window.roomTokensDbChannel = null;
-    }
-  } catch {}
-  try {
-    if (window.roomLogDbChannel) {
-      try { await window.roomLogDbChannel.unsubscribe(); } catch {}
-      window.roomLogDbChannel = null;
-    }
-  } catch {}
-  try {
-    if (window.roomDiceDbChannel) {
-      try { await window.roomDiceDbChannel.unsubscribe(); } catch {}
-      window.roomDiceDbChannel = null;
-    }
-  } catch {}
-}
-
-async function startSupabaseRoomRealtime(roomId) {
-  const rid = String(roomId || '').trim();
-  if (!rid) return;
-  if (isWsRealtimeReady()) return;
-  await subscribeRoomDb(rid);
-  try { await subscribeRoomTokensDb(rid); } catch (e) { console.warn('tokens subscribe failed', e); }
-  try { await subscribeRoomLogDb(rid); } catch (e) { console.warn('log subscribe failed', e); }
-  try { await subscribeRoomDiceDb(rid); } catch (e) { console.warn('dice subscribe failed', e); }
 }
 
 async function subscribeRoomDb(roomId) {
@@ -1138,12 +1086,9 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
       .update({ is_public: pub })
       .eq('room_id', roomId)
       .eq('token_id', tokenId)
-      .select('room_id,map_id,token_id,x,y,size,color,is_public')
+      .select('room_id')
       .limit(1);
-    if (!uErr && Array.isArray(upd) && upd.length) {
-      try { sendWsEnvelope({ type: 'tokenRow', roomId, row: upd[0] }, { optimisticApplied: true }); } catch {}
-      return;
-    }
+    if (!uErr && Array.isArray(upd) && upd.length) return;
 
     // If there is no row yet (token not placed), create a stub on current map.
     const mapId = String(lastState?.currentMapId || '') || null;
@@ -1159,7 +1104,6 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
       is_public: pub
     };
     await sbClient.from('room_tokens').upsert(payload);
-    try { sendWsEnvelope({ type: 'tokenRow', roomId, row: payload }, { optimisticApplied: true }); } catch {}
   } catch (e) {
     console.warn('upsertTokenVisibility failed', e);
   }
@@ -1170,9 +1114,7 @@ async function insertRoomLog(roomId, text) {
     await ensureSupabaseReady();
     const t = String(text || '').trim();
     if (!roomId || !t) return;
-    const row = { room_id: roomId, text: t, created_at: new Date().toISOString() };
     await sbClient.from('room_log').insert({ room_id: roomId, text: t });
-    try { sendWsEnvelope({ type: 'logRow', roomId, row }, { optimisticApplied: true }); } catch {}
   } catch (e) {
     console.warn('room_log insert failed', e);
   }
@@ -1195,41 +1137,10 @@ async function insertDiceEvent(roomId, ev) {
       p_total: Number(ev.total) || null,
       p_crit: String(ev.crit || '')
     };
-
-    const row = {
-      room_id: roomId,
-      from_id: args.p_from_id,
-      from_name: args.p_from_name,
-      kind_text: args.p_kind_text,
-      sides: args.p_sides,
-      count: args.p_count,
-      bonus: args.p_bonus,
-      rolls: args.p_rolls,
-      total: args.p_total,
-      crit: args.p_crit,
-      created_at: new Date().toISOString()
-    };
-
-    const who = (args.p_from_name || '').trim() || 'Игрок';
-    const kind = (args.p_kind_text || '').trim() || (args.p_sides ? `d${args.p_sides}` : 'Бросок');
-    const rollsTxt = (Array.isArray(args.p_rolls) && args.p_rolls.length) ? args.p_rolls.join(',') : '';
-    const bonusTxt = (Number(args.p_bonus) === 0) ? '' : (Number(args.p_bonus) > 0 ? `+${Number(args.p_bonus)}` : String(Number(args.p_bonus)));
-    const totalTxt = (args.p_total === null || args.p_total === undefined) ? '' : ` = ${args.p_total}`;
-    const critTxt = (args.p_crit === 'crit-success') ? ' (КРИТ)' : (args.p_crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
-    const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(args.p_total ?? '');
-    const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
-
     try {
       const { error } = await sbClient.rpc('add_dice_event', args);
-      if (!error) {
-        try { sendWsEnvelope({ type: 'diceRow', roomId, row }, { optimisticApplied: true }); } catch {}
-        if (line) {
-          try { sendWsEnvelope({ type: 'logRow', roomId, row: { room_id: roomId, text: line, created_at: new Date().toISOString() } }, { optimisticApplied: true }); } catch {}
-        }
-        return;
-      }
+      if (!error) return;
     } catch {}
-
     // fallback (no RPC): insert dice row + a matching log line
     await sbClient.from('room_dice_events').insert({
       room_id: roomId,
@@ -1243,9 +1154,17 @@ async function insertDiceEvent(roomId, ev) {
       total: args.p_total,
       crit: args.p_crit
     });
-    try { sendWsEnvelope({ type: 'diceRow', roomId, row }, { optimisticApplied: true }); } catch {}
 
+    // log line (roughly same as RPC)
     try {
+      const who = (args.p_from_name || '').trim() || 'Игрок';
+      const kind = (args.p_kind_text || '').trim() || (args.p_sides ? `d${args.p_sides}` : 'Бросок');
+      const rollsTxt = (Array.isArray(args.p_rolls) && args.p_rolls.length) ? args.p_rolls.join(',') : '';
+      const bonusTxt = (Number(args.p_bonus) === 0) ? '' : (Number(args.p_bonus) > 0 ? `+${Number(args.p_bonus)}` : String(Number(args.p_bonus)));
+      const totalTxt = (args.p_total === null || args.p_total === undefined) ? '' : ` = ${args.p_total}`;
+      const critTxt = (args.p_crit === 'crit-success') ? ' (КРИТ)' : (args.p_crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
+      const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(args.p_total ?? '');
+      const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
       if (line) await insertRoomLog(roomId, line);
     } catch {}
   } catch (e) {
@@ -1457,7 +1376,11 @@ async function sendMessage(msg) {
           rs = { state: initState };
         }
 
-        await startSupabaseRoomRealtime(roomId);
+        await subscribeRoomDb(roomId);
+        // v4: dedicated realtime tables
+        try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
+        try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
+        try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
         await refreshRoomMembers(roomId);
         await subscribeRoomMembersDb(roomId);
         handleMessage({ type: "state", state: rs.state });
