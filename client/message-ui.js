@@ -49,57 +49,6 @@ function handleMessage(msg) {
     return true;
   }
 
-
-
-  function getMarksCache() {
-    if (!(window.__roomMarksCache instanceof Map)) window.__roomMarksCache = new Map();
-    return window.__roomMarksCache;
-  }
-
-  function cacheMarks(mapId, marks) {
-    const mid = String(mapId || '').trim();
-    if (!mid) return;
-    getMarksCache().set(mid, Array.isArray(marks) ? deepClone(marks) : []);
-  }
-
-  function readCachedMarks(mapId) {
-    const mid = String(mapId || '').trim();
-    if (!mid) return [];
-    const arr = getMarksCache().get(mid);
-    return Array.isArray(arr) ? deepClone(arr) : [];
-  }
-
-  function applyMarksToState(state, mapId, marks) {
-    if (!state || !mapId) return;
-    const mid = String(mapId || '').trim();
-    const safeMarks = Array.isArray(marks) ? deepClone(marks) : [];
-    state.marks = safeMarks;
-    if (Array.isArray(state.maps)) {
-      const m = state.maps.find(mm => String(mm?.id || '') === mid);
-      if (m) m.marks = deepClone(safeMarks);
-    }
-    cacheMarks(mid, safeMarks);
-  }
-
-  function rerenderMarksOnly() {
-    try { window.BoardMarks?.onBoardRendered?.(lastState); } catch {}
-  }
-
-  async function ensureMarksLoadedForMap(roomId, mapId) {
-    const rid = String(roomId || '').trim();
-    const mid = String(mapId || '').trim();
-    if (!rid || !mid || typeof window.loadRoomMarks !== 'function') return;
-    const reqKey = `${rid}:${mid}`;
-    if (String(window.__lastRequestedMarksKey || '') === reqKey) return;
-    window.__lastRequestedMarksKey = reqKey;
-    try {
-      const rows = await window.loadRoomMarks(rid, mid);
-      handleMessage({ type: 'marksInit', rows, mapId: mid });
-    } catch (e) {
-      console.warn('marks load failed', e);
-    }
-  }
-
 // ===== Rooms lobby messages =====
 if (msg.type === 'rooms' && Array.isArray(msg.rooms)) {
   try { window.SERVER_TOTAL_USERS = Number(msg.totalUsers || 0) || 0; } catch {}
@@ -267,37 +216,6 @@ loginDiv.style.display = 'none';
       }
     }
 
-
-    // ================== v5: MARKS (dedicated table) ==================
-    if (msg.type === 'marksInit' && Array.isArray(msg.rows)) {
-      if (!lastState) lastState = createInitialGameState();
-      const mapId = String(msg.mapId || lastState?.currentMapId || '');
-      const marks = msg.rows.map(r => convertRoomMarkRowToMark?.(r)).filter(Boolean);
-      applyMarksToState(lastState, mapId, marks);
-      rerenderMarksOnly();
-    }
-    if (msg.type === 'markRow' && msg.row) {
-      if (!lastState) lastState = createInitialGameState();
-      const mark = convertRoomMarkRowToMark?.(msg.row);
-      if (mark) {
-        const mapId = String(mark.mapId || lastState?.currentMapId || '');
-        const arr = readCachedMarks(mapId).filter(m => String(m?.id || '') !== String(mark.id || ''));
-        arr.push(mark);
-        applyMarksToState(lastState, mapId, arr);
-        if (String(lastState?.currentMapId || '') === mapId) rerenderMarksOnly();
-      }
-    }
-    if (msg.type === 'markDelete' && msg.row) {
-      if (!lastState) lastState = createInitialGameState();
-      const mapId = String(msg.row.map_id || msg.row.mapId || lastState?.currentMapId || '');
-      const markId = String(msg.row.mark_id || msg.row.id || '');
-      if (mapId && markId) {
-        const arr = readCachedMarks(mapId).filter(m => String(m?.id || '') !== markId);
-        applyMarksToState(lastState, mapId, arr);
-        if (String(lastState?.currentMapId || '') === mapId) rerenderMarksOnly();
-      }
-    }
-
     // ================== v4: TOKENS (positions) ==================
     if (msg.type === 'tokensInit' && Array.isArray(msg.rows)) {
       try {
@@ -367,6 +285,59 @@ loginDiv.style.display = 'none';
       } catch {}
     }
 
+    // ================== v5: MARKS (separate room_marks table) ==================
+    if (msg.type === 'marksInit' && Array.isArray(msg.rows)) {
+      if (!lastState) lastState = createInitialGameState();
+      const mapId = String(msg.mapId || lastState?.currentMapId || '');
+      const marks = msg.rows.map(r => markFromDbRow(r)).filter(Boolean);
+      const otherMaps = Array.isArray(lastState.marks)
+        ? lastState.marks.filter(m => String(m?.mapId || '') !== mapId)
+        : [];
+      lastState.marks = [...otherMaps, ...marks];
+      try {
+        const maps = Array.isArray(lastState.maps) ? lastState.maps : [];
+        const mm = maps.find(x => String(x?.id || '') === mapId);
+        if (mm) mm.marks = deepClone(marks);
+      } catch {}
+      try { window.BoardMarks?.onBoardRendered?.(lastState); } catch {}
+    }
+    if (msg.type === 'markRow' && msg.row) {
+      if (!lastState) lastState = createInitialGameState();
+      const mark = markFromDbRow(msg.row);
+      if (mark) {
+        const all = Array.isArray(lastState.marks) ? [...lastState.marks] : [];
+        const idx = all.findIndex(m => String(m?.id || '') === String(mark.id) && String(m?.mapId || '') === String(mark.mapId || ''));
+        if (idx >= 0) all[idx] = mark;
+        else all.push(mark);
+        lastState.marks = all;
+        try {
+          const maps = Array.isArray(lastState.maps) ? lastState.maps : [];
+          const mm = maps.find(x => String(x?.id || '') === String(mark.mapId || ''));
+          if (mm) {
+            const arr = Array.isArray(mm.marks) ? [...mm.marks] : [];
+            const mi = arr.findIndex(m => String(m?.id || '') === String(mark.id));
+            if (mi >= 0) arr[mi] = mark; else arr.push(mark);
+            mm.marks = arr;
+          }
+        } catch {}
+        try { window.BoardMarks?.onBoardRendered?.(lastState); } catch {}
+      }
+    }
+    if (msg.type === 'markDelete' && msg.row) {
+      if (!lastState) lastState = createInitialGameState();
+      const markId = String(msg.row.mark_id || msg.row.id || '').trim();
+      const mapId = String(msg.row.map_id || msg.row.mapId || lastState?.currentMapId || '').trim();
+      if (markId) {
+        lastState.marks = (Array.isArray(lastState.marks) ? lastState.marks : []).filter(m => !(String(m?.id || '') === markId && String(m?.mapId || '') === mapId));
+        try {
+          const maps = Array.isArray(lastState.maps) ? lastState.maps : [];
+          const mm = maps.find(x => String(x?.id || '') === mapId);
+          if (mm) mm.marks = (Array.isArray(mm.marks) ? mm.marks : []).filter(m => String(m?.id || '') !== markId);
+        } catch {}
+        try { window.BoardMarks?.onBoardRendered?.(lastState); } catch {}
+      }
+    }
+
     // ================== v4: DICE (append-only) ==================
     if (msg.type === 'diceInit' && Array.isArray(msg.rows)) {
       window._seenDiceIds = window._seenDiceIds || new Set();
@@ -426,9 +397,6 @@ loginDiv.style.display = 'none';
       // - wipe the action log (state.log is intentionally empty)
       // - temporarily reset token positions to null until room_tokens catches up
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
-      const prevCurrentMapId = String(lastState?.currentMapId || '');
-      const prevMarks = Array.isArray(lastState?.marks) ? deepClone(lastState.marks) : [];
-      if (prevCurrentMapId) cacheMarks(prevCurrentMapId, prevMarks);
       const prevPos = new Map();
       try {
         (lastState?.players || []).forEach(p => {
@@ -447,15 +415,6 @@ loginDiv.style.display = 'none';
       const normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
 
       lastState = normalized;
-
-      const normalizedMapId = String(lastState?.currentMapId || '');
-      const cachedMarks = readCachedMarks(normalizedMapId);
-      if (cachedMarks.length || prevCurrentMapId === normalizedMapId) {
-        applyMarksToState(lastState, normalizedMapId, cachedMarks.length ? cachedMarks : prevMarks);
-      }
-      if (currentRoomId && normalizedMapId && (!cachedMarks.length || prevCurrentMapId !== normalizedMapId)) {
-        ensureMarksLoadedForMap(currentRoomId, normalizedMapId);
-      }
 
       // restore append-only log from memory (room_log drives it)
       if (prevLog && (!Array.isArray(lastState.log) || lastState.log.length === 0)) {
@@ -481,6 +440,14 @@ loginDiv.style.display = 'none';
       } catch {}
       boardWidth = normalized.boardWidth;
       boardHeight = normalized.boardHeight;
+
+      try {
+        const curMarksMapId = String(normalized?.currentMapId || '');
+        if (currentRoomId && curMarksMapId && window.__lastMarksMapId !== curMarksMapId) {
+          window.__lastMarksMapId = curMarksMapId;
+          window.loadRoomMarksForCurrentMap?.(currentRoomId, curMarksMapId);
+        }
+      } catch {}
 
       // UI карт кампании (селект + подписи)
       try { updateCampaignMapsUI(normalized); } catch {}
