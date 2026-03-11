@@ -1009,18 +1009,6 @@ async function deleteCampaignSave(saveId) {
 // ================== OPTIONAL VPS WEBSOCKET RELAY ==================
 // Supabase remains the source of truth for DB/storage.
 // This WS layer is used as a low-latency relay via the user's VPS.
-// Preferred production mode for this project:
-// - DB/storage: Supabase PostgreSQL + Storage
-// - live fan-out: VPS WebSocket relay
-// Supabase Realtime can be force-enabled only as a diagnostic fallback.
-const USE_SUPABASE_REALTIME = (() => {
-  try {
-    const raw = String(window?.DND_USE_SUPABASE_REALTIME ?? localStorage.getItem('dnd_use_supabase_realtime') ?? '').trim().toLowerCase();
-    return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
-  } catch {
-    return false;
-  }
-})();
 const WS_URL = "wss://ws.d20-initiative.fun/ws/";
 const WS_CLIENT_ID = (() => {
   try {
@@ -1135,7 +1123,6 @@ function connectRoomWs(roomId) {
       if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
 
       if (msg.type === 'ping' || msg.type === 'pong' || msg.type === 'joinedWsRoom') return;
-      if (applyWsDetachedRelayMessage(msg)) return;
       handleMessage(msg);
     } catch (e) {
       console.warn('[WS] bad message', e);
@@ -1173,75 +1160,6 @@ function sendWsEnvelope(msg, opts = {}) {
     return true;
   } catch (e) {
     console.warn('[WS] send failed', e);
-    return false;
-  }
-}
-
-function applyWsDetachedRelayMessage(msg) {
-  try {
-    if (!msg || typeof msg !== 'object') return false;
-    const type = String(msg.type || '');
-    if (type === 'roomMapMetaRow' && msg.row) {
-      _cacheMapMeta(msg.row);
-      _refreshDetachedRoomView();
-      return true;
-    }
-    if (type === 'roomMapMetaDelete') {
-      const mapId = String(msg.mapId || '').trim();
-      if (mapId) {
-        __roomDetachedCache.mapMetaById.delete(mapId);
-        __roomDetachedCache.wallsByMap.delete(mapId);
-        __roomDetachedCache.marksByMap.delete(mapId);
-        __roomDetachedCache.fogByMap.delete(mapId);
-      }
-      _refreshDetachedRoomView();
-      return true;
-    }
-    if (type === 'roomWallsPatch') {
-      const mode = String(msg.mode || '');
-      const rows = Array.isArray(msg.rows) ? msg.rows : [];
-      if (mode === 'remove') rows.forEach(_cacheDeleteWallRow);
-      else rows.forEach(_cacheUpsertWallRow);
-      _refreshDetachedRoomView();
-      return true;
-    }
-    if (type === 'roomMarkRow' && msg.row) {
-      _cacheUpsertMarkRow(msg.row);
-      _refreshDetachedRoomView();
-      return true;
-    }
-    if (type === 'roomMarkDelete') {
-      _cacheDeleteMarkRow({ map_id: msg.mapId, mark_id: msg.markId });
-      _refreshDetachedRoomView();
-      return true;
-    }
-    if (type === 'roomMarksClear') {
-      const mapId = String(msg.mapId || '');
-      const ownerId = String(msg.ownerId || '');
-      if (mapId) {
-        if (ownerId) {
-          const list = Array.isArray(__roomDetachedCache.marksByMap.get(mapId)) ? __roomDetachedCache.marksByMap.get(mapId) : [];
-          __roomDetachedCache.marksByMap.set(mapId, list.filter(m => String(m?.ownerId || '') !== ownerId));
-        } else {
-          __roomDetachedCache.marksByMap.set(mapId, []);
-        }
-      }
-      _refreshDetachedRoomView();
-      return true;
-    }
-    if (type === 'roomFogRow' && msg.row) {
-      _cacheUpsertFogRow(msg.row);
-      _refreshDetachedRoomView();
-      return true;
-    }
-    if (type === 'roomMusicRow' && msg.row) {
-      _cacheMusicRow(msg.row);
-      _refreshDetachedRoomView();
-      return true;
-    }
-    return false;
-  } catch (e) {
-    console.warn('[WS] detached relay apply failed', e);
     return false;
   }
 }
@@ -1633,7 +1551,6 @@ async function upsertRoomMapMetaRow(roomId, map) {
   const { error } = await sbClient.from('room_map_meta').upsert(row, { onConflict: 'room_id,map_id' });
   if (error) throw error;
   _cacheMapMeta(row);
-  try { sendWsEnvelope({ type: 'roomMapMetaRow', roomId, row }, { optimisticApplied: true }); } catch {}
 }
 
 async function deleteRoomMapCascade(roomId, mapId) {
@@ -1652,7 +1569,6 @@ async function deleteRoomMapCascade(roomId, mapId) {
   __roomDetachedCache.wallsByMap.delete(mid);
   __roomDetachedCache.marksByMap.delete(mid);
   __roomDetachedCache.fogByMap.delete(mid);
-  try { sendWsEnvelope({ type: 'roomMapMetaDelete', roomId: rid, mapId: mid }, { optimisticApplied: true }); } catch {}
 }
 
 async function upsertRoomWallsEdges(roomId, mapId, mode, edges) {
@@ -1685,12 +1601,10 @@ async function upsertRoomWallsEdges(roomId, mapId, mode, edges) {
       if (error) throw error;
       _cacheDeleteWallRow(row);
     }
-    try { sendWsEnvelope({ type: 'roomWallsPatch', roomId: rid, mode: 'remove', rows: clean }, { optimisticApplied: true }); } catch {}
   } else {
     const { error } = await sbClient.from('room_walls').upsert(clean, { onConflict: 'room_id,map_id,x,y,dir' });
     if (error) throw error;
     clean.forEach(_cacheUpsertWallRow);
-    try { sendWsEnvelope({ type: 'roomWallsPatch', roomId: rid, mode: 'add', rows: clean }, { optimisticApplied: true }); } catch {}
   }
 }
 
@@ -1725,7 +1639,6 @@ async function upsertRoomFogState(roomId, mapId, fog, boardW, boardH) {
   const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
   if (error) throw error;
   _cacheUpsertFogRow(row);
-  try { sendWsEnvelope({ type: 'roomFogRow', roomId, row }, { optimisticApplied: true }); } catch {}
 }
 
 let __pendingFogTimer = null;
@@ -1742,7 +1655,6 @@ function scheduleRoomFogUpsert(roomId, mapId, fog, boardW, boardH, delay = 180) 
       const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
       if (error) throw error;
       _cacheUpsertFogRow(row);
-      try { sendWsEnvelope({ type: 'roomFogRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
       _refreshDetachedRoomView();
     } catch (e) {
       console.warn('coalesced fog upsert failed', e);
@@ -1771,7 +1683,6 @@ async function upsertRoomMarkRow(roomId, mark) {
     throw error;
   }
   _cacheUpsertMarkRow(row);
-  try { sendWsEnvelope({ type: 'roomMarkRow', roomId, row }, { optimisticApplied: true }); } catch {}
 }
 
 async function deleteRoomMarkRow(roomId, mapId, markId) {
@@ -1783,7 +1694,6 @@ async function deleteRoomMarkRow(roomId, mapId, markId) {
   const { error } = await sbClient.from('room_marks').delete().eq('room_id', rid).eq('map_id', mid).eq('mark_id', id);
   if (error) throw error;
   _cacheDeleteMarkRow({ map_id: mid, mark_id: id });
-  try { sendWsEnvelope({ type: 'roomMarkDelete', roomId: rid, mapId: mid, markId: id }, { optimisticApplied: true }); } catch {}
 }
 
 async function clearRoomMarks(roomId, mapId, ownerId = null) {
@@ -1798,7 +1708,6 @@ async function clearRoomMarks(roomId, mapId, ownerId = null) {
   } else {
     __roomDetachedCache.marksByMap.set(String(mapId || ''), []);
   }
-  try { sendWsEnvelope({ type: 'roomMarksClear', roomId: String(roomId || ''), mapId: String(mapId || ''), ownerId: ownerId ? String(ownerId) : null }, { optimisticApplied: true }); } catch {}
 }
 
 async function upsertRoomMusicState(roomId, bgMusic) {
@@ -1812,7 +1721,6 @@ async function upsertRoomMusicState(roomId, bgMusic) {
   const { error } = await sbClient.from('room_music_state').upsert(row, { onConflict: 'room_id' });
   if (error) throw error;
   _cacheMusicRow(row);
-  try { sendWsEnvelope({ type: 'roomMusicRow', roomId, row }, { optimisticApplied: true }); } catch {}
 }
 
 async function ensureDetachedBootstrap(roomId, fullState) {
@@ -1864,17 +1772,17 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
     if (!roomId || !tokenId) return;
     const pub = !!isPublic;
 
+    // Try update all rows of this token in this room (across maps).
     const { data: upd, error: uErr } = await sbClient
       .from('room_tokens')
-      .update({ is_public: pub, updated_at: new Date().toISOString() })
+      .update({ is_public: pub })
       .eq('room_id', roomId)
       .eq('token_id', tokenId)
-      .select('*');
-    if (!uErr && Array.isArray(upd) && upd.length) {
-      try { upd.forEach(row => sendWsEnvelope({ type: 'tokenRow', roomId, row }, { optimisticApplied: true })); } catch {}
-      return;
-    }
+      .select('room_id')
+      .limit(1);
+    if (!uErr && Array.isArray(upd) && upd.length) return;
 
+    // If there is no row yet (token not placed), create a stub on current map.
     const mapId = String(lastState?.currentMapId || '') || null;
     const p = (lastState?.players || []).find(pp => String(pp?.id) === String(tokenId));
     const payload = {
@@ -1885,11 +1793,9 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
       y: (p?.y === null || typeof p?.y === 'undefined') ? null : Number(p.y),
       size: Number(p?.size) || 1,
       color: (typeof p?.color === 'string') ? p.color : null,
-      is_public: pub,
-      updated_at: new Date().toISOString()
+      is_public: pub
     };
     await sbClient.from('room_tokens').upsert(payload);
-    try { sendWsEnvelope({ type: 'tokenRow', roomId, row: payload }, { optimisticApplied: true }); } catch {}
   } catch (e) {
     console.warn('upsertTokenVisibility failed', e);
   }
@@ -1900,27 +1806,9 @@ async function insertRoomLog(roomId, text) {
     await ensureSupabaseReady();
     const t = String(text || '').trim();
     if (!roomId || !t) return;
-    const row = { room_id: roomId, text: t, created_at: new Date().toISOString() };
     await sbClient.from('room_log').insert({ room_id: roomId, text: t });
-    try { sendWsEnvelope({ type: 'logRow', roomId, row }, { optimisticApplied: false }); } catch {}
   } catch (e) {
     console.warn('room_log insert failed', e);
-  }
-}
-
-function buildDiceLogLine(ev) {
-  try {
-    const who = String(ev?.fromName || '').trim() || 'Игрок';
-    const kind = String(ev?.kindText || '').trim() || ((Number(ev?.sides) || 0) ? `d${Number(ev.sides)}` : 'Бросок');
-    const rollsTxt = Array.isArray(ev?.rolls) && ev.rolls.length ? ev.rolls.join(',') : '';
-    const bonusNum = Number(ev?.bonus) || 0;
-    const bonusTxt = bonusNum === 0 ? '' : (bonusNum > 0 ? `+${bonusNum}` : String(bonusNum));
-    const totalTxt = (ev?.total === null || typeof ev?.total === 'undefined') ? '' : ` = ${ev.total}`;
-    const critTxt = (ev?.crit === 'crit-success') ? ' (КРИТ)' : (ev?.crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
-    const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(ev?.total ?? '');
-    return `${who}: ${kind}: ${body}${critTxt}`.trim();
-  } catch {
-    return '';
   }
 }
 
@@ -1943,12 +1831,9 @@ async function insertDiceEvent(roomId, ev) {
     };
     try {
       const { error } = await sbClient.rpc('add_dice_event', args);
-      if (!error) {
-        try { sendWsEnvelope({ type: 'diceEvent', roomId, event: ev }, { optimisticApplied: true }); } catch {}
-        try { sendWsEnvelope({ type: 'logRow', roomId, row: { text: buildDiceLogLine(ev), created_at: new Date().toISOString() } }, { optimisticApplied: false }); } catch {}
-        return;
-      }
+      if (!error) return;
     } catch {}
+    // fallback (no RPC): insert dice row + a matching log line
     await sbClient.from('room_dice_events').insert({
       room_id: roomId,
       from_id: args.p_from_id,
@@ -1961,8 +1846,19 @@ async function insertDiceEvent(roomId, ev) {
       total: args.p_total,
       crit: args.p_crit
     });
-    try { sendWsEnvelope({ type: 'diceEvent', roomId, event: ev }, { optimisticApplied: true }); } catch {}
-    try { sendWsEnvelope({ type: 'logRow', roomId, row: { text: buildDiceLogLine(ev), created_at: new Date().toISOString() } }, { optimisticApplied: false }); } catch {}
+
+    // log line (roughly same as RPC)
+    try {
+      const who = (args.p_from_name || '').trim() || 'Игрок';
+      const kind = (args.p_kind_text || '').trim() || (args.p_sides ? `d${args.p_sides}` : 'Бросок');
+      const rollsTxt = (Array.isArray(args.p_rolls) && args.p_rolls.length) ? args.p_rolls.join(',') : '';
+      const bonusTxt = (Number(args.p_bonus) === 0) ? '' : (Number(args.p_bonus) > 0 ? `+${Number(args.p_bonus)}` : String(Number(args.p_bonus)));
+      const totalTxt = (args.p_total === null || args.p_total === undefined) ? '' : ` = ${args.p_total}`;
+      const critTxt = (args.p_crit === 'crit-success') ? ' (КРИТ)' : (args.p_crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
+      const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(args.p_total ?? '');
+      const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
+      if (line) await insertRoomLog(roomId, line);
+    } catch {}
   } catch (e) {
     console.warn('dice insert failed', e);
   }
@@ -2174,16 +2070,15 @@ async function sendMessage(msg) {
         }
         try { await ensureDetachedBootstrap(roomId, rs.state); } catch (e) { console.warn('detached bootstrap joinRoom failed', e); }
 
-        if (USE_SUPABASE_REALTIME) {
-          await subscribeRoomDb(roomId);
-          try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
-          try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
-          try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
-          try { await subscribeDetachedRoomTables(roomId); } catch (e) { console.warn('detached subscribe failed', e); }
-          await subscribeRoomMembersDb(roomId);
-        }
+        await subscribeRoomDb(roomId);
+        // v4: dedicated realtime tables
+        try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
+        try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
+        try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
+        try { await subscribeDetachedRoomTables(roomId); } catch (e) { console.warn('detached subscribe failed', e); }
         try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
         await refreshRoomMembers(roomId);
+        await subscribeRoomMembersDb(roomId);
         handleMessage({ type: "state", state: applyDetachedPayloadToState(rs.state) });
 
         // v4 init: load logs + tokens snapshot after state is applied
@@ -2207,8 +2102,13 @@ async function sendMessage(msg) {
       // ===== Dice live events =====
       case "diceEvent": {
         if (!currentRoomId) return;
+        // v4: dice events are append-only in room_dice_events (and log is append-only in room_log)
         const ev = msg.event || {};
         await insertDiceEvent(currentRoomId, ev);
+        try {
+          sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true });
+        } catch {}
+        // apply to self instantly (others will receive via realtime INSERT)
         if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         break;
       }
@@ -2216,7 +2116,21 @@ async function sendMessage(msg) {
       // ===== v4: append-only log entry =====
       case 'log': {
         if (!currentRoomId) return;
+        const logRow = { text: String(msg.text || ''), created_at: new Date().toISOString() };
         await insertRoomLog(currentRoomId, msg.text);
+        try {
+          sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: !msg.noOptimistic });
+        } catch {}
+        // Optimistic local append (realtime INSERT will also arrive if enabled).
+        // Если msg.noOptimistic = true — НЕ добавляем локально, чтобы не было дублей.
+        if (!msg.noOptimistic) {
+          try {
+            handleMessage({
+              type: 'logRow',
+              row: logRow
+            });
+          } catch {}
+        }
         break;
       }
 
@@ -3546,6 +3460,21 @@ async function sendMessage(msg) {
         else {
           // unknown message type (ignored)
           return;
+        }
+
+        // Low-frequency structural player changes should feel instant.
+        // Unlike "remove from board", these actions previously waited for the
+        // room_state DB upsert to finish before UI/WS update, which made add/remove
+        // look delayed. Push an optimistic state to the current client and via VPS WS
+        // first, then persist to DB.
+        if (type === 'addPlayer' || type === 'removePlayerCompletely') {
+          try {
+            const optimisticState = applyDetachedPayloadToState(syncActiveToMap(deepClone(next)));
+            try { handleMessage({ type: 'state', state: optimisticState }); } catch {}
+            try { sendWsEnvelope({ type: 'state', roomId: currentRoomId, state: optimisticState }, { optimisticApplied: true }); } catch {}
+          } catch (e) {
+            console.warn('optimistic player list state failed', e);
+          }
         }
 
         await upsertRoomState(currentRoomId, next);
