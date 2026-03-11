@@ -5,53 +5,6 @@ function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj || null));
 }
 
-
-function stripMarksFromState(state) {
-  const st = deepClone(state || {});
-  try {
-    if (Array.isArray(st.marks)) st.marks = [];
-  } catch {}
-  try {
-    const maps = Array.isArray(st.maps) ? st.maps : [];
-    maps.forEach((m) => {
-      if (!m || typeof m !== 'object') return;
-      if (Array.isArray(m.marks)) m.marks = [];
-    });
-  } catch {}
-  return st;
-}
-
-function markFromDbRow(row) {
-  try {
-    const data = (row && typeof row.data_json === 'object' && row.data_json) ? row.data_json : {};
-    const mark = {
-      ...(data || {}),
-      id: String(data?.id || row?.mark_id || '').trim(),
-      mapId: String(data?.mapId || row?.map_id || '').trim(),
-      ownerId: String(data?.ownerId || row?.owner_id || '').trim(),
-      kind: String(data?.kind || row?.kind || '').trim()
-    };
-    if (!mark.id || !mark.kind) return null;
-    if (!mark.mapId) mark.mapId = String(row?.map_id || '').trim();
-    return mark;
-  } catch {
-    return null;
-  }
-}
-
-function markToDbRow(roomId, mapId, mark) {
-  const m = deepClone(mark || {});
-  return {
-    room_id: String(roomId || '').trim(),
-    map_id: String(mapId || m?.mapId || '').trim(),
-    mark_id: String(m?.id || '').trim(),
-    owner_id: String(m?.ownerId || '').trim() || null,
-    kind: String(m?.kind || '').trim(),
-    data_json: m,
-    updated_at: new Date().toISOString()
-  };
-}
-
 function createInitialGameState() {
   const sectionId = (crypto?.randomUUID ? crypto.randomUUID() : ("sec-" + Math.random().toString(16).slice(2)));
   const mapId = (crypto?.randomUUID ? crypto.randomUUID() : ("map-" + Math.random().toString(16).slice(2)));
@@ -304,8 +257,8 @@ function syncActiveToMap(state) {
 
   m.walls = Array.isArray(st.walls) ? st.walls : [];
 
-  // marks are stored separately in public.room_marks (keep only runtime mirror)
-  if (!Array.isArray(m.marks)) m.marks = [];
+  // sync marks (root mirror -> map)
+  m.marks = Array.isArray(st.marks) ? st.marks : [];
 
   // sync fog (root mirror -> map)
   if (!m.fog || typeof m.fog !== 'object') m.fog = {};
@@ -703,8 +656,7 @@ async function upsertRoomState(roomId, nextState) {
       if (m.playersPos && typeof m.playersPos === 'object') m.playersPos = {};
     });
   } catch {}
-  const stateNoMarks = stripMarksFromState(stSafe);
-  const syncedState = syncActiveToMap(stateNoMarks);
+  const syncedState = syncActiveToMap(stSafe);
   const payload = {
     room_id: roomId,
     phase: String(stSafe?.phase || "lobby"),
@@ -796,7 +748,7 @@ async function deleteCampaignSave(saveId) {
 // ================== OPTIONAL VPS WEBSOCKET RELAY ==================
 // Supabase remains the source of truth for DB/storage.
 // This WS layer is used as a low-latency relay via the user's VPS.
-const WS_URL = "ws://5.42.106.75:8080";
+const WS_URL = "wss://ws.d20-initiative.fun/ws/";
 const WS_CLIENT_ID = (() => {
   try {
     const key = 'dnd_ws_client_id';
@@ -1221,98 +1173,6 @@ async function insertDiceEvent(roomId, ev) {
 }
 
 
-
-let roomMarksDbChannel = null;
-
-async function subscribeRoomMarksDb(roomId) {
-  await ensureSupabaseReady();
-  if (roomMarksDbChannel) {
-    try { await roomMarksDbChannel.unsubscribe(); } catch {}
-    roomMarksDbChannel = null;
-  }
-  roomMarksDbChannel = sbClient
-    .channel(`db-room_marks-${roomId}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'room_marks', filter: `room_id=eq.${roomId}` },
-      (payload) => {
-        try {
-          const ev = String(payload?.eventType || payload?.event_type || '').toUpperCase();
-          if (ev === 'DELETE') {
-            const row = payload?.old || payload?.new;
-            handleMessage({ type: 'markDelete', row });
-            return;
-          }
-          const row = payload?.new;
-          if (row) handleMessage({ type: 'markRow', row });
-        } catch (e) {
-          console.warn('room_marks realtime failed', e);
-        }
-      }
-    );
-  await roomMarksDbChannel.subscribe();
-}
-
-async function loadRoomMarks(roomId, mapId) {
-  await ensureSupabaseReady();
-  if (!roomId) return [];
-  let q = sbClient.from('room_marks').select('*').eq('room_id', roomId);
-  if (mapId) q = q.eq('map_id', mapId);
-  const { data, error } = await q.order('created_at', { ascending: true });
-  if (error) throw error;
-  return data || [];
-}
-window.loadRoomMarks = loadRoomMarks;
-window.loadRoomMarksForCurrentMap = async function loadRoomMarksForCurrentMap(roomId, mapId) {
-  try {
-    const rid = String(roomId || currentRoomId || '').trim();
-    const mid = String(mapId || lastState?.currentMapId || '').trim();
-    if (!rid || !mid) return [];
-    const rows = await loadRoomMarks(rid, mid);
-    try { handleMessage({ type: 'marksInit', rows, mapId: mid }); } catch {}
-    return rows;
-  } catch (e) {
-    console.warn('loadRoomMarksForCurrentMap failed', e);
-    return [];
-  }
-};
-
-async function upsertRoomMark(roomId, mapId, mark) {
-  await ensureSupabaseReady();
-  const row = markToDbRow(roomId, mapId, mark);
-  if (!row.room_id || !row.map_id || !row.mark_id || !row.kind) return null;
-  const { data, error } = await sbClient
-    .from('room_marks')
-    .upsert(row, { onConflict: 'room_id,map_id,mark_id' })
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data || row;
-}
-
-async function removeRoomMark(roomId, mapId, markId) {
-  await ensureSupabaseReady();
-  const { data, error } = await sbClient
-    .from('room_marks')
-    .delete()
-    .eq('room_id', roomId)
-    .eq('map_id', mapId)
-    .eq('mark_id', markId)
-    .select('room_id,map_id,mark_id')
-    .maybeSingle();
-  if (error) throw error;
-  return data || { room_id: roomId, map_id: mapId, mark_id: markId };
-}
-
-async function clearRoomMarks(roomId, mapId, ownerId = null) {
-  await ensureSupabaseReady();
-  let q = sbClient.from('room_marks').delete().eq('room_id', roomId).eq('map_id', mapId).select('room_id,map_id,mark_id');
-  if (ownerId) q = q.eq('owner_id', ownerId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data || [];
-}
-
 let roomMembersDbChannel = null;
 
 async function refreshRoomMembers(roomId) {
@@ -1521,7 +1381,6 @@ async function sendMessage(msg) {
         try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
         try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
         try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
-        try { await subscribeRoomMarksDb(roomId); } catch (e) { console.warn('marks subscribe failed', e); }
         await refreshRoomMembers(roomId);
         await subscribeRoomMembersDb(roomId);
         handleMessage({ type: "state", state: rs.state });
@@ -1541,11 +1400,6 @@ async function sendMessage(msg) {
           const diceRows = await loadRoomDice(roomId, 50);
           handleMessage({ type: 'diceInit', rows: diceRows });
         } catch (e) { console.warn('dice init failed', e); }
-        try {
-          const mapId = String(rs?.state?.currentMapId || '');
-          const markRows = await loadRoomMarks(roomId, mapId);
-          handleMessage({ type: 'marksInit', rows: markRows, mapId });
-        } catch (e) { console.warn('marks init failed', e); }
         break;
       }
 
@@ -2637,18 +2491,23 @@ else if (type === "addWall") {
           logEventToState(next, "Фоновая музыка обновлена");
         }
 
-        // ===== Marks / Areas (public.room_marks + realtime) =====
+        // ===== Marks / Areas (everyone can draw; GM can remove all) =====
         else if (type === 'addMark') {
           const raw = msg.mark;
           if (!raw || typeof raw !== 'object') return;
 
-          const mapId = String(next.currentMapId || '').trim();
-          if (!mapId) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
+          if (!Array.isArray(next.marks)) next.marks = [];
 
           const id = String(raw.id || '').trim();
           const kind = String(raw.kind || '').trim();
           if (!id) return;
           if (!(kind === 'rect' || kind === 'circle' || kind === 'poly')) return;
+
+          // Avoid duplicates
+          if (m.marks.some(mm => String(mm?.id) === id)) return;
 
           const ownerId = String(raw.ownerId || myId || '').trim();
           const color = String(raw.color || '#ffa500').trim();
@@ -2659,7 +2518,7 @@ else if (type === "addWall") {
 
           const safe = {
             id,
-            mapId,
+            mapId: String(next.currentMapId || m.id || ''),
             ownerId,
             kind,
             color,
@@ -2693,49 +2552,52 @@ else if (type === "addWall") {
             }));
           }
 
-          const row = await upsertRoomMark(currentRoomId, mapId, safe);
-          try {
-            handleMessage({ type: 'markRow', row });
-            sendWsEnvelope({ type: 'markRow', roomId: currentRoomId, row }, { optimisticApplied: true });
-          } catch {}
-          return;
+          m.marks.push(safe);
+          next.marks = deepClone(m.marks);
+          logEventToState(next, `Обозначение добавлено`);
         }
 
         else if (type === 'removeMark') {
           const id = String(msg.id || '').trim();
           if (!id) return;
-          const mapId = String(next.currentMapId || '').trim();
-          if (!mapId) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
 
-          const arr = Array.isArray(lastState?.marks) ? lastState.marks : [];
-          const mark = arr.find(mm => String(mm?.id) === id && String(mm?.mapId || '') === mapId);
+          const mark = m.marks.find(mm => String(mm?.id) === id);
           if (!mark) return;
 
+          // GM может удалить всё, игрок — только своё
           if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
 
-          const deleted = await removeRoomMark(currentRoomId, mapId, id);
-          try {
-            handleMessage({ type: 'markDelete', row: deleted });
-            sendWsEnvelope({ type: 'markDelete', roomId: currentRoomId, row: deleted }, { optimisticApplied: true });
-          } catch {}
-          return;
+          const before = m.marks.length;
+          m.marks = m.marks.filter(mm => String(mm?.id) !== id);
+          if (m.marks.length !== before) {
+            next.marks = deepClone(m.marks);
+            logEventToState(next, `Обозначение удалено`);
+          }
         }
 
         else if (type === 'clearMarks') {
-          const mapId = String(next.currentMapId || '').trim();
-          if (!mapId) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          if (!Array.isArray(m.marks)) m.marks = [];
           const scope = String(msg.scope || 'mine');
-          const ownerFilter = (scope === 'all') ? null : String(myId || '');
-          if (scope === 'all' && !isGM) return;
-
-          const deletedRows = await clearRoomMarks(currentRoomId, mapId, ownerFilter);
-          (deletedRows || []).forEach((row) => {
-            try {
-              handleMessage({ type: 'markDelete', row });
-              sendWsEnvelope({ type: 'markDelete', roomId: currentRoomId, row }, { optimisticApplied: true });
-            } catch {}
-          });
-          return;
+          if (scope === 'all') {
+            if (!isGM) return;
+            if (m.marks.length) {
+              m.marks = [];
+              next.marks = [];
+              logEventToState(next, `Обозначения очищены`);
+            }
+          } else {
+            const before = m.marks.length;
+            m.marks = m.marks.filter(mm => String(mm?.ownerId || '') !== String(myId || ''));
+            if (m.marks.length !== before) {
+              next.marks = deepClone(m.marks);
+              logEventToState(next, `Обозначения очищены (локально)`);
+            }
+          }
         }
 
         // ===== Fog of war (GM controls) =====
