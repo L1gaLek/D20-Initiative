@@ -168,9 +168,12 @@ loginDiv.style.display = 'none';
     }
 
     if (msg.type === "diceEvent" && msg.event) {
-      // NOTE(v4): dice are delivered to everyone via room_dice_events (diceRow).
-      // diceEvent is used ONLY for instant local feedback (main dice panel).
-      applyDiceEventToMain(msg.event);
+      const fromId = String(msg?.event?.fromId || '');
+      if (fromId && String(fromId) !== String(myId || '')) {
+        try { pushOtherDiceEvent?.(msg.event); } catch {}
+      } else {
+        applyDiceEventToMain(msg.event);
+      }
     }
 
     // ===== Saved bases (персонажи, привязанные к userId) =====
