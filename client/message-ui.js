@@ -285,59 +285,6 @@ loginDiv.style.display = 'none';
       } catch {}
     }
 
-    // ================== v5: MARKS (separate room_marks table) ==================
-    if (msg.type === 'marksInit' && Array.isArray(msg.rows)) {
-      if (!lastState) lastState = createInitialGameState();
-      const mapId = String(msg.mapId || lastState?.currentMapId || '');
-      const marks = msg.rows.map(r => markFromDbRow(r)).filter(Boolean);
-      const otherMaps = Array.isArray(lastState.marks)
-        ? lastState.marks.filter(m => String(m?.mapId || '') !== mapId)
-        : [];
-      lastState.marks = [...otherMaps, ...marks];
-      try {
-        const maps = Array.isArray(lastState.maps) ? lastState.maps : [];
-        const mm = maps.find(x => String(x?.id || '') === mapId);
-        if (mm) mm.marks = deepClone(marks);
-      } catch {}
-      try { window.BoardMarks?.onBoardRendered?.(lastState); } catch {}
-    }
-    if (msg.type === 'markRow' && msg.row) {
-      if (!lastState) lastState = createInitialGameState();
-      const mark = markFromDbRow(msg.row);
-      if (mark) {
-        const all = Array.isArray(lastState.marks) ? [...lastState.marks] : [];
-        const idx = all.findIndex(m => String(m?.id || '') === String(mark.id) && String(m?.mapId || '') === String(mark.mapId || ''));
-        if (idx >= 0) all[idx] = mark;
-        else all.push(mark);
-        lastState.marks = all;
-        try {
-          const maps = Array.isArray(lastState.maps) ? lastState.maps : [];
-          const mm = maps.find(x => String(x?.id || '') === String(mark.mapId || ''));
-          if (mm) {
-            const arr = Array.isArray(mm.marks) ? [...mm.marks] : [];
-            const mi = arr.findIndex(m => String(m?.id || '') === String(mark.id));
-            if (mi >= 0) arr[mi] = mark; else arr.push(mark);
-            mm.marks = arr;
-          }
-        } catch {}
-        try { window.BoardMarks?.onBoardRendered?.(lastState); } catch {}
-      }
-    }
-    if (msg.type === 'markDelete' && msg.row) {
-      if (!lastState) lastState = createInitialGameState();
-      const markId = String(msg.row.mark_id || msg.row.id || '').trim();
-      const mapId = String(msg.row.map_id || msg.row.mapId || lastState?.currentMapId || '').trim();
-      if (markId) {
-        lastState.marks = (Array.isArray(lastState.marks) ? lastState.marks : []).filter(m => !(String(m?.id || '') === markId && String(m?.mapId || '') === mapId));
-        try {
-          const maps = Array.isArray(lastState.maps) ? lastState.maps : [];
-          const mm = maps.find(x => String(x?.id || '') === mapId);
-          if (mm) mm.marks = (Array.isArray(mm.marks) ? mm.marks : []).filter(m => String(m?.id || '') !== markId);
-        } catch {}
-        try { window.BoardMarks?.onBoardRendered?.(lastState); } catch {}
-      }
-    }
-
     // ================== v4: DICE (append-only) ==================
     if (msg.type === 'diceInit' && Array.isArray(msg.rows)) {
       window._seenDiceIds = window._seenDiceIds || new Set();
@@ -412,7 +359,8 @@ loginDiv.style.display = 'none';
       } catch {}
 
       // нормализация состояния + поддержка нескольких карт кампании
-      const normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
+      let normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
+      try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
 
       lastState = normalized;
 
@@ -440,14 +388,6 @@ loginDiv.style.display = 'none';
       } catch {}
       boardWidth = normalized.boardWidth;
       boardHeight = normalized.boardHeight;
-
-      try {
-        const curMarksMapId = String(normalized?.currentMapId || '');
-        if (currentRoomId && curMarksMapId && window.__lastMarksMapId !== curMarksMapId) {
-          window.__lastMarksMapId = curMarksMapId;
-          window.loadRoomMarksForCurrentMap?.(currentRoomId, curMarksMapId);
-        }
-      } catch {}
 
       // UI карт кампании (селект + подписи)
       try { updateCampaignMapsUI(normalized); } catch {}
@@ -1239,3 +1179,13 @@ function canViewSensitiveInfo(p) {
   return true;
 }
 
+
+
+window.refreshDetachedStateView = function refreshDetachedStateView() {
+  try {
+    if (!lastState) return;
+    handleMessage({ type: 'state', state: window.applyDetachedPayloadToState?.(deepClone(lastState)) || deepClone(lastState) });
+  } catch (e) {
+    console.warn('refreshDetachedStateView failed', e);
+  }
+};

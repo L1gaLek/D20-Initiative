@@ -397,6 +397,225 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+// ===== Detached room payload caches (walls / marks / fog / music / map meta) =====
+const __roomDetachedCache = {
+  roomId: null,
+  mapMetaById: new Map(),
+  wallsByMap: new Map(),
+  marksByMap: new Map(),
+  fogByMap: new Map(),
+  music: null
+};
+window.__roomDetachedCache = __roomDetachedCache;
+
+function resetDetachedRoomCache(roomId) {
+  __roomDetachedCache.roomId = String(roomId || '');
+  __roomDetachedCache.mapMetaById = new Map();
+  __roomDetachedCache.wallsByMap = new Map();
+  __roomDetachedCache.marksByMap = new Map();
+  __roomDetachedCache.fogByMap = new Map();
+  __roomDetachedCache.music = null;
+}
+
+function _cacheMapMeta(row) {
+  const mapId = String(row?.map_id || row?.id || '').trim();
+  if (!mapId) return;
+  __roomDetachedCache.mapMetaById.set(mapId, {
+    id: mapId,
+    name: String(row?.name || '').trim() || 'Карта',
+    sectionId: String(row?.section_id || '').trim() || null,
+    boardWidth: Math.max(5, Math.min(150, Number(row?.board_width) || 10)),
+    boardHeight: Math.max(5, Math.min(150, Number(row?.board_height) || 10)),
+    boardBgUrl: row?.board_bg_url ? String(row.board_bg_url) : null,
+    boardBgStoragePath: row?.board_bg_storage_path ? String(row.board_bg_storage_path) : null,
+    boardBgStorageBucket: row?.board_bg_storage_bucket ? String(row.board_bg_storage_bucket) : null,
+    gridAlpha: Number.isFinite(Number(row?.grid_alpha)) ? clamp(Number(row.grid_alpha), 0, 1) : 1,
+    wallAlpha: Number.isFinite(Number(row?.wall_alpha)) ? clamp(Number(row.wall_alpha), 0, 1) : 1,
+    updatedAt: row?.updated_at || null
+  });
+}
+
+function _cacheWallRows(rows) {
+  const grouped = new Map();
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const mapId = String(row?.map_id || '').trim();
+    const dir = String(row?.dir || '').toUpperCase();
+    if (!mapId || !dir) continue;
+    if (!grouped.has(mapId)) grouped.set(mapId, []);
+    grouped.get(mapId).push({
+      x: Number(row?.x) || 0,
+      y: Number(row?.y) || 0,
+      dir,
+      type: String(row?.wall_type || row?.type || 'stone'),
+      thickness: Math.max(1, Math.min(12, Number(row?.thickness) || 4))
+    });
+  }
+  __roomDetachedCache.wallsByMap = grouped;
+}
+
+function _cacheUpsertWallRow(row) {
+  const mapId = String(row?.map_id || '').trim();
+  const dir = String(row?.dir || '').toUpperCase();
+  if (!mapId || !dir) return;
+  const list = Array.isArray(__roomDetachedCache.wallsByMap.get(mapId)) ? [...__roomDetachedCache.wallsByMap.get(mapId)] : [];
+  const k = `${Number(row?.x) || 0},${Number(row?.y) || 0},${dir}`;
+  const next = list.filter(w => `${Number(w?.x) || 0},${Number(w?.y) || 0},${String(w?.dir || '').toUpperCase()}` !== k);
+  next.push({
+    x: Number(row?.x) || 0,
+    y: Number(row?.y) || 0,
+    dir,
+    type: String(row?.wall_type || row?.type || 'stone'),
+    thickness: Math.max(1, Math.min(12, Number(row?.thickness) || 4))
+  });
+  __roomDetachedCache.wallsByMap.set(mapId, next);
+}
+
+function _cacheDeleteWallRow(row) {
+  const mapId = String(row?.map_id || '').trim();
+  const dir = String(row?.dir || '').toUpperCase();
+  if (!mapId || !dir) return;
+  const list = Array.isArray(__roomDetachedCache.wallsByMap.get(mapId)) ? __roomDetachedCache.wallsByMap.get(mapId) : [];
+  const k = `${Number(row?.x) || 0},${Number(row?.y) || 0},${dir}`;
+  __roomDetachedCache.wallsByMap.set(mapId, list.filter(w => `${Number(w?.x) || 0},${Number(w?.y) || 0},${String(w?.dir || '').toUpperCase()}` !== k));
+}
+
+function _normalizeMarkPayload(row) {
+  const payload = (row?.payload && typeof row.payload === 'object') ? deepClone(row.payload) : {};
+  const id = String(row?.mark_id || payload?.id || '').trim();
+  const mapId = String(row?.map_id || payload?.mapId || '').trim();
+  const ownerId = String(row?.owner_id || payload?.ownerId || '').trim();
+  const kind = String(row?.kind || payload?.kind || '').trim();
+  if (!id || !mapId || !kind) return null;
+  payload.id = id;
+  payload.mapId = mapId;
+  payload.ownerId = ownerId;
+  payload.kind = kind;
+  return payload;
+}
+
+function _cacheMarkRows(rows) {
+  const grouped = new Map();
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const payload = _normalizeMarkPayload(row);
+    if (!payload) continue;
+    const mapId = String(payload.mapId || '').trim();
+    if (!grouped.has(mapId)) grouped.set(mapId, []);
+    grouped.get(mapId).push(payload);
+  }
+  __roomDetachedCache.marksByMap = grouped;
+}
+
+function _cacheUpsertMarkRow(row) {
+  const payload = _normalizeMarkPayload(row);
+  if (!payload) return;
+  const mapId = String(payload.mapId || '').trim();
+  const list = Array.isArray(__roomDetachedCache.marksByMap.get(mapId)) ? [...__roomDetachedCache.marksByMap.get(mapId)] : [];
+  const next = list.filter(m => String(m?.id || '') !== String(payload.id));
+  next.push(payload);
+  __roomDetachedCache.marksByMap.set(mapId, next);
+}
+
+function _cacheDeleteMarkRow(row) {
+  const mapId = String(row?.map_id || '').trim();
+  const markId = String(row?.mark_id || '').trim();
+  if (!mapId || !markId) return;
+  const list = Array.isArray(__roomDetachedCache.marksByMap.get(mapId)) ? __roomDetachedCache.marksByMap.get(mapId) : [];
+  __roomDetachedCache.marksByMap.set(mapId, list.filter(m => String(m?.id || '') !== markId));
+}
+
+function _defaultFogDetached(row) {
+  const settings = (row?.settings && typeof row.settings === 'object') ? deepClone(row.settings) : {};
+  const manualStamps = Array.isArray(row?.manual_stamps) ? deepClone(row.manual_stamps) : [];
+  const fog = {
+    enabled: typeof settings.enabled === 'boolean' ? settings.enabled : false,
+    mode: (settings.mode === 'dynamic') ? 'dynamic' : 'manual',
+    manualBase: (settings.manualBase === 'reveal') ? 'reveal' : 'hide',
+    manualStamps,
+    visionRadius: Number.isFinite(Number(settings.visionRadius)) ? clamp(Number(settings.visionRadius), 1, 60) : 8,
+    useWalls: typeof settings.useWalls === 'boolean' ? settings.useWalls : true,
+    exploredEnabled: typeof settings.exploredEnabled === 'boolean' ? settings.exploredEnabled : true,
+    gmViewMode: (settings.gmViewMode === 'player') ? 'player' : 'gm',
+    gmOpen: typeof settings.gmOpen === 'boolean' ? settings.gmOpen : false,
+    moveOnlyExplored: typeof settings.moveOnlyExplored === 'boolean' ? settings.moveOnlyExplored : false,
+    exploredPacked: String(row?.explored_packed || settings.exploredPacked || ''),
+    explored: []
+  };
+  try {
+    if (fog.exploredPacked) fog.explored = unpackFogExplored(fog.exploredPacked);
+    else if (Array.isArray(settings.explored)) fog.explored = deepClone(settings.explored);
+  } catch {}
+  return fog;
+}
+
+function _cacheFogRows(rows) {
+  const grouped = new Map();
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const mapId = String(row?.map_id || '').trim();
+    if (!mapId) continue;
+    grouped.set(mapId, _defaultFogDetached(row));
+  }
+  __roomDetachedCache.fogByMap = grouped;
+}
+
+function _cacheUpsertFogRow(row) {
+  const mapId = String(row?.map_id || '').trim();
+  if (!mapId) return;
+  __roomDetachedCache.fogByMap.set(mapId, _defaultFogDetached(row));
+}
+
+function _cacheMusicRow(row) {
+  const payload = (row?.payload && typeof row.payload === 'object') ? deepClone(row.payload) : null;
+  __roomDetachedCache.music = payload;
+}
+
+function applyDetachedPayloadToState(state) {
+  const st = ensureStateHasMaps(deepClone(state || {}));
+  const maps = Array.isArray(st.maps) ? st.maps : [];
+  maps.forEach((m) => {
+    if (!m || typeof m !== 'object') return;
+    const mapId = String(m.id || '');
+    const meta = __roomDetachedCache.mapMetaById.get(mapId);
+    if (meta) {
+      m.name = meta.name || m.name || 'Карта';
+      m.sectionId = meta.sectionId || m.sectionId || null;
+      m.boardWidth = meta.boardWidth;
+      m.boardHeight = meta.boardHeight;
+      m.boardBgUrl = meta.boardBgUrl || null;
+      m.boardBgDataUrl = meta.boardBgUrl || null;
+      m.boardBgStoragePath = meta.boardBgStoragePath || null;
+      m.boardBgStorageBucket = meta.boardBgStorageBucket || null;
+      m.gridAlpha = meta.gridAlpha;
+      m.wallAlpha = meta.wallAlpha;
+    }
+    if (__roomDetachedCache.wallsByMap.has(mapId)) m.walls = deepClone(__roomDetachedCache.wallsByMap.get(mapId) || []);
+    if (__roomDetachedCache.marksByMap.has(mapId)) m.marks = deepClone(__roomDetachedCache.marksByMap.get(mapId) || []);
+    if (__roomDetachedCache.fogByMap.has(mapId)) m.fog = deepClone(__roomDetachedCache.fogByMap.get(mapId));
+  });
+  const active = getActiveMap(st);
+  if (active) {
+    st.boardWidth = Number(active.boardWidth) || 10;
+    st.boardHeight = Number(active.boardHeight) || 10;
+    st.boardBgDataUrl = active.boardBgUrl || active.boardBgDataUrl || null;
+    st.boardBgUrl = active.boardBgUrl || active.boardBgDataUrl || null;
+    st.boardBgStoragePath = active.boardBgStoragePath || null;
+    st.boardBgStorageBucket = active.boardBgStorageBucket || null;
+    st.gridAlpha = (typeof active.gridAlpha !== 'undefined') ? active.gridAlpha : 1;
+    st.wallAlpha = (typeof active.wallAlpha !== 'undefined') ? active.wallAlpha : 1;
+    st.walls = Array.isArray(active.walls) ? deepClone(active.walls) : [];
+    st.marks = Array.isArray(active.marks) ? deepClone(active.marks) : [];
+    st.fog = (active.fog && typeof active.fog === 'object') ? deepClone(active.fog) : st.fog;
+  }
+  if (__roomDetachedCache.music && typeof __roomDetachedCache.music === 'object') {
+    st.bgMusic = deepClone(__roomDetachedCache.music);
+  }
+  return st;
+}
+window.applyDetachedPayloadToState = applyDetachedPayloadToState;
+
+function _refreshDetachedRoomView() {
+  try { window.refreshDetachedStateView?.(); } catch {}
+}
+
 
 // ===== Fog explored packing (bitset -> base64) =====
 // Stores explored cells compactly in state.fog.exploredPacked (base64 string of bytes).
@@ -628,24 +847,66 @@ async function upsertRoomState(roomId, nextState) {
     });
   } catch {}
 
-  // Compress fog.explored when it becomes large to reduce DB payload / egress.
-  // We keep exploredPacked in DB and decode it back to fog.explored on load.
+  // Detached architecture v5:
+  // - walls -> room_walls
+  // - marks -> room_marks
+  // - fog/manual stamps/explored -> room_fog
+  // - music -> room_music_state
+  // - per-map board metadata -> room_map_meta
+  // Keep room_state slim: only room orchestration + map ids/sections + players/turns.
   try {
-    const f = stSafe?.fog;
-    if (f && typeof f === 'object') {
-      const arr = Array.isArray(f.explored) ? f.explored : [];
-      const w = Number(stSafe.boardWidth) || 10;
-      const h = Number(stSafe.boardHeight) || 10;
-      // pack once it's non-trivial; threshold chosen to avoid overhead for small sets
-      if (arr.length >= 80) {
-        const packed = packFogExplored(arr, w, h);
-        if (packed) {
-          f.exploredPacked = packed;
-          // keep DB small: drop the raw array
-          f.explored = [];
-        }
-      }
-    }
+    stSafe.walls = [];
+    stSafe.marks = [];
+    stSafe.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+    stSafe.boardBgDataUrl = null;
+    stSafe.boardBgUrl = null;
+    stSafe.boardBgStoragePath = null;
+    stSafe.boardBgStorageBucket = null;
+    stSafe.gridAlpha = 1;
+    stSafe.wallAlpha = 1;
+    stSafe.fog = {
+      enabled: false,
+      mode: 'manual',
+      manualBase: 'hide',
+      manualStamps: [],
+      visionRadius: 8,
+      useWalls: true,
+      exploredEnabled: true,
+      gmViewMode: 'gm',
+      gmOpen: false,
+      moveOnlyExplored: false,
+      explored: []
+    };
+    const maps = Array.isArray(stSafe.maps) ? stSafe.maps : [];
+    stSafe.maps = maps.map((m) => ({
+      id: String(m?.id || ''),
+      name: String(m?.name || 'Карта'),
+      sectionId: String(m?.sectionId || '') || null,
+      boardWidth: 10,
+      boardHeight: 10,
+      boardBgDataUrl: null,
+      boardBgUrl: null,
+      boardBgStoragePath: null,
+      boardBgStorageBucket: null,
+      gridAlpha: 1,
+      wallAlpha: 1,
+      walls: [],
+      marks: [],
+      fog: {
+        enabled: false,
+        mode: 'manual',
+        manualBase: 'hide',
+        manualStamps: [],
+        visionRadius: 8,
+        useWalls: true,
+        exploredEnabled: true,
+        gmViewMode: 'gm',
+        gmOpen: false,
+        moveOnlyExplored: false,
+        explored: []
+      },
+      playersPos: {}
+    }));
   } catch {}
 
   // Also clear legacy per-map mirrors if present.
@@ -1030,6 +1291,195 @@ async function loadRoomDice(roomId, limit = 50) {
   return data || [];
 }
 
+// ================== Detached low-frequency tables ==================
+async function loadRoomMapMeta(roomId) {
+  await ensureSupabaseReady();
+  if (!roomId) return [];
+  const { data, error } = await sbClient
+    .from('room_map_meta')
+    .select('*')
+    .eq('room_id', roomId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function loadRoomWalls(roomId) {
+  await ensureSupabaseReady();
+  if (!roomId) return [];
+  const { data, error } = await sbClient
+    .from('room_walls')
+    .select('*')
+    .eq('room_id', roomId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function loadRoomMarks(roomId) {
+  await ensureSupabaseReady();
+  if (!roomId) return [];
+  const { data, error } = await sbClient
+    .from('room_marks')
+    .select('*')
+    .eq('room_id', roomId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function loadRoomFog(roomId) {
+  await ensureSupabaseReady();
+  if (!roomId) return [];
+  const { data, error } = await sbClient
+    .from('room_fog')
+    .select('*')
+    .eq('room_id', roomId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function loadRoomMusic(roomId) {
+  await ensureSupabaseReady();
+  if (!roomId) return null;
+  const { data, error } = await sbClient
+    .from('room_music_state')
+    .select('*')
+    .eq('room_id', roomId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function subscribeRoomMapMetaDb(roomId) {
+  await ensureSupabaseReady();
+  if (window.roomMapMetaDbChannel) {
+    try { await window.roomMapMetaDbChannel.unsubscribe(); } catch {}
+    window.roomMapMetaDbChannel = null;
+  }
+  window.roomMapMetaDbChannel = sbClient
+    .channel(`db-room_map_meta-${roomId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_map_meta', filter: `room_id=eq.${roomId}` }, (payload) => {
+      try {
+        if (payload.eventType === 'DELETE') {
+          const old = payload.old || {};
+          const mapId = String(old.map_id || '').trim();
+          if (mapId) {
+            __roomDetachedCache.mapMetaById.delete(mapId);
+            __roomDetachedCache.wallsByMap.delete(mapId);
+            __roomDetachedCache.marksByMap.delete(mapId);
+            __roomDetachedCache.fogByMap.delete(mapId);
+          }
+        } else {
+          _cacheMapMeta(payload.new || {});
+        }
+        _refreshDetachedRoomView();
+      } catch (e) { console.warn('room_map_meta realtime failed', e); }
+    });
+  await window.roomMapMetaDbChannel.subscribe();
+}
+
+async function subscribeRoomWallsDb(roomId) {
+  await ensureSupabaseReady();
+  if (window.roomWallsDbChannel) {
+    try { await window.roomWallsDbChannel.unsubscribe(); } catch {}
+    window.roomWallsDbChannel = null;
+  }
+  window.roomWallsDbChannel = sbClient
+    .channel(`db-room_walls-${roomId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_walls', filter: `room_id=eq.${roomId}` }, (payload) => {
+      try {
+        if (payload.eventType === 'DELETE') _cacheDeleteWallRow(payload.old || {});
+        else _cacheUpsertWallRow(payload.new || {});
+        _refreshDetachedRoomView();
+      } catch (e) { console.warn('room_walls realtime failed', e); }
+    });
+  await window.roomWallsDbChannel.subscribe();
+}
+
+async function subscribeRoomMarksDb(roomId) {
+  await ensureSupabaseReady();
+  if (window.roomMarksDbChannel) {
+    try { await window.roomMarksDbChannel.unsubscribe(); } catch {}
+    window.roomMarksDbChannel = null;
+  }
+  window.roomMarksDbChannel = sbClient
+    .channel(`db-room_marks-${roomId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_marks', filter: `room_id=eq.${roomId}` }, (payload) => {
+      try {
+        if (payload.eventType === 'DELETE') _cacheDeleteMarkRow(payload.old || {});
+        else _cacheUpsertMarkRow(payload.new || {});
+        _refreshDetachedRoomView();
+      } catch (e) { console.warn('room_marks realtime failed', e); }
+    });
+  await window.roomMarksDbChannel.subscribe();
+}
+
+async function subscribeRoomFogDb(roomId) {
+  await ensureSupabaseReady();
+  if (window.roomFogDbChannel) {
+    try { await window.roomFogDbChannel.unsubscribe(); } catch {}
+    window.roomFogDbChannel = null;
+  }
+  window.roomFogDbChannel = sbClient
+    .channel(`db-room_fog-${roomId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_fog', filter: `room_id=eq.${roomId}` }, (payload) => {
+      try {
+        if (payload.eventType === 'DELETE') {
+          const mapId = String(payload.old?.map_id || '').trim();
+          if (mapId) __roomDetachedCache.fogByMap.delete(mapId);
+        } else {
+          _cacheUpsertFogRow(payload.new || {});
+        }
+        _refreshDetachedRoomView();
+      } catch (e) { console.warn('room_fog realtime failed', e); }
+    });
+  await window.roomFogDbChannel.subscribe();
+}
+
+async function subscribeRoomMusicDb(roomId) {
+  await ensureSupabaseReady();
+  if (window.roomMusicDbChannel) {
+    try { await window.roomMusicDbChannel.unsubscribe(); } catch {}
+    window.roomMusicDbChannel = null;
+  }
+  window.roomMusicDbChannel = sbClient
+    .channel(`db-room_music_state-${roomId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_music_state', filter: `room_id=eq.${roomId}` }, (payload) => {
+      try {
+        if (payload.eventType === 'DELETE') __roomDetachedCache.music = null;
+        else _cacheMusicRow(payload.new || {});
+        _refreshDetachedRoomView();
+      } catch (e) { console.warn('room_music realtime failed', e); }
+    });
+  await window.roomMusicDbChannel.subscribe();
+}
+
+async function hydrateDetachedRoomData(roomId) {
+  await ensureSupabaseReady();
+  resetDetachedRoomCache(roomId);
+  const [metaRows, wallRows, markRows, fogRows, musicRow] = await Promise.all([
+    loadRoomMapMeta(roomId).catch(() => []),
+    loadRoomWalls(roomId).catch(() => []),
+    loadRoomMarks(roomId).catch(() => []),
+    loadRoomFog(roomId).catch(() => []),
+    loadRoomMusic(roomId).catch(() => null)
+  ]);
+  (metaRows || []).forEach(_cacheMapMeta);
+  _cacheWallRows(wallRows || []);
+  _cacheMarkRows(markRows || []);
+  _cacheFogRows(fogRows || []);
+  if (musicRow) _cacheMusicRow(musicRow);
+  _refreshDetachedRoomView();
+}
+
+async function subscribeDetachedRoomTables(roomId) {
+  await Promise.all([
+    subscribeRoomMapMetaDb(roomId),
+    subscribeRoomWallsDb(roomId),
+    subscribeRoomMarksDb(roomId),
+    subscribeRoomFogDb(roomId),
+    subscribeRoomMusicDb(roomId)
+  ]);
+}
+
 function applyTokenRowToLocalState(row) {
   try {
     if (!row) return;
@@ -1072,6 +1522,211 @@ function applyTokenRowToLocalState(row) {
       }
     }
   } catch {}
+}
+
+async function upsertRoomMapMetaRow(roomId, map) {
+  await ensureSupabaseReady();
+  const m = map || {};
+  const mapId = String(m.id || m.map_id || '').trim();
+  if (!roomId || !mapId) return;
+  const row = {
+    room_id: roomId,
+    map_id: mapId,
+    name: String(m.name || 'Карта'),
+    section_id: String(m.sectionId || m.section_id || '') || null,
+    board_width: Math.max(5, Math.min(150, Number(m.boardWidth) || 10)),
+    board_height: Math.max(5, Math.min(150, Number(m.boardHeight) || 10)),
+    board_bg_url: m.boardBgUrl || m.boardBgDataUrl || null,
+    board_bg_storage_path: m.boardBgStoragePath || null,
+    board_bg_storage_bucket: m.boardBgStorageBucket || null,
+    grid_alpha: Number.isFinite(Number(m.gridAlpha)) ? clamp(Number(m.gridAlpha), 0, 1) : 1,
+    wall_alpha: Number.isFinite(Number(m.wallAlpha)) ? clamp(Number(m.wallAlpha), 0, 1) : 1,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await sbClient.from('room_map_meta').upsert(row, { onConflict: 'room_id,map_id' });
+  if (error) throw error;
+  _cacheMapMeta(row);
+}
+
+async function deleteRoomMapCascade(roomId, mapId) {
+  await ensureSupabaseReady();
+  const rid = String(roomId || '');
+  const mid = String(mapId || '');
+  if (!rid || !mid) return;
+  await Promise.all([
+    sbClient.from('room_map_meta').delete().eq('room_id', rid).eq('map_id', mid),
+    sbClient.from('room_walls').delete().eq('room_id', rid).eq('map_id', mid),
+    sbClient.from('room_marks').delete().eq('room_id', rid).eq('map_id', mid),
+    sbClient.from('room_fog').delete().eq('room_id', rid).eq('map_id', mid),
+    sbClient.from('room_tokens').delete().eq('room_id', rid).eq('map_id', mid)
+  ]);
+  __roomDetachedCache.mapMetaById.delete(mid);
+  __roomDetachedCache.wallsByMap.delete(mid);
+  __roomDetachedCache.marksByMap.delete(mid);
+  __roomDetachedCache.fogByMap.delete(mid);
+}
+
+async function upsertRoomWallsEdges(roomId, mapId, mode, edges) {
+  await ensureSupabaseReady();
+  const rid = String(roomId || '');
+  const mid = String(mapId || '');
+  const list = Array.isArray(edges) ? edges : [];
+  if (!rid || !mid || !list.length) return;
+  const clean = [];
+  for (const e of list) {
+    const x = Number(e?.x), y = Number(e?.y);
+    const dir = String(e?.dir || '').toUpperCase();
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (!(dir === 'N' || dir === 'E' || dir === 'S' || dir === 'W')) continue;
+    clean.push({
+      room_id: rid,
+      map_id: mid,
+      x,
+      y,
+      dir,
+      wall_type: String(e?.type || 'stone'),
+      thickness: Math.max(1, Math.min(12, Number(e?.thickness) || 4)),
+      updated_at: new Date().toISOString()
+    });
+  }
+  if (!clean.length) return;
+  if (String(mode) === 'remove') {
+    for (const row of clean) {
+      const { error } = await sbClient.from('room_walls').delete().eq('room_id', rid).eq('map_id', mid).eq('x', row.x).eq('y', row.y).eq('dir', row.dir);
+      if (error) throw error;
+      _cacheDeleteWallRow(row);
+    }
+  } else {
+    const { error } = await sbClient.from('room_walls').upsert(clean, { onConflict: 'room_id,map_id,x,y,dir' });
+    if (error) throw error;
+    clean.forEach(_cacheUpsertWallRow);
+  }
+}
+
+function buildDetachedFogRow(roomId, mapId, fog, boardW, boardH) {
+  const f = (fog && typeof fog === 'object') ? deepClone(fog) : {};
+  const settings = {
+    enabled: !!f.enabled,
+    mode: (f.mode === 'dynamic') ? 'dynamic' : 'manual',
+    manualBase: (f.manualBase === 'reveal') ? 'reveal' : 'hide',
+    visionRadius: Number.isFinite(Number(f.visionRadius)) ? clamp(Number(f.visionRadius), 1, 60) : 8,
+    useWalls: typeof f.useWalls === 'boolean' ? f.useWalls : true,
+    exploredEnabled: typeof f.exploredEnabled === 'boolean' ? f.exploredEnabled : true,
+    gmViewMode: (f.gmViewMode === 'player') ? 'player' : 'gm',
+    gmOpen: typeof f.gmOpen === 'boolean' ? f.gmOpen : false,
+    moveOnlyExplored: typeof f.moveOnlyExplored === 'boolean' ? f.moveOnlyExplored : false
+  };
+  const exploredPacked = String(f.exploredPacked || packFogExplored(Array.isArray(f.explored) ? f.explored : [], Number(boardW) || 10, Number(boardH) || 10) || '');
+  return {
+    room_id: String(roomId || ''),
+    map_id: String(mapId || ''),
+    settings,
+    manual_stamps: Array.isArray(f.manualStamps) ? deepClone(f.manualStamps).slice(-5000) : [],
+    explored_packed: exploredPacked,
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function upsertRoomFogState(roomId, mapId, fog, boardW, boardH) {
+  await ensureSupabaseReady();
+  const row = buildDetachedFogRow(roomId, mapId, fog, boardW, boardH);
+  if (!row.room_id || !row.map_id) return;
+  const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
+  if (error) throw error;
+  _cacheUpsertFogRow(row);
+}
+
+let __pendingFogTimer = null;
+let __pendingFogRow = null;
+function scheduleRoomFogUpsert(roomId, mapId, fog, boardW, boardH, delay = 180) {
+  __pendingFogRow = buildDetachedFogRow(roomId, mapId, fog, boardW, boardH);
+  if (__pendingFogTimer) return;
+  __pendingFogTimer = setTimeout(async () => {
+    const row = __pendingFogRow;
+    __pendingFogTimer = null;
+    __pendingFogRow = null;
+    try {
+      if (!row?.room_id || !row?.map_id) return;
+      const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
+      if (error) throw error;
+      _cacheUpsertFogRow(row);
+      _refreshDetachedRoomView();
+    } catch (e) {
+      console.warn('coalesced fog upsert failed', e);
+    }
+  }, Math.max(50, Number(delay) || 180));
+}
+
+async function upsertRoomMarkRow(roomId, mark) {
+  await ensureSupabaseReady();
+  const m = mark || {};
+  const row = {
+    room_id: String(roomId || ''),
+    map_id: String(m.mapId || ''),
+    mark_id: String(m.id || ''),
+    owner_id: String(m.ownerId || '') || null,
+    kind: String(m.kind || ''),
+    payload: deepClone(m),
+    updated_at: new Date().toISOString()
+  };
+  if (!row.room_id || !row.map_id || !row.mark_id || !row.kind) return;
+  const { error } = await sbClient.from('room_marks').upsert(row, { onConflict: 'room_id,map_id,mark_id' });
+  if (error) throw error;
+  _cacheUpsertMarkRow(row);
+}
+
+async function deleteRoomMarkRow(roomId, mapId, markId) {
+  await ensureSupabaseReady();
+  const rid = String(roomId || '');
+  const mid = String(mapId || '');
+  const id = String(markId || '');
+  if (!rid || !mid || !id) return;
+  const { error } = await sbClient.from('room_marks').delete().eq('room_id', rid).eq('map_id', mid).eq('mark_id', id);
+  if (error) throw error;
+  _cacheDeleteMarkRow({ map_id: mid, mark_id: id });
+}
+
+async function clearRoomMarks(roomId, mapId, ownerId = null) {
+  await ensureSupabaseReady();
+  let q = sbClient.from('room_marks').delete().eq('room_id', String(roomId || '')).eq('map_id', String(mapId || ''));
+  if (ownerId) q = q.eq('owner_id', String(ownerId));
+  const { error } = await q;
+  if (error) throw error;
+  if (ownerId) {
+    const list = Array.isArray(__roomDetachedCache.marksByMap.get(String(mapId || ''))) ? __roomDetachedCache.marksByMap.get(String(mapId || '')) : [];
+    __roomDetachedCache.marksByMap.set(String(mapId || ''), list.filter(m => String(m?.ownerId || '') !== String(ownerId)));
+  } else {
+    __roomDetachedCache.marksByMap.set(String(mapId || ''), []);
+  }
+}
+
+async function upsertRoomMusicState(roomId, bgMusic) {
+  await ensureSupabaseReady();
+  const row = {
+    room_id: String(roomId || ''),
+    payload: deepClone(bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 }),
+    updated_at: new Date().toISOString()
+  };
+  if (!row.room_id) return;
+  const { error } = await sbClient.from('room_music_state').upsert(row, { onConflict: 'room_id' });
+  if (error) throw error;
+  _cacheMusicRow(row);
+}
+
+async function ensureDetachedBootstrap(roomId, fullState) {
+  await ensureSupabaseReady();
+  const st = ensureStateHasMaps(deepClone(fullState));
+  const maps = Array.isArray(st.maps) ? st.maps : [];
+  for (const m of maps) {
+    if (!m || !m.id) continue;
+    await upsertRoomMapMetaRow(roomId, m);
+    await upsertRoomFogState(roomId, m.id, m.fog || {}, m.boardWidth, m.boardHeight);
+    const walls = Array.isArray(m.walls) ? m.walls.filter(w => String(w?.dir || '').toUpperCase()) : [];
+    if (walls.length) await upsertRoomWallsEdges(roomId, m.id, 'add', walls);
+    const marks = Array.isArray(m.marks) ? m.marks : [];
+    for (const mk of marks) { await upsertRoomMarkRow(roomId, mk); }
+  }
+  await upsertRoomMusicState(roomId, st.bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 });
 }
 
 async function upsertTokenVisibility(roomId, tokenId, isPublic) {
@@ -1307,6 +1962,7 @@ async function sendMessage(msg) {
           state: initState
         });
         if (e2) throw e2;
+        try { await ensureDetachedBootstrap(roomId, initState); } catch (e) { console.warn('detached bootstrap createRoom failed', e); }
 
         // refresh list
         await sendMessage({ type: "listRooms" });
@@ -1375,15 +2031,18 @@ async function sendMessage(msg) {
           await sbClient.from("room_state").insert({ room_id: roomId, phase: initState.phase, current_actor_id: null, state: initState });
           rs = { state: initState };
         }
+        try { await ensureDetachedBootstrap(roomId, rs.state); } catch (e) { console.warn('detached bootstrap joinRoom failed', e); }
 
         await subscribeRoomDb(roomId);
         // v4: dedicated realtime tables
         try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
         try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
         try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
+        try { await subscribeDetachedRoomTables(roomId); } catch (e) { console.warn('detached subscribe failed', e); }
+        try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
         await refreshRoomMembers(roomId);
         await subscribeRoomMembersDb(roomId);
-        handleMessage({ type: "state", state: rs.state });
+        handleMessage({ type: "state", state: applyDetachedPayloadToState(rs.state) });
 
         // v4 init: load logs + tokens snapshot after state is applied
         try {
@@ -1754,6 +2413,18 @@ async function sendMessage(msg) {
 
 
         if (handled) {
+          try {
+            const existingIds = new Set((next.maps || []).map(m => String(m?.id || '')).filter(Boolean));
+            for (const m of (next.maps || [])) {
+              if (m && m.id) await upsertRoomMapMetaRow(currentRoomId, m);
+            }
+            const cachedIds = Array.from(__roomDetachedCache.mapMetaById.keys());
+            for (const mid of cachedIds) {
+              if (!existingIds.has(String(mid))) await deleteRoomMapCascade(currentRoomId, mid);
+            }
+          } catch (e) {
+            console.warn('campaign map meta sync failed', e);
+          }
           await upsertRoomState(currentRoomId, next);
           break;
         }
@@ -1763,6 +2434,7 @@ async function sendMessage(msg) {
           next.boardWidth = msg.width;
           next.boardHeight = msg.height;
           logEventToState(next, "Поле изменено");
+          try { syncActiveToMap(next); await upsertRoomMapMetaRow(currentRoomId, getActiveMap(next)); } catch (e) { console.warn('resizeBoard meta sync failed', e); }
         }
 
         else if (type === "startInitiative") {
@@ -2322,101 +2994,44 @@ async function sendMessage(msg) {
         }
 
         else if (type === "bulkWallEdges") {
-          // v2: edge walls on cell borders
           if (!isGM) return;
           const mode = String(msg.mode || "");
           const edges = Array.isArray(msg.edges) ? msg.edges : [];
-          if (!Array.isArray(next.walls)) next.walls = [];
-
-          const key = (w) => `${Number(w?.x)},${Number(w?.y)},${String(w?.dir || '').toUpperCase()}`;
-          const set = new Set();
-          for (const w of next.walls) {
-            const dir = String(w?.dir || '').toUpperCase();
-            if (!dir) continue;
-            set.add(key(w));
-          }
-
-          let changed = 0;
-          if (mode === 'add') {
-            for (const e of edges) {
-              const x = Number(e?.x), y = Number(e?.y);
-              const dir = String(e?.dir || '').toUpperCase();
-              if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-              if (!(dir === 'N' || dir === 'E' || dir === 'S' || dir === 'W')) continue;
-              const k = `${x},${y},${dir}`;
-              if (set.has(k)) continue;
-              set.add(k);
-              next.walls.push({
-                x, y, dir,
-                type: String(e?.type || 'stone'),
-                thickness: Number(e?.thickness) || 4
-              });
-              changed++;
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          if (!mapId || !edges.length) return;
+          await upsertRoomWallsEdges(currentRoomId, mapId, mode, edges);
+          try {
+            if (typeof lastState !== 'undefined' && lastState) {
+              lastState = applyDetachedPayloadToState(lastState);
             }
-          } else if (mode === 'remove') {
-            const remove = new Set();
-            for (const e of edges) {
-              const x = Number(e?.x), y = Number(e?.y);
-              const dir = String(e?.dir || '').toUpperCase();
-              if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-              if (!(dir === 'N' || dir === 'E' || dir === 'S' || dir === 'W')) continue;
-              remove.add(`${x},${y},${dir}`);
-            }
-            if (remove.size) {
-              const before = next.walls.length;
-              next.walls = next.walls.filter(w => !remove.has(`${Number(w?.x)},${Number(w?.y)},${String(w?.dir || '').toUpperCase()}`));
-              changed = Math.max(0, before - next.walls.length);
-            }
-          } else {
-            return;
-          }
-
-          if (changed) logEventToState(next, `Окружение: ${mode === "add" ? "добавлено" : "удалено"} ${changed} сегментов стен`);
+          } catch {}
+          try { await insertRoomLog(currentRoomId, `Окружение: ${mode === 'remove' ? 'удалено' : 'добавлено'} ${edges.length} сегментов стен`); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
-else if (type === "addWall") {
+        else if (type === "addWall") {
           if (!isGM) return;
           const w = msg.wall;
           if (!w) return;
-          if (!Array.isArray(next.walls)) next.walls = [];
-          const x = Number(w?.x), y = Number(w?.y);
-          if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-          const dir = String(w?.dir || '').toUpperCase();
-
-          // v2 edge wall
-          if (dir === 'N' || dir === 'E' || dir === 'S' || dir === 'W') {
-            const exists = (next.walls || []).some(ww => Number(ww?.x) === x && Number(ww?.y) === y && String(ww?.dir || '').toUpperCase() === dir);
-            if (!exists) {
-              next.walls.push({ x, y, dir, type: String(w?.type || 'stone'), thickness: Number(w?.thickness) || 4 });
-              logEventToState(next, `Стена добавлена (${x},${y},${dir})`);
-            }
-            return;
-          }
-
-          // legacy cell wall (kept for compatibility)
-          if (!(next.walls || []).find(ww => ww && ww.x === x && ww.y === y && !ww.dir)) {
-            next.walls.push({ x, y });
-            logEventToState(next, `Стена добавлена (${x},${y})`);
-          }
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          if (!mapId) return;
+          await upsertRoomWallsEdges(currentRoomId, mapId, 'add', [w]);
+          try { await insertRoomLog(currentRoomId, `Стена добавлена (${Number(w?.x)},${Number(w?.y)},${String(w?.dir || '').toUpperCase()})`); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
         else if (type === "removeWall") {
           if (!isGM) return;
           const w = msg.wall;
           if (!w) return;
-          if (!Array.isArray(next.walls)) next.walls = [];
-          const x = Number(w?.x), y = Number(w?.y);
-          const dir = String(w?.dir || '').toUpperCase();
-          if (Number.isFinite(x) && Number.isFinite(y) && (dir === 'N' || dir === 'E' || dir === 'S' || dir === 'W')) {
-            next.walls = next.walls.filter(ww => !(Number(ww?.x) === x && Number(ww?.y) === y && String(ww?.dir || '').toUpperCase() === dir));
-            logEventToState(next, `Стена удалена (${x},${y},${dir})`);
-            return;
-          }
-          // legacy cell
-          if (Number.isFinite(x) && Number.isFinite(y)) {
-            next.walls = next.walls.filter(ww => !(Number(ww?.x) === x && Number(ww?.y) === y && !ww.dir));
-            logEventToState(next, `Стена удалена (${x},${y})`);
-          }
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          if (!mapId) return;
+          await upsertRoomWallsEdges(currentRoomId, mapId, 'remove', [w]);
+          try { await insertRoomLog(currentRoomId, `Стена удалена (${Number(w?.x)},${Number(w?.y)},${String(w?.dir || '').toUpperCase()})`); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
         else if (type === "setBoardBg") {
@@ -2429,6 +3044,7 @@ else if (type === "addWall") {
           next.boardBgStoragePath = bgStoragePath;
           next.boardBgStorageBucket = bgStorageBucket;
           logEventToState(next, next.boardBgUrl ? "Подложка карты загружена" : "Подложка карты очищена");
+          try { syncActiveToMap(next); await upsertRoomMapMetaRow(currentRoomId, getActiveMap(next)); } catch (e) { console.warn('setBoardBg meta sync failed', e); }
         }
 
         else if (type === "clearBoardBg") {
@@ -2438,6 +3054,7 @@ else if (type === "addWall") {
           next.boardBgStoragePath = null;
           next.boardBgStorageBucket = null;
           logEventToState(next, "Подложка карты очищена");
+          try { syncActiveToMap(next); await upsertRoomMapMetaRow(currentRoomId, getActiveMap(next)); } catch (e) { console.warn('clearBoardBg meta sync failed', e); }
         }
 
         else if (type === "setGridAlpha") {
@@ -2445,6 +3062,7 @@ else if (type === "addWall") {
           const a = Number(msg.alpha);
           next.gridAlpha = Number.isFinite(a) ? clamp(a, 0, 1) : 1;
           logEventToState(next, `Прозрачность клеток: ${Math.round((1 - next.gridAlpha) * 100)}%`);
+          try { syncActiveToMap(next); await upsertRoomMapMetaRow(currentRoomId, getActiveMap(next)); } catch (e) { console.warn('setGridAlpha meta sync failed', e); }
         }
 
         else if (type === "setWallAlpha") {
@@ -2452,6 +3070,7 @@ else if (type === "addWall") {
           const a = Number(msg.alpha);
           next.wallAlpha = Number.isFinite(a) ? clamp(a, 0, 1) : 1;
           logEventToState(next, `Прозрачность стен: ${Math.round((1 - next.wallAlpha) * 100)}%`);
+          try { syncActiveToMap(next); await upsertRoomMapMetaRow(currentRoomId, getActiveMap(next)); } catch (e) { console.warn('setWallAlpha meta sync failed', e); }
         }
 
 
@@ -2459,102 +3078,41 @@ else if (type === "addWall") {
         // ===== Background Music (GM) =====
         else if (type === "bgMusicSet") {
           if (!isGM) return;
-          if (!next.bgMusic || typeof next.bgMusic !== 'object') {
-            next.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
-          }
-          const incoming = msg.bgMusic || {};
-          if (Array.isArray(incoming.tracks)) {
-            // hard limit 10
-            next.bgMusic.tracks = incoming.tracks.slice(0, 10).map(t => ({
-              id: String(t?.id || ''),
-              name: String(t?.name || ''),
-              desc: String(t?.desc || ''),
-              url: String(t?.url || ''),
-              path: String(t?.path || ''),
-              createdAt: String(t?.createdAt || '')
-            })).filter(t => t.id && t.url);
-          }
-          if ('currentTrackId' in incoming) next.bgMusic.currentTrackId = incoming.currentTrackId ? String(incoming.currentTrackId) : null;
-          if (typeof incoming.isPlaying === 'boolean') next.bgMusic.isPlaying = incoming.isPlaying;
-          if ('volume' in incoming) {
-            const v = Number(incoming.volume);
-            next.bgMusic.volume = Number.isFinite(v) ? clamp(v, 0, 100) : (Number(next.bgMusic.volume) || 40);
-          }
-          // If current track removed — stop
-          if (next.bgMusic.currentTrackId) {
-            const ok = (next.bgMusic.tracks || []).some(t => String(t.id) === String(next.bgMusic.currentTrackId));
-            if (!ok) {
-              next.bgMusic.currentTrackId = null;
-              next.bgMusic.isPlaying = false;
-            }
-          }
-          logEventToState(next, "Фоновая музыка обновлена");
+          const incoming = (msg.bgMusic && typeof msg.bgMusic === 'object') ? deepClone(msg.bgMusic) : { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+          if (!Array.isArray(incoming.tracks)) incoming.tracks = [];
+          incoming.tracks = incoming.tracks.slice(0, 10).map(t => ({
+            id: String(t?.id || ''),
+            name: String(t?.name || ''),
+            desc: String(t?.desc || t?.description || ''),
+            description: String(t?.description || t?.desc || ''),
+            url: String(t?.url || ''),
+            path: String(t?.path || ''),
+            createdAt: String(t?.createdAt || '')
+          })).filter(t => t.id && t.url);
+          incoming.currentTrackId = incoming.currentTrackId ? String(incoming.currentTrackId) : null;
+          incoming.isPlaying = !!incoming.isPlaying;
+          incoming.volume = Number.isFinite(Number(incoming.volume)) ? clamp(Number(incoming.volume), 0, 100) : 40;
+          await upsertRoomMusicState(currentRoomId, incoming);
+          try { await insertRoomLog(currentRoomId, 'Фоновая музыка обновлена'); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
+        // ===== Marks / Areas (everyone can draw; GM can remove all) =====
         // ===== Marks / Areas (everyone can draw; GM can remove all) =====
         else if (type === 'addMark') {
           const raw = msg.mark;
           if (!raw || typeof raw !== 'object') return;
-
           const m = getActiveMap(next);
           if (!m) return;
-          if (!Array.isArray(m.marks)) m.marks = [];
-          if (!Array.isArray(next.marks)) next.marks = [];
-
-          const id = String(raw.id || '').trim();
-          const kind = String(raw.kind || '').trim();
-          if (!id) return;
-          if (!(kind === 'rect' || kind === 'circle' || kind === 'poly')) return;
-
-          // Avoid duplicates
-          if (m.marks.some(mm => String(mm?.id) === id)) return;
-
-          const ownerId = String(raw.ownerId || myId || '').trim();
-          const color = String(raw.color || '#ffa500').trim();
-          const alphaFill = Number.isFinite(Number(raw.alphaFill)) ? clamp(Number(raw.alphaFill), 0, 1) : 0.7;
-          const alphaStroke = Number.isFinite(Number(raw.alphaStroke)) ? clamp(Number(raw.alphaStroke), 0, 1) : 0.6;
-          const strokeW = Number.isFinite(Number(raw.strokeW)) ? clamp(Number(raw.strokeW), 1, 10) : 2;
-          const label = String(raw.label || '').slice(0, 80);
-
-          const safe = {
-            id,
-            mapId: String(next.currentMapId || m.id || ''),
-            ownerId,
-            kind,
-            color,
-            alphaFill,
-            alphaStroke,
-            strokeW,
-            label
-          };
-
-          if (kind === 'rect') {
-            const x = Number(raw.x), y = Number(raw.y), w = Number(raw.w), h = Number(raw.h);
-            if (![x, y, w, h].every(Number.isFinite)) return;
-            if (w <= 0 || h <= 0) return;
-            safe.x = clamp(x, 0, Math.max(0, next.boardWidth - 0.01));
-            safe.y = clamp(y, 0, Math.max(0, next.boardHeight - 0.01));
-            safe.w = clamp(w, 0.01, next.boardWidth * 2);
-            safe.h = clamp(h, 0.01, next.boardHeight * 2);
-          } else if (kind === 'circle') {
-            const cx = Number(raw.cx), cy = Number(raw.cy), r = Number(raw.r);
-            if (![cx, cy, r].every(Number.isFinite)) return;
-            if (r <= 0) return;
-            safe.cx = clamp(cx, 0, Math.max(0, next.boardWidth));
-            safe.cy = clamp(cy, 0, Math.max(0, next.boardHeight));
-            safe.r = clamp(r, 0.05, Math.max(next.boardWidth, next.boardHeight) * 2);
-          } else if (kind === 'poly') {
-            const pts = Array.isArray(raw.pts) ? raw.pts : [];
-            if (pts.length < 3) return;
-            safe.pts = pts.slice(0, 64).map(p => ({
-              x: clamp(Number(p?.x) || 0, 0, Math.max(0, next.boardWidth)),
-              y: clamp(Number(p?.y) || 0, 0, Math.max(0, next.boardHeight))
-            }));
-          }
-
-          m.marks.push(safe);
-          next.marks = deepClone(m.marks);
-          logEventToState(next, `Обозначение добавлено`);
+          const safe = deepClone(raw);
+          safe.mapId = String(raw.mapId || next.currentMapId || m.id || '');
+          safe.ownerId = String(raw.ownerId || myId || '');
+          if (!safe.id || !safe.mapId || !safe.kind) return;
+          await upsertRoomMarkRow(currentRoomId, safe);
+          try { await insertRoomLog(currentRoomId, 'Обозначение добавлено'); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
         else if (type === 'removeMark') {
@@ -2562,81 +3120,79 @@ else if (type === "addWall") {
           if (!id) return;
           const m = getActiveMap(next);
           if (!m) return;
-          if (!Array.isArray(m.marks)) m.marks = [];
-
-          const mark = m.marks.find(mm => String(mm?.id) === id);
+          const mapId = String(next.currentMapId || m.id || '');
+          const cached = Array.isArray(__roomDetachedCache.marksByMap.get(mapId)) ? __roomDetachedCache.marksByMap.get(mapId) : [];
+          const mark = cached.find(mm => String(mm?.id || '') === id);
           if (!mark) return;
-
-          // GM может удалить всё, игрок — только своё
           if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
-
-          const before = m.marks.length;
-          m.marks = m.marks.filter(mm => String(mm?.id) !== id);
-          if (m.marks.length !== before) {
-            next.marks = deepClone(m.marks);
-            logEventToState(next, `Обозначение удалено`);
-          }
+          await deleteRoomMarkRow(currentRoomId, mapId, id);
+          try { await insertRoomLog(currentRoomId, 'Обозначение удалено'); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
         else if (type === 'clearMarks') {
           const m = getActiveMap(next);
           if (!m) return;
-          if (!Array.isArray(m.marks)) m.marks = [];
+          const mapId = String(next.currentMapId || m.id || '');
           const scope = String(msg.scope || 'mine');
           if (scope === 'all') {
             if (!isGM) return;
-            if (m.marks.length) {
-              m.marks = [];
-              next.marks = [];
-              logEventToState(next, `Обозначения очищены`);
-            }
+            await clearRoomMarks(currentRoomId, mapId, null);
+            try { await insertRoomLog(currentRoomId, 'Обозначения очищены'); } catch {}
           } else {
-            const before = m.marks.length;
-            m.marks = m.marks.filter(mm => String(mm?.ownerId || '') !== String(myId || ''));
-            if (m.marks.length !== before) {
-              next.marks = deepClone(m.marks);
-              logEventToState(next, `Обозначения очищены (локально)`);
-            }
+            await clearRoomMarks(currentRoomId, mapId, String(myId || ''));
+            try { await insertRoomLog(currentRoomId, 'Обозначения очищены (локально)'); } catch {}
           }
+          _refreshDetachedRoomView();
+          return;
         }
 
         // ===== Fog of war (GM controls) =====
+        // ===== Fog of war (GM controls) =====
         else if (type === "setFogSettings") {
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = {};
-          const f = next.fog;
-          if (typeof msg.enabled === 'boolean') f.enabled = msg.enabled;
-          if (msg.mode === 'manual' || msg.mode === 'dynamic') f.mode = msg.mode;
-          if (msg.manualBase === 'hide' || msg.manualBase === 'reveal') f.manualBase = msg.manualBase;
-          if (Number.isFinite(Number(msg.visionRadius))) f.visionRadius = clamp(Number(msg.visionRadius), 1, 60);
-          if (typeof msg.useWalls === 'boolean') f.useWalls = msg.useWalls;
-          if (typeof msg.exploredEnabled === 'boolean') f.exploredEnabled = msg.exploredEnabled;
-          if (typeof msg.gmOpen === 'boolean') f.gmOpen = msg.gmOpen;
-          if (typeof msg.moveOnlyExplored === 'boolean') f.moveOnlyExplored = msg.moveOnlyExplored;
-          // GM view mode:
-          // - 'gm'     : GM sees full board, fog is an overlay showing what is revealed
-          // - 'player' : GM sees exactly what players see
-          if (msg.gmViewMode === 'gm' || msg.gmViewMode === 'player') f.gmViewMode = msg.gmViewMode;
-          if (!Array.isArray(f.manualStamps)) f.manualStamps = [];
-          if (!Array.isArray(f.explored)) f.explored = [];
-          logEventToState(next, `Туман войны: ${f.enabled ? 'ВКЛ' : 'ВЫКЛ'} (${f.mode === 'dynamic' ? 'динамический' : 'ручной'})`);
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
+          const currentFog = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || {});
+          if (typeof msg.enabled === 'boolean') currentFog.enabled = msg.enabled;
+          if (msg.mode === 'manual' || msg.mode === 'dynamic') currentFog.mode = msg.mode;
+          if (msg.manualBase === 'hide' || msg.manualBase === 'reveal') currentFog.manualBase = msg.manualBase;
+          if (Number.isFinite(Number(msg.visionRadius))) currentFog.visionRadius = clamp(Number(msg.visionRadius), 1, 60);
+          if (typeof msg.useWalls === 'boolean') currentFog.useWalls = msg.useWalls;
+          if (typeof msg.exploredEnabled === 'boolean') currentFog.exploredEnabled = msg.exploredEnabled;
+          if (typeof msg.gmOpen === 'boolean') currentFog.gmOpen = msg.gmOpen;
+          if (typeof msg.moveOnlyExplored === 'boolean') currentFog.moveOnlyExplored = msg.moveOnlyExplored;
+          if (msg.gmViewMode === 'gm' || msg.gmViewMode === 'player') currentFog.gmViewMode = msg.gmViewMode;
+          if (!Array.isArray(currentFog.manualStamps)) currentFog.manualStamps = [];
+          if (!Array.isArray(currentFog.explored)) currentFog.explored = [];
+          await upsertRoomFogState(currentRoomId, mapId, currentFog, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight);
+          try { await insertRoomLog(currentRoomId, `Туман войны: ${currentFog.enabled ? 'ВКЛ' : 'ВЫКЛ'} (${currentFog.mode === 'dynamic' ? 'динамический' : 'ручной'})`); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
         else if (type === "fogStamp") {
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] };
-          const f = next.fog;
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] });
           if (!Array.isArray(f.manualStamps)) f.manualStamps = [];
           const x = Number(msg.x), y = Number(msg.y), r = Number(msg.r);
           const mode = String(msg.mode || 'reveal');
           if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(r)) return;
           f.manualStamps.push({ x, y, r: clamp(r, 1, 40), mode: (mode === 'hide' ? 'hide' : 'reveal') });
+          _cacheUpsertFogRow(buildDetachedFogRow(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight));
+          _refreshDetachedRoomView();
+          scheduleRoomFogUpsert(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight, 140);
+          return;
         }
 
         else if (type === "fogStampBatch") {
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] };
-          const f = next.fog;
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] });
           if (!Array.isArray(f.manualStamps)) f.manualStamps = [];
           const stamps = Array.isArray(msg.stamps) ? msg.stamps : [];
           for (const s of stamps) {
@@ -2644,45 +3200,37 @@ else if (type === "addWall") {
             const mode = (String(s?.mode || 'reveal') === 'hide') ? 'hide' : 'reveal';
             if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(r)) continue;
             f.manualStamps.push({ x, y, r: clamp(r, 1, 40), mode });
-            if (f.manualStamps.length > 5000) break; // safety
+            if (f.manualStamps.length > 5000) break;
           }
+          _cacheUpsertFogRow(buildDetachedFogRow(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight));
+          _refreshDetachedRoomView();
+          scheduleRoomFogUpsert(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight, 140);
+          return;
         }
 
         else if (type === "fogStamp2") {
-          // New manual shapes: rect/circle/poly (stored in fog.manualStamps)
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] };
-          const f = next.fog;
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] });
           if (!Array.isArray(f.manualStamps)) f.manualStamps = [];
           const s = (msg && typeof msg === 'object') ? msg.stamp : null;
           if (!s || typeof s !== 'object') return;
-
           const kind = String(s.kind || '').toLowerCase();
           const mode = (String(s.mode || 'reveal') === 'hide') ? 'hide' : 'reveal';
-
-          // Square NxN brush (top-left cell x,y; size n)
           if (kind === 'square') {
             const x = Number(s.x), y = Number(s.y), n = Number(s.n);
             if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(n)) return;
             f.manualStamps.push({ kind: 'square', x, y, n: clamp(n, 1, 10), mode });
-            return;
-          }
-
-          if (kind === 'rect') {
+          } else if (kind === 'rect') {
             const x1 = Number(s.x1), y1 = Number(s.y1), x2 = Number(s.x2), y2 = Number(s.y2);
-            if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) return;
+            if (![x1,y1,x2,y2].every(Number.isFinite)) return;
             f.manualStamps.push({ kind: 'rect', x1, y1, x2, y2, mode });
-            return;
-          }
-
-          if (kind === 'circle') {
+          } else if (kind === 'circle') {
             const cx = Number(s.cx), cy = Number(s.cy), r = Number(s.r);
-            if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r)) return;
+            if (![cx,cy,r].every(Number.isFinite)) return;
             f.manualStamps.push({ kind: 'circle', cx, cy, r: clamp(r, 0.1, 200), mode });
-            return;
-          }
-
-          if (kind === 'poly') {
+          } else if (kind === 'poly') {
             const pts = Array.isArray(s.pts) ? s.pts : [];
             const safe = [];
             for (const p of pts) {
@@ -2693,57 +3241,68 @@ else if (type === "addWall") {
             }
             if (safe.length < 3) return;
             f.manualStamps.push({ kind: 'poly', pts: safe, mode });
+          } else {
             return;
           }
-
-          // fallback: ignore unknown kind
+          _cacheUpsertFogRow(buildDetachedFogRow(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight));
+          _refreshDetachedRoomView();
+          scheduleRoomFogUpsert(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight, 140);
+          return;
         }
 
         else if (type === "fogFill") {
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = {};
-          const f = next.fog;
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || {});
           if (String(msg.value) === 'revealAll') f.manualBase = 'reveal';
           else f.manualBase = 'hide';
           f.manualStamps = [];
-          logEventToState(next, `Туман войны: ${f.manualBase === 'reveal' ? 'Открыто всё' : 'Скрыто всё'}`);
+          await upsertRoomFogState(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight);
+          try { await insertRoomLog(currentRoomId, `Туман войны: ${f.manualBase === 'reveal' ? 'Открыто всё' : 'Скрыто всё'}`); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
-        
         else if (type === "fogClearExplored") {
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = {};
-          next.fog.exploredPacked = '';
-          next.fog.explored = [];
-          logEventToState(next, 'Туман войны: очищено исследованное');
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || {});
+          f.exploredPacked = '';
+          f.explored = [];
+          await upsertRoomFogState(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight);
+          try { await insertRoomLog(currentRoomId, 'Туман войны: очищено исследованное'); } catch {}
+          _refreshDetachedRoomView();
+          return;
         }
 
-        
         else if (type === "fogSetExplored") {
-          // GM replaces explored set (array of "x,y") — stored compactly as exploredPacked bitset.
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = {};
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || {});
           const cells = Array.isArray(msg.cells) ? msg.cells : [];
-          // pack
-          next.fog.exploredPacked = '';
-          next.fog.explored = [];
-          _fogApplyExploredDeltaToState(next, cells);
+          f.explored = cells;
+          f.exploredPacked = packFogExplored(cells, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight) || '';
+          await upsertRoomFogState(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight);
+          _refreshDetachedRoomView();
+          return;
         }
 
-        
         else if (type === "fogAddExplored") {
-          // GM appends explored cells (delta) — stored as exploredPacked to avoid huge room_state payloads.
           if (!isGM) return;
-          if (!next.fog || typeof next.fog !== 'object') next.fog = {};
-          const f = next.fog;
-
-          // One-time migration: if legacy array exists but packed not yet built, pack it once.
-          if (!f.exploredPacked && Array.isArray(f.explored) && f.explored.length) {
-            _fogApplyExploredDeltaToState(next, f.explored);
-          }
-
-          const add = Array.isArray(msg.cells) ? msg.cells : [];
-          _fogApplyExploredDeltaToState(next, add);
+          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || {});
+          const set = new Set(Array.isArray(f.explored) ? f.explored : []);
+          (Array.isArray(msg.cells) ? msg.cells : []).forEach(c => { if (c != null) set.add(String(c)); });
+          f.explored = Array.from(set);
+          f.exploredPacked = packFogExplored(f.explored, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight) || '';
+          _cacheUpsertFogRow(buildDetachedFogRow(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight));
+          _refreshDetachedRoomView();
+          scheduleRoomFogUpsert(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight, 320);
+          return;
         }
 
         else if (type === "rollInitiative") {
