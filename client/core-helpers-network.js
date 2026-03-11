@@ -787,6 +787,26 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
   const updArr = Array.isArray(updates) ? updates : [];
   if (!updArr.length) return;
 
+  try {
+    if (lastState && typeof lastState === 'object') {
+      const optimistic = deepClone(lastState);
+      const pls = Array.isArray(optimistic.players) ? optimistic.players : [];
+      for (const u of updArr) {
+        const pid = String(u?.playerId || '');
+        if (!pid) continue;
+        const p = pls.find(pp => String(pp?.id) === pid);
+        if (!p) continue;
+        if (String(p.ownerId) !== String(myUserId)) continue;
+        if (!p.inCombat || p.hasRolledInitiative) continue;
+        p.initiative = Number(u.total);
+        p.hasRolledInitiative = true;
+      }
+      pushOptimisticRoomState(roomId, optimistic);
+    }
+  } catch (e) {
+    console.warn('initiative optimistic push failed', e);
+  }
+
   for (let attempt = 0; attempt < 6; attempt++) {
     const latest = await fetchRoomStateSnapshot(roomId);
     if (!latest) return;
@@ -959,6 +979,19 @@ function scheduleRoomStateUpsert(roomId, nextState, delayMs = 180) {
     }, __pendingRoomStateDelay);
   } catch {}
 }
+
+function pushOptimisticRoomState(roomId, nextState) {
+  try {
+    const optimisticState = applyDetachedPayloadToState(syncActiveToMap(deepClone(nextState || {})));
+    try { handleMessage({ type: 'state', state: optimisticState }); } catch {}
+    try { sendWsEnvelope({ type: 'state', roomId: String(roomId || currentRoomId || ''), state: optimisticState }, { optimisticApplied: true }); } catch {}
+    return optimisticState;
+  } catch (e) {
+    console.warn('optimistic room_state push failed', e);
+    return null;
+  }
+}
+
 
 
 // ===== Campaign saves (GM) =====
@@ -2218,6 +2251,7 @@ async function sendMessage(msg) {
           const d = (String(type) === 'fogStamp' || String(type) === 'fogStamp2' || String(type) === 'fogStampBatch') ? 140 : 320;
           scheduleRoomStateUpsert(currentRoomId, next, d);
         } else {
+          pushOptimisticRoomState(currentRoomId, next);
           await upsertRoomState(currentRoomId, next);
         }
         handleMessage({ type: "savedBaseApplied", playerId: p.id, savedId });
@@ -2251,6 +2285,7 @@ async function sendMessage(msg) {
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
   } catch {}
 
+  pushOptimisticRoomState(currentRoomId, next);
   await upsertRoomState(currentRoomId, next);
   break;
 }
@@ -3462,19 +3497,19 @@ async function sendMessage(msg) {
           return;
         }
 
-        // Low-frequency structural player changes should feel instant.
-        // Unlike "remove from board", these actions previously waited for the
-        // room_state DB upsert to finish before UI/WS update, which made add/remove
-        // look delayed. Push an optimistic state to the current client and via VPS WS
-        // first, then persist to DB.
-        if (type === 'addPlayer' || type === 'removePlayerCompletely') {
-          try {
-            const optimisticState = applyDetachedPayloadToState(syncActiveToMap(deepClone(next)));
-            try { handleMessage({ type: 'state', state: optimisticState }); } catch {}
-            try { sendWsEnvelope({ type: 'state', roomId: currentRoomId, state: optimisticState }, { optimisticApplied: true }); } catch {}
-          } catch (e) {
-            console.warn('optimistic player list state failed', e);
-          }
+        // Push almost all room_state-based mechanics optimistically to the local UI
+        // and to the VPS relay before persisting to DB. Detached systems (walls/fog/marks/music)
+        // return earlier and use their own low-latency path, while token movement uses room_tokens.
+        const optimisticRoomStateTypes = new Set([
+          'createMapSection','renameMapSection','deleteMapSection',
+          'createCampaignMap','renameCampaignMap','moveCampaignMap','deleteCampaignMap','switchCampaignMap',
+          'resizeBoard','startInitiative','startExploration','startCombat','endTurn',
+          'updatePlayerColor','addPlayer','setPlayerPublic','combatInitChoice','gmRollInitiativeFor',
+          'updatePlayerSize','removePlayerFromBoard','removePlayerCompletely',
+          'clearBoard','resetGame'
+        ]);
+        if (optimisticRoomStateTypes.has(String(type))) {
+          pushOptimisticRoomState(currentRoomId, next);
         }
 
         await upsertRoomState(currentRoomId, next);
