@@ -615,6 +615,13 @@ async function upsertRoomState(roomId, nextState) {
   // Do not persist logs inside room_state; logs are append-only in room_log.
   stSafe.log = [];
 
+  // Do not persist marks inside room_state; they live in room_marks.
+  stSafe.marks = [];
+  try {
+    const maps = Array.isArray(stSafe.maps) ? stSafe.maps : [];
+    maps.forEach((m) => { if (m && typeof m === 'object') m.marks = []; });
+  } catch {}
+
   // Do not persist token positions inside room_state.
   // Positions are authoritative in public.room_tokens (realtime). If we keep x/y here,
   // any unrelated room_state upsert (walls/fog/etc.) can overwrite fresh positions
@@ -768,6 +775,12 @@ let wsRoomId = '';
 let wsReconnectTimer = null;
 let wsWantConnected = false;
 const wsSeenNonces = new Map();
+let roomDbChannel = null;
+let roomChannel = null;
+let roomMarksDbChannel = null;
+window.loadRoomMarks = async function(roomId, mapId) {
+  return await loadRoomMarks(roomId, mapId);
+};
 
 function wsMakeNonce() {
   return (crypto?.randomUUID ? crypto.randomUUID() : ('n-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
@@ -1173,6 +1186,125 @@ async function insertDiceEvent(roomId, ev) {
 }
 
 
+async function subscribeRoomMarksDb(roomId) {
+  await ensureSupabaseReady();
+  if (roomMarksDbChannel) {
+    try { await roomMarksDbChannel.unsubscribe(); } catch {}
+    roomMarksDbChannel = null;
+  }
+  roomMarksDbChannel = sbClient
+    .channel(`db-room_marks-${roomId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'room_marks', filter: `room_id=eq.${roomId}` },
+      (payload) => {
+        const ev = String(payload?.eventType || payload?.event_type || '').toUpperCase();
+        if (ev === 'DELETE') {
+          const row = payload.old;
+          if (row) handleMessage({ type: 'markDelete', row });
+          return;
+        }
+        const row = payload.new;
+        if (row) handleMessage({ type: 'markRow', row });
+      }
+    );
+  await roomMarksDbChannel.subscribe();
+}
+
+async function loadRoomMarks(roomId, mapId) {
+  await ensureSupabaseReady();
+  if (!roomId) return [];
+  let q = sbClient
+    .from('room_marks')
+    .select('*')
+    .eq('room_id', roomId)
+    .order('updated_at', { ascending: true });
+  if (mapId) q = q.eq('map_id', mapId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+function normalizeMarkForDb(mark, state, fallbackOwnerId) {
+  const st = state || lastState || null;
+  const curMapId = String(mark?.mapId || st?.currentMapId || '').trim();
+  const ownerId = String(mark?.ownerId || fallbackOwnerId || '').trim();
+  const id = String(mark?.id || '').trim();
+  const kind = String(mark?.kind || '').trim();
+  if (!id || !curMapId) return null;
+  if (!(kind === 'rect' || kind === 'circle' || kind === 'poly')) return null;
+
+  const color = String(mark?.color || '#ffa500').trim();
+  const alphaFill = Number.isFinite(Number(mark?.alphaFill)) ? clamp(Number(mark.alphaFill), 0, 1) : 0.7;
+  const alphaStroke = Number.isFinite(Number(mark?.alphaStroke)) ? clamp(Number(mark.alphaStroke), 0, 1) : 0.6;
+  const strokeW = Number.isFinite(Number(mark?.strokeW)) ? clamp(Number(mark.strokeW), 1, 10) : 2;
+  const label = String(mark?.label || '').slice(0, 80);
+
+  const payload = {};
+  if (kind === 'rect') {
+    const x = Number(mark?.x), y = Number(mark?.y), w = Number(mark?.w), h = Number(mark?.h);
+    if (![x, y, w, h].every(Number.isFinite)) return null;
+    if (w <= 0 || h <= 0) return null;
+    payload.x = x; payload.y = y; payload.w = w; payload.h = h;
+  } else if (kind === 'circle') {
+    const cx = Number(mark?.cx), cy = Number(mark?.cy), r = Number(mark?.r);
+    if (![cx, cy, r].every(Number.isFinite)) return null;
+    if (r <= 0) return null;
+    payload.cx = cx; payload.cy = cy; payload.r = r;
+  } else if (kind === 'poly') {
+    const pts = Array.isArray(mark?.pts) ? mark.pts.slice(0, 64).map(p => ({ x: Number(p?.x), y: Number(p?.y) })).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y)) : [];
+    if (pts.length < 3) return null;
+    payload.pts = pts;
+  }
+
+  return {
+    room_id: String(currentRoomId || ''),
+    map_id: curMapId,
+    mark_id: id,
+    owner_id: ownerId || null,
+    kind,
+    color,
+    alpha_fill: alphaFill,
+    alpha_stroke: alphaStroke,
+    stroke_w: strokeW,
+    label,
+    payload,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function convertRoomMarkRowToMark(row) {
+  try {
+    if (!row) return null;
+    const kind = String(row.kind || '').trim();
+    if (!(kind === 'rect' || kind === 'circle' || kind === 'poly')) return null;
+    const payload = (row.payload && typeof row.payload === 'object') ? row.payload : {};
+    const mark = {
+      id: String(row.mark_id || row.id || '').trim(),
+      mapId: String(row.map_id || '').trim(),
+      ownerId: String(row.owner_id || '').trim(),
+      kind,
+      color: String(row.color || '#ffa500').trim(),
+      alphaFill: Number.isFinite(Number(row.alpha_fill)) ? clamp(Number(row.alpha_fill), 0, 1) : 0.7,
+      alphaStroke: Number.isFinite(Number(row.alpha_stroke)) ? clamp(Number(row.alpha_stroke), 0, 1) : 0.6,
+      strokeW: Number.isFinite(Number(row.stroke_w)) ? clamp(Number(row.stroke_w), 1, 10) : 2,
+      label: String(row.label || '').slice(0, 80)
+    };
+    if (kind === 'rect') {
+      mark.x = Number(payload.x); mark.y = Number(payload.y); mark.w = Number(payload.w); mark.h = Number(payload.h);
+    } else if (kind === 'circle') {
+      mark.cx = Number(payload.cx); mark.cy = Number(payload.cy); mark.r = Number(payload.r);
+    } else if (kind === 'poly') {
+      mark.pts = Array.isArray(payload.pts) ? payload.pts.map(p => ({ x: Number(p?.x), y: Number(p?.y) })).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y)) : [];
+    }
+    return mark;
+  } catch {
+    return null;
+  }
+}
+
+
+
 let roomMembersDbChannel = null;
 
 async function refreshRoomMembers(roomId) {
@@ -1381,6 +1513,7 @@ async function sendMessage(msg) {
         try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
         try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
         try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
+        try { await subscribeRoomMarksDb(roomId); } catch (e) { console.warn('marks subscribe failed', e); }
         await refreshRoomMembers(roomId);
         await subscribeRoomMembersDb(roomId);
         handleMessage({ type: "state", state: rs.state });
@@ -1400,6 +1533,11 @@ async function sendMessage(msg) {
           const diceRows = await loadRoomDice(roomId, 50);
           handleMessage({ type: 'diceInit', rows: diceRows });
         } catch (e) { console.warn('dice init failed', e); }
+        try {
+          const mapId = String(rs?.state?.currentMapId || '');
+          const markRows = await loadRoomMarks(roomId, mapId);
+          handleMessage({ type: 'marksInit', rows: markRows, mapId });
+        } catch (e) { console.warn('marks init failed', e); }
         break;
       }
 
@@ -1435,6 +1573,85 @@ async function sendMessage(msg) {
             });
           } catch {}
         }
+        break;
+      }
+
+
+      case 'loadRoomMarks': {
+        const roomId = String(msg.roomId || currentRoomId || '');
+        const mapId = String(msg.mapId || lastState?.currentMapId || '');
+        if (!roomId || !mapId) return;
+        const rows = await loadRoomMarks(roomId, mapId);
+        handleMessage({ type: 'marksInit', rows, mapId });
+        break;
+      }
+
+      case 'addMark': {
+        if (!currentRoomId) return;
+        const normalizedRow = normalizeMarkForDb(msg.mark || {}, lastState, (localStorage.getItem('dnd_user_id') || myId || ''));
+        if (!normalizedRow) return;
+        const { data, error } = await sbClient
+          .from('room_marks')
+          .upsert(normalizedRow, { onConflict: 'room_id,map_id,mark_id' })
+          .select('*')
+          .single();
+        if (error) throw error;
+        const row = data || normalizedRow;
+        try { sendWsEnvelope({ type: 'markRow', roomId: currentRoomId, row }, { optimisticApplied: true }); } catch {}
+        handleMessage({ type: 'markRow', row });
+        break;
+      }
+
+      case 'removeMark': {
+        if (!currentRoomId) return;
+        const id = String(msg.id || '').trim();
+        const mapId = String(msg.mapId || lastState?.currentMapId || '').trim();
+        if (!id || !mapId) return;
+        const { data: found, error: fErr } = await sbClient
+          .from('room_marks')
+          .select('*')
+          .eq('room_id', currentRoomId)
+          .eq('map_id', mapId)
+          .eq('mark_id', id)
+          .maybeSingle();
+        if (fErr) throw fErr;
+        if (!found) return;
+        const ownerId = String(found.owner_id || '');
+        const isGMNow = (String(myRole || '') === 'GM');
+        const myUserIdNow = String(localStorage.getItem('dnd_user_id') || myId || '');
+        if (!isGMNow && ownerId !== myUserIdNow) return;
+        const { error } = await sbClient
+          .from('room_marks')
+          .delete()
+          .eq('room_id', currentRoomId)
+          .eq('map_id', mapId)
+          .eq('mark_id', id);
+        if (error) throw error;
+        const delRow = { room_id: currentRoomId, map_id: mapId, mark_id: id, owner_id: ownerId };
+        try { sendWsEnvelope({ type: 'markDelete', roomId: currentRoomId, row: delRow }, { optimisticApplied: true }); } catch {}
+        handleMessage({ type: 'markDelete', row: delRow });
+        break;
+      }
+
+      case 'clearMarks': {
+        if (!currentRoomId) return;
+        const mapId = String(msg.mapId || lastState?.currentMapId || '').trim();
+        if (!mapId) return;
+        const scope = String(msg.scope || 'mine');
+        let q = sbClient.from('room_marks').delete().eq('room_id', currentRoomId).eq('map_id', mapId).select('*');
+        const myUserIdNow = String(localStorage.getItem('dnd_user_id') || myId || '');
+        const isGMNow = (String(myRole || '') === 'GM');
+        if (scope === 'all') {
+          if (!isGMNow) return;
+        } else {
+          q = q.eq('owner_id', myUserIdNow);
+        }
+        const { data: deletedRows, error } = await q;
+        if (error) throw error;
+        (deletedRows || []).forEach((row) => {
+          try { sendWsEnvelope({ type: 'markDelete', roomId: currentRoomId, row }, { optimisticApplied: true }); } catch {}
+          handleMessage({ type: 'markDelete', row });
+        });
         break;
       }
 
@@ -2490,115 +2707,7 @@ else if (type === "addWall") {
           }
           logEventToState(next, "Фоновая музыка обновлена");
         }
-
-        // ===== Marks / Areas (everyone can draw; GM can remove all) =====
-        else if (type === 'addMark') {
-          const raw = msg.mark;
-          if (!raw || typeof raw !== 'object') return;
-
-          const m = getActiveMap(next);
-          if (!m) return;
-          if (!Array.isArray(m.marks)) m.marks = [];
-          if (!Array.isArray(next.marks)) next.marks = [];
-
-          const id = String(raw.id || '').trim();
-          const kind = String(raw.kind || '').trim();
-          if (!id) return;
-          if (!(kind === 'rect' || kind === 'circle' || kind === 'poly')) return;
-
-          // Avoid duplicates
-          if (m.marks.some(mm => String(mm?.id) === id)) return;
-
-          const ownerId = String(raw.ownerId || myId || '').trim();
-          const color = String(raw.color || '#ffa500').trim();
-          const alphaFill = Number.isFinite(Number(raw.alphaFill)) ? clamp(Number(raw.alphaFill), 0, 1) : 0.7;
-          const alphaStroke = Number.isFinite(Number(raw.alphaStroke)) ? clamp(Number(raw.alphaStroke), 0, 1) : 0.6;
-          const strokeW = Number.isFinite(Number(raw.strokeW)) ? clamp(Number(raw.strokeW), 1, 10) : 2;
-          const label = String(raw.label || '').slice(0, 80);
-
-          const safe = {
-            id,
-            mapId: String(next.currentMapId || m.id || ''),
-            ownerId,
-            kind,
-            color,
-            alphaFill,
-            alphaStroke,
-            strokeW,
-            label
-          };
-
-          if (kind === 'rect') {
-            const x = Number(raw.x), y = Number(raw.y), w = Number(raw.w), h = Number(raw.h);
-            if (![x, y, w, h].every(Number.isFinite)) return;
-            if (w <= 0 || h <= 0) return;
-            safe.x = clamp(x, 0, Math.max(0, next.boardWidth - 0.01));
-            safe.y = clamp(y, 0, Math.max(0, next.boardHeight - 0.01));
-            safe.w = clamp(w, 0.01, next.boardWidth * 2);
-            safe.h = clamp(h, 0.01, next.boardHeight * 2);
-          } else if (kind === 'circle') {
-            const cx = Number(raw.cx), cy = Number(raw.cy), r = Number(raw.r);
-            if (![cx, cy, r].every(Number.isFinite)) return;
-            if (r <= 0) return;
-            safe.cx = clamp(cx, 0, Math.max(0, next.boardWidth));
-            safe.cy = clamp(cy, 0, Math.max(0, next.boardHeight));
-            safe.r = clamp(r, 0.05, Math.max(next.boardWidth, next.boardHeight) * 2);
-          } else if (kind === 'poly') {
-            const pts = Array.isArray(raw.pts) ? raw.pts : [];
-            if (pts.length < 3) return;
-            safe.pts = pts.slice(0, 64).map(p => ({
-              x: clamp(Number(p?.x) || 0, 0, Math.max(0, next.boardWidth)),
-              y: clamp(Number(p?.y) || 0, 0, Math.max(0, next.boardHeight))
-            }));
-          }
-
-          m.marks.push(safe);
-          next.marks = deepClone(m.marks);
-          logEventToState(next, `Обозначение добавлено`);
-        }
-
-        else if (type === 'removeMark') {
-          const id = String(msg.id || '').trim();
-          if (!id) return;
-          const m = getActiveMap(next);
-          if (!m) return;
-          if (!Array.isArray(m.marks)) m.marks = [];
-
-          const mark = m.marks.find(mm => String(mm?.id) === id);
-          if (!mark) return;
-
-          // GM может удалить всё, игрок — только своё
-          if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
-
-          const before = m.marks.length;
-          m.marks = m.marks.filter(mm => String(mm?.id) !== id);
-          if (m.marks.length !== before) {
-            next.marks = deepClone(m.marks);
-            logEventToState(next, `Обозначение удалено`);
-          }
-        }
-
-        else if (type === 'clearMarks') {
-          const m = getActiveMap(next);
-          if (!m) return;
-          if (!Array.isArray(m.marks)) m.marks = [];
-          const scope = String(msg.scope || 'mine');
-          if (scope === 'all') {
-            if (!isGM) return;
-            if (m.marks.length) {
-              m.marks = [];
-              next.marks = [];
-              logEventToState(next, `Обозначения очищены`);
-            }
-          } else {
-            const before = m.marks.length;
-            m.marks = m.marks.filter(mm => String(mm?.ownerId || '') !== String(myId || ''));
-            if (m.marks.length !== before) {
-              next.marks = deepClone(m.marks);
-              logEventToState(next, `Обозначения очищены (локально)`);
-            }
-          }
-        }
+        // ===== Marks / Areas are stored in dedicated table room_marks (see direct switch cases above)
 
         // ===== Fog of war (GM controls) =====
         else if (type === "setFogSettings") {
