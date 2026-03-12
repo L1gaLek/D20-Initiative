@@ -534,20 +534,26 @@ function updateHpBar(player, tokenEl) {
   if (fill) fill.style.width = `${pct}%`;
   if (deathMode) {
     bar.classList.remove('token-hpbar--temp');
+    const isDead = ds.fail >= 3;
+    const isStable = !!(ds.stabilized && ds.success >= 3 && ds.fail < 3);
+    bar.classList.toggle('token-hpbar--dead', isDead);
     if (fill) fill.style.width = '100%';
     if (txt) {
-      if (ds.fail >= 3) txt.textContent = 'Мертв';
-      else if (ds.stabilized && ds.success >= 3) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
+      if (isDead) txt.textContent = 'Мертв(а)';
+      else if (isStable) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
       else txt.textContent = `${Math.min(3, ds.fail || 0)}/${Math.min(3, ds.success || 0)}`;
     }
   } else if (showTemp) {
+    bar.classList.remove('token-hpbar--dead');
     bar.classList.add('token-hpbar--temp');
     if (txt) txt.textContent = `${tempVal}`;
   } else {
+    bar.classList.remove('token-hpbar--dead');
     bar.classList.remove('token-hpbar--temp');
     if (txt) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
   }
 }
+
 
 // ================== MINI POPUP (dblclick on token) ==================
 let tokenMiniEl = null;
@@ -1265,15 +1271,18 @@ const diceVizKind = document.getElementById("dice-viz-kind");
       return;
     }
 
-    // "Основа" должна считаться существующей для стрелки только если реально размещена на поле.
-    if (baseP.x === null || typeof baseP.x === 'undefined' || baseP.y === null || typeof baseP.y === 'undefined') {
+    // Prefer live DOM position first. This keeps the locator working even if the
+    // player snapshot temporarily lost x/y while the token is still rendered on the field.
+    const tokenEl = playerElements.get(baseP.id) || (baseP && baseP.element) || null;
+    const hasLogicalPos = !(baseP.x === null || typeof baseP.x === 'undefined' || baseP.y === null || typeof baseP.y === 'undefined');
+    const hasDomToken = !!(tokenEl && tokenEl.style?.display !== 'none');
+    if (!hasLogicalPos && !hasDomToken) {
       arrow.style.display = 'none';
       return;
     }
 
-    // Prefer live DOM position, but if token element was temporarily recreated/lost,
-    // fall back to logical board coordinates so the arrow does not disappear.
-    const tokenEl = playerElements.get(baseP.id) || (baseP && baseP.element) || null;
+    // If logical coordinates are absent, but DOM token exists, keep working from DOM.
+    // If both are absent, hide the arrow.
     const wrapRect = wrap.getBoundingClientRect();
     let tokenCx = null;
     let tokenCy = null;
