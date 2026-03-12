@@ -1536,10 +1536,31 @@ function renderShopTab(vm, canEdit) {
               </div>
               <input class="sheet-chip-input" type="number" min="0" max="40" ${canEdit ? "" : "disabled"} data-sheet-path="vitality.ac.value" data-hero-val="ac" value="${escapeHtml(String(vm.ac))}">
             </div>
-            <div class="sheet-chip sheet-chip--hp" data-hero="hp" data-hp-open role="button" tabindex="0" style="--hp-fill-pct:${escapeHtml(String(vm.hp ? Math.max(0, Math.min(100, Math.round((Number(vm.hpCur) / Math.max(1, Number(vm.hp))) * 100))) : 0))}%">
+            <div class="sheet-chip sheet-chip--hp ${vm.deathSavesActive ? 'sheet-chip--hp-death' : ''} ${vm.dsStabilized ? 'is-stabilized' : ''}" data-hero="hp" data-hp-open role="button" tabindex="0" style="--hp-fill-pct:${escapeHtml(String(vm.hp ? Math.max(0, Math.min(100, Math.round((Number(vm.hpCur) / Math.max(1, Number(vm.hp))) * 100))) : 0))}%">
               <div class="hp-liquid" aria-hidden="true"></div>
               <div class="k">Здоровье</div>
-              <div class="v" data-hero-val="hp">${escapeHtml(String((Number(vm.hpTemp)||0)>0 ? `(${Number(vm.hpTemp)}) ${vm.hpCur}/${vm.hp}` : `${vm.hpCur}/${vm.hp}`))}</div>
+              <div class="v" data-hero-val="hp" ${vm.deathSavesActive ? 'style="display:none;"' : ''}>${escapeHtml(String((Number(vm.hpTemp)||0)>0 ? `(${Number(vm.hpTemp)}) ${vm.hpCur}/${vm.hp}` : `${vm.hpCur}/${vm.hp}`))}</div>
+              <div class="death-saves ${vm.deathSavesActive ? 'is-active' : ''}" data-death-saves ${vm.deathSavesActive ? '' : 'style="display:none;"'}>
+                <div class="death-saves__row" data-death-saves-row>
+                  <div class="death-saves__side death-saves__side--fail" aria-label="Провалы">
+                    <span class="death-dot ${vm.dsFail >= 1 ? 'is-on' : ''}" data-death-dot="fail-1"></span>
+                    <span class="death-dot ${vm.dsFail >= 2 ? 'is-on' : ''}" data-death-dot="fail-2"></span>
+                    <span class="death-dot ${vm.dsFail >= 3 ? 'is-on' : ''}" data-death-dot="fail-3"></span>
+                  </div>
+                  <button class="death-d20" type="button" data-death-save-roll ${canEdit ? '' : 'disabled'} title="Спасбросок от смерти">
+                    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                      <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor" opacity="0.96"></path>
+                      <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(255,255,255,0.26)" stroke-width="1.2"></path>
+                    </svg>
+                  </button>
+                  <div class="death-saves__side death-saves__side--success" aria-label="Успехи">
+                    <span class="death-dot ${vm.dsSuccess >= 1 ? 'is-on' : ''}" data-death-dot="success-1"></span>
+                    <span class="death-dot ${vm.dsSuccess >= 2 ? 'is-on' : ''}" data-death-dot="success-2"></span>
+                    <span class="death-dot ${vm.dsSuccess >= 3 ? 'is-on' : ''}" data-death-dot="success-3"></span>
+                  </div>
+                </div>
+                <div class="death-saves__status ${(vm.dsStabilized || vm.dsFail >= 3) ? 'is-visible' : ''}" data-death-saves-status ${(vm.dsStabilized || vm.dsFail >= 3) ? '' : 'style="display:none;"'}>${vm.dsFail >= 3 ? 'Мертв' : 'Стабилизирован'}</div>
+              </div>
             </div>
             <div class="sheet-chip" data-hero="speed">
               <div class="k">Скорость</div>

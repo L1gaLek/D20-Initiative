@@ -1,4 +1,127 @@
   // ===== LIVE UI UPDATERS (без полного ререндера) =====
+  function ensureDeathSavesState(sheet) {
+    if (!sheet || typeof sheet !== 'object') return { success: 0, fail: 0, stabilized: false, lastRoll: null, lastOutcome: '' };
+    if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
+    if (!sheet.vitality.deathSaves || typeof sheet.vitality.deathSaves !== 'object') {
+      sheet.vitality.deathSaves = { success: 0, fail: 0, stabilized: false, lastRoll: null, lastOutcome: '' };
+    }
+    const ds = sheet.vitality.deathSaves;
+    ds.success = Math.max(0, Math.min(3, safeInt(ds.success, 0)));
+    ds.fail = Math.max(0, Math.min(3, safeInt(ds.fail, 0)));
+    ds.stabilized = !!ds.stabilized;
+    if (ds.lastRoll !== null && ds.lastRoll !== undefined && ds.lastRoll !== '') ds.lastRoll = safeInt(ds.lastRoll, null);
+    else ds.lastRoll = null;
+    ds.lastOutcome = String(ds.lastOutcome || '');
+    return ds;
+  }
+
+  function isDeathSavesActiveSheet(sheet) {
+    const hp = safeInt(sheet?.vitality?.["hp-max"]?.value, 0);
+    const hpCur = safeInt(sheet?.vitality?.["hp-current"]?.value, 0);
+    return hp > 0 && hpCur <= 0;
+  }
+
+  function resetDeathSavesState(sheet) {
+    const ds = ensureDeathSavesState(sheet);
+    ds.success = 0;
+    ds.fail = 0;
+    ds.stabilized = false;
+    ds.lastRoll = null;
+    ds.lastOutcome = '';
+    return ds;
+  }
+
+  function syncDeathSavesUi(root, sheet, canEditOverride = null) {
+    if (!root || !sheet) return;
+    const hp = safeInt(sheet?.vitality?.["hp-max"]?.value, 0);
+    const hpCur = safeInt(sheet?.vitality?.["hp-current"]?.value, 0);
+    const active = hp > 0 && hpCur <= 0;
+    const ds = ensureDeathSavesState(sheet);
+
+    const hpEl = root.querySelector('[data-hero-val="hp"]');
+    const hpChip = root.querySelector('[data-hero="hp"]');
+    const box = root.querySelector('[data-death-saves]');
+    const row = root.querySelector('[data-death-saves-row]');
+    const status = root.querySelector('[data-death-saves-status]');
+    const rollBtn = root.querySelector('[data-death-save-roll]');
+
+    if (hpEl) hpEl.style.display = active ? 'none' : '';
+    if (box) box.style.display = active ? '' : 'none';
+    if (box) box.classList.toggle('is-active', !!active);
+    if (hpChip) {
+      hpChip.classList.toggle('sheet-chip--hp-death', !!active);
+      hpChip.classList.toggle('is-stabilized', !!(active && ds.stabilized && ds.success >= 3));
+    }
+    if (row) row.style.display = (active && !(ds.stabilized && ds.success >= 3) && ds.fail < 3) ? '' : 'none';
+    if (status) {
+      const showStatus = !!(active && ((ds.stabilized && ds.success >= 3) || ds.fail >= 3));
+      status.style.display = showStatus ? '' : 'none';
+      status.classList.toggle('is-visible', showStatus);
+      status.textContent = (ds.fail >= 3) ? 'Мертв' : 'Стабилизирован';
+    }
+    if (rollBtn) {
+      const canEdit = (canEditOverride === null)
+        ? !rollBtn.disabled
+        : !!canEditOverride;
+      rollBtn.disabled = !(active && !(ds.stabilized && ds.success >= 3) && ds.fail < 3 && canEdit);
+    }
+
+    const failDots = root.querySelectorAll('[data-death-dot^="fail-"]');
+    failDots.forEach((dot, idx) => dot.classList.toggle('is-on', idx < ds.fail));
+    const sucDots = root.querySelectorAll('[data-death-dot^="success-"]');
+    sucDots.forEach((dot, idx) => dot.classList.toggle('is-on', idx < ds.success));
+  }
+
+  function applyDeathSaveRoll(sheet, roll) {
+    const ds = ensureDeathSavesState(sheet);
+    const hp = safeInt(sheet?.vitality?.["hp-max"]?.value, 0);
+    const hpCur = safeInt(sheet?.vitality?.["hp-current"]?.value, 0);
+    if (!(hp > 0 && hpCur <= 0)) {
+      resetDeathSavesState(sheet);
+      return { roll: null, outcome: 'inactive' };
+    }
+
+    const n = Math.max(1, Math.min(20, safeInt(roll, 1)));
+    ds.lastRoll = n;
+    ds.lastOutcome = '';
+
+    if (n === 20) {
+      ds.success = 0;
+      ds.fail = 0;
+      ds.stabilized = false;
+      if (!sheet.vitality["hp-current"]) sheet.vitality["hp-current"] = { value: 0 };
+      sheet.vitality["hp-current"].value = 1;
+      ds.lastOutcome = 'crit-success';
+      return { roll: n, outcome: ds.lastOutcome };
+    }
+    if (n === 1) {
+      ds.fail = Math.max(0, Math.min(3, ds.fail + 2));
+      ds.lastOutcome = 'crit-fail';
+      if (ds.fail >= 3) ds.stabilized = false;
+      return { roll: n, outcome: ds.lastOutcome };
+    }
+    if (n >= 10) {
+      ds.success = Math.max(0, Math.min(3, ds.success + 1));
+      if (ds.success >= 3) {
+        ds.success = 3;
+        ds.stabilized = true;
+        ds.lastOutcome = 'stabilized';
+      } else {
+        ds.lastOutcome = 'success';
+      }
+      return { roll: n, outcome: ds.lastOutcome };
+    }
+    ds.fail = Math.max(0, Math.min(3, ds.fail + 1));
+    if (ds.fail >= 3) {
+      ds.fail = 3;
+      ds.stabilized = false;
+      ds.lastOutcome = 'dead';
+    } else {
+      ds.lastOutcome = 'fail';
+    }
+    return { roll: n, outcome: ds.lastOutcome };
+  }
+
   function updateHeroChips(root, sheet) {
     if (!root || !sheet) return;
     const ac = safeInt(sheet?.vitality?.ac?.value, 0);
@@ -23,6 +146,7 @@
       const pct = Math.round(ratio * 100);
       hpChip.style.setProperty('--hp-fill-pct', `${pct}%`);
     }
+    syncDeathSavesUi(root, sheet);
 
 
     // Inspiration star (SVG)
@@ -1791,6 +1915,35 @@ function bindEditableInputs(root, player, canEdit) {
     // Upgrade large textareas to a lightweight rich-text editor (toolbar + contenteditable).
     // This is used for backstory/notes/descriptions etc.
     try { upgradeSheetTextareasToRte(root, player, canEdit); } catch {}
+
+    const deathBtn = root.querySelector('[data-death-save-roll]');
+    if (deathBtn) {
+      if (!canEdit) deathBtn.disabled = true;
+      deathBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!canEdit) return;
+        const sheet = player.sheet?.parsed;
+        if (!sheet) return;
+        if (!isDeathSavesActiveSheet(sheet)) return;
+
+        let roll = null;
+        try {
+          if (window.DicePanel?.roll) {
+            const res = await window.DicePanel.roll({ sides: 20, count: 1, bonus: 0, kindText: 'Спасбросок от смерти: d20' });
+            roll = Number(res?.rolls?.[0]);
+          }
+        } catch {}
+        if (!Number.isFinite(roll)) roll = 1 + Math.floor(Math.random() * 20);
+
+        const result = applyDeathSaveRoll(sheet, roll);
+        if (result.outcome === 'inactive') return;
+        syncDeathSavesUi(root, sheet, canEdit);
+        updateHeroChips(root, sheet);
+        markModalInteracted(player.id);
+        scheduleSheetSave(player);
+      });
+    }
 
     const inputs = root.querySelectorAll("[data-sheet-path]");
     inputs.forEach(inp => {

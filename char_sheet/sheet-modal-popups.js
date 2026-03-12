@@ -193,6 +193,7 @@
         sheet.vitality['hit-dice-total'].value = nextTotal;
       } catch {}
 
+      syncDeathSavesForHpPopup(sheet);
       syncHpPopupInputs(sheet);
       markModalInteracted(player.id);
       scheduleSheetSave(player);
@@ -200,6 +201,51 @@
     });
 
     return hpPopupEl;
+  }
+
+  function ensureDeathSavesPopupState(sheet) {
+    if (!sheet || typeof sheet !== 'object') return { success: 0, fail: 0, stabilized: false, lastRoll: null, lastOutcome: '' };
+    if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
+    if (!sheet.vitality.deathSaves || typeof sheet.vitality.deathSaves !== 'object') {
+      sheet.vitality.deathSaves = { success: 0, fail: 0, stabilized: false, lastRoll: null, lastOutcome: '' };
+    }
+    const ds = sheet.vitality.deathSaves;
+    ds.success = Math.max(0, Math.min(3, safeInt(ds.success, 0)));
+    ds.fail = Math.max(0, Math.min(3, safeInt(ds.fail, 0)));
+    ds.stabilized = !!ds.stabilized;
+    ds.lastRoll = (ds.lastRoll === null || ds.lastRoll === undefined || ds.lastRoll === '') ? null : safeInt(ds.lastRoll, null);
+    ds.lastOutcome = String(ds.lastOutcome || '');
+    return ds;
+  }
+
+  function syncDeathSavesForHpPopup(sheet) {
+    if (!sheet || typeof sheet !== 'object') return;
+    const max = Number(sheet?.vitality?.["hp-max"]?.value) || 0;
+    const cur = Number(sheet?.vitality?.["hp-current"]?.value) || 0;
+    const ds = ensureDeathSavesPopupState(sheet);
+    if (cur > 0 || max <= 0) {
+      ds.success = 0;
+      ds.fail = 0;
+      ds.stabilized = false;
+      ds.lastRoll = null;
+      ds.lastOutcome = '';
+      return;
+    }
+    if (cur <= 0 && ds.fail >= 3) ds.stabilized = false;
+  }
+
+  function clearStabilizedOnDamagePopup(sheet) {
+    if (!sheet || typeof sheet !== 'object') return;
+    const max = Number(sheet?.vitality?.["hp-max"]?.value) || 0;
+    const cur = Number(sheet?.vitality?.["hp-current"]?.value) || 0;
+    const ds = ensureDeathSavesPopupState(sheet);
+    if (max > 0 && cur <= 0 && ds.stabilized) {
+      ds.success = 0;
+      ds.fail = 0;
+      ds.stabilized = false;
+      ds.lastRoll = null;
+      ds.lastOutcome = '';
+    }
   }
 
   function getConModifierFromScore(score) {
@@ -255,6 +301,7 @@
     const curCur = Number(sheet.vitality["hp-current"].value) || 0;
     if (curCur > newMax) sheet.vitality["hp-current"].value = newMax;
 
+    syncDeathSavesForHpPopup(sheet);
     syncHpPopupInputs(sheet);
     markModalInteracted(player.id);
     scheduleSheetSave(player);
@@ -341,6 +388,7 @@
       sheet.vitality["hit-dice-max"] = { value: lvl };
     }
 
+    syncDeathSavesForHpPopup(sheet);
     syncHpPopupInputs(sheet);
     setHpPopupEditable(!!lastCanEdit);
     el.classList.remove('hidden');
@@ -381,6 +429,7 @@
       nextCur = Math.max(0, Math.min(max, cur + delta));
       // temp unchanged
     } else {
+      clearStabilizedOnDamagePopup(sheet);
       const spentTemp = Math.min(temp, delta);
       nextTemp = Math.max(0, temp - delta);
       const remaining = Math.max(0, delta - spentTemp);
@@ -390,6 +439,7 @@
     sheet.vitality["hp-current"].value = nextCur;
     sheet.vitality["hp-temp"].value = nextTemp;
 
+    syncDeathSavesForHpPopup(sheet);
     syncHpPopupInputs(sheet);
     markModalInteracted(player.id);
     scheduleSheetSave(player);
