@@ -1,6 +1,48 @@
 // ================== MESSAGE HANDLER (used by Supabase subscriptions) ==================
 function handleMessage(msg) {
 
+  function makeDiceDedupKey(ev) {
+    try {
+      const rolls = Array.isArray(ev?.rolls) ? ev.rolls.map(n => Number(n) || 0).join(',') : '';
+      return [
+        String(ev?.fromId || ''),
+        String(ev?.fromName || ''),
+        String(ev?.kindText || ''),
+        String(ev?.sides ?? ''),
+        String(ev?.count ?? ''),
+        String(Number(ev?.bonus) || 0),
+        rolls,
+        String(ev?.total ?? ''),
+        String(ev?.crit || '')
+      ].join('|');
+    } catch {
+      return '';
+    }
+  }
+
+  function shouldSkipDuplicateOtherDice(ev, explicitId) {
+    try {
+      const now = Date.now();
+      const ttlMs = 1500;
+      window._recentOtherDiceKeys = window._recentOtherDiceKeys || new Map();
+      const recent = window._recentOtherDiceKeys;
+
+      for (const [k, ts] of recent.entries()) {
+        if ((now - Number(ts || 0)) > ttlMs) recent.delete(k);
+      }
+
+      const idKey = explicitId ? `id:${String(explicitId)}` : '';
+      const sigKey = `sig:${makeDiceDedupKey(ev)}`;
+      if (idKey && recent.has(idKey)) return true;
+      if (sigKey && recent.has(sigKey)) return true;
+      if (idKey) recent.set(idKey, now);
+      if (sigKey) recent.set(sigKey, now);
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   // ================== VISIBILITY HELPERS ==================
   // Rules requested:
   // 1) "Союзник" is GM-only.
@@ -170,7 +212,11 @@ loginDiv.style.display = 'none';
     if (msg.type === "diceEvent" && msg.event) {
       const fromId = String(msg?.event?.fromId || '');
       if (fromId && String(fromId) !== String(myId || '')) {
-        try { pushOtherDiceEvent?.(msg.event); } catch {}
+        try {
+          if (!shouldSkipDuplicateOtherDice(msg.event, msg?.event?.id || msg?.event?.localNonce || '')) {
+            pushOtherDiceEvent?.(msg.event);
+          }
+        } catch {}
       } else {
         applyDiceEventToMain(msg.event);
       }
@@ -301,6 +347,7 @@ loginDiv.style.display = 'none';
           if (rid && window._seenDiceIds.has(rid)) return;
           if (rid) window._seenDiceIds.add(rid);
           const ev = {
+            id: rid,
             fromId: r.from_id || '',
             fromName: r.from_name || '',
             kindText: r.kind_text || '',
@@ -311,6 +358,7 @@ loginDiv.style.display = 'none';
             total: r.total || null,
             crit: r.crit || ''
           };
+          if (shouldSkipDuplicateOtherDice(ev, rid)) return;
           pushOtherDiceEvent?.(ev);
         });
       } catch {}
@@ -325,6 +373,7 @@ loginDiv.style.display = 'none';
         if (rid && window._seenDiceIds.has(rid)) return;
         if (rid) window._seenDiceIds.add(rid);
         const ev = {
+          id: rid,
           fromId: r.from_id || '',
           fromName: r.from_name || '',
           kindText: r.kind_text || '',
@@ -335,6 +384,7 @@ loginDiv.style.display = 'none';
           total: r.total || null,
           crit: r.crit || ''
         };
+        if (shouldSkipDuplicateOtherDice(ev, rid)) return;
         pushOtherDiceEvent?.(ev);
       } catch {}
     }

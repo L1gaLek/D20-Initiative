@@ -787,26 +787,6 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
   const updArr = Array.isArray(updates) ? updates : [];
   if (!updArr.length) return;
 
-  try {
-    if (lastState && typeof lastState === 'object') {
-      const optimistic = deepClone(lastState);
-      const pls = Array.isArray(optimistic.players) ? optimistic.players : [];
-      for (const u of updArr) {
-        const pid = String(u?.playerId || '');
-        if (!pid) continue;
-        const p = pls.find(pp => String(pp?.id) === pid);
-        if (!p) continue;
-        if (String(p.ownerId) !== String(myUserId)) continue;
-        if (!p.inCombat || p.hasRolledInitiative) continue;
-        p.initiative = Number(u.total);
-        p.hasRolledInitiative = true;
-      }
-      pushOptimisticRoomState(roomId, optimistic);
-    }
-  } catch (e) {
-    console.warn('initiative optimistic push failed', e);
-  }
-
   for (let attempt = 0; attempt < 6; attempt++) {
     const latest = await fetchRoomStateSnapshot(roomId);
     if (!latest) return;
@@ -979,19 +959,6 @@ function scheduleRoomStateUpsert(roomId, nextState, delayMs = 180) {
     }, __pendingRoomStateDelay);
   } catch {}
 }
-
-function pushOptimisticRoomState(roomId, nextState) {
-  try {
-    const optimisticState = applyDetachedPayloadToState(syncActiveToMap(deepClone(nextState || {})));
-    try { handleMessage({ type: 'state', state: optimisticState }); } catch {}
-    try { sendWsEnvelope({ type: 'state', roomId: String(roomId || currentRoomId || ''), state: optimisticState }, { optimisticApplied: true }); } catch {}
-    return optimisticState;
-  } catch (e) {
-    console.warn('optimistic room_state push failed', e);
-    return null;
-  }
-}
-
 
 
 // ===== Campaign saves (GM) =====
@@ -1602,6 +1569,49 @@ async function deleteRoomMapCascade(roomId, mapId) {
   __roomDetachedCache.wallsByMap.delete(mid);
   __roomDetachedCache.marksByMap.delete(mid);
   __roomDetachedCache.fogByMap.delete(mid);
+}
+
+async function clearRoomMapPlayfield(roomId, mapLike, opts = {}) {
+  await ensureSupabaseReady();
+  const rid = String(roomId || '');
+  const mid = String(mapLike?.id || mapLike?.map_id || '').trim();
+  if (!rid || !mid) return;
+
+  const boardW = Math.max(5, Math.min(150, Number(mapLike?.boardWidth || mapLike?.board_width) || 10));
+  const boardH = Math.max(5, Math.min(150, Number(mapLike?.boardHeight || mapLike?.board_height) || 10));
+  const clearTokens = opts.clearTokens !== false;
+  const clearWalls = opts.clearWalls !== false;
+  const clearMarks = opts.clearMarks !== false;
+  const resetFog = opts.resetFog !== false;
+
+  const tasks = [];
+  if (clearWalls) tasks.push(sbClient.from('room_walls').delete().eq('room_id', rid).eq('map_id', mid));
+  if (clearMarks) tasks.push(sbClient.from('room_marks').delete().eq('room_id', rid).eq('map_id', mid));
+  if (clearTokens) tasks.push(sbClient.from('room_tokens').delete().eq('room_id', rid).eq('map_id', mid));
+
+  if (resetFog) {
+    const emptyFog = {
+      enabled: false,
+      mode: 'manual',
+      manualBase: 'hide',
+      manualStamps: [],
+      visionRadius: 8,
+      useWalls: true,
+      exploredEnabled: true,
+      gmViewMode: 'gm',
+      gmOpen: false,
+      moveOnlyExplored: false,
+      explored: []
+    };
+    const row = buildDetachedFogRow(rid, mid, emptyFog, boardW, boardH);
+    tasks.push(sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' }));
+    _cacheUpsertFogRow(row);
+  }
+
+  await Promise.all(tasks);
+
+  if (clearWalls) __roomDetachedCache.wallsByMap.set(mid, []);
+  if (clearMarks) __roomDetachedCache.marksByMap.set(mid, []);
 }
 
 async function upsertRoomWallsEdges(roomId, mapId, mode, edges) {
@@ -2251,7 +2261,6 @@ async function sendMessage(msg) {
           const d = (String(type) === 'fogStamp' || String(type) === 'fogStamp2' || String(type) === 'fogStampBatch') ? 140 : 320;
           scheduleRoomStateUpsert(currentRoomId, next, d);
         } else {
-          pushOptimisticRoomState(currentRoomId, next);
           await upsertRoomState(currentRoomId, next);
         }
         handleMessage({ type: "savedBaseApplied", playerId: p.id, savedId });
@@ -2285,7 +2294,6 @@ async function sendMessage(msg) {
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
   } catch {}
 
-  pushOptimisticRoomState(currentRoomId, next);
   await upsertRoomState(currentRoomId, next);
   break;
 }
@@ -3489,27 +3497,43 @@ async function sendMessage(msg) {
           if (!isGM) return;
           (next.players || []).forEach(p => { p.x = null; p.y = null; });
           next.walls = [];
+          next.marks = [];
+          next.fog = {
+            enabled: false,
+            mode: 'manual',
+            manualBase: 'hide',
+            manualStamps: [],
+            visionRadius: 8,
+            useWalls: true,
+            exploredEnabled: true,
+            gmViewMode: 'gm',
+            gmOpen: false,
+            moveOnlyExplored: false,
+            explored: []
+          };
+          try {
+            const activeMap = getActiveMap(next);
+            if (activeMap) {
+              activeMap.walls = [];
+              activeMap.marks = [];
+              activeMap.fog = deepClone(next.fog);
+              await clearRoomMapPlayfield(currentRoomId, activeMap, {
+                clearTokens: true,
+                clearWalls: true,
+                clearMarks: true,
+                resetFog: true
+              });
+              _refreshDetachedRoomView();
+            }
+          } catch (e) {
+            console.warn('clearBoard detached clear failed', e);
+          }
           logEventToState(next, "Поле очищено");
         }
 
         else {
           // unknown message type (ignored)
           return;
-        }
-
-        // Push almost all room_state-based mechanics optimistically to the local UI
-        // and to the VPS relay before persisting to DB. Detached systems (walls/fog/marks/music)
-        // return earlier and use their own low-latency path, while token movement uses room_tokens.
-        const optimisticRoomStateTypes = new Set([
-          'createMapSection','renameMapSection','deleteMapSection',
-          'createCampaignMap','renameCampaignMap','moveCampaignMap','deleteCampaignMap','switchCampaignMap',
-          'resizeBoard','startInitiative','startExploration','startCombat','endTurn',
-          'updatePlayerColor','addPlayer','setPlayerPublic','combatInitChoice','gmRollInitiativeFor',
-          'updatePlayerSize','removePlayerFromBoard','removePlayerCompletely',
-          'clearBoard','resetGame'
-        ]);
-        if (optimisticRoomStateTypes.has(String(type))) {
-          pushOptimisticRoomState(currentRoomId, next);
         }
 
         await upsertRoomState(currentRoomId, next);
