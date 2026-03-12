@@ -375,11 +375,22 @@ function ensureSheetPath(sheetObj, path) {
   return { parent: sheetObj, key: null };
 }
 
+function canEditTokenMiniSheet(player) {
+  try {
+    if (String(typeof myRole !== 'undefined' ? myRole : window.myRole || '') === 'GM') return true;
+  } catch {}
+  try {
+    return String(player?.ownerId || '') === String(typeof myId !== 'undefined' ? myId : window.myId || '');
+  } catch {}
+  return false;
+}
+
 function upsertSheetNumber(player, path, value) {
   const pid = String(player?.id || '');
   if (!pid) return;
   const current = players.find(p => String(p?.id) === pid);
   if (!current) return;
+  if (!canEditTokenMiniSheet(current)) return;
   const nextSheet = deepClone(current.sheet || { parsed: {} });
   if (!nextSheet.parsed || typeof nextSheet.parsed !== 'object') nextSheet.parsed = {};
   const { parent, key } = ensureSheetPath(nextSheet.parsed, path);
@@ -592,8 +603,24 @@ function openTokenMini(playerId) {
   const hpDeltaMinus = card.querySelector('.hp-delta-minus');
   const hpDeltaPlus = card.querySelector('.hp-delta-plus');
   const sheetBtn = card.querySelector('.btn');
+  const canEditHp = canEditTokenMiniSheet(p);
+
+  [hpCurInput, hpMaxInput, hpDeltaInput, hpDeltaMinus, hpDeltaPlus].forEach((el) => {
+    if (!el) return;
+    el.disabled = !canEditHp;
+  });
+  if (!canEditHp) {
+    try {
+      hpCurInput?.setAttribute('title', 'Можно менять только своих персонажей');
+      hpMaxInput?.setAttribute('title', 'Можно менять только своих персонажей');
+      hpDeltaInput?.setAttribute('title', 'Можно менять только своих персонажей');
+      hpDeltaMinus?.setAttribute('title', 'Можно менять только своих персонажей');
+      hpDeltaPlus?.setAttribute('title', 'Можно менять только своих персонажей');
+    } catch {}
+  }
 
   const applyHp = () => {
+    if (!canEditHp) return;
     const cur = safeNum(hpCurInput?.value, 0) ?? 0;
     const max = safeNum(hpMaxInput?.value, 0) ?? 0;
     upsertSheetNumber(p, 'vitality.hp-max', Math.max(0, max));
@@ -609,6 +636,7 @@ function openTokenMini(playerId) {
   hpMaxInput?.addEventListener('change', applyHp);
 
   const applyDelta = (sign) => {
+    if (!canEditHp) return;
     const delta = safeNum(hpDeltaInput?.value, 0) ?? 0;
     if (!delta) return;
 

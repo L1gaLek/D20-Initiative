@@ -3495,40 +3495,23 @@ async function sendMessage(msg) {
 
         else if (type === "clearBoard") {
           if (!isGM) return;
-          (next.players || []).forEach(p => { p.x = null; p.y = null; });
           next.walls = [];
-          next.marks = [];
-          next.fog = {
-            enabled: false,
-            mode: 'manual',
-            manualBase: 'hide',
-            manualStamps: [],
-            visionRadius: 8,
-            useWalls: true,
-            exploredEnabled: true,
-            gmViewMode: 'gm',
-            gmOpen: false,
-            moveOnlyExplored: false,
-            explored: []
-          };
           try {
             const activeMap = getActiveMap(next);
             if (activeMap) {
               activeMap.walls = [];
-              activeMap.marks = [];
-              activeMap.fog = deepClone(next.fog);
               await clearRoomMapPlayfield(currentRoomId, activeMap, {
-                clearTokens: true,
+                clearTokens: false,
                 clearWalls: true,
-                clearMarks: true,
-                resetFog: true
+                clearMarks: false,
+                resetFog: false
               });
               _refreshDetachedRoomView();
             }
           } catch (e) {
             console.warn('clearBoard detached clear failed', e);
           }
-          logEventToState(next, "Поле очищено");
+          logEventToState(next, "Стены на поле очищены");
         }
 
         else {
