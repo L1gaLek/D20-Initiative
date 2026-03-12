@@ -490,7 +490,17 @@ function updateHpBar(player, tokenEl) {
   if (!bars) {
     const main = document.createElement('div');
     main.className = 'token-hpbar';
-    main.innerHTML = `<div class="fill"></div><div class="txt"></div>`;
+    main.innerHTML = `
+      <div class="fill"></div>
+      <div class="death-track" aria-hidden="true">
+        <div class="death-seg death-seg--fail" data-ds-seg="fail-1"></div>
+        <div class="death-seg death-seg--fail" data-ds-seg="fail-2"></div>
+        <div class="death-seg death-seg--fail" data-ds-seg="fail-3"></div>
+        <div class="death-seg death-seg--success" data-ds-seg="success-1"></div>
+        <div class="death-seg death-seg--success" data-ds-seg="success-2"></div>
+        <div class="death-seg death-seg--success" data-ds-seg="success-3"></div>
+      </div>
+      <div class="txt"></div>`;
     board.appendChild(main);
 
     // Temp HP is shown inside the same bar (swap style/text), so no extra bar.
@@ -531,25 +541,40 @@ function updateHpBar(player, tokenEl) {
 
   const fill = bar.querySelector('.fill');
   const txt = bar.querySelector('.txt');
+  const deathTrack = bar.querySelector('.death-track');
+  const failSegs = Array.from(bar.querySelectorAll('[data-ds-seg^="fail-"]'));
+  const successSegs = Array.from(bar.querySelectorAll('[data-ds-seg^="success-"]'));
   if (fill) fill.style.width = `${pct}%`;
   if (deathMode) {
     bar.classList.remove('token-hpbar--temp');
     const isDead = ds.fail >= 3;
     const isStable = !!(ds.stabilized && ds.success >= 3 && ds.fail < 3);
     bar.classList.toggle('token-hpbar--dead', isDead);
-    if (fill) fill.style.width = '100%';
+    bar.classList.toggle('token-hpbar--death-progress', !isDead && !isStable);
+    if (fill) fill.style.width = '0%';
+    if (deathTrack) deathTrack.style.display = isDead ? 'none' : '';
+    failSegs.forEach((seg, idx) => seg.classList.toggle('is-on', idx < Math.min(3, ds.fail || 0)));
+    successSegs.forEach((seg, idx) => seg.classList.toggle('is-on', idx < Math.min(3, ds.success || 0)));
     if (txt) {
       if (isDead) txt.textContent = 'Мертв(а)';
       else if (isStable) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
-      else txt.textContent = `${Math.min(3, ds.fail || 0)}/${Math.min(3, ds.success || 0)}`;
+      else txt.textContent = '';
     }
   } else if (showTemp) {
     bar.classList.remove('token-hpbar--dead');
+    bar.classList.remove('token-hpbar--death-progress');
     bar.classList.add('token-hpbar--temp');
+    if (deathTrack) deathTrack.style.display = 'none';
+    failSegs.forEach((seg) => seg.classList.remove('is-on'));
+    successSegs.forEach((seg) => seg.classList.remove('is-on'));
     if (txt) txt.textContent = `${tempVal}`;
   } else {
     bar.classList.remove('token-hpbar--dead');
+    bar.classList.remove('token-hpbar--death-progress');
     bar.classList.remove('token-hpbar--temp');
+    if (deathTrack) deathTrack.style.display = 'none';
+    failSegs.forEach((seg) => seg.classList.remove('is-on'));
+    successSegs.forEach((seg) => seg.classList.remove('is-on'));
     if (txt) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
   }
 }
