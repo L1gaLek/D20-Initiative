@@ -398,6 +398,7 @@ loginDiv.style.display = 'none';
       // - temporarily reset token positions to null until room_tokens catches up
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
       const prevPos = new Map();
+      const prevSheets = new Map();
       try {
         (lastState?.players || []).forEach(p => {
           if (!p || !p.id) return;
@@ -408,6 +409,11 @@ loginDiv.style.display = 'none';
             color: p.color || null,
             mapId: p.mapId || null
           });
+          prevSheets.set(String(p.id), {
+            sheet: deepClone(p.sheet),
+            sheetUpdatedAt: Number(p.sheetUpdatedAt) || 0,
+            name: p.name || ''
+          });
         });
       } catch {}
 
@@ -416,6 +422,22 @@ loginDiv.style.display = 'none';
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
 
       lastState = normalized;
+
+      // Preserve newer local character sheets if an incoming room_state snapshot is older.
+      try {
+        (lastState.players || []).forEach(p => {
+          if (!p || !p.id) return;
+          const prev = prevSheets.get(String(p.id));
+          if (!prev) return;
+          const incomingTs = Number(p.sheetUpdatedAt) || 0;
+          const prevTs = Number(prev.sheetUpdatedAt) || 0;
+          if (prevTs > incomingTs) {
+            p.sheet = deepClone(prev.sheet);
+            p.sheetUpdatedAt = prevTs;
+            if (typeof prev.name === 'string' && prev.name.trim()) p.name = prev.name;
+          }
+        });
+      } catch {}
 
       // restore append-only log from memory (room_log drives it)
       if (prevLog && (!Array.isArray(lastState.log) || lastState.log.length === 0)) {

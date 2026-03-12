@@ -1190,15 +1190,29 @@ const diceVizKind = document.getElementById("dice-viz-kind");
       return;
     }
 
+    // "Основа" должна считаться существующей для стрелки только если реально размещена на поле.
+    if (baseP.x === null || typeof baseP.x === 'undefined' || baseP.y === null || typeof baseP.y === 'undefined') {
+      arrow.style.display = 'none';
+      return;
+    }
+
     // Find the DOM element of the base token (more robust with zoom/transform than using scrollLeft math).
     const tokenEl = (baseP && baseP.element) ? baseP.element : (playerElements.get(baseP.id) || null);
     if (!tokenEl) {
       arrow.style.display = 'none';
       return;
     }
+    if (tokenEl.style?.display === 'none' || tokenEl.offsetParent === null) {
+      arrow.style.display = 'none';
+      return;
+    }
 
     const wrapRect = wrap.getBoundingClientRect();
     const tokRect = tokenEl.getBoundingClientRect();
+    if (!Number.isFinite(tokRect.width) || !Number.isFinite(tokRect.height) || tokRect.width <= 0 || tokRect.height <= 0) {
+      arrow.style.display = 'none';
+      return;
+    }
 
     const tokenCx = tokRect.left + tokRect.width / 2;
     const tokenCy = tokRect.top + tokRect.height / 2;
@@ -1287,17 +1301,34 @@ const diceVizKind = document.getElementById("dice-viz-kind");
     });
   }
 
+  let wiredWrap = null;
   function wire() {
     const wrap = getBoardWrapper();
     if (!wrap) return;
+
+    // board-wrapper can be recreated/rebound after UI refreshes; avoid duplicate listeners,
+    // but do re-bind when the actual DOM node changes.
+    if (wiredWrap === wrap) {
+      scheduleUpdate();
+      return;
+    }
+    wiredWrap = wrap;
 
     // Update on scroll/resize.
     wrap.addEventListener('scroll', scheduleUpdate, { passive: true });
     window.addEventListener('resize', scheduleUpdate);
     try { document.addEventListener('visibilitychange', scheduleUpdate); } catch {}
+    try { wrap.addEventListener('mouseenter', scheduleUpdate, { passive: true }); } catch {}
+    try { wrap.addEventListener('mousemove', scheduleUpdate, { passive: true }); } catch {}
 
-    // Periodic safety update.
-    setInterval(scheduleUpdate, 300);
+    // Periodic safety update + auto-rebind if wrapper/token DOM was recreated.
+    setInterval(() => {
+      try {
+        const currentWrap = getBoardWrapper();
+        if (currentWrap && currentWrap !== wiredWrap) wire();
+      } catch {}
+      scheduleUpdate();
+    }, 300);
 
     scheduleUpdate();
   }

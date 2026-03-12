@@ -397,6 +397,38 @@ function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
+function getPlayerSheetTs(player) {
+  const n = Number(player?.sheetUpdatedAt);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function mergeNewestPlayerSheets(targetState, sourceState) {
+  try {
+    const targetPlayers = Array.isArray(targetState?.players) ? targetState.players : [];
+    const sourcePlayers = Array.isArray(sourceState?.players) ? sourceState.players : [];
+    if (!targetPlayers.length || !sourcePlayers.length) return targetState;
+
+    const srcById = new Map();
+    sourcePlayers.forEach((p) => {
+      if (!p?.id) return;
+      srcById.set(String(p.id), p);
+    });
+
+    targetPlayers.forEach((p) => {
+      if (!p?.id) return;
+      const src = srcById.get(String(p.id));
+      if (!src) return;
+      const srcTs = getPlayerSheetTs(src);
+      const dstTs = getPlayerSheetTs(p);
+      if (srcTs <= dstTs) return;
+      p.sheet = deepClone(src.sheet);
+      p.sheetUpdatedAt = srcTs;
+      if (typeof src.name === 'string' && src.name.trim()) p.name = src.name;
+    });
+  } catch {}
+  return targetState;
+}
+
 // ===== Detached room payload caches (walls / marks / fog / music / map meta) =====
 const __roomDetachedCache = {
   roomId: null,
@@ -827,6 +859,18 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
 
 async function upsertRoomState(roomId, nextState) {
   await ensureSupabaseReady();
+
+  // Preserve the newest character sheets from the latest DB snapshot before writing.
+  // This prevents unrelated room_state writes from rolling back concurrent edits in sheets.
+  let latestRoomState = null;
+  try {
+    const { data, error } = await sbClient
+      .from("room_state")
+      .select("state")
+      .eq("room_id", roomId)
+      .maybeSingle();
+    if (!error) latestRoomState = data?.state || null;
+  } catch {}
   // v4 architecture: room_state is NOT the source of truth for token positions or logs.
   // Keeping those inside room_state causes race conditions ("last write wins").
   // We persist only the low-frequency game state here.
@@ -917,7 +961,10 @@ async function upsertRoomState(roomId, nextState) {
       if (m.playersPos && typeof m.playersPos === 'object') m.playersPos = {};
     });
   } catch {}
-  const syncedState = syncActiveToMap(stSafe);
+  let syncedState = syncActiveToMap(stSafe);
+  try {
+    if (latestRoomState) syncedState = mergeNewestPlayerSheets(syncedState, latestRoomState);
+  } catch {}
   const payload = {
     room_id: roomId,
     phase: String(stSafe?.phase || "lobby"),
@@ -2238,6 +2285,7 @@ async function sendMessage(msg) {
           return;
         }
         p.sheet = deepClone(savedSheet);
+        try { p.sheetUpdatedAt = Date.now(); } catch {}
         try {
           const parsed = p.sheet?.parsed;
           const nextName = parsed?.name?.value ?? parsed?.name;
