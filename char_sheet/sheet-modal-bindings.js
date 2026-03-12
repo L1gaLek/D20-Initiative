@@ -35,8 +35,8 @@
     if (!root || !sheet) return;
     const hp = safeInt(sheet?.vitality?.["hp-max"]?.value, 0);
     const hpCur = safeInt(sheet?.vitality?.["hp-current"]?.value, 0);
-    const active = hp > 0 && hpCur <= 0;
     const ds = ensureDeathSavesState(sheet);
+    const active = (hp > 0 && hpCur <= 0) || ds.success > 0 || ds.fail > 0 || ds.stabilized || ds.fail >= 3;
 
     const hpEl = root.querySelector('[data-hero-val="hp"]');
     const hpChip = root.querySelector('[data-hero="hp"]');
@@ -57,7 +57,8 @@
       const showStatus = !!(active && ((ds.stabilized && ds.success >= 3) || ds.fail >= 3));
       status.style.display = showStatus ? '' : 'none';
       status.classList.toggle('is-visible', showStatus);
-      status.textContent = (ds.fail >= 3) ? 'Мертв' : 'Стабилизирован';
+      status.classList.toggle('is-dead', !!(showStatus && ds.fail >= 3));
+      status.textContent = (ds.fail >= 3) ? 'Мертв(а)' : 'Стабилизирован';
     }
     if (rollBtn) {
       const canEdit = (canEditOverride === null)
@@ -1944,6 +1945,46 @@ function bindEditableInputs(root, player, canEdit) {
         scheduleSheetSave(player);
       });
     }
+
+    const deathDots = root.querySelectorAll('[data-death-dot]');
+    deathDots.forEach((dot) => {
+      if (!canEdit) {
+        try { dot.disabled = true; } catch {}
+        return;
+      }
+      dot.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const sheet = player.sheet?.parsed;
+        if (!sheet) return;
+        const ds = ensureDeathSavesState(sheet);
+        const key = String(dot.getAttribute('data-death-dot') || '');
+        const m = key.match(/^(fail|success)-(\d)$/);
+        if (!m) return;
+        const side = m[1];
+        const idx = Math.max(1, Math.min(3, safeInt(m[2], 1)));
+        const curVal = Math.max(0, Math.min(3, side === 'fail' ? ds.fail : ds.success));
+        const nextVal = (curVal === idx) ? (idx - 1) : idx;
+        if (side === 'fail') ds.fail = nextVal;
+        else ds.success = nextVal;
+        if (ds.fail >= 3) {
+          ds.fail = 3;
+          ds.stabilized = false;
+          ds.lastOutcome = 'dead';
+        } else if (ds.success >= 3) {
+          ds.success = 3;
+          ds.stabilized = true;
+          ds.lastOutcome = 'stabilized';
+        } else {
+          ds.stabilized = false;
+          ds.lastOutcome = side === 'fail' ? 'manual-fail' : 'manual-success';
+        }
+        markModalInteracted(player.id);
+        syncDeathSavesUi(root, sheet, canEdit);
+        updateHeroChips(root, sheet);
+        scheduleSheetSave(player);
+      });
+    });
 
     const inputs = root.querySelectorAll("[data-sheet-path]");
     inputs.forEach(inp => {

@@ -1543,9 +1543,9 @@ function renderShopTab(vm, canEdit) {
               <div class="death-saves ${vm.deathSavesActive ? 'is-active' : ''}" data-death-saves ${vm.deathSavesActive ? '' : 'style="display:none;"'}>
                 <div class="death-saves__row" data-death-saves-row>
                   <div class="death-saves__side death-saves__side--fail" aria-label="Провалы">
-                    <span class="death-dot ${vm.dsFail >= 1 ? 'is-on' : ''}" data-death-dot="fail-1"></span>
-                    <span class="death-dot ${vm.dsFail >= 2 ? 'is-on' : ''}" data-death-dot="fail-2"></span>
-                    <span class="death-dot ${vm.dsFail >= 3 ? 'is-on' : ''}" data-death-dot="fail-3"></span>
+                    <button class="death-dot ${vm.dsFail >= 1 ? 'is-on' : ''}" type="button" data-death-dot="fail-1" ${canEdit ? '' : 'disabled'} title="Провал 1"></button>
+                    <button class="death-dot ${vm.dsFail >= 2 ? 'is-on' : ''}" type="button" data-death-dot="fail-2" ${canEdit ? '' : 'disabled'} title="Провал 2"></button>
+                    <button class="death-dot ${vm.dsFail >= 3 ? 'is-on' : ''}" type="button" data-death-dot="fail-3" ${canEdit ? '' : 'disabled'} title="Провал 3"></button>
                   </div>
                   <button class="death-d20" type="button" data-death-save-roll ${canEdit ? '' : 'disabled'} title="Спасбросок от смерти">
                     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -1554,12 +1554,12 @@ function renderShopTab(vm, canEdit) {
                     </svg>
                   </button>
                   <div class="death-saves__side death-saves__side--success" aria-label="Успехи">
-                    <span class="death-dot ${vm.dsSuccess >= 1 ? 'is-on' : ''}" data-death-dot="success-1"></span>
-                    <span class="death-dot ${vm.dsSuccess >= 2 ? 'is-on' : ''}" data-death-dot="success-2"></span>
-                    <span class="death-dot ${vm.dsSuccess >= 3 ? 'is-on' : ''}" data-death-dot="success-3"></span>
+                    <button class="death-dot ${vm.dsSuccess >= 1 ? 'is-on' : ''}" type="button" data-death-dot="success-1" ${canEdit ? '' : 'disabled'} title="Успех 1"></button>
+                    <button class="death-dot ${vm.dsSuccess >= 2 ? 'is-on' : ''}" type="button" data-death-dot="success-2" ${canEdit ? '' : 'disabled'} title="Успех 2"></button>
+                    <button class="death-dot ${vm.dsSuccess >= 3 ? 'is-on' : ''}" type="button" data-death-dot="success-3" ${canEdit ? '' : 'disabled'} title="Успех 3"></button>
                   </div>
                 </div>
-                <div class="death-saves__status ${(vm.dsStabilized || vm.dsFail >= 3) ? 'is-visible' : ''}" data-death-saves-status ${(vm.dsStabilized || vm.dsFail >= 3) ? '' : 'style="display:none;"'}>${vm.dsFail >= 3 ? 'Мертв' : 'Стабилизирован'}</div>
+                <div class="death-saves__status ${(vm.dsStabilized || vm.dsFail >= 3) ? 'is-visible' : ''} ${vm.dsFail >= 3 ? 'is-dead' : ''}" data-death-saves-status ${(vm.dsStabilized || vm.dsFail >= 3) ? '' : 'style="display:none;"'}>${vm.dsFail >= 3 ? 'Мертв(а)' : 'Стабилизирован'}</div>
               </div>
             </div>
             <div class="sheet-chip" data-hero="speed">

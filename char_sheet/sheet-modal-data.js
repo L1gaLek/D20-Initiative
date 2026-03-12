@@ -482,12 +482,13 @@
     const dsRaw = (sheet?.vitality?.deathSaves && typeof sheet.vitality.deathSaves === 'object') ? sheet.vitality.deathSaves : {};
     const dsSuccess = Math.max(0, Math.min(3, safeInt(dsRaw.success, 0)));
     const dsFail = Math.max(0, Math.min(3, safeInt(dsRaw.fail, 0)));
+    const dsHasProgress = dsSuccess > 0 || dsFail > 0;
     const dsStabilized = !!dsRaw.stabilized;
     const dsLastRoll = (dsRaw.lastRoll === null || dsRaw.lastRoll === undefined || dsRaw.lastRoll === '') ? null : safeInt(dsRaw.lastRoll, null);
     const dsLastOutcome = String(dsRaw.lastOutcome || '').trim();
     const hpNum = safeInt(hp, 0);
     const hpCurNum = safeInt(hpCur, 0);
-    const deathSavesActive = hpNum > 0 && hpCurNum <= 0;
+    const deathSavesActive = (hpNum > 0 && hpCurNum <= 0) || dsHasProgress || dsStabilized || dsFail >= 3;
 
     const inspiration = safeInt(get(sheet, 'inspiration', 0), 0) ? 1 : 0;
     const exhaustion = Math.max(0, Math.min(6, safeInt(get(sheet, 'exhaustion', 0), 0)));
