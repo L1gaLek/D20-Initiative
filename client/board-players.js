@@ -344,6 +344,53 @@ function safeNum(v, fallback = null) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function ensureDeathSavesStateOnSheet(sheet) {
+  if (!sheet || typeof sheet !== 'object') return { success: 0, fail: 0, stabilized: false, lastRoll: null, lastOutcome: '' };
+  if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
+  if (!sheet.vitality.deathSaves || typeof sheet.vitality.deathSaves !== 'object') {
+    sheet.vitality.deathSaves = { success: 0, fail: 0, stabilized: false, lastRoll: null, lastOutcome: '' };
+  }
+  const ds = sheet.vitality.deathSaves;
+  ds.success = Math.max(0, Math.min(3, safeNum(ds.success, 0) ?? 0));
+  ds.fail = Math.max(0, Math.min(3, safeNum(ds.fail, 0) ?? 0));
+  ds.stabilized = !!ds.stabilized;
+  ds.lastRoll = (ds.lastRoll === null || ds.lastRoll === undefined || ds.lastRoll === '') ? null : (safeNum(ds.lastRoll, null));
+  ds.lastOutcome = String(ds.lastOutcome || '');
+  return ds;
+}
+
+function resetDeathSavesOnSheet(sheet) {
+  const ds = ensureDeathSavesStateOnSheet(sheet);
+  ds.success = 0;
+  ds.fail = 0;
+  ds.stabilized = false;
+  ds.lastRoll = null;
+  ds.lastOutcome = '';
+  return ds;
+}
+
+function syncDeathSavesForCurrentHp(sheet) {
+  if (!sheet || typeof sheet !== 'object') return;
+  const max = safeNum(getFrom(sheet, 'vitality.hp-max.value', 0), 0) ?? 0;
+  const cur = safeNum(getFrom(sheet, 'vitality.hp-current.value', 0), 0) ?? 0;
+  const ds = ensureDeathSavesStateOnSheet(sheet);
+  if (cur > 0 || max <= 0) {
+    resetDeathSavesOnSheet(sheet);
+    return;
+  }
+  if (cur <= 0 && ds.fail >= 3) ds.stabilized = false;
+}
+
+function clearStabilizedIfDamagedAtZero(sheet) {
+  if (!sheet || typeof sheet !== 'object') return;
+  const max = safeNum(getFrom(sheet, 'vitality.hp-max.value', 0), 0) ?? 0;
+  const cur = safeNum(getFrom(sheet, 'vitality.hp-current.value', 0), 0) ?? 0;
+  const ds = ensureDeathSavesStateOnSheet(sheet);
+  if (max > 0 && cur <= 0 && ds.stabilized) {
+    resetDeathSavesOnSheet(sheet);
+  }
+}
+
 function getQuickSheetStats(player) {
   const s = player?.sheet?.parsed || {};
   const hpMax = safeNum(getFrom(s, 'vitality.hp-max.value', null), null);
@@ -397,6 +444,7 @@ function upsertSheetNumber(player, path, value) {
   if (!parent || !key) return;
   if (!parent[key] || typeof parent[key] !== 'object') parent[key] = {};
   parent[key].value = value;
+  try { syncDeathSavesForCurrentHp(nextSheet.parsed); } catch {}
   // оптимистично обновляем локально
   current.sheet = nextSheet;
 
@@ -461,9 +509,14 @@ function updateHpBar(player, tokenEl) {
   const max = (hpMax !== null ? Math.max(0, hpMax) : 0);
   const cur = (hpCur !== null ? hpCur : max);
 
+  const sheet = getTokenSheetSafe(player) || {};
+  try { syncDeathSavesForCurrentHp(sheet); } catch {}
+  const ds = ensureDeathSavesStateOnSheet(sheet);
+  const deathMode = (max > 0 && cur <= 0 && (hpTemp === null || Number(hpTemp) <= 0));
+
   // If temp HP exists, show it inside the same bar (and style as temp).
   const tempVal = (hpTemp !== null ? Math.max(0, hpTemp) : 0);
-  const showTemp = tempVal > 0;
+  const showTemp = tempVal > 0 && !deathMode;
 
   const pct = (!showTemp && max > 0)
     ? Math.max(0, Math.min(100, Math.round((cur / max) * 100)))
@@ -473,11 +526,21 @@ function updateHpBar(player, tokenEl) {
   bar.style.width = `${size * 50}px`;
   bar.style.left = `${tokenEl.offsetLeft}px`;
   bar.style.top = `${tokenEl.offsetTop - 14}px`;
+  bar.classList.toggle('token-hpbar--death', deathMode);
+  bar.classList.toggle('token-hpbar--stabilized', deathMode && ds.stabilized && ds.success >= 3 && ds.fail < 3);
 
   const fill = bar.querySelector('.fill');
   const txt = bar.querySelector('.txt');
   if (fill) fill.style.width = `${pct}%`;
-  if (showTemp) {
+  if (deathMode) {
+    bar.classList.remove('token-hpbar--temp');
+    if (fill) fill.style.width = '100%';
+    if (txt) {
+      if (ds.fail >= 3) txt.textContent = 'Мертв';
+      else if (ds.stabilized && ds.success >= 3) txt.textContent = `${cur ?? 0}/${max ?? 0}`;
+      else txt.textContent = `${Math.min(3, ds.fail || 0)}/${Math.min(3, ds.success || 0)}`;
+    }
+  } else if (showTemp) {
     bar.classList.add('token-hpbar--temp');
     if (txt) txt.textContent = `${tempVal}`;
   } else {
@@ -604,6 +667,10 @@ function openTokenMini(playerId) {
   const hpDeltaPlus = card.querySelector('.hp-delta-plus');
   const sheetBtn = card.querySelector('.btn');
   const canEditHp = canEditTokenMiniSheet(p);
+  const currentSheetForMini = () => {
+    const curPlayer = players.find(pp => String(pp?.id) === String(p?.id)) || p;
+    return curPlayer?.sheet?.parsed || null;
+  };
 
   [hpCurInput, hpMaxInput, hpDeltaInput, hpDeltaMinus, hpDeltaPlus].forEach((el) => {
     if (!el) return;
@@ -625,6 +692,10 @@ function openTokenMini(playerId) {
     const max = safeNum(hpMaxInput?.value, 0) ?? 0;
     upsertSheetNumber(p, 'vitality.hp-max', Math.max(0, max));
     upsertSheetNumber(p, 'vitality.hp-current', Math.max(0, Math.min(Math.max(0, max), cur)));
+    try {
+      const sh = currentSheetForMini();
+      if (sh) syncDeathSavesForCurrentHp(sh);
+    } catch {}
     // сразу обновим полоску
     updateHpBar(p, tokenEl);
   };
@@ -652,6 +723,10 @@ function openTokenMini(playerId) {
         temp = safeNum(getFrom(sh, 'vitality.hp-temp.value', 0), 0) ?? 0;
       } catch {}
 
+      try {
+        const sh0 = currentSheetForMini();
+        if (sh0) clearStabilizedIfDamagedAtZero(sh0);
+      } catch {}
       if (temp > 0 && dmg > 0) {
         const used = Math.min(temp, dmg);
         temp = Math.max(0, temp - used);
@@ -1196,26 +1271,31 @@ const diceVizKind = document.getElementById("dice-viz-kind");
       return;
     }
 
-    // Find the DOM element of the base token (more robust with zoom/transform than using scrollLeft math).
-    const tokenEl = (baseP && baseP.element) ? baseP.element : (playerElements.get(baseP.id) || null);
-    if (!tokenEl) {
-      arrow.style.display = 'none';
-      return;
-    }
-    if (tokenEl.style?.display === 'none' || tokenEl.offsetParent === null) {
-      arrow.style.display = 'none';
-      return;
-    }
-
+    // Prefer live DOM position, but if token element was temporarily recreated/lost,
+    // fall back to logical board coordinates so the arrow does not disappear.
+    const tokenEl = playerElements.get(baseP.id) || (baseP && baseP.element) || null;
     const wrapRect = wrap.getBoundingClientRect();
-    const tokRect = tokenEl.getBoundingClientRect();
-    if (!Number.isFinite(tokRect.width) || !Number.isFinite(tokRect.height) || tokRect.width <= 0 || tokRect.height <= 0) {
-      arrow.style.display = 'none';
-      return;
+    let tokenCx = null;
+    let tokenCy = null;
+
+    if (tokenEl && tokenEl.style?.display !== 'none') {
+      const tokRect = tokenEl.getBoundingClientRect();
+      if (Number.isFinite(tokRect.width) && Number.isFinite(tokRect.height) && tokRect.width > 0 && tokRect.height > 0) {
+        tokenCx = tokRect.left + tokRect.width / 2;
+        tokenCy = tokRect.top + tokRect.height / 2;
+      }
     }
 
-    const tokenCx = tokRect.left + tokRect.width / 2;
-    const tokenCy = tokRect.top + tokRect.height / 2;
+    if (!Number.isFinite(tokenCx) || !Number.isFinite(tokenCy)) {
+      const bRect = b.getBoundingClientRect();
+      const ow = b.offsetWidth || 1;
+      const scale = (bRect.width && ow) ? (bRect.width / ow) : (window.ControlBox?.getZoom?.() || 1);
+      const size = Math.max(1, Number(baseP?.size) || 1);
+      const localCx = ((Number(baseP.x) || 0) + (size / 2)) * CELL;
+      const localCy = ((Number(baseP.y) || 0) + (size / 2)) * CELL;
+      tokenCx = bRect.left + (localCx * scale);
+      tokenCy = bRect.top + (localCy * scale);
+    }
 
     // Visible area (in screen coordinates), slightly inset so arrow doesn't overlap borders.
     // IMPORTANT: use clientWidth/clientHeight to exclude scrollbars, otherwise the arrow can end up under the scrollbar.
