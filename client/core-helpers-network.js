@@ -1004,6 +1004,16 @@ async function deleteCampaignSave(saveId) {
   if (error) throw error;
 }
 
+async function getLatestRoomState(roomId) {
+  await ensureSupabaseReady();
+  const { data, error } = await sbClient
+    .from('room_state')
+    .select('state')
+    .eq('room_id', roomId)
+    .single();
+  if (error) throw error;
+  return data?.state || null;
+}
 
 
 // ================== OPTIONAL VPS WEBSOCKET RELAY ==================
@@ -1569,49 +1579,6 @@ async function deleteRoomMapCascade(roomId, mapId) {
   __roomDetachedCache.wallsByMap.delete(mid);
   __roomDetachedCache.marksByMap.delete(mid);
   __roomDetachedCache.fogByMap.delete(mid);
-}
-
-async function clearRoomMapPlayfield(roomId, mapLike, opts = {}) {
-  await ensureSupabaseReady();
-  const rid = String(roomId || '');
-  const mid = String(mapLike?.id || mapLike?.map_id || '').trim();
-  if (!rid || !mid) return;
-
-  const boardW = Math.max(5, Math.min(150, Number(mapLike?.boardWidth || mapLike?.board_width) || 10));
-  const boardH = Math.max(5, Math.min(150, Number(mapLike?.boardHeight || mapLike?.board_height) || 10));
-  const clearTokens = opts.clearTokens !== false;
-  const clearWalls = opts.clearWalls !== false;
-  const clearMarks = opts.clearMarks !== false;
-  const resetFog = opts.resetFog !== false;
-
-  const tasks = [];
-  if (clearWalls) tasks.push(sbClient.from('room_walls').delete().eq('room_id', rid).eq('map_id', mid));
-  if (clearMarks) tasks.push(sbClient.from('room_marks').delete().eq('room_id', rid).eq('map_id', mid));
-  if (clearTokens) tasks.push(sbClient.from('room_tokens').delete().eq('room_id', rid).eq('map_id', mid));
-
-  if (resetFog) {
-    const emptyFog = {
-      enabled: false,
-      mode: 'manual',
-      manualBase: 'hide',
-      manualStamps: [],
-      visionRadius: 8,
-      useWalls: true,
-      exploredEnabled: true,
-      gmViewMode: 'gm',
-      gmOpen: false,
-      moveOnlyExplored: false,
-      explored: []
-    };
-    const row = buildDetachedFogRow(rid, mid, emptyFog, boardW, boardH);
-    tasks.push(sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' }));
-    _cacheUpsertFogRow(row);
-  }
-
-  await Promise.all(tasks);
-
-  if (clearWalls) __roomDetachedCache.wallsByMap.set(mid, []);
-  if (clearMarks) __roomDetachedCache.marksByMap.set(mid, []);
 }
 
 async function upsertRoomWallsEdges(roomId, mapId, mode, edges) {
@@ -2271,27 +2238,51 @@ async function sendMessage(msg) {
   if (!currentRoomId) return;
   if (!lastState) return;
 
-  const next = deepClone(lastState);
   const isGm = (String(myRole || "") === "GM");
   const myUserId = String(localStorage.getItem("dnd_user_id") || "");
+  const owns = (pl) => pl && String(pl.ownerId) === myUserId;
+
+  const incomingTs = Number(msg.sheetUpdatedAt) || Date.now();
+  let next = null;
+
+  try {
+    const freshState = await getLatestRoomState(currentRoomId);
+    if (freshState && typeof freshState === 'object') {
+      next = loadMapToRoot(ensureStateHasMaps(deepClone(freshState)), freshState?.currentMapId);
+    }
+  } catch (e) {
+    console.warn('setPlayerSheet: fresh room_state fetch failed, fallback to local snapshot', e);
+  }
+
+  if (!next) next = deepClone(lastState);
 
   const p = (next.players || []).find(pl => String(pl.id) === String(msg.id));
   if (!p) return;
-
-  const owns = (pl) => pl && String(pl.ownerId) === myUserId;
   if (!isGm && !owns(p)) return;
 
+  const prevTs = Number(p.sheetUpdatedAt) || 0;
+  if (incomingTs < prevTs) {
+    return;
+  }
+
   p.sheet = deepClone(msg.sheet);
-  try {
-    const ts = Number(msg.sheetUpdatedAt) || Date.now();
-    p.sheetUpdatedAt = ts;
-  } catch {}
+  p.sheetUpdatedAt = incomingTs;
 
   // синхронизируем имя персонажа из sheet (если есть)
   try {
     const parsed = p.sheet?.parsed;
     const nextName = parsed?.name?.value ?? parsed?.name;
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
+  } catch {}
+
+  // optimistic local/UI update immediately
+  try {
+    const localP = (lastState?.players || []).find(pl => String(pl.id) === String(msg.id));
+    if (localP) {
+      localP.sheet = deepClone(p.sheet);
+      localP.sheetUpdatedAt = incomingTs;
+      if (typeof p.name === 'string' && p.name.trim()) localP.name = p.name;
+    }
   } catch {}
 
   await upsertRoomState(currentRoomId, next);
@@ -3495,23 +3486,9 @@ async function sendMessage(msg) {
 
         else if (type === "clearBoard") {
           if (!isGM) return;
+          (next.players || []).forEach(p => { p.x = null; p.y = null; });
           next.walls = [];
-          try {
-            const activeMap = getActiveMap(next);
-            if (activeMap) {
-              activeMap.walls = [];
-              await clearRoomMapPlayfield(currentRoomId, activeMap, {
-                clearTokens: false,
-                clearWalls: true,
-                clearMarks: false,
-                resetFog: false
-              });
-              _refreshDetachedRoomView();
-            }
-          } catch (e) {
-            console.warn('clearBoard detached clear failed', e);
-          }
-          logEventToState(next, "Стены на поле очищены");
+          logEventToState(next, "Поле очищено");
         }
 
         else {
