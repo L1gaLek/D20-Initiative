@@ -13,6 +13,32 @@
     return (lastPlayersSnapshot || []).find(x => x && x.id === openedSheetPlayerId) || null;
   }
 
+  function syncOpenedPlayerSheetToGlobals(player, sheet) {
+    try {
+      const pid = String(player?.id || openedSheetPlayerId || '');
+      if (!pid || !sheet) return;
+      const nextSheet = player?.sheet || { parsed: sheet };
+      if (!nextSheet.parsed || typeof nextSheet.parsed !== 'object') nextSheet.parsed = sheet;
+
+      const localPlayer = getOpenedPlayerSafe();
+      if (localPlayer && String(localPlayer.id || '') === pid) localPlayer.sheet = nextSheet;
+
+      try {
+        if (Array.isArray(window.players)) {
+          const canonical = window.players.find(x => String(x?.id || '') === pid);
+          if (canonical) canonical.sheet = nextSheet;
+        }
+      } catch {}
+
+      try {
+        if (Array.isArray(lastPlayersSnapshot)) {
+          const snap = lastPlayersSnapshot.find(x => String(x?.id || '') === pid);
+          if (snap) snap.sheet = nextSheet;
+        }
+      } catch {}
+    } catch {}
+  }
+
   function ensureHpPopup() {
     if (hpPopupEl) return hpPopupEl;
 
@@ -195,6 +221,7 @@
 
       syncDeathSavesForHpPopup(sheet);
       syncHpPopupInputs(sheet);
+      syncOpenedPlayerSheetToGlobals(player, sheet);
       markModalInteracted(player.id);
       scheduleSheetSave(player);
       if (sheetContent) updateHeroChips(sheetContent, sheet);
@@ -303,6 +330,7 @@
 
     syncDeathSavesForHpPopup(sheet);
     syncHpPopupInputs(sheet);
+    syncOpenedPlayerSheetToGlobals(player, sheet);
     markModalInteracted(player.id);
     scheduleSheetSave(player);
     if (sheetContent) updateHeroChips(sheetContent, sheet);
@@ -389,6 +417,7 @@
     }
 
     syncDeathSavesForHpPopup(sheet);
+    syncOpenedPlayerSheetToGlobals(player, sheet);
     syncHpPopupInputs(sheet);
     setHpPopupEditable(!!lastCanEdit);
     el.classList.remove('hidden');
@@ -441,6 +470,7 @@
 
     syncDeathSavesForHpPopup(sheet);
     syncHpPopupInputs(sheet);
+    syncOpenedPlayerSheetToGlobals(player, sheet);
     markModalInteracted(player.id);
     scheduleSheetSave(player);
     if (sheetContent) updateHeroChips(sheetContent, sheet);
