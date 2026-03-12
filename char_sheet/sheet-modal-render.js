@@ -1386,14 +1386,7 @@ function renderShopTab(vm, canEdit) {
           const text = await file.text();
           const sheet = parseCharboxFileText(text);
           player.sheet = sheet;
-          if (typeof window.queuePlayerSheetSave === 'function') {
-            const ts = window.queuePlayerSheetSave((msg) => ctx.sendMessage(msg), player.id, sheet, 60);
-            try { player.sheetUpdatedAt = Number(ts) || Date.now(); } catch {}
-          } else {
-            const ts = Date.now();
-            try { player.sheetUpdatedAt = ts; } catch {}
-            ctx.sendMessage({ type: "setPlayerSheet", id: player.id, sheet, sheetUpdatedAt: ts });
-          }
+          ctx.sendMessage({ type: "setPlayerSheet", id: player.id, sheet });
 
           // Мгновенно обновляем UI (не ждём round-trip через сервер)
           // и при этом не сбрасываем вкладку/скролл.
