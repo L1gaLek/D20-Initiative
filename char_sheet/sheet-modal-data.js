@@ -785,19 +785,41 @@ const weapons = weaponsRaw
     catch { return undefined; }
   }
 
-  function scheduleSheetSave(player) {
-    if (!player?.id || !ctx?.sendMessage) return;
+  function queuePlayerSheetSave(sendFn, playerId, sheet, delayMs = 450) {
+    if (!playerId || typeof sendFn !== 'function') return;
 
-    const key = player.id;
+    const key = String(playerId);
+    const ts = Date.now();
+
+    try {
+      window.__pendingSheetWrites = window.__pendingSheetWrites || new Map();
+      window.__pendingSheetWrites.set(key, { ts, sheet: deepClone(sheet) });
+    } catch {}
+
     const prev = sheetSaveTimers.get(key);
     if (prev) clearTimeout(prev);
 
     const t = setTimeout(() => {
-      ctx.sendMessage({ type: "setPlayerSheet", id: player.id, sheet: player.sheet });
-      sheetSaveTimers.delete(key);
-    }, 450);
+      try {
+        const pending = window.__pendingSheetWrites?.get?.(key);
+        const pendingTs = Number(pending?.ts) || ts;
+        const pendingSheet = pending?.sheet ? deepClone(pending.sheet) : deepClone(sheet);
+        sendFn({ type: "setPlayerSheet", id: key, sheet: pendingSheet, sheetUpdatedAt: pendingTs });
+      } finally {
+        sheetSaveTimers.delete(key);
+      }
+    }, Math.max(60, Number(delayMs) || 450));
 
     sheetSaveTimers.set(key, t);
+    return ts;
+  }
+
+  window.queuePlayerSheetSave = queuePlayerSheetSave;
+
+  function scheduleSheetSave(player) {
+    if (!player?.id || !ctx?.sendMessage) return;
+    const ts = queuePlayerSheetSave((msg) => ctx.sendMessage(msg), player.id, player.sheet, 450);
+    try { player.sheetUpdatedAt = Number(ts) || Date.now(); } catch {}
   }
 
   // ===== Coins helpers =====
