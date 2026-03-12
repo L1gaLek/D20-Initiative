@@ -400,20 +400,25 @@ function upsertSheetNumber(player, path, value) {
   // оптимистично обновляем локально
   current.sheet = nextSheet;
 
-  // Debounced per-player sheet updates with pending local snapshot protection.
+  // Debounce per-player sheet updates to avoid "revert" on late/out-of-order echoes.
+  window.__sheetSendTimers = window.__sheetSendTimers || new Map();
+  window.__sheetSendPending = window.__sheetSendPending || new Map();
+  try { window.__sheetSendPending.set(pid, nextSheet); } catch {}
+
   try {
-    if (typeof window.queuePlayerSheetSave === 'function') {
-      const ts = window.queuePlayerSheetSave((msg) => sendMessage(msg), pid, nextSheet, 140);
-      try { current.sheetUpdatedAt = Number(ts) || Date.now(); } catch {}
-    } else {
-      const ts = Date.now();
-      try { current.sheetUpdatedAt = ts; } catch {}
-      try { sendMessage({ type: 'setPlayerSheet', id: pid, sheet: nextSheet, sheetUpdatedAt: ts }); } catch {}
-    }
+    const timers = window.__sheetSendTimers;
+    const prev = timers.get(pid);
+    if (prev) clearTimeout(prev);
+    const t = setTimeout(() => {
+      const pending = window.__sheetSendPending?.get?.(pid) || nextSheet;
+      try { sendMessage({ type: 'setPlayerSheet', id: pid, sheet: pending }); } catch {}
+      try { window.__sheetSendPending?.delete?.(pid); } catch {}
+      try { window.__sheetSendTimers?.delete?.(pid); } catch {}
+    }, 140);
+    timers.set(pid, t);
   } catch {
-    const ts = Date.now();
-    try { current.sheetUpdatedAt = ts; } catch {}
-    try { sendMessage({ type: 'setPlayerSheet', id: pid, sheet: nextSheet, sheetUpdatedAt: ts }); } catch {}
+    // fallback
+    try { sendMessage({ type: 'setPlayerSheet', id: pid, sheet: nextSheet }); } catch {}
   }
 }
 
@@ -1185,20 +1190,9 @@ const diceVizKind = document.getElementById("dice-viz-kind");
       return;
     }
 
-    // Arrow is shown only when the player's base token is actually placed on the current map.
-    const bx = Number(baseP?.x);
-    const by = Number(baseP?.y);
-    const currentMapId = String((typeof lastState !== 'undefined' ? lastState?.currentMapId : window.lastState?.currentMapId) || '');
-    const baseMapId = String(baseP?.mapId || currentMapId || '');
-    const placed = Number.isFinite(bx) && Number.isFinite(by) && bx >= 0 && by >= 0;
-    if (!placed || (currentMapId && baseMapId && currentMapId !== baseMapId)) {
-      arrow.style.display = 'none';
-      return;
-    }
-
     // Find the DOM element of the base token (more robust with zoom/transform than using scrollLeft math).
-    const tokenEl = (playerElements.get(String(baseP.id)) || baseP.element || null);
-    if (!tokenEl || !tokenEl.isConnected || tokenEl.style.display === 'none') {
+    const tokenEl = (baseP && baseP.element) ? baseP.element : (playerElements.get(baseP.id) || null);
+    if (!tokenEl) {
       arrow.style.display = 'none';
       return;
     }
@@ -1301,12 +1295,6 @@ const diceVizKind = document.getElementById("dice-viz-kind");
     wrap.addEventListener('scroll', scheduleUpdate, { passive: true });
     window.addEventListener('resize', scheduleUpdate);
     try { document.addEventListener('visibilitychange', scheduleUpdate); } catch {}
-
-    // React when tokens / board DOM changes (token recreated, removed, re-appended, etc.).
-    try {
-      const mo = new MutationObserver(() => scheduleUpdate());
-      mo.observe(wrap, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
-    } catch {}
 
     // Periodic safety update.
     setInterval(scheduleUpdate, 300);

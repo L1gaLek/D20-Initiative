@@ -439,27 +439,6 @@ loginDiv.style.display = 'none';
           if (snap.mapId && typeof snap.mapId === 'string') p.mapId = snap.mapId;
         });
       } catch {}
-
-      // Preserve more recent local sheet edits while their DB write / echo is still in flight.
-      try {
-        const pendingSheets = window.__pendingSheetWrites;
-        if (pendingSheets && typeof pendingSheets.forEach === 'function') {
-          (lastState.players || []).forEach((p) => {
-            if (!p || !p.id) return;
-            const key = String(p.id);
-            const pending = pendingSheets.get(key);
-            if (!pending) return;
-            const incomingTs = Number(p.sheetUpdatedAt) || 0;
-            const pendingTs = Number(pending.ts) || 0;
-            if (pendingTs > incomingTs) {
-              p.sheet = deepClone(pending.sheet);
-              p.sheetUpdatedAt = pendingTs;
-            } else {
-              pendingSheets.delete(key);
-            }
-          });
-        }
-      } catch {}
       boardWidth = normalized.boardWidth;
       boardHeight = normalized.boardHeight;
 
