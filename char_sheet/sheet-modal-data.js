@@ -792,8 +792,16 @@ const weapons = weaponsRaw
     const prev = sheetSaveTimers.get(key);
     if (prev) clearTimeout(prev);
 
+    const updatedAt = Date.now();
+    try { player.sheetUpdatedAt = updatedAt; } catch {}
+
     const t = setTimeout(() => {
-      ctx.sendMessage({ type: "setPlayerSheet", id: player.id, sheet: player.sheet });
+      ctx.sendMessage({
+        type: "setPlayerSheet",
+        id: player.id,
+        sheet: deepClone(player.sheet),
+        sheetUpdatedAt: updatedAt
+      });
       sheetSaveTimers.delete(key);
     }, 450);
 
