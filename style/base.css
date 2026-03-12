@@ -930,6 +930,16 @@ button:hover {
   box-shadow: 0 0 0 1px rgba(60,160,90,0.28) inset;
 }
 
+
+.death-saves__status.is-dead{
+  color: rgba(230, 82, 82, 0.98);
+}
+.death-dot{
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+}
+
 .token-hpbar--death{
   background:
     linear-gradient(90deg,
@@ -944,6 +954,10 @@ button:hover {
       rgba(30,120,48,0.92) 67.66%, rgba(30,120,48,0.92) 83.33%,
       rgba(40,40,40,0.92) 83.33%, rgba(40,40,40,0.92) 84.33%,
       rgba(30,120,48,0.92) 84.33%, rgba(30,120,48,0.92) 100%);
+}
+.token-hpbar--death.token-hpbar--dead{
+  background: rgba(165,24,24,0.94);
+  box-shadow: 0 0 0 1px rgba(210,40,40,0.45) inset, 0 0 8px rgba(150,20,20,0.35);
 }
 .token-hpbar--death .fill{
   display: none;
