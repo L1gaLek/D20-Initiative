@@ -18,7 +18,8 @@
   function isDeathSavesActiveSheet(sheet) {
     const hp = safeInt(sheet?.vitality?.["hp-max"]?.value, 0);
     const hpCur = safeInt(sheet?.vitality?.["hp-current"]?.value, 0);
-    return hp > 0 && hpCur <= 0;
+    const ds = ensureDeathSavesState(sheet);
+    return (hp > 0 && hpCur <= 0) || ds.success > 0 || ds.fail > 0 || ds.stabilized || ds.fail >= 3;
   }
 
   function resetDeathSavesState(sheet) {
