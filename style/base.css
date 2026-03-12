@@ -863,6 +863,99 @@ button:hover {
   z-index: 1;
 }
 
+
+.sheet-chip--hp.sheet-chip--hp-death{
+  min-width: 170px;
+}
+.sheet-chip--hp.sheet-chip--hp-death .hp-liquid{
+  width: 0 !important;
+}
+.death-saves{
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+}
+.death-saves__row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.death-saves__side{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.death-dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.38);
+  background: transparent;
+  display: inline-block;
+}
+.death-saves__side--fail .death-dot.is-on{
+  background: rgba(190, 34, 34, 0.95);
+  border-color: rgba(255,120,120,0.95);
+  box-shadow: 0 0 6px rgba(190,34,34,0.45);
+}
+.death-saves__side--success .death-dot.is-on{
+  background: rgba(32, 146, 68, 0.95);
+  border-color: rgba(116,255,150,0.95);
+  box-shadow: 0 0 6px rgba(32,146,68,0.45);
+}
+.death-d20{
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0;
+  color: rgba(255,255,255,0.92);
+}
+.death-d20:disabled{
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.death-saves__status{
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(135, 225, 152, 0.96);
+  margin-top: 2px;
+}
+.sheet-chip--hp.is-stabilized{
+  border-color: rgba(60,160,90,0.95);
+  box-shadow: 0 0 0 1px rgba(60,160,90,0.28) inset;
+}
+
+.token-hpbar--death{
+  background:
+    linear-gradient(90deg,
+      rgba(165,24,24,0.92) 0%, rgba(165,24,24,0.92) 16.66%,
+      rgba(40,40,40,0.92) 16.66%, rgba(40,40,40,0.92) 17.66%,
+      rgba(165,24,24,0.92) 17.66%, rgba(165,24,24,0.92) 33.33%,
+      rgba(40,40,40,0.92) 33.33%, rgba(40,40,40,0.92) 34.33%,
+      rgba(165,24,24,0.92) 34.33%, rgba(165,24,24,0.92) 50%,
+      rgba(40,40,40,0.92) 50%, rgba(40,40,40,0.92) 51%,
+      rgba(30,120,48,0.92) 51%, rgba(30,120,48,0.92) 66.66%,
+      rgba(40,40,40,0.92) 66.66%, rgba(40,40,40,0.92) 67.66%,
+      rgba(30,120,48,0.92) 67.66%, rgba(30,120,48,0.92) 83.33%,
+      rgba(40,40,40,0.92) 83.33%, rgba(40,40,40,0.92) 84.33%,
+      rgba(30,120,48,0.92) 84.33%, rgba(30,120,48,0.92) 100%);
+}
+.token-hpbar--death .fill{
+  display: none;
+}
+.token-hpbar--death .txt{
+  font-weight: 900;
+  letter-spacing: 0.4px;
+}
+.token-hpbar--stabilized{
+  box-shadow: 0 0 0 1px rgba(72,190,102,0.7), 0 0 8px rgba(72,190,102,0.35);
+}
+
 .sheet-chip .k {
   font-size: 11px;
   color: #aaa;
