@@ -1057,6 +1057,8 @@ async function deleteCampaignSave(saveId) {
 // Supabase remains the source of truth for DB/storage.
 // This WS layer is used as a low-latency relay via the user's VPS.
 const WS_URL = "wss://ws.d20-initiative.fun/ws/";
+const USE_SUPABASE_REALTIME = false; // realtime идет через VPS WS, не через Supabase Realtime
+let roomMembersPollTimer = null;
 const WS_CLIENT_ID = (() => {
   try {
     const key = 'dnd_ws_client_id';
@@ -1112,6 +1114,7 @@ function wsWasSeen(nonce) {
 
 function disconnectRoomWs() {
   wsWantConnected = false;
+  stopRoomMembersPolling();
   wsRoomId = '';
   try { clearTimeout(wsReconnectTimer); } catch {}
   wsReconnectTimer = null;
@@ -1190,6 +1193,54 @@ function connectRoomWs(roomId) {
   };
 }
 
+
+async function stopSupabaseRealtimeChannels() {
+  const channels = [
+    typeof roomDbChannel !== 'undefined' ? roomDbChannel : null,
+    typeof roomChannel !== 'undefined' ? roomChannel : null,
+    window.roomTokensDbChannel || null,
+    window.roomLogDbChannel || null,
+    window.roomDiceDbChannel || null,
+    window.roomMapMetaDbChannel || null,
+    window.roomWallsDbChannel || null,
+    window.roomMarksDbChannel || null,
+    window.roomFogDbChannel || null,
+    window.roomMusicDbChannel || null,
+    roomMembersDbChannel || null
+  ].filter(Boolean);
+
+  for (const ch of channels) {
+    try { await ch.unsubscribe(); } catch {}
+  }
+
+  try { roomDbChannel = null; } catch {}
+  try { roomChannel = null; } catch {}
+  try { window.roomTokensDbChannel = null; } catch {}
+  try { window.roomLogDbChannel = null; } catch {}
+  try { window.roomDiceDbChannel = null; } catch {}
+  try { window.roomMapMetaDbChannel = null; } catch {}
+  try { window.roomWallsDbChannel = null; } catch {}
+  try { window.roomMarksDbChannel = null; } catch {}
+  try { window.roomFogDbChannel = null; } catch {}
+  try { window.roomMusicDbChannel = null; } catch {}
+  try { roomMembersDbChannel = null; } catch {}
+}
+
+function stopRoomMembersPolling() {
+  try { clearInterval(roomMembersPollTimer); } catch {}
+  roomMembersPollTimer = null;
+}
+
+function startRoomMembersPolling(roomId) {
+  stopRoomMembersPolling();
+  const rid = String(roomId || '').trim();
+  if (!rid || USE_SUPABASE_REALTIME) return;
+  roomMembersPollTimer = setInterval(() => {
+    if (!currentRoomId || String(currentRoomId) !== rid) return;
+    refreshRoomMembers(rid).catch(() => {});
+  }, 15000);
+}
+
 function sendWsEnvelope(msg, opts = {}) {
   try {
     if (!msg || typeof msg !== 'object') return false;
@@ -1212,6 +1263,10 @@ function sendWsEnvelope(msg, opts = {}) {
 }
 
 async function subscribeRoomDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (roomDbChannel) {
     try { await roomDbChannel.unsubscribe(); } catch {}
@@ -1246,6 +1301,10 @@ async function subscribeRoomDb(roomId) {
 
 // ================== v4: TOKENS / LOG / DICE (dedicated tables) ==================
 async function subscribeRoomTokensDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (window.roomTokensDbChannel) {
     try { await window.roomTokensDbChannel.unsubscribe(); } catch {}
@@ -1275,6 +1334,10 @@ async function loadRoomTokens(roomId, mapId) {
 }
 
 async function subscribeRoomLogDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (window.roomLogDbChannel) {
     try { await window.roomLogDbChannel.unsubscribe(); } catch {}
@@ -1307,6 +1370,10 @@ async function loadRoomLog(roomId, limit = 200) {
 }
 
 async function subscribeRoomDiceDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (window.roomDiceDbChannel) {
     try { await window.roomDiceDbChannel.unsubscribe(); } catch {}
@@ -1401,6 +1468,10 @@ async function loadRoomMusic(roomId) {
 }
 
 async function subscribeRoomMapMetaDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (window.roomMapMetaDbChannel) {
     try { await window.roomMapMetaDbChannel.unsubscribe(); } catch {}
@@ -1429,6 +1500,10 @@ async function subscribeRoomMapMetaDb(roomId) {
 }
 
 async function subscribeRoomWallsDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (window.roomWallsDbChannel) {
     try { await window.roomWallsDbChannel.unsubscribe(); } catch {}
@@ -1447,6 +1522,10 @@ async function subscribeRoomWallsDb(roomId) {
 }
 
 async function subscribeRoomMarksDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (window.roomMarksDbChannel) {
     try { await window.roomMarksDbChannel.unsubscribe(); } catch {}
@@ -1465,6 +1544,10 @@ async function subscribeRoomMarksDb(roomId) {
 }
 
 async function subscribeRoomFogDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (window.roomFogDbChannel) {
     try { await window.roomFogDbChannel.unsubscribe(); } catch {}
@@ -1487,6 +1570,10 @@ async function subscribeRoomFogDb(roomId) {
 }
 
 async function subscribeRoomMusicDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (window.roomMusicDbChannel) {
     try { await window.roomMusicDbChannel.unsubscribe(); } catch {}
@@ -1985,6 +2072,10 @@ async function refreshRoomMembers(roomId) {
 }
 
 async function subscribeRoomMembersDb(roomId) {
+  if (!USE_SUPABASE_REALTIME) {
+    await stopSupabaseRealtimeChannels();
+    return null;
+  }
   await ensureSupabaseReady();
   if (roomMembersDbChannel) {
     try { await roomMembersDbChannel.unsubscribe(); } catch {}
@@ -2160,15 +2251,20 @@ async function sendMessage(msg) {
         }
         try { await ensureDetachedBootstrap(roomId, rs.state); } catch (e) { console.warn('detached bootstrap joinRoom failed', e); }
 
-        await subscribeRoomDb(roomId);
-        // v4: dedicated realtime tables
-        try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
-        try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
-        try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
-        try { await subscribeDetachedRoomTables(roomId); } catch (e) { console.warn('detached subscribe failed', e); }
+        if (USE_SUPABASE_REALTIME) {
+          await subscribeRoomDb(roomId);
+          // v4: dedicated realtime tables
+          try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
+          try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
+          try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
+          try { await subscribeDetachedRoomTables(roomId); } catch (e) { console.warn('detached subscribe failed', e); }
+          await subscribeRoomMembersDb(roomId);
+        } else {
+          try { await stopSupabaseRealtimeChannels(); } catch (e) { console.warn('disable supabase realtime failed', e); }
+        }
         try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
         await refreshRoomMembers(roomId);
-        await subscribeRoomMembersDb(roomId);
+        startRoomMembersPolling(roomId);
         handleMessage({ type: "state", state: applyDetachedPayloadToState(rs.state) });
 
         // v4 init: load logs + tokens snapshot after state is applied
