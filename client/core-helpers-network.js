@@ -1663,6 +1663,72 @@ function applyTokenRowToLocalState(row) {
   } catch {}
 }
 
+
+
+function syncOptimisticPlayersToLocalState(snapshot) {
+  try {
+    if (typeof lastState === 'undefined' || !lastState || !Array.isArray(lastState.players)) return;
+    const srcPlayers = Array.isArray(snapshot?.players) ? snapshot.players : [];
+    if (!srcPlayers.length) return;
+
+    const byId = new Map();
+    srcPlayers.forEach((p) => {
+      if (!p?.id) return;
+      byId.set(String(p.id), p);
+    });
+
+    lastState.players.forEach((dst) => {
+      if (!dst?.id) return;
+      const src = byId.get(String(dst.id));
+      if (!src) return;
+
+      if (src.x === null || Number.isFinite(Number(src.x))) dst.x = (src.x === null || typeof src.x === 'undefined') ? null : Number(src.x);
+      if (src.y === null || Number.isFinite(Number(src.y))) dst.y = (src.y === null || typeof src.y === 'undefined') ? null : Number(src.y);
+
+      const size = Number(src.size);
+      if (Number.isFinite(size) && size > 0) dst.size = size;
+
+      if (typeof src.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(src.color)) dst.color = String(src.color);
+      if (typeof src.mapId === 'string' && src.mapId.trim()) dst.mapId = String(src.mapId);
+      if (typeof src.isPublic !== 'undefined') dst.isPublic = !!src.isPublic;
+
+      if (typeof src.name === 'string' && src.name.trim()) dst.name = src.name;
+      if (typeof src.ownerId !== 'undefined') dst.ownerId = src.ownerId;
+      if (typeof src.ownerRole !== 'undefined') dst.ownerRole = src.ownerRole;
+      if (typeof src.isBase !== 'undefined') dst.isBase = !!src.isBase;
+      if (typeof src.isAlly !== 'undefined') dst.isAlly = !!src.isAlly;
+      if (typeof src.inCombat !== 'undefined') dst.inCombat = !!src.inCombat;
+      if (typeof src.hasRolledInitiative !== 'undefined') dst.hasRolledInitiative = !!src.hasRolledInitiative;
+      if (typeof src.pendingInitiativeChoice !== 'undefined') dst.pendingInitiativeChoice = !!src.pendingInitiativeChoice;
+      if (typeof src.willJoinNextRound !== 'undefined') dst.willJoinNextRound = !!src.willJoinNextRound;
+      if (typeof src.initiative !== 'undefined') dst.initiative = src.initiative;
+      if (typeof src.sheetUpdatedAt !== 'undefined') dst.sheetUpdatedAt = src.sheetUpdatedAt;
+      if (typeof src.sheet !== 'undefined') {
+        try { dst.sheet = deepClone(src.sheet); } catch { dst.sheet = src.sheet; }
+      }
+    });
+  } catch (e) {
+    console.warn('syncOptimisticPlayersToLocalState failed', e);
+  }
+}
+
+function applyOptimisticPlayerVisuals(snapshot) {
+  try {
+    const st = snapshot || lastState;
+    const list = Array.isArray(st?.players) ? st.players : [];
+    list.forEach((p) => {
+      try { setPlayerPosition?.(p); } catch {}
+      try {
+        const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;
+        if (el) updateHpBar?.(p, el);
+      } catch {}
+    });
+    try { window.FogWar?.onTokenPositionsChanged?.(st); } catch {}
+  } catch (e) {
+    console.warn('applyOptimisticPlayerVisuals failed', e);
+  }
+}
+
 async function upsertRoomMapMetaRow(roomId, map) {
   await ensureSupabaseReady();
   const m = map || {};
@@ -3666,8 +3732,13 @@ async function sendMessage(msg) {
         try {
           // Supabase Realtime is disabled, so the local client must see state changes
           // immediately without waiting for a WS echo from the VPS.
-          // Apply the full optimistic room snapshot to UI first, then persist it.
-          handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+          // Keep local volatile token/player fields in sync BEFORE message-ui snapshots
+          // them, otherwise color/size/position can appear to rollback until the next
+          // tokenRow or full refresh arrives.
+          const optimisticState = syncActiveToMap(deepClone(next));
+          try { syncOptimisticPlayersToLocalState(optimisticState); } catch {}
+          handleMessage({ type: 'state', state: optimisticState });
+          try { applyOptimisticPlayerVisuals(lastState || optimisticState); } catch {}
         } catch (e) {
           console.warn('optimistic state apply failed', e);
         }
