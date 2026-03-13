@@ -783,25 +783,6 @@ function logEventToState(state, text) {
   if (state.log.length > 200) state.log.splice(0, state.log.length - 200);
 }
 
-function getNewLogEntries(prevState, nextState) {
-  const prev = Array.isArray(prevState?.log) ? prevState.log.map(x => String(x || '')) : [];
-  const next = Array.isArray(nextState?.log) ? nextState.log.map(x => String(x || '')) : [];
-  if (!next.length) return [];
-  if (!prev.length) return next.filter(Boolean);
-  if (next.length >= prev.length) {
-    const tail = next.slice(prev.length);
-    if (tail.length) return tail.filter(Boolean);
-  }
-  const out = [];
-  let i = 0;
-  while (i < prev.length && i < next.length && prev[i] === next[i]) i += 1;
-  for (; i < next.length; i += 1) {
-    const text = String(next[i] || '').trim();
-    if (text) out.push(text);
-  }
-  return out;
-}
-
 async function ensureSupabaseReady() {
   if (!sbClient) {
     if (!window.supabase || !window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
@@ -993,9 +974,6 @@ async function upsertRoomState(roomId, nextState) {
   };
   const { error } = await sbClient.from("room_state").upsert(payload);
   if (error) throw error;
-  try {
-    handleMessage({ type: 'state', state: applyDetachedPayloadToState(deepClone(syncedState)) });
-  } catch {}
   try {
     sendWsEnvelope({ type: 'state', roomId, state: syncedState }, { optimisticApplied: true });
   } catch {}
@@ -2000,23 +1978,14 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
   }
 }
 
-async function insertRoomLog(roomId, text, opts = {}) {
+async function insertRoomLog(roomId, text) {
   try {
     await ensureSupabaseReady();
     const t = String(text || '').trim();
-    if (!roomId || !t) return null;
-    const row = { room_id: roomId, text: t, created_at: new Date().toISOString() };
+    if (!roomId || !t) return;
     await sbClient.from('room_log').insert({ room_id: roomId, text: t });
-    if (opts.local !== false) {
-      try { handleMessage({ type: 'logRow', row }); } catch {}
-    }
-    if (opts.broadcast !== false) {
-      try { sendWsEnvelope({ type: 'logRow', roomId, row }, { optimisticApplied: true }); } catch {}
-    }
-    return row;
   } catch (e) {
     console.warn('room_log insert failed', e);
-    return null;
   }
 }
 
@@ -2323,36 +2292,9 @@ async function sendMessage(msg) {
         const ev = msg.event || {};
         await insertDiceEvent(currentRoomId, ev);
         try {
-          const diceRow = {
-            from_name: String(ev.fromName || ''),
-            kind_text: String(ev.kindText || ''),
-            sides: Number(ev.sides) || null,
-            count: Number(ev.count) || null,
-            bonus: Number(ev.bonus) || 0,
-            rolls: Array.isArray(ev.rolls) ? ev.rolls.map(n => Number(n) || 0) : [],
-            total: (ev.total === null || typeof ev.total === 'undefined') ? null : Number(ev.total),
-            crit: String(ev.crit || ''),
-            created_at: new Date().toISOString()
-          };
-          handleMessage({ type: 'diceRow', row: diceRow });
-          sendWsEnvelope({ type: 'diceRow', roomId: currentRoomId, row: diceRow }, { optimisticApplied: true });
-        } catch {}
-        try {
-          const who = String(ev.fromName || '').trim() || 'Игрок';
-          const kind = String(ev.kindText || '').trim() || ((Number(ev.sides) || 0) ? `d${Number(ev.sides)}` : 'Бросок');
-          const rollsTxt = Array.isArray(ev.rolls) && ev.rolls.length ? ev.rolls.map(n => Number(n) || 0).join(',') : '';
-          const bonusNum = Number(ev.bonus) || 0;
-          const bonusTxt = bonusNum === 0 ? '' : (bonusNum > 0 ? `+${bonusNum}` : String(bonusNum));
-          const totalTxt = (ev.total === null || typeof ev.total === 'undefined') ? '' : ` = ${Number(ev.total) || 0}`;
-          const critTxt = ev.crit === 'crit-success' ? ' (КРИТ)' : (ev.crit === 'crit-fail' ? ' (ПРОВАЛ)' : '');
-          const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(ev.total ?? '');
-          const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
-          if (line) await insertRoomLog(currentRoomId, line, { local: true, broadcast: true });
-        } catch {}
-        try {
           sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true });
         } catch {}
-        // apply to self instantly
+        // apply to self instantly (others will receive via realtime INSERT)
         if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         break;
       }
@@ -2360,10 +2302,21 @@ async function sendMessage(msg) {
       // ===== v4: append-only log entry =====
       case 'log': {
         if (!currentRoomId) return;
-        await insertRoomLog(currentRoomId, msg.text, {
-          local: !msg.noOptimistic,
-          broadcast: true
-        });
+        const logRow = { text: String(msg.text || ''), created_at: new Date().toISOString() };
+        await insertRoomLog(currentRoomId, msg.text);
+        try {
+          sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: !msg.noOptimistic });
+        } catch {}
+        // Optimistic local append (realtime INSERT will also arrive if enabled).
+        // Если msg.noOptimistic = true — НЕ добавляем локально, чтобы не было дублей.
+        if (!msg.noOptimistic) {
+          try {
+            handleMessage({
+              type: 'logRow',
+              row: logRow
+            });
+          } catch {}
+        }
         break;
       }
 
@@ -3710,11 +3663,16 @@ async function sendMessage(msg) {
           return;
         }
 
-        const pendingLogTexts = getNewLogEntries(lastState, next);
-        await upsertRoomState(currentRoomId, next);
-        for (const line of pendingLogTexts) {
-          try { await insertRoomLog(currentRoomId, line, { local: true, broadcast: true }); } catch {}
+        try {
+          // Supabase Realtime is disabled, so the local client must see state changes
+          // immediately without waiting for a WS echo from the VPS.
+          // Apply the full optimistic room snapshot to UI first, then persist it.
+          handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+        } catch (e) {
+          console.warn('optimistic state apply failed', e);
         }
+
+        await upsertRoomState(currentRoomId, next);
 
 		// v4+: mirror GM "eye" visibility into room_tokens for reliable realtime visibility updates.
 		if (type === 'setPlayerPublic') {
