@@ -2953,57 +2953,19 @@ async function sendMessage(msg) {
           p.color = c;
           logEventToState(next, `${p.name} изменил цвет`);
 
-          // v4+: Token visuals are mirrored via room_tokens rows (realtime).
-          // If we don't persist color there, incoming token rows will overwrite
-          // p.color and the board will appear to "ignore" the change.
-          // We update existing rows for this token across maps; if none exist
-          // (token never placed), we create a stub row on the current map.
           try {
-            await ensureSupabaseReady();
-            const roomId = String(currentRoomId || '');
-            const tokenId = String(p.id);
-            if (roomId && tokenId) {
-              const nowIso = new Date().toISOString();
-
-              // Update all existing token rows for this token in this room (all maps)
-              const { data: upd, error: uErr } = await sbClient
-                .from('room_tokens')
-                .update({ color: c, updated_at: nowIso })
-                .eq('room_id', roomId)
-                .eq('token_id', tokenId)
-                .select('*');
-
-              if (!uErr && Array.isArray(upd) && upd.length) {
-                upd.forEach((row) => {
-                  try { sendWsEnvelope({ type: 'tokenRow', roomId, row }, { optimisticApplied: true }); } catch {}
-                });
-              }
-
-              // If there is no row yet (token not placed anywhere), create stub on current map.
-              if (!uErr && (!Array.isArray(upd) || upd.length === 0)) {
-                const mapId = String(p?.mapId || next?.currentMapId || '');
-                if (mapId) {
-                  const payload = {
-                    room_id: roomId,
-                    map_id: mapId,
-                    token_id: tokenId,
-                    x: (p.x === null || typeof p.x === 'undefined') ? null : Number(p.x),
-                    y: (p.y === null || typeof p.y === 'undefined') ? null : Number(p.y),
-                    size: Number(p.size) || 1,
-                    color: c,
-                    owner_id: p.ownerId || null,
-                    updated_at: nowIso
-                  };
-                  await sbClient.from('room_tokens').upsert(payload, { onConflict: 'room_id,map_id,token_id' });
-                  try { sendWsEnvelope({ type: 'tokenRow', roomId, row: payload }, { optimisticApplied: true }); } catch {}
-                }
-              }
-            }
+            sendWsEnvelope({
+              type: 'updateTokenColor',
+              roomId: String(currentRoomId || ''),
+              mapId: String(p?.mapId || next?.currentMapId || ''),
+              tokenId: String(p.id),
+              color: c
+            }, { optimisticApplied: true });
           } catch (e) {
-            console.warn('updatePlayerColor: room_tokens update failed', e);
+            console.warn('updateTokenColor ws send failed', e);
           }
 
-          // Optimistic DOM update (current client). Others will update via realtime/state.
+          // Optimistic DOM update (current client). Others will update via VPS tokenRow/state.
           try { setPlayerPosition?.(p); } catch {}
         }
 
@@ -3216,69 +3178,40 @@ async function sendMessage(msg) {
           const nx = clamp(Number(msg.x) || 0, 0, maxX);
           const ny = clamp(Number(msg.y) || 0, 0, maxY);
 
-          // v4: movement is atomic via room_tokens (RPC), not via room_state.
-          // This removes race conditions when multiple users move simultaneously.
-          // Optimistic local update for smooth UX
+          // Authoritative movement now goes through VPS.
+          // Keep optimistic local update for instant UX, then wait for tokenRow from WS.
           try {
             if (p) { p.x = nx; p.y = ny; }
-            // Also move the DOM token immediately (we may not receive realtime
-            // events if the new tables are not enabled for Realtime yet).
             try { setPlayerPosition?.(p); } catch {}
             try {
               const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;
               if (el) updateHpBar?.(p, el);
             } catch {}
 
-            // Fog of war must react instantly to movement (recompute dynamic vision + refresh discoverable tokens)
             try {
               const stNow = (typeof lastState !== 'undefined' && lastState) ? lastState : next;
               window.FogWar?.onTokenPositionsChanged?.(stNow);
-              // Re-run token placement/visibility rules (GM-hidden NPC discovery) without full board rerender.
               (stNow?.players || []).forEach(pp => { try { setPlayerPosition?.(pp); } catch {} });
             } catch {}
           } catch {}
 
           try {
-            const mapId = String(next.currentMapId || '');
-            // Prefer RPC (server-side collision checks + log insert)
-            // v5: pass token name so room_log shows player name instead of UUID.
-            const { data, error } = await sbClient.rpc('move_token_v2', {
-              p_room_id: currentRoomId,
-              p_map_id: mapId,
-              p_token_id: String(p.id),
-              p_token_name: String(p.name || ''),
-              p_actor_user_id: String(myUserId || ''),
-              p_x: nx,
-              p_y: ny
-            });
-            if (error) {
-              // fallback: client-side collision check + direct update
-              if (!isAreaFree(next, p.id, nx, ny, size)) {
-                handleMessage({ type: 'error', message: 'Эта клетка занята другим персонажем' });
-                return;
-              }
-              const fallbackRow = { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() };
-              const { error: uErr } = await sbClient
-                .from('room_tokens')
-                .upsert(fallbackRow, { onConflict: 'room_id,map_id,token_id' });
-              if (uErr) throw uErr;
-              try { sendWsEnvelope({ type: 'tokenRow', roomId: currentRoomId, row: fallbackRow }, { optimisticApplied: true }); } catch {}
-              await insertRoomLog(currentRoomId, `${p.name} перемещен в (${nx},${ny})`);
-            } else {
-              // Apply returned row instantly if provided
-              if (data) applyTokenRowToLocalState(data);
-              try {
-                const relayRow = data || { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: nx, y: ny, size, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() };
-                sendWsEnvelope({ type: 'tokenRow', roomId: currentRoomId, row: relayRow }, { optimisticApplied: true });
-              } catch {}
-            }
+            sendWsEnvelope({
+              type: 'moveToken',
+              roomId: String(currentRoomId || ''),
+              mapId: String(next.currentMapId || ''),
+              tokenId: String(p.id),
+              tokenName: String(p.name || ''),
+              actorUserId: String(myUserId || ''),
+              x: nx,
+              y: ny
+            }, { optimisticApplied: true });
           } catch (e) {
-            console.warn('move_token failed', e);
-            handleMessage({ type: 'error', message: 'Не удалось переместить персонажа' });
+            console.warn('moveToken ws send failed', e);
+            handleMessage({ type: 'error', message: 'Не удалось отправить перемещение на сервер' });
           }
 
           // IMPORTANT: movement is NOT persisted via room_state.
-          // We stop here to avoid overwriting fresh positions/logs with a full state upsert.
           return;
         }
 
@@ -3304,29 +3237,16 @@ async function sendMessage(msg) {
           p.size = newSize;
           logEventToState(next, `${p.name} изменил размер на ${p.size}x${p.size}`);
 
-          // v4+: Persist token size in room_tokens, otherwise realtime token rows
-          // will overwrite the local size and the UI will look like it "doesn't work".
           try {
-            await ensureSupabaseReady();
-            const roomId = String(currentRoomId || '');
-            const mapId = String(p?.mapId || next?.currentMapId || '');
-            if (roomId && mapId) {
-              const payload = {
-                room_id: roomId,
-                map_id: mapId,
-                token_id: String(p.id),
-                x: (p.x === null || typeof p.x === 'undefined') ? null : Number(p.x),
-                y: (p.y === null || typeof p.y === 'undefined') ? null : Number(p.y),
-                size: Number(p.size) || 1,
-                color: (typeof p.color === 'string') ? p.color : null,
-                owner_id: p.ownerId || null,
-                updated_at: new Date().toISOString()
-              };
-              await sbClient.from('room_tokens').upsert(payload, { onConflict: 'room_id,map_id,token_id' });
-              try { sendWsEnvelope({ type: 'tokenRow', roomId, row: payload }, { optimisticApplied: true }); } catch {}
-            }
+            sendWsEnvelope({
+              type: 'updateTokenSize',
+              roomId: String(currentRoomId || ''),
+              mapId: String(p?.mapId || next?.currentMapId || ''),
+              tokenId: String(p.id),
+              size: newSize
+            }, { optimisticApplied: true });
           } catch (e) {
-            console.warn('updatePlayerSize: room_tokens upsert failed', e);
+            console.warn('updateTokenSize ws send failed', e);
           }
         }
 
@@ -3340,27 +3260,15 @@ async function sendMessage(msg) {
           p.y = null;
           try { setPlayerPosition?.(p); } catch {}
 
-          // v4: token position is stored in room_tokens; clear it there too
           try {
-            await ensureSupabaseReady();
-            const mapId = String(next.currentMapId || '');
-            if (currentRoomId && mapId) {
-              await sbClient
-                .from('room_tokens')
-                .update({ x: null, y: null })
-                .eq('room_id', currentRoomId)
-                .eq('map_id', mapId)
-                .eq('token_id', String(p.id));
-              try {
-                sendWsEnvelope({
-                  type: 'tokenRow',
-                  roomId: currentRoomId,
-                  row: { room_id: currentRoomId, map_id: mapId, token_id: String(p.id), x: null, y: null, size: Number(p.size) || 1, color: p.color || null, owner_id: p.ownerId || null, updated_at: new Date().toISOString() }
-                }, { optimisticApplied: true });
-              } catch {}
-            }
+            sendWsEnvelope({
+              type: 'removeTokenFromBoard',
+              roomId: String(currentRoomId || ''),
+              mapId: String(p?.mapId || next?.currentMapId || ''),
+              tokenId: String(p.id)
+            }, { optimisticApplied: true });
           } catch (e) {
-            console.warn('removePlayerFromBoard: room_tokens update failed', e);
+            console.warn('removeTokenFromBoard ws send failed', e);
           }
 
           logEventToState(next, `${p.name} удален с поля`);
