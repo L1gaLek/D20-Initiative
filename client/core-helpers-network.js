@@ -1173,6 +1173,7 @@ function connectRoomWs(roomId) {
       if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
 
       if (msg.type === 'ping' || msg.type === 'pong' || msg.type === 'joinedWsRoom') return;
+      if (handleDetachedWsMessage(msg)) return;
       handleMessage(msg);
     } catch (e) {
       console.warn('[WS] bad message', e);
@@ -1261,6 +1262,91 @@ function sendWsEnvelope(msg, opts = {}) {
     return false;
   }
 }
+
+function handleDetachedWsMessage(msg) {
+  try {
+    if (!msg || typeof msg !== 'object') return false;
+    const type = String(msg.type || '').trim();
+    if (!type) return false;
+
+    if (type === 'mapMetaRow') {
+      _cacheMapMeta(msg.row || {});
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'mapMetaDelete') {
+      const old = msg.row || {};
+      const mapId = String(old.map_id || old.id || '').trim();
+      if (mapId) {
+        __roomDetachedCache.mapMetaById.delete(mapId);
+        __roomDetachedCache.wallsByMap.delete(mapId);
+        __roomDetachedCache.marksByMap.delete(mapId);
+        __roomDetachedCache.fogByMap.delete(mapId);
+      }
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'wallRow') {
+      _cacheUpsertWallRow(msg.row || {});
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'wallDelete') {
+      _cacheDeleteWallRow(msg.row || {});
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'markRow') {
+      _cacheUpsertMarkRow(msg.row || {});
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'markDelete') {
+      _cacheDeleteMarkRow(msg.row || {});
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'marksReplace') {
+      const mapId = String(msg.mapId || '').trim();
+      if (mapId) {
+        const rows = Array.isArray(msg.rows) ? msg.rows : [];
+        __roomDetachedCache.marksByMap.set(
+          mapId,
+          rows.map(_normalizeMarkPayload).filter(Boolean)
+        );
+      }
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'fogRow') {
+      _cacheUpsertFogRow(msg.row || {});
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'fogDelete') {
+      const mapId = String(msg.row?.map_id || '').trim();
+      if (mapId) __roomDetachedCache.fogByMap.delete(mapId);
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'musicRow') {
+      if (msg.row) _cacheMusicRow(msg.row);
+      else __roomDetachedCache.music = null;
+      _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'musicDelete') {
+      __roomDetachedCache.music = null;
+      _refreshDetachedRoomView();
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.warn('[WS] detached message failed', e);
+    return false;
+  }
+}
+
 
 async function subscribeRoomDb(roomId) {
   if (!USE_SUPABASE_REALTIME) {
@@ -1751,6 +1837,7 @@ async function upsertRoomMapMetaRow(roomId, map) {
   const { error } = await sbClient.from('room_map_meta').upsert(row, { onConflict: 'room_id,map_id' });
   if (error) throw error;
   _cacheMapMeta(row);
+  try { sendWsEnvelope({ type: 'mapMetaRow', roomId: String(roomId || ''), row }, { optimisticApplied: true }); } catch {}
 }
 
 async function deleteRoomMapCascade(roomId, mapId) {
@@ -1769,6 +1856,7 @@ async function deleteRoomMapCascade(roomId, mapId) {
   __roomDetachedCache.wallsByMap.delete(mid);
   __roomDetachedCache.marksByMap.delete(mid);
   __roomDetachedCache.fogByMap.delete(mid);
+  try { sendWsEnvelope({ type: 'mapMetaDelete', roomId: rid, row: { map_id: mid } }, { optimisticApplied: true }); } catch {}
 }
 
 async function clearRoomMapPlayfield(roomId, mapLike, opts = {}) {
@@ -1784,6 +1872,7 @@ async function clearRoomMapPlayfield(roomId, mapLike, opts = {}) {
   const clearMarks = opts.clearMarks !== false;
   const resetFog = opts.resetFog !== false;
 
+  const prevWalls = clearWalls && Array.isArray(__roomDetachedCache.wallsByMap.get(mid)) ? [...__roomDetachedCache.wallsByMap.get(mid)] : [];
   const tasks = [];
   if (clearWalls) tasks.push(sbClient.from('room_walls').delete().eq('room_id', rid).eq('map_id', mid));
   if (clearMarks) tasks.push(sbClient.from('room_marks').delete().eq('room_id', rid).eq('map_id', mid));
@@ -1812,6 +1901,35 @@ async function clearRoomMapPlayfield(roomId, mapLike, opts = {}) {
 
   if (clearWalls) __roomDetachedCache.wallsByMap.set(mid, []);
   if (clearMarks) __roomDetachedCache.marksByMap.set(mid, []);
+
+  if (clearWalls) {
+    prevWalls.forEach((w) => {
+      try {
+        sendWsEnvelope({ type: 'wallDelete', roomId: rid, row: { map_id: mid, x: Number(w?.x) || 0, y: Number(w?.y) || 0, dir: String(w?.dir || '').toUpperCase() } }, { optimisticApplied: true });
+      } catch {}
+    });
+  }
+  if (clearMarks) {
+    try { sendWsEnvelope({ type: 'marksReplace', roomId: rid, mapId: mid, rows: [] }, { optimisticApplied: true }); } catch {}
+  }
+  if (resetFog) {
+    try {
+      const emptyFogRow = buildDetachedFogRow(rid, mid, {
+        enabled: false,
+        mode: 'manual',
+        manualBase: 'hide',
+        manualStamps: [],
+        visionRadius: 8,
+        useWalls: true,
+        exploredEnabled: true,
+        gmViewMode: 'gm',
+        gmOpen: false,
+        moveOnlyExplored: false,
+        explored: []
+      }, boardW, boardH);
+      sendWsEnvelope({ type: 'fogRow', roomId: rid, row: emptyFogRow }, { optimisticApplied: true });
+    } catch {}
+  }
 }
 
 async function upsertRoomWallsEdges(roomId, mapId, mode, edges) {
@@ -1843,11 +1961,15 @@ async function upsertRoomWallsEdges(roomId, mapId, mode, edges) {
       const { error } = await sbClient.from('room_walls').delete().eq('room_id', rid).eq('map_id', mid).eq('x', row.x).eq('y', row.y).eq('dir', row.dir);
       if (error) throw error;
       _cacheDeleteWallRow(row);
+      try { sendWsEnvelope({ type: 'wallDelete', roomId: rid, row }, { optimisticApplied: true }); } catch {}
     }
   } else {
     const { error } = await sbClient.from('room_walls').upsert(clean, { onConflict: 'room_id,map_id,x,y,dir' });
     if (error) throw error;
-    clean.forEach(_cacheUpsertWallRow);
+    clean.forEach((row) => {
+      _cacheUpsertWallRow(row);
+      try { sendWsEnvelope({ type: 'wallRow', roomId: rid, row }, { optimisticApplied: true }); } catch {}
+    });
   }
 }
 
@@ -1882,6 +2004,7 @@ async function upsertRoomFogState(roomId, mapId, fog, boardW, boardH) {
   const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
   if (error) throw error;
   _cacheUpsertFogRow(row);
+  try { sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
 }
 
 let __pendingFogTimer = null;
@@ -1898,6 +2021,7 @@ function scheduleRoomFogUpsert(roomId, mapId, fog, boardW, boardH, delay = 180) 
       const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
       if (error) throw error;
       _cacheUpsertFogRow(row);
+      try { sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
       _refreshDetachedRoomView();
     } catch (e) {
       console.warn('coalesced fog upsert failed', e);
@@ -1926,6 +2050,7 @@ async function upsertRoomMarkRow(roomId, mark) {
     throw error;
   }
   _cacheUpsertMarkRow(row);
+  try { sendWsEnvelope({ type: 'markRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
 }
 
 async function deleteRoomMarkRow(roomId, mapId, markId) {
@@ -1936,7 +2061,9 @@ async function deleteRoomMarkRow(roomId, mapId, markId) {
   if (!rid || !mid || !id) return;
   const { error } = await sbClient.from('room_marks').delete().eq('room_id', rid).eq('map_id', mid).eq('mark_id', id);
   if (error) throw error;
-  _cacheDeleteMarkRow({ map_id: mid, mark_id: id });
+  const row = { map_id: mid, mark_id: id };
+  _cacheDeleteMarkRow(row);
+  try { sendWsEnvelope({ type: 'markDelete', roomId: rid, row }, { optimisticApplied: true }); } catch {}
 }
 
 async function clearRoomMarks(roomId, mapId, ownerId = null) {
@@ -1951,6 +2078,18 @@ async function clearRoomMarks(roomId, mapId, ownerId = null) {
   } else {
     __roomDetachedCache.marksByMap.set(String(mapId || ''), []);
   }
+  try {
+    const rows = (Array.isArray(__roomDetachedCache.marksByMap.get(String(mapId || ''))) ? __roomDetachedCache.marksByMap.get(String(mapId || '')) : []).map((m) => ({
+      room_id: String(roomId || ''),
+      map_id: String(mapId || ''),
+      mark_id: String(m?.id || ''),
+      owner_id: String(m?.ownerId || '') || null,
+      kind: String(m?.kind || ''),
+      payload: deepClone(m),
+      updated_at: new Date().toISOString()
+    }));
+    sendWsEnvelope({ type: 'marksReplace', roomId: String(roomId || ''), mapId: String(mapId || ''), rows }, { optimisticApplied: true });
+  } catch {}
 }
 
 async function upsertRoomMusicState(roomId, bgMusic) {
@@ -1964,6 +2103,7 @@ async function upsertRoomMusicState(roomId, bgMusic) {
   const { error } = await sbClient.from('room_music_state').upsert(row, { onConflict: 'room_id' });
   if (error) throw error;
   _cacheMusicRow(row);
+  try { sendWsEnvelope({ type: 'musicRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
 }
 
 async function ensureDetachedBootstrap(roomId, fullState) {
@@ -2831,8 +2971,13 @@ async function sendMessage(msg) {
                 .update({ color: c, updated_at: nowIso })
                 .eq('room_id', roomId)
                 .eq('token_id', tokenId)
-                .select('room_id')
-                .limit(1);
+                .select('*');
+
+              if (!uErr && Array.isArray(upd) && upd.length) {
+                upd.forEach((row) => {
+                  try { sendWsEnvelope({ type: 'tokenRow', roomId, row }, { optimisticApplied: true }); } catch {}
+                });
+              }
 
               // If there is no row yet (token not placed anywhere), create stub on current map.
               if (!uErr && (!Array.isArray(upd) || upd.length === 0)) {
@@ -2850,6 +2995,7 @@ async function sendMessage(msg) {
                     updated_at: nowIso
                   };
                   await sbClient.from('room_tokens').upsert(payload, { onConflict: 'room_id,map_id,token_id' });
+                  try { sendWsEnvelope({ type: 'tokenRow', roomId, row: payload }, { optimisticApplied: true }); } catch {}
                 }
               }
             }
