@@ -1107,6 +1107,13 @@ let wsRoomId = '';
 let wsReconnectTimer = null;
 let wsWantConnected = false;
 const wsSeenNonces = new Map();
+const WS_HEARTBEAT_INTERVAL_MS = 20000;
+const WS_HEARTBEAT_TIMEOUT_MS = 45000;
+const WS_RECONNECT_DELAY_MS = 250;
+const WS_SEND_QUEUE_LIMIT = 25;
+let wsHeartbeatTimer = null;
+let wsLastPongAt = 0;
+let wsPendingEnvelopes = [];
 
 function wsMakeNonce() {
   return (crypto?.randomUUID ? crypto.randomUUID() : ('n-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
@@ -1141,10 +1148,87 @@ function wsWasSeen(nonce) {
   return true;
 }
 
+
+function stopWsHeartbeat() {
+  try { clearInterval(wsHeartbeatTimer); } catch {}
+  wsHeartbeatTimer = null;
+}
+
+function markWsAlive() {
+  wsLastPongAt = Date.now();
+}
+
+function flushWsPendingEnvelopes(sock = wsClient) {
+  try {
+    if (!sock || sock.readyState !== WebSocket.OPEN) return false;
+    if (!Array.isArray(wsPendingEnvelopes) || !wsPendingEnvelopes.length) return true;
+    const pending = wsPendingEnvelopes.splice(0, wsPendingEnvelopes.length);
+    pending.forEach((payload) => {
+      try {
+        if (payload && typeof payload === 'object') sock.send(JSON.stringify(payload));
+      } catch (e) {
+        console.warn('[WS] flush queued send failed', e);
+      }
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function queueWsEnvelope(payload) {
+  try {
+    if (!payload || typeof payload !== 'object') return false;
+    if (!Array.isArray(wsPendingEnvelopes)) wsPendingEnvelopes = [];
+    wsPendingEnvelopes.push(payload);
+    if (wsPendingEnvelopes.length > WS_SEND_QUEUE_LIMIT) {
+      wsPendingEnvelopes.splice(0, wsPendingEnvelopes.length - WS_SEND_QUEUE_LIMIT);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function startWsHeartbeat(sock = wsClient) {
+  stopWsHeartbeat();
+  markWsAlive();
+  if (!sock) return;
+  wsHeartbeatTimer = setInterval(() => {
+    try {
+      if (!wsWantConnected) {
+        stopWsHeartbeat();
+        return;
+      }
+      if (!wsClient || wsClient !== sock) {
+        stopWsHeartbeat();
+        return;
+      }
+      if (sock.readyState !== WebSocket.OPEN) return;
+      const now = Date.now();
+      if (wsLastPongAt && (now - wsLastPongAt) > WS_HEARTBEAT_TIMEOUT_MS) {
+        try { sock.close(); } catch {}
+        return;
+      }
+      sock.send(JSON.stringify({
+        type: 'ping',
+        roomId: String(wsRoomId || sock.__roomId || ''),
+        clientId: WS_CLIENT_ID,
+        ts: now
+      }));
+    } catch (e) {
+      console.warn('[WS] heartbeat failed', e);
+    }
+  }, WS_HEARTBEAT_INTERVAL_MS);
+}
+
 function disconnectRoomWs() {
   wsWantConnected = false;
   stopRoomMembersPolling();
+  stopWsHeartbeat();
   wsRoomId = '';
+  wsLastPongAt = 0;
+  wsPendingEnvelopes = [];
   try { clearTimeout(wsReconnectTimer); } catch {}
   wsReconnectTimer = null;
   if (wsClient) {
@@ -1177,6 +1261,8 @@ function connectRoomWs(roomId) {
   wsClient = sock;
 
   sock.onopen = () => {
+    markWsAlive();
+    startWsHeartbeat(sock);
     try {
       sock.send(JSON.stringify({
         type: 'joinRoom',
@@ -1185,6 +1271,7 @@ function connectRoomWs(roomId) {
         transport: 'ws'
       }));
     } catch {}
+    flushWsPendingEnvelopes(sock);
   };
 
   sock.onmessage = (event) => {
@@ -1201,7 +1288,29 @@ function connectRoomWs(roomId) {
       const msgRoomId = String(msg.roomId || '').trim();
       if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
 
-      if (msg.type === 'ping' || msg.type === 'pong' || msg.type === 'joinedWsRoom') return;
+      if (msg.type === 'ping') {
+        markWsAlive();
+        try {
+          if (sock.readyState === WebSocket.OPEN) {
+            sock.send(JSON.stringify({
+              type: 'pong',
+              roomId: String(wsRoomId || sock.__roomId || ''),
+              clientId: WS_CLIENT_ID,
+              ts: Date.now()
+            }));
+          }
+        } catch {}
+        return;
+      }
+      if (msg.type === 'pong') {
+        markWsAlive();
+        return;
+      }
+      if (msg.type === 'joinedWsRoom') {
+        markWsAlive();
+        flushWsPendingEnvelopes(sock);
+        return;
+      }
       if (String(msg.type || '') === 'state' && msg.state) {
         try { rememberRoomStateShadow(msg.roomId || wsRoomId, msg.state); } catch {}
       }
@@ -1214,11 +1323,13 @@ function connectRoomWs(roomId) {
 
   sock.onclose = () => {
     if (wsClient === sock) wsClient = null;
+    if (wsHeartbeatTimer) stopWsHeartbeat();
+    wsLastPongAt = 0;
     if (!wsWantConnected || !wsRoomId) return;
     try { clearTimeout(wsReconnectTimer); } catch {}
     wsReconnectTimer = setTimeout(() => {
       if (wsWantConnected && wsRoomId) connectRoomWs(wsRoomId);
-    }, 2000);
+    }, WS_RECONNECT_DELAY_MS);
   };
 
   sock.onerror = (e) => {
@@ -1274,7 +1385,7 @@ function startRoomMembersPolling(roomId) {
 function sendWsEnvelope(msg, opts = {}) {
   try {
     if (!msg || typeof msg !== 'object') return false;
-    if (!wsRoomId || !wsClient || wsClient.readyState !== WebSocket.OPEN) return false;
+    if (!wsRoomId) return false;
     const nonce = String(opts.nonce || wsMakeNonce());
     const payload = {
       ...msg,
@@ -1284,8 +1395,18 @@ function sendWsEnvelope(msg, opts = {}) {
       __optimisticApplied: !!opts.optimisticApplied
     };
     wsRememberNonce(nonce);
-    wsClient.send(JSON.stringify(payload));
-    return true;
+
+    if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+      wsClient.send(JSON.stringify(payload));
+      return true;
+    }
+
+    queueWsEnvelope(payload);
+    if (wsWantConnected && wsRoomId) {
+      connectRoomWs(wsRoomId);
+      return true;
+    }
+    return false;
   } catch (e) {
     console.warn('[WS] send failed', e);
     return false;
