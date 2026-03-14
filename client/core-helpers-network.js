@@ -2349,6 +2349,29 @@ async function insertRoomLog(roomId, text) {
   }
 }
 
+
+function buildDiceLogText(ev) {
+  try {
+    if (!ev || typeof ev !== 'object') return '';
+    const who = String(ev.fromName || '').trim() || 'Игрок';
+    const kind = String(ev.kindText || '').trim() || ((Number(ev.sides) || 0) ? `d${Number(ev.sides)}` : 'Бросок');
+    const rolls = Array.isArray(ev.rolls) ? ev.rolls.map(n => Number(n)).filter(Number.isFinite) : [];
+    const rollsTxt = rolls.length ? rolls.join(',') : '';
+    const bonus = Number(ev.bonus) || 0;
+    const bonusTxt = bonus === 0 ? '' : (bonus > 0 ? `+${bonus}` : `${bonus}`);
+    const hasTotal = ev.total !== null && typeof ev.total !== 'undefined' && Number.isFinite(Number(ev.total));
+    const totalTxt = hasTotal ? ` = ${Number(ev.total)}` : '';
+    const critTxt = String(ev.crit || '') === 'crit-success'
+      ? ' (КРИТ)'
+      : (String(ev.crit || '') === 'crit-fail' ? ' (ПРОВАЛ)' : '');
+    const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : (hasTotal ? String(Number(ev.total)) : '');
+    return `${who}: ${kind}: ${body}${critTxt}`.trim();
+  } catch {
+    return '';
+  }
+}
+try { window.buildDiceLogText = buildDiceLogText; } catch {}
+
 async function insertDiceEvent(roomId, ev) {
   try {
     await ensureSupabaseReady();
@@ -2400,7 +2423,36 @@ async function insertDiceEvent(roomId, ev) {
     console.warn('dice insert failed', e);
   }
 }
+try { window.insertDiceEvent = insertDiceEvent; } catch {}
 
+async function broadcastDiceEventOnly(event) {
+  try {
+    if (!event || !currentRoomId) return;
+    const ev = { ...(event || {}) };
+    if (typeof myId !== 'undefined' && !ev.fromId) ev.fromId = String(myId);
+    if (myNameSpan?.textContent && !ev.fromName) ev.fromName = String(myNameSpan.textContent);
+
+    const line = buildDiceLogText(ev);
+    const logRow = line ? { text: line, created_at: new Date().toISOString() } : null;
+
+    await insertDiceEvent(currentRoomId, ev);
+
+    if (logRow) {
+      try { handleMessage({ type: 'logRow', row: logRow }); } catch {}
+    }
+    try { handleMessage({ type: 'diceEvent', event: ev }); } catch {}
+
+    if (!USE_SUPABASE_REALTIME) {
+      try { sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true }); } catch {}
+      if (logRow) {
+        try { sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: true }); } catch {}
+      }
+    }
+  } catch (e) {
+    console.warn('broadcastDiceEventOnly failed', e);
+  }
+}
+try { window.broadcastDiceEventOnly = broadcastDiceEventOnly; } catch {}
 
 let roomMembersDbChannel = null;
 
@@ -2668,20 +2720,20 @@ async function sendMessage(msg) {
         if (!currentRoomId) return;
         // v4: dice events are append-only in room_dice_events (and log is append-only in room_log)
         const ev = msg.event || {};
+        const diceLogText = buildDiceLogText(ev);
+        const logRow = diceLogText ? { text: diceLogText, created_at: new Date().toISOString() } : null;
         await insertDiceEvent(currentRoomId, ev);
         try {
           sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true });
         } catch {}
-        // apply to self instantly (others will receive via realtime INSERT)
-        if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
-        // and append the matching action-log line locally right away.
-        try {
-          const line = (typeof formatDiceEventLogTextLocal === 'function') ? formatDiceEventLogTextLocal(ev) : '';
-          if (line) handleMessage({ type: 'logRow', row: { text: line, created_at: new Date().toISOString() } });
-          if (!USE_SUPABASE_REALTIME && line) {
-            sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: { text: line, created_at: new Date().toISOString() } }, { optimisticApplied: true });
+        if (logRow) {
+          try { handleMessage({ type: 'logRow', row: logRow }); } catch {}
+          if (!USE_SUPABASE_REALTIME) {
+            try { sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: true }); } catch {}
           }
-        } catch {}
+        }
+        // apply to self instantly (others will receive via realtime INSERT / WS)
+        if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         break;
       }
 
@@ -2774,8 +2826,10 @@ async function sendMessage(msg) {
           if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
         } catch {}
 
-        // Apply locally immediately so the owner sees the new base/token UI without refresh.
-        try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
+        try {
+          handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+        } catch {}
+
         await upsertRoomState(currentRoomId, next);
         handleMessage({ type: "savedBaseApplied", playerId: p.id, savedId });
         break;
@@ -2808,8 +2862,10 @@ async function sendMessage(msg) {
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
   } catch {}
 
-  // Apply locally immediately so owner sees token portrait / HP / death saves without moving token.
-  try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
+  try {
+    handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+  } catch {}
+
   await upsertRoomState(currentRoomId, next);
   break;
 }
