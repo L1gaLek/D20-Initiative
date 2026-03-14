@@ -946,6 +946,7 @@ function setPlayerPosition(player) {
         }
         selectedPlayer = cur;
         el.classList.add('selected');
+        try { window.updateMovePreview?.(); } catch {}
       }
     });
 
@@ -961,6 +962,7 @@ function setPlayerPosition(player) {
           const prev = playerElements.get(selectedPlayer.id);
           if (prev) prev.classList.remove('selected');
           selectedPlayer = null;
+          try { window.hideMovePreview?.(); } catch {}
         }
       } catch {}
       // block for GM-created public NPCs
@@ -1167,6 +1169,109 @@ addPlayerBtn.addEventListener('click', () => {
   if (isAllyCheckbox) isAllyCheckbox.checked = false;
 });
 
+// ================== MOVE PREVIEW ==================
+(function wireMovePreview() {
+  const CELL = 50;
+
+  function ensureMovePreviewLayer() {
+    let layer = board?.querySelector?.('#move-preview-layer');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'move-preview-layer';
+      try { board.appendChild(layer); } catch {}
+    }
+    return layer;
+  }
+
+  function ensureMovePreviewBox() {
+    const layer = ensureMovePreviewLayer();
+    if (!layer) return null;
+    let box = layer.querySelector('.move-preview-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'move-preview-box';
+      layer.appendChild(box);
+    }
+    return box;
+  }
+
+  function hideMovePreview() {
+    try {
+      const box = board?.querySelector?.('#move-preview-layer .move-preview-box');
+      if (box) box.classList.remove('is-visible');
+    } catch {}
+  }
+
+  function showMovePreviewForCell(cell) {
+    if (!selectedPlayer || editEnvironment) {
+      hideMovePreview();
+      return;
+    }
+    if (!cell) {
+      hideMovePreview();
+      return;
+    }
+
+    const size = Math.max(1, Number(selectedPlayer?.size) || 1);
+    let x = parseInt(cell.dataset.x, 10);
+    let y = parseInt(cell.dataset.y, 10);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      hideMovePreview();
+      return;
+    }
+
+    if (x + size > boardWidth) x = boardWidth - size;
+    if (y + size > boardHeight) y = boardHeight - size;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+
+    const box = ensureMovePreviewBox();
+    if (!box) return;
+    box.style.left = `${x * CELL}px`;
+    box.style.top = `${y * CELL}px`;
+    box.style.width = `${size * CELL}px`;
+    box.style.height = `${size * CELL}px`;
+    box.classList.add('is-visible');
+  }
+
+  board.addEventListener('mousemove', (e) => {
+    try {
+      if (!selectedPlayer || editEnvironment) {
+        hideMovePreview();
+        return;
+      }
+      const cell = e.target.closest('.cell');
+      showMovePreviewForCell(cell);
+    } catch {}
+  }, { passive: true });
+
+  board.addEventListener('mouseleave', () => {
+    hideMovePreview();
+  });
+
+  board.addEventListener('click', () => {
+    hideMovePreview();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    try {
+      if (e.key === 'Escape') hideMovePreview();
+    } catch {}
+  });
+
+  window.updateMovePreview = function () {
+    try {
+      if (!selectedPlayer || editEnvironment) {
+        hideMovePreview();
+        return;
+      }
+      const hovered = board?.querySelector?.('.cell:hover');
+      showMovePreviewForCell(hovered);
+    } catch {}
+  };
+  window.hideMovePreview = hideMovePreview;
+})();
+
 // ================== MOVE PLAYER ==================
 board.addEventListener('click', e => {
   if (!selectedPlayer) return;
@@ -1199,6 +1304,7 @@ board.addEventListener('click', e => {
   const el = playerElements.get(selectedPlayer.id);
   if (el) el.classList.remove('selected');
   selectedPlayer = null;
+  try { window.hideMovePreview?.(); } catch {}
 });
 
 // ===== Dice Viz (panel + canvas animation) =====
