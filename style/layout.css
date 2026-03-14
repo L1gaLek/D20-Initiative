@@ -1295,6 +1295,17 @@
   width: min(700px, calc(100vw - 28px));
 }
 
+.mini-popover__panel--conditions{
+  max-height: min(78vh, 900px);
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-popover__panel--conditions .mini-popover__body{
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .mini-popover__head{
   display:flex;
   align-items:center;
@@ -1327,7 +1338,7 @@
 
 .cond-item__row{
   display:flex;
-  gap: 10px;
+  gap: 8px;
   align-items:center;
   justify-content:space-between;
 }
@@ -1336,6 +1347,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+  align-items: start;
 }
 
 @media (max-width: 720px){

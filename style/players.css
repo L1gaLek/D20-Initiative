@@ -201,6 +201,11 @@
   pointer-events: auto;
 }
 
+.player:has(.token-statuses:hover),
+.player:has(.token-statuses:focus-within){
+  z-index: 10020;
+}
+
 .player .token-statuses__list{
   display: flex;
   align-items: center;
@@ -241,6 +246,7 @@
   background: rgba(16,16,16,0.96);
   border: 1px solid rgba(255,255,255,0.14);
   box-shadow: 0 12px 28px rgba(0,0,0,0.42);
+  z-index: 10030;
   opacity: 0;
   pointer-events: none;
   visibility: hidden;

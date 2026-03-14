@@ -2643,20 +2643,26 @@ textarea[data-sheet-path="text.profPlain.value"]{
   border:none;
   background: transparent;
   color: inherit;
-  font-weight: 900;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1.15;
   cursor:pointer;
   padding: 0;
   text-align:left;
+  min-width: 0;
 }
 
 .cond-item__descbtn{
   border: 1px solid rgba(255,255,255,0.15);
   background: rgba(255,255,255,0.06);
   color: inherit;
-  border-radius: 10px;
-  padding: 6px 10px;
+  border-radius: 9px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1;
   cursor:pointer;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .cond-item__desc{
@@ -2664,6 +2670,9 @@ textarea[data-sheet-path="text.profPlain.value"]{
   font-size: 12px;
   opacity: 0.9;
   line-height: 1.35;
+  max-height: 180px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .cond-item__desc.hidden{ display:none; }
@@ -2677,45 +2686,48 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .cond-item__titlewrap{
   display:flex;
   align-items:center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .cond-item__icon{
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 8px;
   display:flex;
   align-items:center;
   justify-content:center;
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.10);
-  font-size: 15px;
+  font-size: 14px;
   flex: 0 0 auto;
 }
 
 .cond-item__actions{
   display:flex;
   align-items:center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   justify-content: flex-end;
 }
 
 .cond-item__iconbtn{
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.15);
   background: rgba(255,255,255,0.06);
   color: inherit;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
   display:flex;
   align-items:center;
   justify-content:center;
   padding: 0;
+  flex: 0 0 auto;
 }
 
 .cond-item__iconbtn:hover:not(:disabled){
