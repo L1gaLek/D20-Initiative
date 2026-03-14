@@ -13,32 +13,6 @@
     return (lastPlayersSnapshot || []).find(x => x && x.id === openedSheetPlayerId) || null;
   }
 
-  function syncOpenedPlayerSheetToGlobals(player, sheet) {
-    try {
-      const pid = String(player?.id || openedSheetPlayerId || '');
-      if (!pid || !sheet) return;
-      const nextSheet = player?.sheet || { parsed: sheet };
-      if (!nextSheet.parsed || typeof nextSheet.parsed !== 'object') nextSheet.parsed = sheet;
-
-      const localPlayer = getOpenedPlayerSafe();
-      if (localPlayer && String(localPlayer.id || '') === pid) localPlayer.sheet = nextSheet;
-
-      try {
-        if (Array.isArray(window.players)) {
-          const canonical = window.players.find(x => String(x?.id || '') === pid);
-          if (canonical) canonical.sheet = nextSheet;
-        }
-      } catch {}
-
-      try {
-        if (Array.isArray(lastPlayersSnapshot)) {
-          const snap = lastPlayersSnapshot.find(x => String(x?.id || '') === pid);
-          if (snap) snap.sheet = nextSheet;
-        }
-      } catch {}
-    } catch {}
-  }
-
   function ensureHpPopup() {
     if (hpPopupEl) return hpPopupEl;
 
@@ -221,7 +195,6 @@
 
       syncDeathSavesForHpPopup(sheet);
       syncHpPopupInputs(sheet);
-      syncOpenedPlayerSheetToGlobals(player, sheet);
       markModalInteracted(player.id);
       scheduleSheetSave(player);
       if (sheetContent) updateHeroChips(sheetContent, sheet);
@@ -330,7 +303,6 @@
 
     syncDeathSavesForHpPopup(sheet);
     syncHpPopupInputs(sheet);
-    syncOpenedPlayerSheetToGlobals(player, sheet);
     markModalInteracted(player.id);
     scheduleSheetSave(player);
     if (sheetContent) updateHeroChips(sheetContent, sheet);
@@ -417,7 +389,6 @@
     }
 
     syncDeathSavesForHpPopup(sheet);
-    syncOpenedPlayerSheetToGlobals(player, sheet);
     syncHpPopupInputs(sheet);
     setHpPopupEditable(!!lastCanEdit);
     el.classList.remove('hidden');
@@ -470,7 +441,6 @@
 
     syncDeathSavesForHpPopup(sheet);
     syncHpPopupInputs(sheet);
-    syncOpenedPlayerSheetToGlobals(player, sheet);
     markModalInteracted(player.id);
     scheduleSheetSave(player);
     if (sheetContent) updateHeroChips(sheetContent, sheet);
@@ -683,18 +653,51 @@ function bindLanguagesUi(root, player, canEdit) {
 
 
 
-  function parseCondList(s) {
-    if (!s || typeof s !== "string") return [];
-    return s.split(",").map(x => x.trim()).filter(Boolean);
+  function parseCondList(raw) {
+    if (Array.isArray(raw)) {
+      return Array.from(new Set(raw.map(x => String(x || "").trim()).filter(Boolean)));
+    }
+    if (!raw || typeof raw !== "string") return [];
+    return Array.from(new Set(raw.split(",").map(x => x.trim()).filter(Boolean)));
+  }
+  function getCondList(sheet) {
+    if (!sheet || typeof sheet !== 'object') return [];
+    const fromList = parseCondList(sheet.conditionsList);
+    if (fromList.length) return fromList;
+    return parseCondList(sheet.conditions);
   }
   function setCondList(sheet, arr) {
-    const s = Array.from(new Set(arr.map(x => String(x).trim()).filter(Boolean))).join(", ");
+    const list = parseCondList(arr);
+    const s = list.join(", ");
+    sheet.conditionsList = list;
     sheet.conditions = s;
     return s;
   }
+  function syncConditionsUi(sheet) {
+    try {
+      const value = String(sheet?.conditions || '');
+      const input = sheetContent?.querySelector('[data-sheet-path="conditions"]');
+      if (input && input instanceof HTMLInputElement) input.value = value;
+      const condChip = sheetContent?.querySelector('[data-cond-open]');
+      if (condChip) condChip.classList.toggle('has-value', !!value.trim());
+    } catch {}
+    try { window.refreshPlayerConditionIndicators?.(openedSheetPlayerId); } catch {}
+  }
+  function refreshCondPopupState(sheet) {
+    if (!condPopupEl) return;
+    const active = new Set(getCondList(sheet).map(x => String(x).toLowerCase()));
+    condPopupEl.querySelectorAll('[data-cond-name]').forEach((row) => {
+      const name = String(row.getAttribute('data-cond-name') || '').trim().toLowerCase();
+      row.classList.toggle('is-active', !!name && active.has(name));
+      const addBtn = row.querySelector('[data-cond-add]');
+      const removeBtn = row.querySelector('[data-cond-remove]');
+      if (addBtn instanceof HTMLButtonElement) addBtn.disabled = !!name && active.has(name);
+      if (removeBtn instanceof HTMLButtonElement) removeBtn.disabled = !(!!name && active.has(name));
+    });
+  }
   // ВАЖНО: "Истощение" и "Состояние" не связаны.
   // sheet.exhaustion хранит только уровень (0..6),
-  // sheet.conditions хранит выбранное состояние (строка) или пусто.
+  // sheet.conditions / sheet.conditionsList хранят выбранные состояния.
 
   function ensureExhPopup() {
     if (exhPopupEl) return exhPopupEl;
@@ -768,13 +771,20 @@ function bindLanguagesUi(root, player, canEdit) {
           <button class="mini-popover__x" type="button" data-cond-close>✕</button>
         </div>
         <div class="mini-popover__body">
-          <button class="cond-clear" type="button" data-cond-clear>Убрать состояние</button>
+          <button class="cond-clear" type="button" data-cond-clear>Очистить все состояния</button>
           <div class="cond-list">
             ${CONDITIONS_DB.map((c, i) => `
               <div class="cond-item" data-cond-name="${escapeHtml(c.name)}">
                 <div class="cond-item__row">
-                  <button class="cond-item__name" type="button" data-cond-toggle="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>
-                  <button class="cond-item__descbtn" type="button" data-cond-desc="${i}">Описание</button>
+                  <div class="cond-item__titlewrap">
+                    <div class="cond-item__icon" aria-hidden="true">${escapeHtml(window.getConditionIcon?.(c.name) || '•')}</div>
+                    <button class="cond-item__name" type="button" data-cond-toggle="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>
+                  </div>
+                  <div class="cond-item__actions">
+                    <button class="cond-item__iconbtn" type="button" data-cond-remove="${escapeHtml(c.name)}" title="Убрать состояние" aria-label="Убрать состояние">−</button>
+                    <button class="cond-item__iconbtn cond-item__iconbtn--add" type="button" data-cond-add="${escapeHtml(c.name)}" title="Добавить состояние" aria-label="Добавить состояние">+</button>
+                    <button class="cond-item__descbtn" type="button" data-cond-desc="${i}">Описание</button>
+                  </div>
                 </div>
                 <div class="cond-item__desc hidden" data-cond-descbox="${i}">${escapeHtml(c.desc).replace(/\n/g, "<br>")}</div>
               </div>
@@ -797,18 +807,12 @@ function bindLanguagesUi(root, player, canEdit) {
         const sheet = player.sheet?.parsed;
         if (!sheet) return;
 
-        // очищаем только состояние (истощение не трогаем)
-        sheet.conditions = "";
+        setCondList(sheet, []);
 
         markModalInteracted(player.id);
         scheduleSheetSave(player);
-
-        try {
-          const input = sheetContent?.querySelector('[data-sheet-path="conditions"]');
-          if (input && input instanceof HTMLInputElement) input.value = sheet.conditions || "";
-          const condChip = sheetContent?.querySelector('[data-cond-open]');
-          if (condChip) condChip.classList.toggle('has-value', !!String(sheet.conditions || '').trim());
-        } catch {}
+        syncConditionsUi(sheet);
+        refreshCondPopupState(sheet);
         return;
       }
 
@@ -820,9 +824,17 @@ function bindLanguagesUi(root, player, canEdit) {
         return;
       }
 
+      const addBtn = t.closest("[data-cond-add]");
+      const removeBtn = t.closest("[data-cond-remove]");
       const tog = t.closest("[data-cond-toggle]");
-      if (tog) {
-        const name = (tog.getAttribute("data-cond-toggle") || "").trim();
+      const actEl = addBtn || removeBtn || tog;
+      if (actEl) {
+        const name = String(
+          actEl.getAttribute("data-cond-add")
+          || actEl.getAttribute("data-cond-remove")
+          || actEl.getAttribute("data-cond-toggle")
+          || ""
+        ).trim();
         if (!name) return;
         const player = getOpenedPlayerSafe();
         if (!player) return;
@@ -830,20 +842,21 @@ function bindLanguagesUi(root, player, canEdit) {
         const sheet = player.sheet?.parsed;
         if (!sheet) return;
 
-        // одиночный выбор: повторный клик по выбранному состоянию = снять
-        const cur = String(sheet.conditions || "").trim();
-        const already = cur.toLowerCase() === name.toLowerCase();
-        sheet.conditions = already ? "" : name;
+        const list = getCondList(sheet);
+        const key = name.toLowerCase();
+        const exists = list.some(x => String(x).toLowerCase() === key);
+        let next = list;
+
+        if (removeBtn) next = list.filter(x => String(x).toLowerCase() !== key);
+        else if (addBtn) next = exists ? list : [...list, name];
+        else next = exists ? list.filter(x => String(x).toLowerCase() !== key) : [...list, name];
+
+        setCondList(sheet, next);
 
         markModalInteracted(player.id);
         scheduleSheetSave(player);
-
-        try {
-          const input = sheetContent?.querySelector('[data-sheet-path="conditions"]');
-          if (input && input instanceof HTMLInputElement) input.value = sheet.conditions || "";
-          const condChip = sheetContent?.querySelector('[data-cond-open]');
-          if (condChip) condChip.classList.toggle('has-value', !!String(sheet.conditions || '').trim());
-        } catch {}
+        syncConditionsUi(sheet);
+        refreshCondPopupState(sheet);
         return;
       }
     });
@@ -852,7 +865,11 @@ function bindLanguagesUi(root, player, canEdit) {
     return condPopupEl;
   }
 
-  function showCondPopup() { ensureCondPopup().classList.remove("hidden"); }
+  function showCondPopup() {
+    const popup = ensureCondPopup();
+    popup.classList.remove("hidden");
+    try { refreshCondPopupState(getOpenedPlayerSafe()?.sheet?.parsed); } catch {}
+  }
   function hideCondPopup() { condPopupEl?.classList.add("hidden"); }
 function ensureWiredCloseHandlers() {
     sheetClose?.addEventListener('click', closeModal);

@@ -213,6 +213,7 @@
       inspiration: 0,
       exhaustion: 0,
       conditions: "",
+      conditionsList: [],
       stats: {
         str: { score: 10, modifier: 0, label: "Сила", check: 0 },
         dex: { score: 10, modifier: 0, label: "Ловкость", check: 0 },
@@ -492,7 +493,11 @@
 
     const inspiration = safeInt(get(sheet, 'inspiration', 0), 0) ? 1 : 0;
     const exhaustion = Math.max(0, Math.min(6, safeInt(get(sheet, 'exhaustion', 0), 0)));
-    const conditions = (typeof get(sheet, 'conditions', "") === "string") ? get(sheet, 'conditions', "") : "";
+    const rawConditionsList = Array.isArray(sheet?.conditionsList)
+      ? sheet.conditionsList.map(x => String(x || '').trim()).filter(Boolean)
+      : [];
+    const rawConditions = (typeof get(sheet, 'conditions', "") === "string") ? get(sheet, 'conditions', "") : "";
+    const conditions = rawConditionsList.length ? rawConditionsList.join(', ') : rawConditions;
 
     const statKeys = ["str","dex","con","int","wis","cha"];
     const stats = statKeys.map(k => {
