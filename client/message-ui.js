@@ -399,6 +399,8 @@ loginDiv.style.display = 'none';
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
       const prevPos = new Map();
       const prevSheets = new Map();
+      const prevInitiatives = new Map();
+      const prevPhase = String(lastState?.phase || '');
       try {
         (lastState?.players || []).forEach(p => {
           if (!p || !p.id) return;
@@ -414,13 +416,19 @@ loginDiv.style.display = 'none';
             sheetUpdatedAt: Number(p.sheetUpdatedAt) || 0,
             name: p.name || ''
           });
+          prevInitiatives.set(String(p.id), {
+            inCombat: !!p.inCombat,
+            hasRolledInitiative: !!p.hasRolledInitiative,
+            pendingInitiativeChoice: !!p.pendingInitiativeChoice,
+            willJoinNextRound: !!p.willJoinNextRound,
+            initiative: (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative)
+          });
         });
       } catch {}
 
       // нормализация состояния + поддержка нескольких карт кампании
       let normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
-      try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
 
       lastState = normalized;
       try { window.rememberRoomStateShadow?.(currentRoomId, normalized); } catch {}
@@ -439,6 +447,36 @@ loginDiv.style.display = 'none';
             if (typeof prev.name === 'string' && prev.name.trim()) p.name = prev.name;
           }
         });
+      } catch {}
+
+      // Preserve already-known initiative results against stale room_state snapshots.
+      // This matters when several players roll initiative almost simultaneously and a slightly
+      // older WS state arrives after a fresher local/appended result.
+      try {
+        const incomingPhase = String(lastState?.phase || '');
+        const sameInitiativeWindow = (
+          (prevPhase === 'initiative' || prevPhase === 'combat') &&
+          (incomingPhase === 'initiative' || incomingPhase === 'combat')
+        );
+        if (sameInitiativeWindow) {
+          (lastState.players || []).forEach(p => {
+            if (!p || !p.id) return;
+            const prev = prevInitiatives.get(String(p.id));
+            if (!prev) return;
+            const incomingRolled = !!p.hasRolledInitiative;
+            const incomingInit = (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative);
+            const shouldKeepPrev = (
+              !!prev.hasRolledInitiative &&
+              (!incomingRolled || !Number.isFinite(incomingInit))
+            );
+            if (!shouldKeepPrev) return;
+            p.inCombat = !!prev.inCombat;
+            p.hasRolledInitiative = true;
+            p.pendingInitiativeChoice = false;
+            p.initiative = prev.initiative;
+            if (typeof prev.willJoinNextRound !== 'undefined') p.willJoinNextRound = !!prev.willJoinNextRound;
+          });
+        }
       } catch {}
 
       // restore append-only log from memory (room_log drives it)

@@ -857,14 +857,14 @@ async function fetchRoomStateRow(roomId) {
 // Apply initiative updates for owned players with retry to avoid "last write wins" collisions.
 // This is needed when multiple users roll initiative at the same time.
 async function applyInitiativeAtomic(roomId, myUserId, updates) {
-  if (!roomId || !myUserId) return false;
+  if (!roomId || !myUserId) return { ok: false, state: null };
   const updArr = Array.isArray(updates) ? updates : [];
-  if (!updArr.length) return false;
+  if (!updArr.length) return { ok: false, state: null };
 
   for (let attempt = 0; attempt < 10; attempt++) {
     const latestRow = await fetchRoomStateRow(roomId);
     const latest = latestRow?.state || null;
-    if (!latest) return false;
+    if (!latest) return { ok: false, state: null };
 
     const next = deepClone(latest);
     const pls = Array.isArray(next.players) ? next.players : [];
@@ -892,13 +892,13 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
         const cp = cpls.find(pp => String(pp?.id) === pid);
         return !!cp && cp.hasRolledInitiative && Number(cp.initiative) === Number(u.total);
       });
-      if (alreadyOk) return true;
-      return false;
+      if (alreadyOk) return { ok: true, state: latest };
+      return { ok: false, state: latest };
     }
 
     const payload = await buildRoomStatePayload(roomId, next, latest);
     const cas = await writePreparedRoomStatePayload(roomId, payload, 'compare-and-swap', latestRow?.updated_at || null);
-    if (cas?.ok) return true;
+    if (cas?.ok) return { ok: true, state: payload?.state || next };
     await delayMs(20 + attempt * 20);
   }
 
@@ -906,13 +906,14 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
   try {
     const check = await fetchRoomStateSnapshot(roomId);
     const cpls = Array.isArray(check?.players) ? check.players : [];
-    return updArr.every(u => {
+    const ok = updArr.every(u => {
       const pid = String(u?.playerId || "");
       const cp = cpls.find(pp => String(pp?.id) === pid);
       return !!cp && cp.hasRolledInitiative && Number(cp.initiative) === Number(u.total);
     });
+    return { ok, state: check || null };
   } catch {
-    return false;
+    return { ok: false, state: null };
   }
 }
 
@@ -3941,8 +3942,16 @@ async function sendMessage(msg) {
           }
 
           // CAS-based apply to room_state so simultaneous clicks merge instead of overwriting each other.
-          const initiativeOk = await applyInitiativeAtomic(currentRoomId, myUserId, updates);
-          if (!initiativeOk) {
+          const initiativeRes = await applyInitiativeAtomic(currentRoomId, myUserId, updates);
+          if (initiativeRes?.ok) {
+            try {
+              const appliedState = applyDetachedPayloadToState(deepClone(initiativeRes?.state || next));
+              if (appliedState) {
+                try { rememberRoomStateShadow(currentRoomId, appliedState); } catch {}
+                handleMessage({ type: 'state', state: appliedState });
+              }
+            } catch {}
+          } else {
             try {
               const freshState = applyDetachedPayloadToState(await fetchRoomStateSnapshot(currentRoomId));
               if (freshState) {
