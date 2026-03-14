@@ -422,6 +422,7 @@ loginDiv.style.display = 'none';
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
 
       lastState = normalized;
+      try { window.rememberRoomStateShadow?.(currentRoomId, normalized); } catch {}
 
       // Preserve newer local character sheets if an incoming room_state snapshot is older.
       try {

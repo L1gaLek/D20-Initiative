@@ -799,6 +799,36 @@ function delayMs(ms) {
   return new Promise(res => setTimeout(res, Number(ms) || 0));
 }
 
+// ===== Lightweight room_state shadow cache (WS-first) =====
+let __roomStateShadowRoomId = null;
+let __roomStateShadow = null;
+let __roomStateShadowUpdatedAt = 0;
+
+function rememberRoomStateShadow(roomId, state) {
+  try {
+    const rid = String(roomId || currentRoomId || '').trim();
+    if (!rid || !state || typeof state !== 'object') return;
+    __roomStateShadowRoomId = rid;
+    __roomStateShadow = deepClone(state);
+    __roomStateShadowUpdatedAt = Date.now();
+    try { window.__roomStateShadowRoomId = rid; } catch {}
+    try { window.__roomStateShadow = deepClone(state); } catch {}
+    try { window.__roomStateShadowUpdatedAt = __roomStateShadowUpdatedAt; } catch {}
+  } catch {}
+}
+
+function getRoomStateShadow(roomId) {
+  try {
+    const rid = String(roomId || currentRoomId || '').trim();
+    if (!rid) return null;
+    if (String(__roomStateShadowRoomId || '') !== rid) return null;
+    if (!__roomStateShadow || typeof __roomStateShadow !== 'object') return null;
+    return deepClone(__roomStateShadow);
+  } catch {
+    return null;
+  }
+}
+
 // Fetch latest room_state.state snapshot from DB (source of truth for low-frequency state)
 async function fetchRoomStateSnapshot(roomId) {
   await ensureSupabaseReady();
@@ -860,17 +890,15 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
 async function upsertRoomState(roomId, nextState) {
   await ensureSupabaseReady();
 
-  // Preserve the newest character sheets from the latest DB snapshot before writing.
-  // This prevents unrelated room_state writes from rolling back concurrent edits in sheets.
-  let latestRoomState = null;
-  try {
-    const { data, error } = await sbClient
-      .from("room_state")
-      .select("state")
-      .eq("room_id", roomId)
-      .maybeSingle();
-    if (!error) latestRoomState = data?.state || null;
-  } catch {}
+  // Preserve the newest character sheets from the freshest known snapshot.
+  // Prefer the local WS/DB shadow cache to avoid an extra SELECT on every write.
+  // Fallback to DB only if we do not have a room-local shadow yet.
+  let latestRoomState = getRoomStateShadow(roomId);
+  if (!latestRoomState) {
+    try {
+      latestRoomState = await fetchRoomStateSnapshot(roomId);
+    } catch {}
+  }
   // v4 architecture: room_state is NOT the source of truth for token positions or logs.
   // Keeping those inside room_state causes race conditions ("last write wins").
   // We persist only the low-frequency game state here.
@@ -974,6 +1002,7 @@ async function upsertRoomState(roomId, nextState) {
   };
   const { error } = await sbClient.from("room_state").upsert(payload);
   if (error) throw error;
+  try { rememberRoomStateShadow(roomId, syncedState); } catch {}
   try {
     sendWsEnvelope({ type: 'state', roomId, state: syncedState }, { optimisticApplied: true });
   } catch {}
@@ -1173,6 +1202,9 @@ function connectRoomWs(roomId) {
       if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
 
       if (msg.type === 'ping' || msg.type === 'pong' || msg.type === 'joinedWsRoom') return;
+      if (String(msg.type || '') === 'state' && msg.state) {
+        try { rememberRoomStateShadow(msg.roomId || wsRoomId, msg.state); } catch {}
+      }
       if (handleDetachedWsMessage(msg)) return;
       handleMessage(msg);
     } catch (e) {
@@ -1233,13 +1265,10 @@ function stopRoomMembersPolling() {
 }
 
 function startRoomMembersPolling(roomId) {
+  // Presence is pushed via VPS WS snapshots.
+  // Keep the helper for compatibility, but do not start periodic polling anymore.
   stopRoomMembersPolling();
-  const rid = String(roomId || '').trim();
-  if (!rid || USE_SUPABASE_REALTIME) return;
-  roomMembersPollTimer = setInterval(() => {
-    if (!currentRoomId || String(currentRoomId) !== rid) return;
-    refreshRoomMembers(rid).catch(() => {});
-  }, 15000);
+  void roomId;
 }
 
 function sendWsEnvelope(msg, opts = {}) {
@@ -1338,6 +1367,10 @@ function handleDetachedWsMessage(msg) {
     if (type === 'musicDelete') {
       __roomDetachedCache.music = null;
       _refreshDetachedRoomView();
+      return true;
+    }
+    if (type === 'users' || type === 'usersSnapshot') {
+      try { handleMessage({ type: 'users', users: Array.isArray(msg.users) ? msg.users : [] }); } catch {}
       return true;
     }
     return false;
@@ -2250,9 +2283,9 @@ async function insertDiceEvent(roomId, ev) {
 
 let roomMembersDbChannel = null;
 
-async function refreshRoomMembers(roomId) {
+async function refreshRoomMembers(roomId, opts = {}) {
   await ensureSupabaseReady();
-  if (!roomId) return;
+  if (!roomId) return [];
 
   const { data, error } = await sbClient
     .from("room_members")
@@ -2261,20 +2294,36 @@ async function refreshRoomMembers(roomId) {
 
   if (error) {
     console.error("room_members load error", error);
-    return;
+    return [];
   }
 
   usersById.clear();
+  const users = [];
   (data || []).forEach((m) => {
     const uid = String(m.user_id || "");
     if (!uid) return;
-    usersById.set(uid, {
+    const row = {
+      id: uid,
       name: m.name || "Unknown",
       role: normalizeRoleForUi(m.role)
+    };
+    users.push(row);
+    usersById.set(uid, {
+      name: row.name,
+      role: row.role
     });
   });
 
   updatePlayerList();
+
+  const shouldBroadcast = !!opts?.broadcast && !!wsRoomId && !!wsClient && wsClient.readyState === WebSocket.OPEN;
+  if (shouldBroadcast) {
+    try {
+      sendWsEnvelope({ type: 'users', roomId: String(roomId || ''), users }, { optimisticApplied: true });
+    } catch {}
+  }
+
+  return users;
 }
 
 async function subscribeRoomMembersDb(roomId) {
@@ -2469,9 +2518,11 @@ async function sendMessage(msg) {
           try { await stopSupabaseRealtimeChannels(); } catch (e) { console.warn('disable supabase realtime failed', e); }
         }
         try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
-        await refreshRoomMembers(roomId);
+        await refreshRoomMembers(roomId, { broadcast: true });
         startRoomMembersPolling(roomId);
-        handleMessage({ type: "state", state: applyDetachedPayloadToState(rs.state) });
+        const __initialStateApplied = applyDetachedPayloadToState(rs.state);
+        try { rememberRoomStateShadow(roomId, __initialStateApplied); } catch {}
+        handleMessage({ type: "state", state: __initialStateApplied });
 
         // v4 init: load logs + tokens snapshot after state is applied
         try {
@@ -3863,3 +3914,6 @@ function updatePhaseUI(state) {
 
 
 
+
+try { window.refreshRoomMembers = refreshRoomMembers; } catch {}
+try { window.rememberRoomStateShadow = rememberRoomStateShadow; } catch {}
