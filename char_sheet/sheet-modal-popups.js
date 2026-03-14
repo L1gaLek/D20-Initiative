@@ -765,7 +765,7 @@ function bindLanguagesUi(root, player, canEdit) {
     condPopupEl.className = "mini-popover hidden";
     condPopupEl.innerHTML = `
       <div class="mini-popover__backdrop" data-cond-close></div>
-      <div class="mini-popover__panel mini-popover__panel--wide" role="dialog" aria-label="Состояния">
+      <div class="mini-popover__panel mini-popover__panel--wide mini-popover__panel--conditions" role="dialog" aria-label="Состояния">
         <div class="mini-popover__head">
           <div class="mini-popover__title">Состояния</div>
           <button class="mini-popover__x" type="button" data-cond-close>✕</button>
