@@ -866,6 +866,92 @@ function getTokenBaseImageUrl(p) {
   return '';
 }
 
+const CONDITION_ICON_MAP = {
+  "Ослеплённое": "👁",
+  "Заворожённое": "✨",
+  "Оглохшее": "🔇",
+  "Испуганное": "⚠",
+  "Схваченное": "✋",
+  "Недееспособное": "⛔",
+  "Невидимое": "👻",
+  "Парализованное": "⚡",
+  "Окаменевшее": "🪨",
+  "Отравленное": "☠",
+  "Распластанное": "↧",
+  "Обездвиженное": "⛓",
+  "Оглушенное": "💫",
+  "Без сознания": "😴"
+};
+
+function parseTokenConditionsList(sheet) {
+  if (!sheet || typeof sheet !== 'object') return [];
+  const rawList = Array.isArray(sheet.conditionsList) ? sheet.conditionsList : null;
+  const src = rawList && rawList.length ? rawList : String(sheet.conditions || '').split(',');
+  return Array.from(new Set((Array.isArray(src) ? src : [])
+    .map(x => String(x || '').trim())
+    .filter(Boolean)));
+}
+
+function getConditionIcon(name) {
+  const key = String(name || '').trim();
+  return CONDITION_ICON_MAP[key] || '•';
+}
+window.getConditionIcon = getConditionIcon;
+
+function updateTokenConditionIndicators(player, tokenEl) {
+  const pid = String(player?.id || '');
+  if (!pid || !tokenEl) return;
+
+  try {
+    if (typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(player)) {
+      const existing = tokenEl.querySelector('.token-statuses');
+      if (existing) existing.remove();
+      return;
+    }
+  } catch {}
+
+  const sheet = getTokenSheetSafe(player) || {};
+  const list = parseTokenConditionsList(sheet);
+
+  let wrap = tokenEl.querySelector('.token-statuses');
+  if (!list.length) {
+    if (wrap) wrap.remove();
+    return;
+  }
+
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'token-statuses';
+    tokenEl.appendChild(wrap);
+  }
+
+  const tooltipRows = list.map(name => `
+    <div class="token-statuses__tiprow">
+      <span class="token-statuses__tipicon" aria-hidden="true">${getConditionIcon(name)}</span>
+      <span class="token-statuses__tipname">${escapeHtml(name)}</span>
+    </div>
+  `).join('');
+
+  wrap.innerHTML = `
+    <div class="token-statuses__list">
+      ${list.map(name => `<span class="token-status-item" title="${escapeHtml(name)}">${getConditionIcon(name)}</span>`).join('')}
+    </div>
+    <div class="token-statuses__tooltip" role="tooltip">${tooltipRows}</div>
+  `;
+}
+
+window.refreshPlayerConditionIndicators = function (playerId) {
+  try {
+    const pid = String(playerId || '');
+    if (!pid) return;
+    const player = (Array.isArray(players) ? players : []).find(p => String(p?.id || '') === pid);
+    if (!player) return;
+    const el = playerElements.get(pid) || player.element;
+    if (!el) return;
+    updateTokenConditionIndicators(player, el);
+  } catch {}
+};
+
 function getTokenDisplaySettings(p) {
   const sheet = getTokenSheetSafe(p);
   const t = sheet?.appearance?.token || p?.appearance?.token || p?.token || null;
@@ -913,8 +999,8 @@ function setPlayerPosition(player) {
   if (!el) {
     el = document.createElement('div');
     el.classList.add('player');
-    // Имя под токеном (рамочка)
-    el.innerHTML = `<span class="token-label"></span>`;
+    // Имя и иконки состояний внутри токена
+    el.innerHTML = `<span class="token-label"></span><div class="token-statuses"></div>`;
     const lbl0 = el.querySelector('.token-label');
     if (lbl0) lbl0.textContent = String(player.name || '?');
     // Default fill; may be overridden by token portrait settings.
@@ -984,6 +1070,7 @@ function setPlayerPosition(player) {
   try { el.title = String(player.name || ''); } catch {}
   // Apply portrait / color mode
   try { applyTokenVisual(el, player); } catch {}
+  try { updateTokenConditionIndicators(player, el); } catch {}
   el.style.width = `${player.size * 50}px`;
   el.style.height = `${player.size * 50}px`;
 
