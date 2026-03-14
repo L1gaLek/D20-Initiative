@@ -799,6 +799,104 @@ function delayMs(ms) {
   return new Promise(res => setTimeout(res, Number(ms) || 0));
 }
 
+// ===== Pending initiative overlay (protect against stale room_state snapshots) =====
+const __pendingInitiativeOverlay = {
+  roomId: null,
+  byPlayerId: new Map()
+};
+
+function clearPendingInitiativeOverlay(roomId) {
+  try {
+    const rid = String(roomId || currentRoomId || '').trim();
+    if (!rid) return;
+    if (String(__pendingInitiativeOverlay.roomId || '') !== rid) {
+      __pendingInitiativeOverlay.roomId = rid;
+      __pendingInitiativeOverlay.byPlayerId = new Map();
+      return;
+    }
+    __pendingInitiativeOverlay.byPlayerId.clear();
+  } catch {}
+}
+
+function rememberPendingInitiativeOverlay(roomId, updates) {
+  try {
+    const rid = String(roomId || currentRoomId || '').trim();
+    if (!rid) return;
+    if (String(__pendingInitiativeOverlay.roomId || '') !== rid) {
+      __pendingInitiativeOverlay.roomId = rid;
+      __pendingInitiativeOverlay.byPlayerId = new Map();
+    }
+    const now = Date.now();
+    (Array.isArray(updates) ? updates : []).forEach((u) => {
+      const pid = String(u?.playerId || '').trim();
+      if (!pid) return;
+      __pendingInitiativeOverlay.byPlayerId.set(pid, {
+        initiative: Number(u?.total),
+        hasRolledInitiative: true,
+        pendingInitiativeChoice: false,
+        willJoinNextRound: !!u?.willJoinNextRound,
+        updatedAt: now
+      });
+    });
+  } catch {}
+}
+
+function applyPendingInitiativeOverlayToState(state) {
+  try {
+    const st = state && typeof state === 'object' ? state : null;
+    if (!st) return state;
+    const rid = String(currentRoomId || __pendingInitiativeOverlay.roomId || '').trim();
+    if (!rid) return state;
+    if (String(__pendingInitiativeOverlay.roomId || '') !== rid) return state;
+    if (!(__pendingInitiativeOverlay.byPlayerId instanceof Map) || !__pendingInitiativeOverlay.byPlayerId.size) return state;
+
+    const phase = String(st?.phase || '');
+    if (phase !== 'initiative' && phase !== 'combat') return state;
+
+    const combatants = Array.isArray(st?.players) ? st.players.filter(p => p && p.inCombat) : [];
+    const isFreshInitiativeReset = (
+      phase === 'initiative' &&
+      (Number(st?.round) || 1) === 1 &&
+      Array.isArray(st?.turnOrder) && st.turnOrder.length === 0 &&
+      combatants.length > 0 &&
+      combatants.every(p => !p.hasRolledInitiative && (p.initiative === null || typeof p.initiative === 'undefined'))
+    );
+    if (isFreshInitiativeReset) {
+      clearPendingInitiativeOverlay(rid);
+      return state;
+    }
+
+    (Array.isArray(st.players) ? st.players : []).forEach((p) => {
+      if (!p || !p.id) return;
+      const pid = String(p.id);
+      const ov = __pendingInitiativeOverlay.byPlayerId.get(pid);
+      if (!ov) return;
+
+      const incomingRolled = !!p.hasRolledInitiative;
+      const incomingInit = (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative);
+      if (incomingRolled && incomingInit === Number(ov.initiative)) {
+        __pendingInitiativeOverlay.byPlayerId.delete(pid);
+        return;
+      }
+
+      if (!p.inCombat) return;
+      if (!incomingRolled || incomingInit === null) {
+        p.initiative = Number(ov.initiative);
+        p.hasRolledInitiative = true;
+        p.pendingInitiativeChoice = false;
+        if (typeof ov.willJoinNextRound !== 'undefined') p.willJoinNextRound = !!ov.willJoinNextRound;
+      }
+    });
+    return st;
+  } catch {
+    return state;
+  }
+}
+
+try { window.clearPendingInitiativeOverlay = clearPendingInitiativeOverlay; } catch {}
+try { window.rememberPendingInitiativeOverlay = rememberPendingInitiativeOverlay; } catch {}
+try { window.applyPendingInitiativeOverlayToState = applyPendingInitiativeOverlayToState; } catch {}
+
 // ===== Lightweight room_state shadow cache (WS-first) =====
 let __roomStateShadowRoomId = null;
 let __roomStateShadow = null;
@@ -3091,6 +3189,7 @@ async function sendMessage(msg) {
 
         else if (type === "startInitiative") {
           if (!isGM) return;
+          try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
           next.phase = "initiative";
           next.turnOrder = [];
           next.currentTurnIndex = 0;
@@ -3906,6 +4005,26 @@ async function sendMessage(msg) {
           // Atomic-ish apply to room_state (retry on collision)
           await applyInitiativeAtomic(currentRoomId, myUserId, updates);
 
+          // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
+          // arrives before the DB echo/WS refresh.
+          try { rememberPendingInitiativeOverlay(currentRoomId, updates); } catch {}
+          try {
+            const optimisticBase = getRoomStateShadow(currentRoomId) || lastState || next;
+            const optimistic = deepClone(optimisticBase);
+            (optimistic.players || []).forEach((p) => {
+              if (!p || !p.id) return;
+              const u = updates.find(x => String(x?.playerId || '') === String(p.id));
+              if (!u) return;
+              p.initiative = Number(u.total);
+              p.hasRolledInitiative = true;
+              p.pendingInitiativeChoice = false;
+            });
+            try { syncOptimisticPlayersToLocalState(optimistic); } catch {}
+            handleMessage({ type: 'state', state: optimistic });
+          } catch (e) {
+            console.warn('initiative optimistic apply failed', e);
+          }
+
           // IMPORTANT: We already wrote to DB using the latest snapshot inside applyInitiativeAtomic.
           // Do NOT fall through to the generic upsert at the end of the handler (it would use stale 'next').
           return;
@@ -3913,6 +4032,7 @@ async function sendMessage(msg) {
 
         else if (type === "startCombat") {
           if (!isGM) return;
+          try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
           if (next.phase !== "initiative" && next.phase !== "placement" && next.phase !== "exploration") return;
           // In v6, combat includes only selected combatants.
           // If starting combat directly from placement/exploration, default to "those placed on the board".

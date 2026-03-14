@@ -397,10 +397,10 @@ loginDiv.style.display = 'none';
       // - wipe the action log (state.log is intentionally empty)
       // - temporarily reset token positions to null until room_tokens catches up
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
+      const prevPhase = String(lastState?.phase || '');
       const prevPos = new Map();
       const prevSheets = new Map();
       const prevInitiatives = new Map();
-      const prevPhase = String(lastState?.phase || '');
       try {
         (lastState?.players || []).forEach(p => {
           if (!p || !p.id) return;
@@ -429,6 +429,7 @@ loginDiv.style.display = 'none';
       // нормализация состояния + поддержка нескольких карт кампании
       let normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
+      try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
 
       lastState = normalized;
       try { window.rememberRoomStateShadow?.(currentRoomId, normalized); } catch {}
@@ -451,8 +452,7 @@ loginDiv.style.display = 'none';
 
       // Preserve already-known initiative results against stale room_state snapshots.
       // This matters when several players roll initiative almost simultaneously and a slightly
-      // older WS state arrives after a fresher local/appended result.
-      // IMPORTANT: when GM starts a NEW initiative phase, we must NOT restore previous rolls.
+      // older snapshot arrives after a fresher local/appended result.
       try {
         const incomingPhase = String(lastState?.phase || '');
         const sameInitiativeWindow = (
@@ -476,16 +476,13 @@ loginDiv.style.display = 'none';
             if (!prev) return;
             const incomingRolled = !!p.hasRolledInitiative;
             const incomingInit = (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative);
-            const shouldKeepPrev = (
-              !!prev.hasRolledInitiative &&
-              (!incomingRolled || !Number.isFinite(incomingInit))
-            );
-            if (!shouldKeepPrev) return;
-            p.inCombat = !!prev.inCombat;
-            p.hasRolledInitiative = true;
-            p.pendingInitiativeChoice = false;
-            p.initiative = prev.initiative;
-            if (typeof prev.willJoinNextRound !== 'undefined') p.willJoinNextRound = !!prev.willJoinNextRound;
+            if (prev.hasRolledInitiative && (!incomingRolled || incomingInit === null)) {
+              p.initiative = prev.initiative;
+              p.hasRolledInitiative = true;
+              p.pendingInitiativeChoice = !!prev.pendingInitiativeChoice && !prev.hasRolledInitiative;
+              p.willJoinNextRound = !!prev.willJoinNextRound;
+              if (typeof prev.inCombat !== 'undefined') p.inCombat = !!prev.inCombat;
+            }
           });
         }
       } catch {}
