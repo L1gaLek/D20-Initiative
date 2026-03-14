@@ -4009,7 +4009,11 @@ async function sendMessage(msg) {
           // arrives before the DB echo/WS refresh.
           try { rememberPendingInitiativeOverlay(currentRoomId, updates); } catch {}
           try {
-            const optimisticBase = getRoomStateShadow(currentRoomId) || lastState || next;
+            // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
+            // does not carry authoritative token x/y positions (they are stored in room_tokens).
+            // If we start from room_state shadow here, src.x/src.y become null and
+            // syncOptimisticPlayersToLocalState(...) can momentarily hide all tokens on the board.
+            const optimisticBase = lastState || getRoomStateShadow(currentRoomId) || next;
             const optimistic = deepClone(optimisticBase);
             (optimistic.players || []).forEach((p) => {
               if (!p || !p.id) return;
