@@ -2349,6 +2349,26 @@ async function insertRoomLog(roomId, text) {
   }
 }
 
+function buildDiceLogText(ev) {
+  try {
+    const who = String(ev?.fromName || '').trim() || 'Игрок';
+    const kind = String(ev?.kindText || '').trim() || (Number(ev?.sides) ? `d${Number(ev.sides)}` : 'Бросок');
+    const rolls = Array.isArray(ev?.rolls) ? ev.rolls.map(n => Number(n) || 0).join(',') : '';
+    const bonusNum = Number(ev?.bonus) || 0;
+    const bonusTxt = bonusNum === 0 ? '' : (bonusNum > 0 ? `+${bonusNum}` : String(bonusNum));
+    const hasTotal = !(ev?.total === null || typeof ev?.total === 'undefined' || ev?.total === '');
+    const totalTxt = hasTotal ? ` = ${Number(ev.total) || 0}` : '';
+    const critTxt = String(ev?.crit || '') === 'crit-success'
+      ? ' (КРИТ)'
+      : (String(ev?.crit || '') === 'crit-fail' ? ' (ПРОВАЛ)' : '');
+    const body = rolls ? `${rolls}${bonusTxt}${totalTxt}` : (hasTotal ? String(Number(ev.total) || 0) : '');
+    const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
+    return line || '';
+  } catch {
+    return '';
+  }
+}
+
 async function insertDiceEvent(roomId, ev) {
   try {
     await ensureSupabaseReady();
@@ -2386,14 +2406,16 @@ async function insertDiceEvent(roomId, ev) {
 
     // log line (roughly same as RPC)
     try {
-      const who = (args.p_from_name || '').trim() || 'Игрок';
-      const kind = (args.p_kind_text || '').trim() || (args.p_sides ? `d${args.p_sides}` : 'Бросок');
-      const rollsTxt = (Array.isArray(args.p_rolls) && args.p_rolls.length) ? args.p_rolls.join(',') : '';
-      const bonusTxt = (Number(args.p_bonus) === 0) ? '' : (Number(args.p_bonus) > 0 ? `+${Number(args.p_bonus)}` : String(Number(args.p_bonus)));
-      const totalTxt = (args.p_total === null || args.p_total === undefined) ? '' : ` = ${args.p_total}`;
-      const critTxt = (args.p_crit === 'crit-success') ? ' (КРИТ)' : (args.p_crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
-      const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(args.p_total ?? '');
-      const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
+      const line = buildDiceLogText({
+        fromName: args.p_from_name,
+        kindText: args.p_kind_text,
+        sides: args.p_sides,
+        count: args.p_count,
+        bonus: args.p_bonus,
+        rolls: args.p_rolls,
+        total: args.p_total,
+        crit: args.p_crit
+      });
       if (line) await insertRoomLog(roomId, line);
     } catch {}
   } catch (e) {
@@ -2668,11 +2690,23 @@ async function sendMessage(msg) {
         if (!currentRoomId) return;
         // v4: dice events are append-only in room_dice_events (and log is append-only in room_log)
         const ev = msg.event || {};
+        const diceLogText = buildDiceLogText(ev);
         await insertDiceEvent(currentRoomId, ev);
         try {
           sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true });
         } catch {}
-        // apply to self instantly (others will receive via realtime INSERT)
+        // When Supabase Realtime is off, the action log will not receive the INSERT from room_log.
+        // Mirror the matching log line through VPS WS too, so every client sees the roll in "Журнале действий" immediately.
+        if (diceLogText) {
+          const logRow = { text: diceLogText, created_at: new Date().toISOString() };
+          try {
+            sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: true });
+          } catch {}
+          try {
+            handleMessage({ type: 'logRow', row: logRow });
+          } catch {}
+        }
+        // apply to self instantly (others will receive via realtime INSERT / WS)
         if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         break;
       }
@@ -2766,25 +2800,16 @@ async function sendMessage(msg) {
           if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
         } catch {}
 
-        // High-frequency operations (fog painting / exploration) are coalesced to reduce
-        // DB writes and realtime egress. We still update local UI immediately.
-        const coalescedTypes = new Set([
-          'fogStamp',
-          'fogStamp2',
-          'fogStampBatch',
-          'fogFill',
-          'fogClearExplored',
-          'fogSetExplored',
-          'fogAddExplored'
-        ]);
-
-        if (coalescedTypes.has(String(type))) {
-          try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
-          const d = (String(type) === 'fogStamp' || String(type) === 'fogStamp2' || String(type) === 'fogStampBatch') ? 140 : 320;
-          scheduleRoomStateUpsert(currentRoomId, next, d);
-        } else {
-          await upsertRoomState(currentRoomId, next);
+        try {
+          const optimisticState = syncActiveToMap(deepClone(next));
+          try { syncOptimisticPlayersToLocalState(optimisticState); } catch {}
+          handleMessage({ type: 'state', state: optimisticState });
+          try { applyOptimisticPlayerVisuals(lastState || optimisticState); } catch {}
+        } catch (e) {
+          console.warn('applySavedBase optimistic apply failed', e);
         }
+
+        await upsertRoomState(currentRoomId, next);
         handleMessage({ type: "savedBaseApplied", playerId: p.id, savedId });
         break;
       }
@@ -2815,6 +2840,15 @@ async function sendMessage(msg) {
     const nextName = parsed?.name?.value ?? parsed?.name;
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
   } catch {}
+
+  try {
+    const optimisticState = syncActiveToMap(deepClone(next));
+    try { syncOptimisticPlayersToLocalState(optimisticState); } catch {}
+    handleMessage({ type: 'state', state: optimisticState });
+    try { applyOptimisticPlayerVisuals(lastState || optimisticState); } catch {}
+  } catch (e) {
+    console.warn('setPlayerSheet optimistic apply failed', e);
+  }
 
   await upsertRoomState(currentRoomId, next);
   break;
