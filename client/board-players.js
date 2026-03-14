@@ -875,7 +875,7 @@ const CONDITION_ICON_MAP = {
   "Недееспособное": "⛔",
   "Невидимое": "👻",
   "Парализованное": "⚡",
-  "Окаменевшее": "🪨",
+  "Окаменевшее": "🗿",
   "Отравленное": "☠",
   "Распластанное": "↧",
   "Обездвиженное": "⛓",
@@ -898,12 +898,27 @@ function getConditionIcon(name) {
 }
 window.getConditionIcon = getConditionIcon;
 
+function canShowTokenConditionIndicators(player) {
+  if (!player) return false;
+  try {
+    if (String(myRole || '') === 'GM') return true;
+  } catch {}
+  if (String(player.ownerId || '') === String(myId || '')) return true;
+  if (player.isAlly) return true;
+
+  const ownerRole = getOwnerRoleForToken(player);
+  if (ownerRole === 'GM') {
+    return !!player.isPublic;
+  }
+  return true;
+}
+
 function updateTokenConditionIndicators(player, tokenEl) {
   const pid = String(player?.id || '');
   if (!pid || !tokenEl) return;
 
   try {
-    if (typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(player)) {
+    if (!canShowTokenConditionIndicators(player)) {
       const existing = tokenEl.querySelector('.token-statuses');
       if (existing) existing.remove();
       return;
