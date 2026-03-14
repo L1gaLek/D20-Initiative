@@ -187,6 +187,90 @@
   z-index: 3;
 }
 
+.player .token-statuses{
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 18px;
+  max-width: calc(100% - 6px);
+  z-index: 4;
+  pointer-events: auto;
+}
+
+.player .token-statuses__list{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 4px;
+  min-height: 16px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.62);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.32);
+}
+
+.player .token-status-item{
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  flex: 0 0 auto;
+}
+
+.player .token-statuses__tooltip{
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  min-width: 150px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(16,16,16,0.96);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.42);
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.player .token-statuses:hover .token-statuses__tooltip{
+  opacity: 1;
+  visibility: visible;
+}
+
+.player .token-statuses__tiprow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.25;
+  color: #f2f2f2;
+}
+
+.player .token-statuses__tiprow + .token-statuses__tiprow{
+  margin-top: 5px;
+}
+
+.player .token-statuses__tipicon{
+  width: 16px;
+  flex: 0 0 16px;
+  text-align: center;
+}
+
 .player.selected {
   outline: 3px solid yellow;
   cursor: grabbing;
