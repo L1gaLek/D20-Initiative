@@ -829,6 +829,72 @@ function getRoomStateShadow(roomId) {
   }
 }
 
+// ===== Pending initiative overlay (protect local/just-written rolls from stale snapshots) =====
+const __pendingInitiativeByPlayerId = new Map();
+
+function rememberPendingInitiativeUpdates(updates) {
+  try {
+    const now = Date.now();
+    (Array.isArray(updates) ? updates : []).forEach((u) => {
+      const pid = String(u?.playerId || '').trim();
+      if (!pid) return;
+      __pendingInitiativeByPlayerId.set(pid, {
+        playerId: pid,
+        total: Number(u?.total) || 0,
+        hasRolledInitiative: true,
+        pendingInitiativeChoice: false,
+        ts: now
+      });
+    });
+  } catch {}
+}
+
+function clearPendingInitiativeUpdates(playerIds) {
+  try {
+    (Array.isArray(playerIds) ? playerIds : []).forEach((id) => {
+      const pid = String(id || '').trim();
+      if (pid) __pendingInitiativeByPlayerId.delete(pid);
+    });
+  } catch {}
+}
+
+function applyPendingInitiativeOverlayToState(state) {
+  try {
+    const st = state && typeof state === 'object' ? state : null;
+    const pls = Array.isArray(st?.players) ? st.players : [];
+    if (!pls.length) return st;
+
+    const now = Date.now();
+    for (const [pid, info] of Array.from(__pendingInitiativeByPlayerId.entries())) {
+      if (!info || (now - Number(info.ts || 0)) > 15000) {
+        __pendingInitiativeByPlayerId.delete(pid);
+        continue;
+      }
+      const p = pls.find((pp) => String(pp?.id || '') === pid);
+      if (!p) continue;
+
+      if (!!p.hasRolledInitiative && Number(p.initiative) === Number(info.total)) {
+        __pendingInitiativeByPlayerId.delete(pid);
+        continue;
+      }
+
+      // Prefer the local just-written initiative over stale room_state snapshots.
+      if (!p.hasRolledInitiative || !Number.isFinite(Number(p.initiative))) {
+        p.initiative = Number(info.total) || 0;
+        p.hasRolledInitiative = true;
+        p.pendingInitiativeChoice = false;
+      }
+    }
+    return st;
+  } catch {
+    return state;
+  }
+}
+
+try { window.applyPendingInitiativeOverlayToState = applyPendingInitiativeOverlayToState; } catch {}
+try { window.rememberPendingInitiativeUpdates = rememberPendingInitiativeUpdates; } catch {}
+try { window.clearPendingInitiativeUpdates = clearPendingInitiativeUpdates; } catch {}
+
 // Fetch latest room_state.state snapshot from DB (source of truth for low-frequency state)
 async function fetchRoomStateSnapshot(roomId) {
   await ensureSupabaseReady();
@@ -885,6 +951,24 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
     } catch {}
     await delayMs(35 + attempt * 25);
   }
+}
+
+function applyInitiativeUpdatesToState(state, myUserId, updates) {
+  const st = state && typeof state === 'object' ? state : null;
+  const pls = Array.isArray(st?.players) ? st.players : [];
+  const updArr = Array.isArray(updates) ? updates : [];
+  for (const u of updArr) {
+    const pid = String(u?.playerId || '').trim();
+    if (!pid) continue;
+    const p = pls.find((pp) => String(pp?.id || '') === pid);
+    if (!p) continue;
+    if (myUserId && String(p.ownerId || '') !== String(myUserId)) continue;
+    if (!p.inCombat) continue;
+    p.initiative = Number(u?.total) || 0;
+    p.hasRolledInitiative = true;
+    p.pendingInitiativeChoice = false;
+  }
+  return st;
 }
 
 async function upsertRoomState(roomId, nextState) {
@@ -3872,17 +3956,32 @@ async function sendMessage(msg) {
             const dexMod = getDexMod(p);
             const total = roll + dexMod;
             updates.push({ playerId: p.id, total, roll, dexMod, name: p.name });
+          }
 
-            // Live dice event (broadcast only) – includes its own log line in room_log.
+          // Optimistic local initiative update so the owner's turn-order box updates instantly.
+          // We also keep a short-lived overlay to protect these values from stale concurrent snapshots.
+          applyInitiativeUpdatesToState(next, myUserId, updates);
+          rememberPendingInitiativeUpdates(updates);
+          try {
+            const optimisticState = syncActiveToMap(deepClone(next));
+            try { syncOptimisticPlayersToLocalState(optimisticState); } catch {}
+            handleMessage({ type: 'state', state: optimisticState });
+            try { applyOptimisticPlayerVisuals(lastState || optimisticState); } catch {}
+          } catch (e) {
+            console.warn('optimistic initiative apply failed', e);
+          }
+
+          // Broadcast dice after local UI update so all clients get the same rolls, including the owner.
+          for (const u of updates) {
             await broadcastDiceEventOnly({
               fromId: myUserId,
-              fromName: p.name,
-              kindText: `Инициатива: d20${dexMod >= 0 ? "+" : ""}${dexMod}`,
+              fromName: u.name,
+              kindText: `Инициатива: d20${u.dexMod >= 0 ? "+" : ""}${u.dexMod}`,
               sides: 20,
               count: 1,
-              bonus: dexMod,
-              rolls: [roll],
-              total,
+              bonus: u.dexMod,
+              rolls: [u.roll],
+              total: u.total,
               crit: ""
             });
           }
