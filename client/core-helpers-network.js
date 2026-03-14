@@ -842,33 +842,19 @@ async function fetchRoomStateSnapshot(roomId) {
   return data?.state || null;
 }
 
-async function fetchRoomStateRow(roomId) {
-  await ensureSupabaseReady();
-  if (!roomId) return null;
-  const { data, error } = await sbClient
-    .from("room_state")
-    .select("state,updated_at,phase,current_actor_id")
-    .eq("room_id", roomId)
-    .maybeSingle();
-  if (error) throw error;
-  return data || null;
-}
-
 // Apply initiative updates for owned players with retry to avoid "last write wins" collisions.
 // This is needed when multiple users roll initiative at the same time.
 async function applyInitiativeAtomic(roomId, myUserId, updates) {
-  if (!roomId || !myUserId) return { ok: false, state: null };
+  if (!roomId || !myUserId) return;
   const updArr = Array.isArray(updates) ? updates : [];
-  if (!updArr.length) return { ok: false, state: null };
+  if (!updArr.length) return;
 
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const latestRow = await fetchRoomStateRow(roomId);
-    const latest = latestRow?.state || null;
-    if (!latest) return { ok: false, state: null };
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const latest = await fetchRoomStateSnapshot(roomId);
+    if (!latest) return;
 
     const next = deepClone(latest);
     const pls = Array.isArray(next.players) ? next.players : [];
-    let changed = false;
     for (const u of updArr) {
       const pid = String(u?.playerId || "");
       if (!pid) continue;
@@ -876,57 +862,39 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
       if (!p) continue;
       // Only allow owner to set their own initiative.
       if (String(p.ownerId) !== String(myUserId)) continue;
-      // Do not overwrite if already rolled (retry / duplicate click / GM action).
+
+      // Do not overwrite if already rolled (e.g., due to a retry or GM action).
       if (!p.inCombat || p.hasRolledInitiative) continue;
 
       p.initiative = Number(u.total);
       p.hasRolledInitiative = true;
-      p.pendingInitiativeChoice = false;
-      changed = true;
     }
 
-    if (!changed) {
-      const cpls = Array.isArray(latest?.players) ? latest.players : [];
-      const alreadyOk = updArr.every(u => {
+    await upsertRoomState(roomId, next);
+
+    // Verify (read-after-write) – if a concurrent writer overwrote us, retry quickly.
+    try {
+      const check = await fetchRoomStateSnapshot(roomId);
+      const cpls = Array.isArray(check?.players) ? check.players : [];
+      const ok = updArr.every(u => {
         const pid = String(u?.playerId || "");
         const cp = cpls.find(pp => String(pp?.id) === pid);
         return !!cp && cp.hasRolledInitiative && Number(cp.initiative) === Number(u.total);
       });
-      if (alreadyOk) return { ok: true, state: latest };
-      return { ok: false, state: latest };
-    }
-
-    const payload = await buildRoomStatePayload(roomId, next, latest);
-    const cas = await writePreparedRoomStatePayload(roomId, payload, 'compare-and-swap', latestRow?.updated_at || null);
-    if (cas?.ok) return { ok: true, state: payload?.state || next };
-    await delayMs(20 + attempt * 20);
-  }
-
-  // Final safety read: if our values are already there, treat as success.
-  try {
-    const check = await fetchRoomStateSnapshot(roomId);
-    const cpls = Array.isArray(check?.players) ? check.players : [];
-    const ok = updArr.every(u => {
-      const pid = String(u?.playerId || "");
-      const cp = cpls.find(pp => String(pp?.id) === pid);
-      return !!cp && cp.hasRolledInitiative && Number(cp.initiative) === Number(u.total);
-    });
-    return { ok, state: check || null };
-  } catch {
-    return { ok: false, state: null };
+      if (ok) return;
+    } catch {}
+    await delayMs(35 + attempt * 25);
   }
 }
 
-async function buildRoomStatePayload(roomId, nextState, latestRoomStateOverride = undefined) {
+async function upsertRoomState(roomId, nextState) {
   await ensureSupabaseReady();
 
   // Preserve the newest character sheets from the freshest known snapshot.
   // Prefer the local WS/DB shadow cache to avoid an extra SELECT on every write.
   // Fallback to DB only if we do not have a room-local shadow yet.
-  let latestRoomState = (typeof latestRoomStateOverride !== 'undefined')
-    ? latestRoomStateOverride
-    : getRoomStateShadow(roomId);
-  if (!latestRoomState && typeof latestRoomStateOverride === 'undefined') {
+  let latestRoomState = getRoomStateShadow(roomId);
+  if (!latestRoomState) {
     try {
       latestRoomState = await fetchRoomStateSnapshot(roomId);
     } catch {}
@@ -1025,53 +993,19 @@ async function buildRoomStatePayload(roomId, nextState, latestRoomStateOverride 
   try {
     if (latestRoomState) syncedState = mergeNewestPlayerSheets(syncedState, latestRoomState);
   } catch {}
-  return {
+  const payload = {
     room_id: roomId,
     phase: String(stSafe?.phase || "lobby"),
     current_actor_id: stSafe?.turnOrder?.[stSafe?.currentTurnIndex] ?? null,
     state: syncedState,
     updated_at: new Date().toISOString()
   };
-}
-
-async function writePreparedRoomStatePayload(roomId, payload, mode = 'upsert', expectedUpdatedAt = null) {
-  await ensureSupabaseReady();
-  if (!roomId || !payload) return { ok: false };
-  if (mode === 'compare-and-swap') {
-    let q = sbClient
-      .from("room_state")
-      .update({
-        phase: payload.phase,
-        current_actor_id: payload.current_actor_id,
-        state: payload.state,
-        updated_at: payload.updated_at
-      })
-      .eq("room_id", roomId);
-    if (expectedUpdatedAt) q = q.eq("updated_at", expectedUpdatedAt);
-    const { data, error } = await q.select('updated_at');
-    if (error) throw error;
-    const ok = Array.isArray(data) ? data.length > 0 : !!data;
-    if (ok) {
-      try { rememberRoomStateShadow(roomId, payload.state); } catch {}
-      try {
-        sendWsEnvelope({ type: 'state', roomId, state: payload.state }, { optimisticApplied: true });
-      } catch {}
-    }
-    return { ok };
-  }
-
   const { error } = await sbClient.from("room_state").upsert(payload);
   if (error) throw error;
-  try { rememberRoomStateShadow(roomId, payload.state); } catch {}
+  try { rememberRoomStateShadow(roomId, syncedState); } catch {}
   try {
-    sendWsEnvelope({ type: 'state', roomId, state: payload.state }, { optimisticApplied: true });
+    sendWsEnvelope({ type: 'state', roomId, state: syncedState }, { optimisticApplied: true });
   } catch {}
-  return { ok: true };
-}
-
-async function upsertRoomState(roomId, nextState) {
-  const payload = await buildRoomStatePayload(roomId, nextState);
-  await writePreparedRoomStatePayload(roomId, payload, 'upsert');
 }
 
 // ===== Coalesced room_state writes (reduces egress & avoids DB hammering) =====
@@ -2415,28 +2349,6 @@ async function insertRoomLog(roomId, text) {
   }
 }
 
-function buildDiceLogText(ev) {
-  try {
-    if (!ev || typeof ev !== 'object') return '';
-    const who = String(ev.fromName || '').trim() || 'Игрок';
-    const kind = String(ev.kindText || '').trim() || ((Number(ev.sides) || 0) ? `d${Number(ev.sides)}` : 'Бросок');
-    const rolls = Array.isArray(ev.rolls) ? ev.rolls.map(n => Number(n)).filter(Number.isFinite) : [];
-    const rollsTxt = rolls.length ? rolls.join(',') : '';
-    const bonus = Number(ev.bonus) || 0;
-    const bonusTxt = bonus === 0 ? '' : (bonus > 0 ? `+${bonus}` : `${bonus}`);
-    const hasTotal = ev.total !== null && typeof ev.total !== 'undefined' && Number.isFinite(Number(ev.total));
-    const totalTxt = hasTotal ? ` = ${Number(ev.total)}` : '';
-    const critTxt = String(ev.crit || '') === 'crit-success'
-      ? ' (КРИТ)'
-      : (String(ev.crit || '') === 'crit-fail' ? ' (ПРОВАЛ)' : '');
-    const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : (hasTotal ? String(Number(ev.total)) : '');
-    return `${who}: ${kind}: ${body}${critTxt}`.trim();
-  } catch {
-    return '';
-  }
-}
-try { window.buildDiceLogText = buildDiceLogText; } catch {}
-
 async function insertDiceEvent(roomId, ev) {
   try {
     await ensureSupabaseReady();
@@ -2762,6 +2674,14 @@ async function sendMessage(msg) {
         } catch {}
         // apply to self instantly (others will receive via realtime INSERT)
         if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
+        // and append the matching action-log line locally right away.
+        try {
+          const line = (typeof formatDiceEventLogTextLocal === 'function') ? formatDiceEventLogTextLocal(ev) : '';
+          if (line) handleMessage({ type: 'logRow', row: { text: line, created_at: new Date().toISOString() } });
+          if (!USE_SUPABASE_REALTIME && line) {
+            sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: { text: line, created_at: new Date().toISOString() } }, { optimisticApplied: true });
+          }
+        } catch {}
         break;
       }
 
@@ -2854,25 +2774,9 @@ async function sendMessage(msg) {
           if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
         } catch {}
 
-        // High-frequency operations (fog painting / exploration) are coalesced to reduce
-        // DB writes and realtime egress. We still update local UI immediately.
-        const coalescedTypes = new Set([
-          'fogStamp',
-          'fogStamp2',
-          'fogStampBatch',
-          'fogFill',
-          'fogClearExplored',
-          'fogSetExplored',
-          'fogAddExplored'
-        ]);
-
-        if (coalescedTypes.has(String(type))) {
-          try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
-          const d = (String(type) === 'fogStamp' || String(type) === 'fogStamp2' || String(type) === 'fogStampBatch') ? 140 : 320;
-          scheduleRoomStateUpsert(currentRoomId, next, d);
-        } else {
-          await upsertRoomState(currentRoomId, next);
-        }
+        // Apply locally immediately so the owner sees the new base/token UI without refresh.
+        try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
+        await upsertRoomState(currentRoomId, next);
         handleMessage({ type: "savedBaseApplied", playerId: p.id, savedId });
         break;
       }
@@ -2904,6 +2808,8 @@ async function sendMessage(msg) {
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
   } catch {}
 
+  // Apply locally immediately so owner sees token portrait / HP / death saves without moving token.
+  try { handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) }); } catch {}
   await upsertRoomState(currentRoomId, next);
   break;
 }
@@ -3138,13 +3044,10 @@ async function sendMessage(msg) {
           (next.players || []).forEach(p => {
             const placed = (p && p.x !== null && p.y !== null);
             p.inCombat = !!placed;
-
-            // Full reset for EVERYONE so repeated "Фаза инициативы" starts cleanly on all clients.
-            // Otherwise stale UI/client-side overlays may think some characters already rolled.
-            p.initiative = null;
-            p.hasRolledInitiative = false;
-            p.pendingInitiativeChoice = false;
-            p.willJoinNextRound = false;
+            if (p.inCombat) {
+              p.initiative = null;
+              p.hasRolledInitiative = false;
+            }
           });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
         }
@@ -3944,25 +3847,8 @@ async function sendMessage(msg) {
             });
           }
 
-          // CAS-based apply to room_state so simultaneous clicks merge instead of overwriting each other.
-          const initiativeRes = await applyInitiativeAtomic(currentRoomId, myUserId, updates);
-          if (initiativeRes?.ok) {
-            try {
-              const appliedState = applyDetachedPayloadToState(deepClone(initiativeRes?.state || next));
-              if (appliedState) {
-                try { rememberRoomStateShadow(currentRoomId, appliedState); } catch {}
-                handleMessage({ type: 'state', state: appliedState });
-              }
-            } catch {}
-          } else {
-            try {
-              const freshState = applyDetachedPayloadToState(await fetchRoomStateSnapshot(currentRoomId));
-              if (freshState) {
-                try { rememberRoomStateShadow(currentRoomId, freshState); } catch {}
-                handleMessage({ type: 'state', state: freshState });
-              }
-            } catch {}
-          }
+          // Atomic-ish apply to room_state (retry on collision)
+          await applyInitiativeAtomic(currentRoomId, myUserId, updates);
 
           // IMPORTANT: We already wrote to DB using the latest snapshot inside applyInitiativeAtomic.
           // Do NOT fall through to the generic upsert at the end of the handler (it would use stale 'next').
