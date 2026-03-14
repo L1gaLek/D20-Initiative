@@ -149,7 +149,7 @@ let myRole;
 // because diceEvent case writes logs using lastState and can overwrite newer state.
 async function broadcastDiceEventOnly(event) {
   // v4: dice events are stored in room_dice_events (+ log in room_log) and delivered via realtime.
-  // We keep this helper name for backwards compatibility, but it now writes to DB.
+  // When Supabase Realtime is disabled, we must also mirror them through VPS WS.
   try {
     if (!event) return;
     if (typeof myId !== 'undefined' && !event.fromId) event.fromId = String(myId);
@@ -158,6 +158,23 @@ async function broadcastDiceEventOnly(event) {
     if (currentRoomId && typeof window.insertDiceEvent === 'function') {
       await window.insertDiceEvent(currentRoomId, event);
     }
+
+    try {
+      window.sendWsEnvelope?.({ type: 'diceEvent', roomId: currentRoomId, event }, { optimisticApplied: true });
+    } catch {}
+
+    try {
+      const diceLogText = (typeof window.buildDiceLogText === 'function') ? window.buildDiceLogText(event) : '';
+      if (diceLogText) {
+        const row = { text: diceLogText, created_at: new Date().toISOString() };
+        try {
+          window.sendWsEnvelope?.({ type: 'logRow', roomId: currentRoomId, row }, { optimisticApplied: true });
+        } catch {}
+        try {
+          handleMessage({ type: 'logRow', row });
+        } catch {}
+      }
+    } catch {}
   } catch {}
 
   // update self UI instantly (main roll panel)
