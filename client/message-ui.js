@@ -452,13 +452,24 @@ loginDiv.style.display = 'none';
       // Preserve already-known initiative results against stale room_state snapshots.
       // This matters when several players roll initiative almost simultaneously and a slightly
       // older WS state arrives after a fresher local/appended result.
+      // IMPORTANT: when GM starts a NEW initiative phase, we must NOT restore previous rolls.
       try {
         const incomingPhase = String(lastState?.phase || '');
         const sameInitiativeWindow = (
           (prevPhase === 'initiative' || prevPhase === 'combat') &&
           (incomingPhase === 'initiative' || incomingPhase === 'combat')
         );
-        if (sameInitiativeWindow) {
+        const incomingCombatants = Array.isArray(lastState?.players)
+          ? lastState.players.filter(p => p && p.inCombat)
+          : [];
+        const isFreshInitiativeReset = (
+          incomingPhase === 'initiative' &&
+          (Number(lastState?.round) || 1) === 1 &&
+          Array.isArray(lastState?.turnOrder) && lastState.turnOrder.length === 0 &&
+          incomingCombatants.length > 0 &&
+          incomingCombatants.every(p => !p.hasRolledInitiative && (p.initiative === null || typeof p.initiative === 'undefined'))
+        );
+        if (sameInitiativeWindow && !isFreshInitiativeReset) {
           (lastState.players || []).forEach(p => {
             if (!p || !p.id) return;
             const prev = prevInitiatives.get(String(p.id));

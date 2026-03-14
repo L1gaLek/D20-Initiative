@@ -3138,10 +3138,13 @@ async function sendMessage(msg) {
           (next.players || []).forEach(p => {
             const placed = (p && p.x !== null && p.y !== null);
             p.inCombat = !!placed;
-            if (p.inCombat) {
-              p.initiative = null;
-              p.hasRolledInitiative = false;
-            }
+
+            // Full reset for EVERYONE so repeated "Фаза инициативы" starts cleanly on all clients.
+            // Otherwise stale UI/client-side overlays may think some characters already rolled.
+            p.initiative = null;
+            p.hasRolledInitiative = false;
+            p.pendingInitiativeChoice = false;
+            p.willJoinNextRound = false;
           });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
         }
