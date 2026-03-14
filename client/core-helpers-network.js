@@ -1981,8 +1981,18 @@ function applyTokenRowToLocalState(row) {
         // map-local safety
         if (mapId) p.mapId = mapId;
 
-        // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates
-        if (isPublic !== null) p.isPublic = isPublic;
+        // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates.
+        // But for GM-created non-allies the default is hidden, and the first placement on the board
+        // must not silently flip the token to public if the inserted token row comes back with is_public=true.
+        // Accept public=true only if local state is already public (for example after an explicit eye toggle).
+        if (isPublic !== null) {
+          const ownerRole = String(p?.ownerRole || '').trim();
+          const isGmOwnedNonAlly = (ownerRole === 'GM' && !p?.isAlly);
+          const localIsPublic = !!p.isPublic;
+          if (!isGmOwnedNonAlly || !isPublic || localIsPublic) {
+            p.isPublic = isPublic;
+          }
+        }
 
         // Apply to DOM immediately (position/color/visibility rules)
         try { setPlayerPosition?.(p); } catch {}
@@ -3525,7 +3535,8 @@ async function sendMessage(msg) {
               tokenName: String(p.name || ''),
               actorUserId: String(myUserId || ''),
               x: nx,
-              y: ny
+              y: ny,
+              isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
           } catch (e) {
             console.warn('moveToken ws send failed', e);
@@ -3564,7 +3575,8 @@ async function sendMessage(msg) {
               roomId: String(currentRoomId || ''),
               mapId: String(p?.mapId || next?.currentMapId || ''),
               tokenId: String(p.id),
-              size: newSize
+              size: newSize,
+              isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
           } catch (e) {
             console.warn('updateTokenSize ws send failed', e);
@@ -3586,7 +3598,8 @@ async function sendMessage(msg) {
               type: 'removeTokenFromBoard',
               roomId: String(currentRoomId || ''),
               mapId: String(p?.mapId || next?.currentMapId || ''),
-              tokenId: String(p.id)
+              tokenId: String(p.id),
+              isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
           } catch (e) {
             console.warn('removeTokenFromBoard ws send failed', e);
