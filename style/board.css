@@ -94,6 +94,28 @@
 #move-preview-layer .move-preview-box.is-visible {
   opacity: 1;
 }
+/* Combat move budget overlay (green reachable cells + orange origin) */
+#combat-move-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+}
+#combat-move-layer .combat-move-cell {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 6px;
+}
+#combat-move-layer .combat-move-cell--reachable {
+  border: 1px solid rgba(112, 255, 112, 0.9);
+  background: rgba(64, 220, 64, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(185, 255, 185, 0.20);
+}
+#combat-move-layer .combat-move-cell--origin {
+  border: 2px solid rgba(255, 168, 54, 0.98);
+  background: rgba(255, 153, 0, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 214, 140, 0.25), 0 0 10px rgba(255, 153, 0, 0.18);
+}
 /* Draft/preview layer for walls while dragging (above walls, below tokens) */
 #walls-preview-layer {
   position: absolute;
