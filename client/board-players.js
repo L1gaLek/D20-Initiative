@@ -1699,14 +1699,15 @@ board.addEventListener('click', e => {
   sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
 
   if (combatRestricted) {
+    const movedId = selectedPlayer?.id;
     try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
     try {
-      selectedPlayer = Object.assign({}, selectedPlayer, { x, y });
-      const el = playerElements.get(selectedPlayer.id);
-      if (el) el.classList.add('selected');
+      selectedPlayer = null;
+      const el = playerElements.get(movedId);
+      if (el) el.classList.remove('selected');
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
-    try { window.renderCombatMoveOverlay?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
     return;
   }
 
