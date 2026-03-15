@@ -1258,16 +1258,20 @@ function updatePlayerList() {
       actions.appendChild(midRow);
 
       li.addEventListener('click', () => {
-        selectedPlayer = p;
-        if (p.x === null || p.y === null) {
-          const size = Number(p.size) || 1;
-          const spot = findFirstFreeSpotClient(size);
-          if (!spot) {
-            alert("Нет свободных клеток для размещения персонажа");
-            return;
-          }
-          sendMessage({ type: 'movePlayer', id: p.id, x: spot.x, y: spot.y });
+        const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
+
+        if (selectedPlayer) {
+          const prev = playerElements.get(String(selectedPlayer.id || ''));
+          if (prev) prev.classList.remove('selected');
         }
+
+        selectedPlayer = cur;
+
+        const curEl = playerElements.get(String(cur?.id || ''));
+        if (curEl) curEl.classList.add('selected');
+
+        try { window.updateMovePreview?.(); } catch {}
+        try { window.renderCombatMoveOverlay?.(); } catch {}
       });
 
       // Нижний ряд больше не нужен — кнопки перенесены в ряд управления
