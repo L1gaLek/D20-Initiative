@@ -932,6 +932,22 @@ function roleToLabel(role) {
   return "-";
 }
 
+
+function ensurePlayerPlacementSelectionStyle() {
+  try {
+    if (document.getElementById("player-placement-selection-style")) return;
+    const style = document.createElement("style");
+    style.id = "player-placement-selection-style";
+    style.textContent = `
+      .player-list-item.player-selected-for-placement {
+        border-color: #ff9800 !important;
+        box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.9), 0 0 12px rgba(255, 152, 0, 0.28);
+      }
+    `;
+    document.head.appendChild(style);
+  } catch {}
+}
+
 function roleToClass(role) {
   const r = normalizeRoleForUi(role);
   if (r === "GM") return "role-gm";
@@ -1076,6 +1092,12 @@ function updatePlayerList() {
     listPlayers.forEach(p => {
       const li = document.createElement('li');
       li.className = 'player-list-item';
+
+      ensurePlayerPlacementSelectionStyle();
+
+      if (selectedPlayer && String(selectedPlayer?.id || '') === String(p?.id || '')) {
+        li.classList.add('player-selected-for-placement');
+      }
 
       if (currentTurnId && p.id === currentTurnId) {
         li.classList.add('is-current-turn');
@@ -1265,7 +1287,12 @@ function updatePlayerList() {
           if (prev) prev.classList.remove('selected');
         }
 
+        document.querySelectorAll('.player-list-item.player-selected-for-placement')
+          .forEach(el => el.classList.remove('player-selected-for-placement'));
+
         selectedPlayer = cur;
+
+        li.classList.add('player-selected-for-placement');
 
         const curEl = playerElements.get(String(cur?.id || ''));
         if (curEl) curEl.classList.add('selected');
