@@ -1425,12 +1425,159 @@ addPlayerBtn.addEventListener('click', () => {
     return chebyshevSteps(fromX, fromY, toX, toY) * FEET_PER_CELL;
   }
 
+  function getWallEdgeKey(x, y, dir) {
+    return `${Number(x) || 0},${Number(y) || 0},${String(dir || '').toUpperCase()}`;
+  }
+
+  function buildWallEdgeSet() {
+    const out = new Set();
+    try {
+      const walls = Array.isArray(lastState?.walls) ? lastState.walls : [];
+      for (const w of walls) {
+        const x = Number(w?.x);
+        const y = Number(w?.y);
+        const dir = String(w?.dir || '').toUpperCase();
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+        out.add(getWallEdgeKey(x, y, dir));
+      }
+    } catch {}
+    return out;
+  }
+
+  function hasWallOnEdge(edgeSet, x, y, dir) {
+    return !!edgeSet?.has?.(getWallEdgeKey(x, y, dir));
+  }
+
+  function isStepBlockedByWalls(fromX, fromY, dx, dy, size, edgeSet) {
+    const stepX = Number(dx) || 0;
+    const stepY = Number(dy) || 0;
+    const topX = Number(fromX) || 0;
+    const topY = Number(fromY) || 0;
+    const tokenSize = Math.max(1, Number(size) || 1);
+    if (!stepX && !stepY) return false;
+
+    if (stepX > 0) {
+      for (let row = 0; row < tokenSize; row++) {
+        if (hasWallOnEdge(edgeSet, topX + tokenSize - 1, topY + row, 'E')) return true;
+        if (hasWallOnEdge(edgeSet, topX + tokenSize, topY + row, 'W')) return true;
+      }
+    } else if (stepX < 0) {
+      for (let row = 0; row < tokenSize; row++) {
+        if (hasWallOnEdge(edgeSet, topX, topY + row, 'W')) return true;
+        if (hasWallOnEdge(edgeSet, topX - 1, topY + row, 'E')) return true;
+      }
+    }
+
+    if (stepY > 0) {
+      for (let col = 0; col < tokenSize; col++) {
+        if (hasWallOnEdge(edgeSet, topX + col, topY + tokenSize - 1, 'S')) return true;
+        if (hasWallOnEdge(edgeSet, topX + col, topY + tokenSize, 'N')) return true;
+      }
+    } else if (stepY < 0) {
+      for (let col = 0; col < tokenSize; col++) {
+        if (hasWallOnEdge(edgeSet, topX + col, topY, 'N')) return true;
+        if (hasWallOnEdge(edgeSet, topX + col, topY - 1, 'S')) return true;
+      }
+    }
+
+    return false;
+  }
+
+  function canOccupyCombatCell(player, x, y, size) {
+    return !!isAreaFreeClient(player?.id, x, y, size, { allowWalls: true });
+  }
+
+  function computeReachableCells(player, recOverride = null) {
+    const live = players.find(pp => String(pp?.id) === String(player?.id)) || player;
+    const rec = recOverride || getTracker(live, { create: true });
+    if (!live || !rec) return null;
+
+    const size = Math.max(1, Number(live?.size) || 1);
+    const stepsLeft = Math.max(0, Math.floor(((Number(rec.totalFeet) || 0) - (Number(rec.spentFeet) || 0)) / FEET_PER_CELL));
+    const maxX = Math.max(0, (Number(boardWidth) || 0) - size);
+    const maxY = Math.max(0, (Number(boardHeight) || 0) - size);
+    const edgeSet = buildWallEdgeSet();
+    const startX = Number(rec.currentX) || 0;
+    const startY = Number(rec.currentY) || 0;
+
+    const dist = new Map();
+    const prev = new Map();
+    const queue = [];
+    const startKey = `${startX},${startY}`;
+    dist.set(startKey, 0);
+    queue.push([startX, startY]);
+
+    const dirs = [
+      [-1, -1], [0, -1], [1, -1],
+      [-1,  0],           [1,  0],
+      [-1,  1], [0,  1], [1,  1],
+    ];
+
+    for (let qi = 0; qi < queue.length; qi++) {
+      const [cx, cy] = queue[qi];
+      const baseKey = `${cx},${cy}`;
+      const baseSteps = Number(dist.get(baseKey) || 0);
+      if (baseSteps >= stepsLeft) continue;
+
+      for (const [dx, dy] of dirs) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx > maxX || ny > maxY) continue;
+
+        if (dx && dy) {
+          if (isStepBlockedByWalls(cx, cy, dx, 0, size, edgeSet)) continue;
+          if (isStepBlockedByWalls(cx, cy, 0, dy, size, edgeSet)) continue;
+        }
+        if (isStepBlockedByWalls(cx, cy, dx, dy, size, edgeSet)) continue;
+
+        try {
+          if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(nx, ny, live)) continue;
+        } catch {}
+
+        if (!canOccupyCombatCell(live, nx, ny, size)) continue;
+
+        const nKey = `${nx},${ny}`;
+        const nextSteps = baseSteps + 1;
+        const seen = dist.get(nKey);
+        if (seen !== undefined && seen <= nextSteps) continue;
+        dist.set(nKey, nextSteps);
+        prev.set(nKey, baseKey);
+        queue.push([nx, ny]);
+      }
+    }
+
+    return {
+      dist,
+      prev,
+      rec,
+      size,
+      startX,
+      startY,
+      originKey: `${Number(rec.originX) || 0},${Number(rec.originY) || 0}`,
+    };
+  }
+
+  function getPathFromReachable(reachable, x, y) {
+    const targetKey = `${Number(x) || 0},${Number(y) || 0}`;
+    if (!reachable?.dist?.has?.(targetKey)) return null;
+    const path = [];
+    let cur = targetKey;
+    while (cur) {
+      const [sx, sy] = String(cur).split(',');
+      path.push({ x: Number(sx) || 0, y: Number(sy) || 0 });
+      cur = reachable.prev.get(cur) || '';
+    }
+    path.reverse();
+    return path;
+  }
+
   function canSpendMoveTo(player, x, y) {
     const rec = getTracker(player, { create: true });
     if (!rec) return true;
     if (Number(x) === Number(rec.originX) && Number(y) === Number(rec.originY)) return true;
-    const cost = getMoveCostFeet(rec.currentX, rec.currentY, x, y);
-    return cost <= getRemainingFeet(player);
+    const reachable = computeReachableCells(player, rec);
+    return !!reachable?.dist?.has?.(`${Number(x) || 0},${Number(y) || 0}`);
   }
 
   function commitMove(player, x, y) {
@@ -1444,7 +1591,15 @@ addPlayerBtn.addEventListener('click', () => {
       rec.spentFeet = 0;
       return;
     }
-    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + getMoveCostFeet(rec.currentX, rec.currentY, nx, ny);
+    const reachable = computeReachableCells(player, rec);
+    const path = getPathFromReachable(reachable, nx, ny);
+    if (!Array.isArray(path) || path.length < 2) {
+      rec.currentX = nx;
+      rec.currentY = ny;
+      return;
+    }
+    const pathSteps = Math.max(0, path.length - 1);
+    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (pathSteps * FEET_PER_CELL);
     rec.currentX = nx;
     rec.currentY = ny;
   }
@@ -1500,9 +1655,7 @@ addPlayerBtn.addEventListener('click', () => {
     if (!rec) return;
 
     const size = Math.max(1, Number(live?.size) || 1);
-    const stepsLeft = Math.floor(((Number(rec.totalFeet) || 0) - (Number(rec.spentFeet) || 0)) / FEET_PER_CELL);
-    const maxX = Math.max(0, (Number(boardWidth) || 0) - size);
-    const maxY = Math.max(0, (Number(boardHeight) || 0) - size);
+    const reachable = computeReachableCells(live, rec) || { dist: new Map() };
 
     const origin = document.createElement('div');
     origin.className = 'combat-move-cell combat-move-cell--origin';
@@ -1512,26 +1665,20 @@ addPlayerBtn.addEventListener('click', () => {
     origin.style.height = `${size * CELL}px`;
     layer.appendChild(origin);
 
-    for (let y = 0; y <= maxY; y++) {
-      for (let x = 0; x <= maxX; x++) {
-        if (x === rec.originX && y === rec.originY) continue;
-        if (chebyshevSteps(rec.currentX, rec.currentY, x, y) > stepsLeft) continue;
+    for (const key of reachable.dist.keys()) {
+      if (!key || key === `${Number(rec.currentX) || 0},${Number(rec.currentY) || 0}`) continue;
+      if (key === `${Number(rec.originX) || 0},${Number(rec.originY) || 0}`) continue;
+      const [sx, sy] = String(key).split(',');
+      const x = Number(sx) || 0;
+      const y = Number(sy) || 0;
 
-        try {
-          if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, live)) continue;
-        } catch {}
-
-        const allowWalls = true;
-        if (!isAreaFreeClient(live.id, x, y, size, { allowWalls })) continue;
-
-        const cell = document.createElement('div');
-        cell.className = 'combat-move-cell combat-move-cell--reachable';
-        cell.style.left = `${x * CELL}px`;
-        cell.style.top = `${y * CELL}px`;
-        cell.style.width = `${size * CELL}px`;
-        cell.style.height = `${size * CELL}px`;
-        layer.appendChild(cell);
-      }
+      const cell = document.createElement('div');
+      cell.className = 'combat-move-cell combat-move-cell--reachable';
+      cell.style.left = `${x * CELL}px`;
+      cell.style.top = `${y * CELL}px`;
+      cell.style.width = `${size * CELL}px`;
+      cell.style.height = `${size * CELL}px`;
+      layer.appendChild(cell);
     }
   }
 
