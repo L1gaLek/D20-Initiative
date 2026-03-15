@@ -1494,13 +1494,13 @@ addPlayerBtn.addEventListener('click', () => {
           currentX: Number.isFinite(Number(live?.x)) ? Number(live.x) : 0,
           currentY: Number.isFinite(Number(live?.y)) ? Number(live.y) : 0,
           spentFeet: 0,
-          totalFeet: Infinity
+          totalFeet: getPlayerSpeedFeet(live)
         }
       : getTracker(live, { create: true });
     if (!rec) return;
 
     const size = Math.max(1, Number(live?.size) || 1);
-    const stepsLeft = isGmNow() ? Infinity : Math.floor(getRemainingFeet(live) / FEET_PER_CELL);
+    const stepsLeft = Math.floor(((Number(rec.totalFeet) || 0) - (Number(rec.spentFeet) || 0)) / FEET_PER_CELL);
     const maxX = Math.max(0, (Number(boardWidth) || 0) - size);
     const maxY = Math.max(0, (Number(boardHeight) || 0) - size);
 
