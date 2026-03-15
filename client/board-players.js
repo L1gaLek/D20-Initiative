@@ -1041,6 +1041,18 @@ function setPlayerPosition(player) {
       } catch {}
 
       if (!editEnvironment) {
+        const restricted = !!window.isCombatRestrictedSelection?.(cur);
+        if (!restricted) {
+          try {
+            const phaseNow = String(lastState?.phase || '');
+            const mine = String(cur?.ownerId || '') === String(myId || '');
+            const isCurrent = String(cur?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
+            if (phaseNow === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent) {
+              return;
+            }
+          } catch {}
+        }
+
         if (selectedPlayer) {
           const prev = playerElements.get(selectedPlayer.id);
           if (prev) prev.classList.remove('selected');
@@ -1048,6 +1060,7 @@ function setPlayerPosition(player) {
         selectedPlayer = cur;
         el.classList.add('selected');
         try { window.updateMovePreview?.(); } catch {}
+        try { window.renderCombatMoveOverlay?.(); } catch {}
       }
     });
 
@@ -1064,6 +1077,7 @@ function setPlayerPosition(player) {
           if (prev) prev.classList.remove('selected');
           selectedPlayer = null;
           try { window.hideMovePreview?.(); } catch {}
+          try { window.hideCombatMoveOverlay?.(); } catch {}
         }
       } catch {}
       // block for GM-created public NPCs
@@ -1108,6 +1122,7 @@ function setPlayerPosition(player) {
       if (selectedPlayer && String(selectedPlayer.id) === String(player.id)) {
         el.classList.remove('selected');
         selectedPlayer = null;
+        try { window.hideCombatMoveOverlay?.(); } catch {}
       }
     } catch {}
     el.style.display = 'none';
@@ -1271,6 +1286,264 @@ addPlayerBtn.addEventListener('click', () => {
   if (isAllyCheckbox) isAllyCheckbox.checked = false;
 });
 
+// ================== COMBAT MOVE BUDGET ==================
+(function wireCombatMoveBudget() {
+  const CELL = 50;
+  const FEET_PER_CELL = 10;
+  const DEFAULT_SPEED = 30;
+
+  function getTurnKey(state) {
+    const phase = String(state?.phase || '');
+    const room = String((typeof currentRoomId !== 'undefined' && currentRoomId) ? currentRoomId : '');
+    const round = Number(state?.round) || 1;
+    const idx = Number(state?.currentTurnIndex) || 0;
+    const actorId = String(state?.turnOrder?.[idx] || '');
+    return `${room}|${phase}|${round}|${idx}|${actorId}`;
+  }
+
+  function isCombatPhase() {
+    try { return String(lastState?.phase || '') === 'combat'; } catch { return false; }
+  }
+
+  function isGmNow() {
+    try { return String(myRole || '') === 'GM'; } catch { return false; }
+  }
+
+  function getCurrentTurnActorId() {
+    try {
+      const st = lastState;
+      if (String(st?.phase || '') !== 'combat') return '';
+      return String(st?.turnOrder?.[st?.currentTurnIndex] || '');
+    } catch {
+      return '';
+    }
+  }
+
+  function getPlayerSpeedFeet(player) {
+    try {
+      const raw = Number(player?.sheet?.parsed?.vitality?.speed?.value);
+      if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.trunc(raw));
+    } catch {}
+    return DEFAULT_SPEED;
+  }
+
+  function ensureStore() {
+    if (!window.__combatMoveBudgetStore || typeof window.__combatMoveBudgetStore !== 'object') {
+      window.__combatMoveBudgetStore = new Map();
+    }
+    return window.__combatMoveBudgetStore;
+  }
+
+  function clearPlayerSelectionVisual(pid) {
+    try {
+      const el = playerElements?.get?.(String(pid || ''));
+      if (el) el.classList.remove('selected');
+    } catch {}
+  }
+
+  function dropSelectionIfInvalid() {
+    try {
+      if (!selectedPlayer) return;
+      if (isGmNow() || !isCombatPhase()) return;
+      const cur = players.find(pp => String(pp?.id) === String(selectedPlayer?.id)) || selectedPlayer;
+      const mine = String(cur?.ownerId || '') === String(myId || '');
+      const currentId = getCurrentTurnActorId();
+      if (!mine || String(cur?.id || '') !== currentId) {
+        clearPlayerSelectionVisual(cur?.id);
+        selectedPlayer = null;
+      }
+    } catch {}
+  }
+
+  function getTracker(player, { create = true } = {}) {
+    if (!player || !isCombatPhase() || isGmNow()) return null;
+    const pid = String(player.id || '');
+    if (!pid) return null;
+
+    const currentId = getCurrentTurnActorId();
+    if (!currentId || currentId !== pid) return null;
+
+    const mine = String(player.ownerId || '') === String(myId || '');
+    if (!mine) return null;
+
+    const store = ensureStore();
+    const turnKey = getTurnKey(lastState || {});
+    let rec = store.get(pid) || null;
+
+    const px = Number(player?.x);
+    const py = Number(player?.y);
+
+    if (!create) {
+      if (!rec || rec.turnKey !== turnKey) return null;
+      return rec;
+    }
+
+    if (!rec || rec.turnKey !== turnKey) {
+      rec = {
+        turnKey,
+        originX: Number.isFinite(px) ? px : 0,
+        originY: Number.isFinite(py) ? py : 0,
+        currentX: Number.isFinite(px) ? px : 0,
+        currentY: Number.isFinite(py) ? py : 0,
+        spentFeet: 0,
+        totalFeet: getPlayerSpeedFeet(player)
+      };
+      store.set(pid, rec);
+      return rec;
+    }
+
+    rec.totalFeet = getPlayerSpeedFeet(player);
+
+    if (Number.isFinite(px) && Number.isFinite(py)) {
+      const posChangedExternally = (px !== rec.currentX || py !== rec.currentY);
+      if (posChangedExternally) {
+        if (px === rec.originX && py === rec.originY) {
+          rec.currentX = px;
+          rec.currentY = py;
+          rec.spentFeet = 0;
+        } else {
+          rec.currentX = px;
+          rec.currentY = py;
+        }
+      }
+    }
+
+    return rec;
+  }
+
+  function getRemainingFeet(player) {
+    const rec = getTracker(player, { create: true });
+    if (!rec) return Infinity;
+    return Math.max(0, (Number(rec.totalFeet) || 0) - (Number(rec.spentFeet) || 0));
+  }
+
+  function chebyshevSteps(ax, ay, bx, by) {
+    return Math.max(Math.abs((Number(ax) || 0) - (Number(bx) || 0)), Math.abs((Number(ay) || 0) - (Number(by) || 0)));
+  }
+
+  function getMoveCostFeet(fromX, fromY, toX, toY) {
+    return chebyshevSteps(fromX, fromY, toX, toY) * FEET_PER_CELL;
+  }
+
+  function canSpendMoveTo(player, x, y) {
+    const rec = getTracker(player, { create: true });
+    if (!rec) return true;
+    if (Number(x) === Number(rec.originX) && Number(y) === Number(rec.originY)) return true;
+    const cost = getMoveCostFeet(rec.currentX, rec.currentY, x, y);
+    return cost <= getRemainingFeet(player);
+  }
+
+  function commitMove(player, x, y) {
+    const rec = getTracker(player, { create: true });
+    if (!rec) return;
+    const nx = Number(x) || 0;
+    const ny = Number(y) || 0;
+    if (nx === rec.originX && ny === rec.originY) {
+      rec.currentX = nx;
+      rec.currentY = ny;
+      rec.spentFeet = 0;
+      return;
+    }
+    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + getMoveCostFeet(rec.currentX, rec.currentY, nx, ny);
+    rec.currentX = nx;
+    rec.currentY = ny;
+  }
+
+  function ensureLayer() {
+    let layer = board?.querySelector?.('#combat-move-layer');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'combat-move-layer';
+      try { board.appendChild(layer); } catch {}
+    }
+    return layer;
+  }
+
+  function clearLayer() {
+    try {
+      const layer = ensureLayer();
+      if (layer) layer.innerHTML = '';
+    } catch {}
+  }
+
+  function isCombatRestrictedSelection(player) {
+    return !!getTracker(player, { create: true });
+  }
+
+  function renderOverlayForSelected() {
+    dropSelectionIfInvalid();
+
+    const layer = ensureLayer();
+    if (!layer) return;
+    layer.innerHTML = '';
+
+    if (!selectedPlayer || editEnvironment) return;
+    if (!isCombatRestrictedSelection(selectedPlayer)) return;
+
+    const live = players.find(pp => String(pp?.id) === String(selectedPlayer?.id)) || selectedPlayer;
+    const rec = getTracker(live, { create: true });
+    if (!rec) return;
+
+    const size = Math.max(1, Number(live?.size) || 1);
+    const stepsLeft = Math.floor(getRemainingFeet(live) / FEET_PER_CELL);
+    const maxX = Math.max(0, (Number(boardWidth) || 0) - size);
+    const maxY = Math.max(0, (Number(boardHeight) || 0) - size);
+
+    const origin = document.createElement('div');
+    origin.className = 'combat-move-cell combat-move-cell--origin';
+    origin.style.left = `${rec.originX * CELL}px`;
+    origin.style.top = `${rec.originY * CELL}px`;
+    origin.style.width = `${size * CELL}px`;
+    origin.style.height = `${size * CELL}px`;
+    layer.appendChild(origin);
+
+    for (let y = 0; y <= maxY; y++) {
+      for (let x = 0; x <= maxX; x++) {
+        if (x === rec.originX && y === rec.originY) continue;
+        if (chebyshevSteps(rec.currentX, rec.currentY, x, y) > stepsLeft) continue;
+
+        try {
+          if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, live)) continue;
+        } catch {}
+
+        const allowWalls = true;
+        if (!isAreaFreeClient(live.id, x, y, size, { allowWalls })) continue;
+
+        const cell = document.createElement('div');
+        cell.className = 'combat-move-cell combat-move-cell--reachable';
+        cell.style.left = `${x * CELL}px`;
+        cell.style.top = `${y * CELL}px`;
+        cell.style.width = `${size * CELL}px`;
+        cell.style.height = `${size * CELL}px`;
+        layer.appendChild(cell);
+      }
+    }
+  }
+
+  function hideOverlay() {
+    clearLayer();
+  }
+
+  window.getCombatMoveBudgetInfo = function(player) {
+    const rec = getTracker(player, { create: true });
+    if (!rec) return null;
+    return {
+      originX: rec.originX,
+      originY: rec.originY,
+      currentX: rec.currentX,
+      currentY: rec.currentY,
+      spentFeet: Number(rec.spentFeet) || 0,
+      totalFeet: Number(rec.totalFeet) || 0,
+      remainingFeet: getRemainingFeet(player)
+    };
+  };
+  window.canSpendCombatMoveTo = canSpendMoveTo;
+  window.commitCombatMove = commitMove;
+  window.renderCombatMoveOverlay = renderOverlayForSelected;
+  window.hideCombatMoveOverlay = hideOverlay;
+  window.isCombatRestrictedSelection = isCombatRestrictedSelection;
+})();
+
 // ================== MOVE PREVIEW ==================
 (function wireMovePreview() {
   const CELL = 50;
@@ -1327,6 +1600,12 @@ addPlayerBtn.addEventListener('click', () => {
     if (x < 0) x = 0;
     if (y < 0) y = 0;
 
+    if (window.isCombatRestrictedSelection?.(selectedPlayer)) {
+      hideMovePreview();
+      try { window.renderCombatMoveOverlay?.(); } catch {}
+      return;
+    }
+
     const box = ensureMovePreviewBox();
     if (!box) return;
     box.style.left = `${x * CELL}px`;
@@ -1340,6 +1619,7 @@ addPlayerBtn.addEventListener('click', () => {
     try {
       if (!selectedPlayer || editEnvironment) {
         hideMovePreview();
+        try { window.hideCombatMoveOverlay?.(); } catch {}
         return;
       }
       const cell = e.target.closest('.cell');
@@ -1365,10 +1645,12 @@ addPlayerBtn.addEventListener('click', () => {
     try {
       if (!selectedPlayer || editEnvironment) {
         hideMovePreview();
+        try { window.hideCombatMoveOverlay?.(); } catch {}
         return;
       }
       const hovered = board?.querySelector?.('.cell:hover');
       showMovePreviewForCell(hovered);
+      try { window.renderCombatMoveOverlay?.(); } catch {}
     } catch {}
   };
   window.hideMovePreview = hideMovePreview;
@@ -1402,11 +1684,37 @@ board.addEventListener('click', e => {
     return;
   }
 
+  const combatRestricted = !!window.isCombatRestrictedSelection?.(selectedPlayer);
+  if (combatRestricted) {
+    const moveInfo = window.getCombatMoveBudgetInfo?.(selectedPlayer);
+    if (moveInfo) {
+      const toOrigin = (Number(x) === Number(moveInfo.originX) && Number(y) === Number(moveInfo.originY));
+      if (!toOrigin && !window.canSpendCombatMoveTo?.(selectedPlayer, x, y)) {
+        alert("Недостаточно скорости для такого перемещения");
+        return;
+      }
+    }
+  }
+
   sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
+
+  if (combatRestricted) {
+    try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
+    try {
+      selectedPlayer = Object.assign({}, selectedPlayer, { x, y });
+      const el = playerElements.get(selectedPlayer.id);
+      if (el) el.classList.add('selected');
+    } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.renderCombatMoveOverlay?.(); } catch {}
+    return;
+  }
+
   const el = playerElements.get(selectedPlayer.id);
   if (el) el.classList.remove('selected');
   selectedPlayer = null;
   try { window.hideMovePreview?.(); } catch {}
+  try { window.hideCombatMoveOverlay?.(); } catch {}
 });
 
 // ===== Dice Viz (panel + canvas animation) =====
