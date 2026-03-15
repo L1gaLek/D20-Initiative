@@ -1470,6 +1470,12 @@ addPlayerBtn.addEventListener('click', () => {
     return !!getTracker(player, { create: true });
   }
 
+  function shouldShowCombatOverlay(player) {
+    if (!player || !isCombatPhase()) return false;
+    if (isCombatRestrictedSelection(player)) return true;
+    return !!isGmNow();
+  }
+
   function renderOverlayForSelected() {
     dropSelectionIfInvalid();
 
@@ -1478,14 +1484,23 @@ addPlayerBtn.addEventListener('click', () => {
     layer.innerHTML = '';
 
     if (!selectedPlayer || editEnvironment) return;
-    if (!isCombatRestrictedSelection(selectedPlayer)) return;
+    if (!shouldShowCombatOverlay(selectedPlayer)) return;
 
     const live = players.find(pp => String(pp?.id) === String(selectedPlayer?.id)) || selectedPlayer;
-    const rec = getTracker(live, { create: true });
+    const rec = isGmNow()
+      ? {
+          originX: Number.isFinite(Number(live?.x)) ? Number(live.x) : 0,
+          originY: Number.isFinite(Number(live?.y)) ? Number(live.y) : 0,
+          currentX: Number.isFinite(Number(live?.x)) ? Number(live.x) : 0,
+          currentY: Number.isFinite(Number(live?.y)) ? Number(live.y) : 0,
+          spentFeet: 0,
+          totalFeet: Infinity
+        }
+      : getTracker(live, { create: true });
     if (!rec) return;
 
     const size = Math.max(1, Number(live?.size) || 1);
-    const stepsLeft = Math.floor(getRemainingFeet(live) / FEET_PER_CELL);
+    const stepsLeft = isGmNow() ? Infinity : Math.floor(getRemainingFeet(live) / FEET_PER_CELL);
     const maxX = Math.max(0, (Number(boardWidth) || 0) - size);
     const maxY = Math.max(0, (Number(boardHeight) || 0) - size);
 
