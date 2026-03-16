@@ -783,7 +783,7 @@ const weapons = weaponsRaw
       stats, passive,
       profLines, profText, languagesHint, languagesLearned,
       personality, notesDetails, notesEntries,
-      spellsInfo, slots, spellsByLevel, spellsPlainByLevel, spellNameByHref, spellDescByHref,
+      spellsInfo, slots, spellsByLevel, spellsPlainByLevel, spellNameByHref, spellDescByHref, spellActionByHref,
       profBonus: getProfBonus(sheet),
       weapons, combatAbilitiesEntries,
       combatPowersDefs, combatPowersActions,
