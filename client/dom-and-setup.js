@@ -23,6 +23,69 @@ const roomPasswordInput = document.getElementById('roomPasswordInput');
 const roomScenarioInput = document.getElementById('roomScenarioInput');
 
 const gameUI = document.getElementById('main-container');
+
+// ===== Lobby scene (video background + screen state) =====
+function updateLobbyModeClass() {
+  try {
+    const loginVisible = !!(loginDiv && loginDiv.style.display !== 'none');
+    const roomsVisible = !!(roomsDiv && roomsDiv.style.display !== 'none');
+    const inLobby = loginVisible || roomsVisible;
+    document.body.classList.toggle('lobby-active', inLobby);
+  } catch {}
+}
+
+function watchLobbyVisibility() {
+  try {
+    const sync = () => updateLobbyModeClass();
+    const observer = new MutationObserver(sync);
+    [loginDiv, roomsDiv, gameUI].forEach((el) => {
+      if (!el) return;
+      observer.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
+    });
+    sync();
+  } catch {
+    updateLobbyModeClass();
+  }
+}
+
+function initLobbyVideoBackground() {
+  const video = document.getElementById('lobby-bg-video');
+  if (!video) return;
+
+  const sources = [
+    '/lobby/lobby-d1.mp4',
+    '/lobby/lobby-n1.mp4',
+    '/lobby/lobby-n2.mp4'
+  ];
+
+  let picked = sources[0];
+  try {
+    const last = String(localStorage.getItem('dnd_lobby_last_video') || '');
+    const pool = sources.filter(src => src !== last);
+    const list = pool.length ? pool : sources;
+    picked = list[Math.floor(Math.random() * list.length)] || sources[0];
+    localStorage.setItem('dnd_lobby_last_video', picked);
+  } catch {}
+
+  const applySource = (src) => {
+    if (!src) return;
+    if (video.getAttribute('src') === src) return;
+    video.setAttribute('src', src);
+    try { video.load(); } catch {}
+    const playPromise = video.play?.();
+    if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
+  };
+
+  applySource(picked);
+
+  video.addEventListener('error', () => {
+    try {
+      const current = String(video.getAttribute('src') || '');
+      const fallback = sources.find(src => src !== current) || sources[0];
+      if (fallback && fallback !== current) applySource(fallback);
+    } catch {}
+  }, { once: true });
+}
 const myNameSpan = document.getElementById('myName');
 const myRoleSpan = document.getElementById('myRole');
 const myRoomSpan = document.getElementById('myRoom');
@@ -149,7 +212,7 @@ let myRole;
 // because diceEvent case writes logs using lastState and can overwrite newer state.
 async function broadcastDiceEventOnly(event) {
   // v4: dice events are stored in room_dice_events (+ log in room_log) and delivered via realtime.
-  // When Supabase Realtime is disabled, we must also mirror them through VPS WS.
+  // We keep this helper name for backwards compatibility, but it now writes to DB.
   try {
     if (!event) return;
     if (typeof myId !== 'undefined' && !event.fromId) event.fromId = String(myId);
@@ -158,23 +221,6 @@ async function broadcastDiceEventOnly(event) {
     if (currentRoomId && typeof window.insertDiceEvent === 'function') {
       await window.insertDiceEvent(currentRoomId, event);
     }
-
-    try {
-      window.sendWsEnvelope?.({ type: 'diceEvent', roomId: currentRoomId, event }, { optimisticApplied: true });
-    } catch {}
-
-    try {
-      const diceLogText = (typeof window.buildDiceLogText === 'function') ? window.buildDiceLogText(event) : '';
-      if (diceLogText) {
-        const row = { text: diceLogText, created_at: new Date().toISOString() };
-        try {
-          window.sendWsEnvelope?.({ type: 'logRow', roomId: currentRoomId, row }, { optimisticApplied: true });
-        } catch {}
-        try {
-          handleMessage({ type: 'logRow', row });
-        } catch {}
-      }
-    } catch {}
   } catch {}
 
   // update self UI instantly (main roll panel)
@@ -724,6 +770,8 @@ const userMissingTicks = new Map(); // userId -> missing polls count
 
 // стартово прячем панель бросков до входа в комнату
 if (diceViz) diceViz.style.display = 'none';
+initLobbyVideoBackground();
+watchLobbyVisibility();
 
 // ================== JOIN GAME ==================
 joinBtn.addEventListener('click', () => {
