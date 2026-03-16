@@ -201,11 +201,13 @@
   // ================== RENDER: SPELLS ==================
 
   
-function renderSpellCard({ level, name, href, desc }) {
+function renderSpellCard({ level, name, href, desc, action }) {
     const safeHref = escapeHtml(href || "");
     const safeName = escapeHtml(name || href || "(без названия)");
     const text = cleanupSpellDesc(desc || "");
     const lvl = safeInt(level, 0);
+    const actionType = String(action?.type || '').trim().toLowerCase();
+    const teleportFeet = Math.max(0, safeInt(action?.rangeFeet, 0));
 
     const isHttp = /^https?:\/\//i.test(String(href || ""));
     const titleHtml = isHttp
@@ -238,6 +240,21 @@ function renderSpellCard({ level, name, href, desc }) {
         </div>
         <div class="spell-item-desc hidden">
           <textarea class="spell-desc-editor" data-spell-desc-editor rows="6" placeholder="Описание (можно редактировать)…">${escapeHtml(text)}</textarea>
+          <div class="sheet-card" style="margin-top:8px; padding:10px;">
+            <div style="display:grid; grid-template-columns:minmax(140px, 180px) minmax(120px, 1fr); gap:8px; align-items:end;">
+              <label style="display:flex; flex-direction:column; gap:4px;">
+                <span class="sheet-note">Действие</span>
+                <select data-spell-action-type>
+                  <option value="" ${actionType ? '' : 'selected'}>Нет</option>
+                  <option value="teleport" ${actionType === 'teleport' ? 'selected' : ''}>Телепортация</option>
+                </select>
+              </label>
+              <label data-spell-teleport-wrap style="display:${actionType === 'teleport' ? 'flex' : 'none'}; flex-direction:column; gap:4px;">
+                <span class="sheet-note">Дистанция телепортации (футы)</span>
+                <input type="number" min="0" step="10" value="${escapeHtml(String(teleportFeet || ''))}" data-spell-teleport-feet placeholder="Например 50">
+              </label>
+            </div>
+          </div>
           <div class="sheet-note" style="margin-top:6px;">Сохраняется автоматически.</div>
         </div>
       </div>
@@ -305,7 +322,8 @@ function renderSpellCard({ level, name, href, desc }) {
         if (it.href) {
           const name = spellNameByHref[it.href] || it.text;
           const desc = spellDescByHref[it.href] || "";
-          return renderSpellCard({ level: lvl, name, href: it.href, desc });
+          const action = (vm?.spellActionByHref && typeof vm.spellActionByHref === 'object') ? vm.spellActionByHref[it.href] : null;
+          return renderSpellCard({ level: lvl, name, href: it.href, desc, action });
         }
         return `<span class="sheet-pill">${escapeHtml(it.text)}</span>`;
       }).join("");

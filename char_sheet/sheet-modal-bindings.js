@@ -3646,6 +3646,7 @@ function bindSlotEditors(root, player, canEdit) {
         const kind = (lvl === 0) ? "Заговор" : "Заклинание";
         const who = String(curPlayer?.name || '').trim() || 'Игрок';
         const nm = title || '(без названия)';
+        const href = item?.getAttribute?.('data-spell-url') || '';
 
         // ===== расход ячеек заклинаний (для уровней 1+) =====
         const sheet = getSheet();
@@ -3672,12 +3673,27 @@ function bindSlotEditors(root, player, canEdit) {
           scheduleSheetSave(curPlayer);
         }
 
+        const spellAction = getSpellActionConfig(sheet, href);
+
         try {
           if (typeof sendMessage === 'function') {
             // Без оптимистичного локального дубля (realtime вставка придёт сама)
             sendMessage({ type: 'log', text: `${who} применил ${kind}: ${nm}`, noOptimistic: true });
           }
         } catch {}
+
+        if (spellAction?.type === 'teleport') {
+          const rangeFeet = Math.max(0, safeInt(spellAction.rangeFeet, 0));
+          const ok = !!window.activateCombatTeleportForPlayer?.(curPlayer, {
+            rangeFeet,
+            sourceKind: 'spell',
+            sourceId: href || '',
+            sourceName: nm
+          });
+          if (!ok) {
+            try { alert('Телепортацию можно активировать только в фазе боя для токена, который стоит на поле и ещё не тратил телепортацию в этом ходу.'); } catch {}
+          }
+        }
         return;
       }
 
@@ -4021,6 +4037,23 @@ function deleteSpellSaved(sheet, href, onlyLevel) {
   if (!stillUsed) {
     delete sheet.text[`spell-name:${href}`];
     delete sheet.text[`spell-desc:${href}`];
+    try {
+      if (sheet.spellActions && typeof sheet.spellActions === 'object') delete sheet.spellActions[href];
+    } catch {}
+  }
+}
+
+function getSpellActionConfig(sheet, href) {
+  try {
+    if (!sheet || !href) return null;
+    const raw = sheet?.spellActions?.[href];
+    if (!raw || typeof raw !== 'object') return null;
+    const type = String(raw.type || '').trim().toLowerCase();
+    const rangeFeet = Math.max(0, safeInt(raw.rangeFeet, 0));
+    if (!type && !rangeFeet) return null;
+    return { type, rangeFeet };
+  } catch {
+    return null;
   }
 }
 
@@ -4604,9 +4637,33 @@ function bindSpellAddAndDesc(root, player, canEdit) {
 
   // выбор базовой характеристики (STR/DEX/CON/INT/WIS/CHA)
   root.addEventListener("change", (e) => {
+    const { player: curPlayer, canEdit: curCanEdit } = getState();
+
+    const actionSel = e.target?.closest?.('[data-spell-action-type]');
+    if (actionSel) {
+      if (!curCanEdit) return;
+      const sheet = getSheet();
+      if (!sheet) return;
+      const item = actionSel.closest('.spell-item');
+      const href = item?.getAttribute?.('data-spell-url') || '';
+      if (!href) return;
+      if (!sheet.spellActions || typeof sheet.spellActions !== 'object') sheet.spellActions = {};
+      const type = String(actionSel.value || '').trim().toLowerCase();
+      if (!type) {
+        delete sheet.spellActions[href];
+      } else {
+        const prev = (sheet.spellActions[href] && typeof sheet.spellActions[href] === 'object') ? sheet.spellActions[href] : {};
+        const rangeInput = item?.querySelector?.('[data-spell-teleport-feet]');
+        const rangeFeet = Math.max(0, safeInt(rangeInput?.value, prev.rangeFeet || 0));
+        sheet.spellActions[href] = { ...prev, type, rangeFeet };
+      }
+      scheduleSheetSave(curPlayer);
+      rerenderSpellsTabInPlace(root, curPlayer, sheet, curCanEdit);
+      return;
+    }
+
     const sel = e.target?.closest?.("[data-spell-base-ability]");
     if (!sel) return;
-    const { player: curPlayer, canEdit: curCanEdit } = getState();
     if (!curCanEdit) return;
 
     const sheet = getSheet();
@@ -4624,6 +4681,27 @@ function bindSpellAddAndDesc(root, player, canEdit) {
 
   // ручное редактирование бонуса атаки
   root.addEventListener("input", (e) => {
+    const tpFeet = e.target?.closest?.('[data-spell-teleport-feet]');
+    if (tpFeet) {
+      const { player: curPlayer, canEdit: curCanEdit } = getState();
+      if (!curCanEdit) return;
+      const sheet = getSheet();
+      if (!sheet) return;
+      const item = tpFeet.closest('.spell-item');
+      const href = item?.getAttribute?.('data-spell-url') || '';
+      if (!href) return;
+      const type = String(item?.querySelector?.('[data-spell-action-type]')?.value || '').trim().toLowerCase();
+      if (!sheet.spellActions || typeof sheet.spellActions !== 'object') sheet.spellActions = {};
+      if (!type) {
+        delete sheet.spellActions[href];
+      } else {
+        const prev = (sheet.spellActions[href] && typeof sheet.spellActions[href] === 'object') ? sheet.spellActions[href] : {};
+        sheet.spellActions[href] = { ...prev, type, rangeFeet: Math.max(0, safeInt(tpFeet.value, 0)) };
+      }
+      scheduleSheetSave(curPlayer);
+      return;
+    }
+
     const atk = e.target?.closest?.("[data-spell-attack-bonus]");
     if (atk) {
       const { player: curPlayer, canEdit: curCanEdit } = getState();

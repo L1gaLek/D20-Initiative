@@ -264,6 +264,7 @@
         mod: { customModifier: "" }
       },
       spells: {},
+      spellActions: {},
       personality: {
         backstory: { value: "" },
         allies: { value: "" },
@@ -586,6 +587,7 @@
     };
 
     const slotsRaw = (sheet?.spells && typeof sheet.spells === "object") ? sheet.spells : {};
+    const spellActionsRaw = (sheet?.spellActions && typeof sheet.spellActions === "object") ? sheet.spellActions : {};
     const slots = [];
     for (let lvlN = 1; lvlN <= 9; lvlN++) {
       const k = `slots-${lvlN}`;
@@ -604,6 +606,7 @@
     const spellsPlainByLevel = {};
     const spellNameByHref = {};
     const spellDescByHref = {};
+    const spellActionByHref = {};
 
     // кастомные описания/имена (добавленные кнопкой) сохраняем в sheet.text
     if (sheet?.text && typeof sheet.text === "object") {
@@ -652,6 +655,16 @@
       });
 
       spellsByLevel.push({ level: lvlN, items: merged });
+    }
+
+    for (const href of Object.keys(spellActionsRaw)) {
+      if (!href) continue;
+      const raw = spellActionsRaw[href];
+      if (!raw || typeof raw !== 'object') continue;
+      const type = String(raw.type || '').trim().toLowerCase();
+      const rangeFeet = Math.max(0, safeInt(raw.rangeFeet, 0));
+      if (!type && !rangeFeet) continue;
+      spellActionByHref[href] = { type, rangeFeet };
     }
 
 const weaponsRaw = Array.isArray(sheet?.weaponsList) ? sheet.weaponsList : [];
