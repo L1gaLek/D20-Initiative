@@ -116,6 +116,11 @@
   background: rgba(255, 153, 0, 0.22);
   box-shadow: inset 0 0 0 1px rgba(255, 214, 140, 0.25), 0 0 10px rgba(255, 153, 0, 0.18);
 }
+#combat-move-layer .combat-move-cell--teleport {
+  border: 1px solid rgba(166, 118, 255, 0.95);
+  background: rgba(133, 84, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(219, 199, 255, 0.18), 0 0 10px rgba(133, 84, 255, 0.16);
+}
 /* Draft/preview layer for walls while dragging (above walls, below tokens) */
 #walls-preview-layer {
   position: absolute;
