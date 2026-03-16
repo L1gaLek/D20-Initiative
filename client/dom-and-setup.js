@@ -52,20 +52,40 @@ function initLobbyVideoBackground() {
   const video = document.getElementById('lobby-bg-video');
   if (!video) return;
 
-  const sources = [
-    '/lobby/lobby-d1.mp4',
-    '/lobby/lobby-n1.mp4',
-    '/lobby/lobby-n2.mp4'
+  const files = [
+    'lobby-d1.mp4',
+    'lobby-n1.mp4',
+    'lobby-n2.mp4'
   ];
 
-  let picked = sources[0];
+  const buildCandidates = (fileName) => {
+    try {
+      const path = String(window.location.pathname || '/');
+      const basePath = path.endsWith('/')
+        ? path.replace(/\/$/, '')
+        : path.replace(/\/[^/]*$/, '');
+
+      return [
+        '/lobby/' + fileName,
+        './lobby/' + fileName,
+        (basePath ? basePath : '') + '/lobby/' + fileName
+      ].filter((value, index, arr) => value && arr.indexOf(value) === index);
+    } catch {
+      return ['/lobby/' + fileName];
+    }
+  };
+
+  let pickedFile = files[0];
   try {
-    const last = String(localStorage.getItem('dnd_lobby_last_video') || '');
-    const pool = sources.filter(src => src !== last);
-    const list = pool.length ? pool : sources;
-    picked = list[Math.floor(Math.random() * list.length)] || sources[0];
-    localStorage.setItem('dnd_lobby_last_video', picked);
+    const last = String(localStorage.getItem('dnd_lobby_last_video_file') || '');
+    const pool = files.filter(file => file !== last);
+    const list = pool.length ? pool : files;
+    pickedFile = list[Math.floor(Math.random() * list.length)] || files[0];
+    localStorage.setItem('dnd_lobby_last_video_file', pickedFile);
   } catch {}
+
+  const sources = buildCandidates(pickedFile);
+  let sourceIndex = 0;
 
   const applySource = (src) => {
     if (!src) return;
@@ -76,15 +96,13 @@ function initLobbyVideoBackground() {
     if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
   };
 
-  applySource(picked);
+  applySource(sources[sourceIndex] || '');
 
   video.addEventListener('error', () => {
-    try {
-      const current = String(video.getAttribute('src') || '');
-      const fallback = sources.find(src => src !== current) || sources[0];
-      if (fallback && fallback !== current) applySource(fallback);
-    } catch {}
-  }, { once: true });
+    sourceIndex += 1;
+    const fallback = sources[sourceIndex] || '';
+    if (fallback) applySource(fallback);
+  });
 }
 const myNameSpan = document.getElementById('myName');
 const myRoleSpan = document.getElementById('myRole');
