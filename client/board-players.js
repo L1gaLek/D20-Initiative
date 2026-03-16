@@ -1476,6 +1476,93 @@ addPlayerBtn.addEventListener('click', () => {
     return wallsSet.has(`${x},${y},${dir}`);
   }
 
+  function getWallAdjacencySet() {
+    const edgeSet = new Set();
+    const walls = Array.isArray(lastState?.walls) ? lastState.walls : [];
+    const keyBetween = (ax, ay, bx, by) => {
+      if (ax > bx || (ax === bx && ay > by)) {
+        const tx = ax, ty = ay;
+        ax = bx; ay = by;
+        bx = tx; by = ty;
+      }
+      return `${ax},${ay}|${bx},${by}`;
+    };
+    for (const w of walls) {
+      const x = Number(w?.x);
+      const y = Number(w?.y);
+      const dir = String(w?.dir || '').toUpperCase();
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (dir === 'N') edgeSet.add(keyBetween(x, y - 1, x, y));
+      else if (dir === 'S') edgeSet.add(keyBetween(x, y, x, y + 1));
+      else if (dir === 'W') edgeSet.add(keyBetween(x - 1, y, x, y));
+      else if (dir === 'E') edgeSet.add(keyBetween(x, y, x + 1, y));
+    }
+    return edgeSet;
+  }
+
+  function hasLineOfSightCells(x0, y0, x1, y1, edgeSet) {
+    if (!edgeSet || !edgeSet.size) return true;
+    if (x0 === x1 && y0 === y1) return true;
+
+    const keyBetween = (ax, ay, bx, by) => {
+      if (ax > bx || (ax === bx && ay > by)) {
+        const tx = ax, ty = ay;
+        ax = bx; ay = by;
+        bx = tx; by = ty;
+      }
+      return `${ax},${ay}|${bx},${by}`;
+    };
+    const blocked = (ax, ay, bx, by) => edgeSet.has(keyBetween(ax, ay, bx, by));
+
+    const ox = x0 + 0.5;
+    const oy = y0 + 0.5;
+    const tx = x1 + 0.5;
+    const ty = y1 + 0.5;
+    const dx = tx - ox;
+    const dy = ty - oy;
+
+    const stepX = dx >= 0 ? 1 : -1;
+    const stepY = dy >= 0 ? 1 : -1;
+    const tDeltaX = (dx === 0) ? Infinity : Math.abs(1 / dx);
+    const tDeltaY = (dy === 0) ? Infinity : Math.abs(1 / dy);
+
+    let cx = x0;
+    let cy = y0;
+
+    const nextV = (stepX > 0) ? (Math.floor(ox) + 1) : Math.floor(ox);
+    const nextH = (stepY > 0) ? (Math.floor(oy) + 1) : Math.floor(oy);
+    let tMaxX = (dx === 0) ? Infinity : Math.abs((nextV - ox) / dx);
+    let tMaxY = (dy === 0) ? Infinity : Math.abs((nextH - oy) / dy);
+    const EPS = 1e-4;
+
+    while (!(cx === x1 && cy === y1)) {
+      if (Math.abs(tMaxX - tMaxY) < EPS) {
+        const nx = cx + stepX;
+        const ny = cy + stepY;
+        if (blocked(cx, cy, nx, cy)) return false;
+        if (blocked(cx, cy, cx, ny)) return false;
+        if (blocked(nx, cy, nx, ny)) return false;
+        if (blocked(cx, ny, nx, ny)) return false;
+        cx = nx;
+        cy = ny;
+        tMaxX += tDeltaX;
+        tMaxY += tDeltaY;
+      } else if (tMaxX < tMaxY) {
+        const nx = cx + stepX;
+        if (blocked(cx, cy, nx, cy)) return false;
+        cx = nx;
+        tMaxX += tDeltaX;
+      } else {
+        const ny = cy + stepY;
+        if (blocked(cx, cy, cx, ny)) return false;
+        cy = ny;
+        tMaxY += tDeltaY;
+      }
+    }
+
+    return true;
+  }
+
   function cardinalStepBlockedByWalls(wallsSet, fromX, fromY, size, dx, dy) {
     if (dx === 1 && dy === 0) {
       for (let oy = 0; oy < size; oy++) {
@@ -1596,6 +1683,47 @@ addPlayerBtn.addEventListener('click', () => {
     };
   }
 
+  function canTeleportTargetPassFog(live, x, y, size) {
+    try {
+      if (isGmNow()) return true;
+      if (!window.FogWar?.isEnabled?.()) return true;
+      for (let oy = 0; oy < size; oy++) {
+        for (let ox = 0; ox < size; ox++) {
+          const cx = x + ox;
+          const cy = y + oy;
+          const visible = !!window.FogWar?.isCellVisible?.(cx, cy);
+          const explored = !!window.FogWar?._isExplored?.(cx, cy);
+          if (!visible && !explored) return false;
+        }
+      }
+      return true;
+    } catch {
+      return true;
+    }
+  }
+
+  function canTeleportTargetPassWalls(live, rec, x, y, size) {
+    if (isGmNow()) return true;
+    const edgeSet = getWallAdjacencySet();
+    if (!edgeSet.size) return true;
+    const srcSize = Math.max(1, Number(live?.size) || 1);
+    for (let ty = 0; ty < size; ty++) {
+      for (let tx = 0; tx < size; tx++) {
+        let seen = false;
+        for (let sy = 0; sy < srcSize && !seen; sy++) {
+          for (let sx = 0; sx < srcSize; sx++) {
+            if (hasLineOfSightCells((Number(rec.currentX) || 0) + sx, (Number(rec.currentY) || 0) + sy, x + tx, y + ty, edgeSet)) {
+              seen = true;
+              break;
+            }
+          }
+        }
+        if (!seen) return false;
+      }
+    }
+    return true;
+  }
+
   function canTeleportTo(player, x, y) {
     const live = getLivePlayer(player) || player;
     const rec = getTracker(live, { create: true });
@@ -1607,10 +1735,9 @@ addPlayerBtn.addEventListener('click', () => {
     if (nx === Number(rec.currentX) && ny === Number(rec.currentY)) return false;
     const size = Math.max(1, Number(live?.size) || 1);
     if (!withinBoard(nx, ny, size)) return false;
-    try {
-      if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(nx, ny, live)) return false;
-    } catch {}
     if (!isAreaFreeClient(live.id, nx, ny, size, { allowWalls: true })) return false;
+    if (!canTeleportTargetPassFog(live, nx, ny, size)) return false;
+    if (!canTeleportTargetPassWalls(live, rec, nx, ny, size)) return false;
     return chebyshevSteps(rec.currentX, rec.currentY, nx, ny) <= tp.rangeCells;
   }
 
@@ -1941,9 +2068,12 @@ board.addEventListener('click', e => {
   if (x + selectedPlayer.size > boardWidth) x = boardWidth - selectedPlayer.size;
   if (y + selectedPlayer.size > boardHeight) y = boardHeight - selectedPlayer.size;
 
-  // Туман войны: опционально может запрещать движение на неоткрытые клетки.
+  const teleportInfo = window.getCombatTeleportInfo?.(selectedPlayer);
+
+  // Туман войны: обычная ходьба по-прежнему опирается на FogWar.canMoveToCell,
+  // но телепорт проверяется отдельно (видимые/исследованные клетки и LOS через стены).
   try {
-    if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
+    if (!teleportInfo?.rangeCells && window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
       alert('Нельзя перемещаться в неоткрытую область (включено "Движение по открытому")');
       return;
     }
@@ -1958,9 +2088,8 @@ board.addEventListener('click', e => {
     return;
   }
 
-  const teleportInfo = window.getCombatTeleportInfo?.(selectedPlayer);
   if (teleportInfo?.rangeCells > 0) {
-    if (!window.canUseCombatTeleportTo?.(selectedPlayer, x, y)) {
+    if (!isGmNow() && !window.canUseCombatTeleportTo?.(selectedPlayer, x, y)) {
       alert('Эта клетка недоступна для телепортации');
       return;
     }
