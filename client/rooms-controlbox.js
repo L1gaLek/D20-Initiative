@@ -21,66 +21,47 @@ function renderRooms(rooms) {
   }
 
   rooms.forEach(r => {
-    const card = document.createElement('div');
-    card.className = 'sheet-card';
-    card.style.marginBottom = '10px';
-    card.style.display = 'flex';
-    card.style.alignItems = 'center';
-    card.style.justifyContent = 'space-between';
-    card.style.gap = '12px';
+    const makeCard = () => {
+      const card = document.createElement('div');
+      card.className = 'lobby-room-card';
 
-    const left = document.createElement('div');
-    left.style.minWidth = '0';
+      const left = document.createElement('div');
+      left.className = 'lobby-room-card__main';
 
-    const title = document.createElement('div');
-    title.style.fontWeight = '900';
-    title.textContent = r.name;
+      const title = document.createElement('div');
+      title.className = 'lobby-room-card__title';
+      title.textContent = r.name;
 
-    const meta = document.createElement('div');
-    meta.style.fontSize = '12px';
-    meta.style.color = '#aaa';
-    meta.textContent =
-      `Пользователей: ${r.uniqueUsers} • Пароль: ${r.hasPassword ? 'да' : 'нет'}`
-      + (r.scenario ? ` • Сценарий: ${r.scenario}` : '');
+      const meta = document.createElement('div');
+      meta.className = 'lobby-room-card__meta';
+      meta.textContent =
+        `Пользователей: ${r.uniqueUsers} • Пароль: ${r.hasPassword ? 'да' : 'нет'}`
+        + (r.scenario ? ` • Сценарий: ${r.scenario}` : '');
 
-    left.appendChild(title);
-    left.appendChild(meta);
+      left.appendChild(title);
+      left.appendChild(meta);
 
-    const right = document.createElement('div');
-    right.style.display = 'flex';
-    right.style.gap = '8px';
+      const right = document.createElement('div');
+      right.className = 'lobby-room-card__actions';
 
-    const joinBtn2 = document.createElement('button');
-    joinBtn2.textContent = 'Войти';
-    joinBtn2.onclick = () => {
-      try {
-        openRoleModalForRoom(r);
-      } catch {
-        // fallback
-        sendMessage({ type: 'joinRoom', roomId: r.id, password: '' });
-      }
+      const joinBtn2 = document.createElement('button');
+      joinBtn2.type = 'button';
+      joinBtn2.textContent = 'Войти';
+      joinBtn2.onclick = () => {
+        try {
+          openRoleModalForRoom(r);
+        } catch {
+          sendMessage({ type: 'joinRoom', roomId: r.id, password: '' });
+        }
+      };
+
+      right.appendChild(joinBtn2);
+      card.appendChild(left);
+      card.appendChild(right);
+      return card;
     };
 
-    right.appendChild(joinBtn2);
-    card.appendChild(left);
-    card.appendChild(right);
-
-    targets.forEach((target) => { target.appendChild(card.cloneNode(true)); });
-
-    // Wire buttons for each rendered copy
-    targets.forEach((target) => {
-      const lastCard = target.lastElementChild;
-      const btn = lastCard?.querySelector('button');
-      if (btn) {
-        btn.onclick = () => {
-          try {
-            openRoleModalForRoom(r);
-          } catch {
-            sendMessage({ type: 'joinRoom', roomId: r.id, password: '' });
-          }
-        };
-      }
-    });
+    targets.forEach((target) => { target.appendChild(makeCard()); });
   });
 }
 
