@@ -1309,6 +1309,19 @@ addPlayerBtn.addEventListener('click', () => {
     try { return String(lastState?.phase || '') === 'combat'; } catch { return false; }
   }
 
+  function isInitiativePhase() {
+    try { return String(lastState?.phase || '') === 'initiative'; } catch { return false; }
+  }
+
+  function canUseSpellActionsPhase() {
+    try {
+      const phase = String(lastState?.phase || '').trim();
+      return phase !== 'initiative';
+    } catch {
+      return true;
+    }
+  }
+
   function isGmNow() {
     try { return String(myRole || '') === 'GM'; } catch { return false; }
   }
@@ -1352,7 +1365,7 @@ addPlayerBtn.addEventListener('click', () => {
   }
 
   function getTracker(player, { create = true } = {}) {
-    if (!player || !isCombatPhase()) return null;
+    if (!player || isInitiativePhase()) return null;
     const pid = String(player.id || '');
     if (!pid) return null;
 
@@ -1603,14 +1616,33 @@ addPlayerBtn.addEventListener('click', () => {
 
   function activateTeleport(playerOrId, opts = {}) {
     const live = getLivePlayer(playerOrId);
-    if (!live || !isCombatPhase()) return false;
+    if (!live || !canUseSpellActionsPhase()) return false;
     if (live.x === null || live.y === null) return false;
-    if (!isGmNow() && !isRestrictedForPlayer(live)) return false;
+
+    const mine = String(live?.ownerId || '') === String(myId || '');
+    if (!isGmNow()) {
+      if (isCombatPhase()) {
+        if (!isRestrictedForPlayer(live)) return false;
+      } else {
+        if (!mine) return false;
+      }
+    }
+
     const rec = getTracker(live, { create: true });
     if (!rec) return false;
-    if (rec.teleportUsed) return false;
+    if (isCombatPhase() && rec.teleportUsed) return false;
     const rangeFeet = Math.max(0, Math.trunc(Number(opts?.rangeFeet) || 0));
     if (rangeFeet <= 0) return false;
+
+    if (!isCombatPhase()) {
+      rec.originX = Number.isFinite(Number(live?.x)) ? Number(live.x) : 0;
+      rec.originY = Number.isFinite(Number(live?.y)) ? Number(live.y) : 0;
+      rec.currentX = rec.originX;
+      rec.currentY = rec.originY;
+      rec.spentFeet = 0;
+      rec.totalFeet = getPlayerSpeedFeet(live);
+      rec.teleportUsed = false;
+    }
 
     rec.teleportAvailable = true;
     rec.teleportRangeFeet = rangeFeet;
@@ -1691,9 +1723,11 @@ addPlayerBtn.addEventListener('click', () => {
   }
 
   function shouldShowCombatOverlay(player) {
-    if (!player || !isCombatPhase()) return false;
+    if (!player || isInitiativePhase()) return false;
+    const tp = getTeleportInfo(player);
+    if (!isCombatPhase()) return !!tp;
     if (isCombatRestrictedSelection(player)) return true;
-    if (getTeleportInfo(player)) return true;
+    if (tp) return true;
     return !!isGmNow();
   }
 
