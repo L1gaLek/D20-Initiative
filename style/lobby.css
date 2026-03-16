@@ -339,11 +339,7 @@ body.lobby-active #lobby-scene {
   object-fit:cover;
 }
 .tavern-screen__shade{
-  position:absolute;
-  inset:0;
-  background:
-    radial-gradient(circle at 46% 54%, rgba(255,191,99,0.08) 0%, rgba(0,0,0,0) 26%),
-    linear-gradient(180deg, rgba(8,7,6,0.1) 0%, rgba(8,7,6,0.18) 52%, rgba(3,3,3,0.48) 100%);
+  display:none;
 }
 
 .tavern-headbar{
