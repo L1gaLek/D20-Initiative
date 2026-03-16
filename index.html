@@ -2,8 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>D20 Initiative</title>
-<link rel="icon" href="favicon.ico" sizes="any">
+<title>Мини D&D</title>
 <link rel="stylesheet" href="style/base.css">
 <link rel="stylesheet" href="style/layout.css">
 <link rel="stylesheet" href="style/lobby.css">
@@ -13,8 +12,49 @@
 </head>
 <body>
 
+<!-- ================== LOGIN SCENE ================== -->
+<div id="login-scene" aria-hidden="true">
+  <div class="login-scene-sky"></div>
+  <div class="login-scene-sun"></div>
+  <div class="login-scene-clouds login-scene-clouds--back"></div>
+  <div class="login-scene-clouds login-scene-clouds--front"></div>
+  <div class="login-scene-birds">
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+  <div class="login-scene-city login-scene-city--far"></div>
+  <div class="login-scene-city login-scene-city--mid"></div>
+  <div class="login-scene-ground"></div>
+  <div class="login-scene-street"></div>
+  <div class="login-scene-tavern-wrap">
+    <div class="login-scene-flag login-scene-flag--left"><span></span></div>
+    <div class="login-scene-flag login-scene-flag--right"><span></span></div>
+    <div class="login-scene-tavern">
+      <div class="login-scene-chimney-smoke">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="login-scene-roof"></div>
+      <div class="login-scene-roof login-scene-roof--side"></div>
+      <div class="login-scene-window login-scene-window--1"></div>
+      <div class="login-scene-window login-scene-window--2"></div>
+      <div class="login-scene-window login-scene-window--3"></div>
+      <div class="login-scene-door"></div>
+      <div class="login-scene-sign">
+        <div class="login-scene-sign__dice">20</div>
+        <div class="login-scene-sign__text">К20 Инициатива</div>
+      </div>
+    </div>
+  </div>
+  <div class="login-scene-npcs">
+    <span class="npc npc--1"></span>
+    <span class="npc npc--2"></span>
+    <span class="npc npc--3"></span>
+    <span class="npc npc--4"></span>
+  </div>
+  <div class="login-scene-vignette"></div>
+</div>
+
 <!-- ================== LOGIN ================== -->
-<div id="login-container">
+<div id="login-container" class="login-panel">
   <h2>Вход</h2>
   <input type="text" id="username" placeholder="Введите имя">
   <!-- Роль выбирается при входе в комнату -->
