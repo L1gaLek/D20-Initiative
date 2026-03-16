@@ -10,74 +10,52 @@
 <link rel="stylesheet" href="style/players.css">
 <link rel="stylesheet" href="style/gameplay.css">
 </head>
-<body>
+<body class="lobby-active">
 
-<!-- ================== LOGIN SCENE ================== -->
-<div id="login-scene" aria-hidden="true">
-  <div class="login-scene-sky"></div>
-  <div class="login-scene-sun"></div>
-  <div class="login-scene-clouds login-scene-clouds--back"></div>
-  <div class="login-scene-clouds login-scene-clouds--front"></div>
-  <div class="login-scene-birds">
-    <span></span><span></span><span></span><span></span><span></span><span></span>
-  </div>
-  <div class="login-scene-city login-scene-city--far"></div>
-  <div class="login-scene-city login-scene-city--mid"></div>
-  <div class="login-scene-ground"></div>
-  <div class="login-scene-street"></div>
-  <div class="login-scene-tavern-wrap">
-    <div class="login-scene-flag login-scene-flag--left"><span></span></div>
-    <div class="login-scene-flag login-scene-flag--right"><span></span></div>
-    <div class="login-scene-tavern">
-      <div class="login-scene-chimney-smoke">
-        <span></span><span></span><span></span><span></span>
-      </div>
-      <div class="login-scene-roof"></div>
-      <div class="login-scene-roof login-scene-roof--side"></div>
-      <div class="login-scene-window login-scene-window--1"></div>
-      <div class="login-scene-window login-scene-window--2"></div>
-      <div class="login-scene-window login-scene-window--3"></div>
-      <div class="login-scene-door"></div>
-      <div class="login-scene-sign">
-        <div class="login-scene-sign__dice">20</div>
-        <div class="login-scene-sign__text">К20 Инициатива</div>
-      </div>
-    </div>
-  </div>
-  <div class="login-scene-npcs">
-    <span class="npc npc--1"></span>
-    <span class="npc npc--2"></span>
-    <span class="npc npc--3"></span>
-    <span class="npc npc--4"></span>
-  </div>
-  <div class="login-scene-vignette"></div>
+<div id="lobby-scene" aria-hidden="true">
+  <video id="lobby-bg-video" autoplay muted loop playsinline preload="auto"></video>
+  <div class="lobby-scene__overlay"></div>
+  <div class="lobby-scene__vignette"></div>
+  <div class="lobby-scene__embers"></div>
 </div>
 
 <!-- ================== LOGIN ================== -->
-<div id="login-container" class="login-panel">
-  <h2>Вход</h2>
-  <input type="text" id="username" placeholder="Введите имя">
-  <!-- Роль выбирается при входе в комнату -->
-  <select id="role" style="display:none;">
-    <option value="GM">GM</option>
-    <option value="Player">Игрок</option>
-    <option value="Spectator">Наблюдатель</option>
-  </select>
-  <button id="joinBtn">Войти</button>
-  <p id="loginError" style="color:red;"></p>
+<div id="login-container" class="lobby-card">
+  <div class="lobby-card__crest">Инициатива</div>
+  <div class="lobby-card__eyebrow">Таверна приключений</div>
+  <h2>Вход в лобби</h2>
+  <p class="lobby-card__text">Введите имя, чтобы войти в таверну и выбрать комнату для игры.</p>
+
+  <div class="lobby-form">
+    <label class="lobby-label" for="username">Имя пользователя</label>
+    <input type="text" id="username" placeholder="Например, Тарик">
+    <!-- Роль выбирается при входе в комнату -->
+    <select id="role" style="display:none;">
+      <option value="GM">GM</option>
+      <option value="Player">Игрок</option>
+      <option value="Spectator">Наблюдатель</option>
+    </select>
+    <button id="joinBtn">Войти</button>
+    <p id="loginError" class="lobby-error"></p>
+  </div>
 </div>
 
 
 <!-- ================== ROOMS LOBBY ================== -->
-<div id="rooms-container" style="display:none;">
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-    <h2 style="margin:0;">Комнаты</h2>
-    <div id="server-users-total" style="font-size:12px; color:#aaa; margin-left:auto; margin-right:8px;"></div>
-    <button id="createRoomBtn">Создать комнату</button>
+<div id="rooms-container" class="lobby-card lobby-card--rooms" style="display:none;">
+  <div class="lobby-rooms-head">
+    <div>
+      <div class="lobby-card__eyebrow">Список столов и кампаний</div>
+      <h2>Комнаты</h2>
+    </div>
+    <div class="lobby-rooms-head__actions">
+      <div id="server-users-total" class="lobby-server-total"></div>
+      <button id="createRoomBtn">Создать комнату</button>
+    </div>
   </div>
 
-  <div id="rooms-list" style="margin-top:12px;"></div>
-  <p id="roomsError" style="color:#ff6b6b; margin-top:10px;"></p>
+  <div id="rooms-list" class="lobby-rooms-list"></div>
+  <p id="roomsError" class="lobby-error"></p>
 </div>
 
 <!-- ===== Role select modal (shown when joining a room) ===== -->
