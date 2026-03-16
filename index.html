@@ -58,6 +58,92 @@
   <p id="roomsError" class="lobby-error"></p>
 </div>
 
+<!-- ================== TAVERN ================== -->
+<div id="tavern-container" class="tavern-screen hidden" aria-hidden="true">
+  <video id="tavern-bg-video" class="tavern-screen__video" autoplay muted loop playsinline preload="auto"></video>
+  <div class="tavern-screen__shade"></div>
+
+  <div class="tavern-topbar">
+    <div class="tavern-topbar__title">Таверна «Инициатива»</div>
+    <div class="tavern-topbar__subtitle">Добро пожаловать, <span id="tavern-my-name">путник</span></div>
+  </div>
+
+  <button id="tavern-hotspot-chat" class="tavern-hotspot tavern-hotspot--chat" type="button" aria-label="Общение">
+    <span class="tavern-hotspot__label">Общение</span>
+  </button>
+
+  <button id="tavern-hotspot-bartender" class="tavern-hotspot tavern-hotspot--bartender" type="button" aria-label="Узнать">
+    <span class="tavern-hotspot__label">Узнать</span>
+  </button>
+
+  <button id="tavern-hotspot-board" class="tavern-hotspot tavern-hotspot--board" type="button" aria-label="Доска объявлений - отправиться в путешествие">
+    <span class="tavern-hotspot__label tavern-hotspot__label--wide">Доска объявлений — отправиться в путешествие</span>
+  </button>
+</div>
+
+<!-- ===== Tavern chat modal ===== -->
+<div id="tavernChatModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Общение</div>
+        <div class="modal-subtitle" id="tavern-chat-subtitle">Разговоры путников в таверне</div>
+      </div>
+      <button id="tavernChatClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body tavern-chat-body">
+      <div id="tavern-chat-list" class="tavern-chat-list"></div>
+      <div class="tavern-chat-form">
+        <input id="tavern-chat-input" type="text" maxlength="500" placeholder="Напишите сообщение в таверну">
+        <button id="tavern-chat-send" type="button">Отправить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tavern bartender modal ===== -->
+<div id="tavernBartenderModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal tavern-menu-modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Бармен</div>
+        <div class="modal-subtitle">Что желаете узнать?</div>
+      </div>
+      <button id="tavernBartenderClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tavern-menu-grid">
+        <button class="tavern-menu-btn" type="button" data-tavern-topic="Новости / Обновления">Новости / Обновления</button>
+        <button class="tavern-menu-btn" type="button" data-tavern-topic="Как играть">Как играть</button>
+        <button class="tavern-menu-btn" type="button" data-tavern-topic="Последние изменения">Последние изменения</button>
+        <button class="tavern-menu-btn" type="button" data-tavern-topic="Помощь новичкам">Помощь новичкам</button>
+      </div>
+      <div id="tavern-bartender-note" class="tavern-bartender-note">Эти разделы уже готовы для кнопок. Наполнение можно добавить следующим шагом.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tavern rooms modal ===== -->
+<div id="tavernRoomsModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal tavern-rooms-modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Доска объявлений</div>
+        <div class="modal-subtitle">Выберите комнату, чтобы отправиться в путешествие</div>
+      </div>
+      <button id="tavernRoomsClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tavern-rooms-head">
+        <div id="tavern-server-users-total" class="lobby-server-total"></div>
+        <button id="tavernCreateRoomBtn" type="button">Создать комнату</button>
+      </div>
+      <div id="tavern-rooms-list" class="lobby-rooms-list tavern-rooms-list"></div>
+      <div id="tavernRoomsError" class="lobby-error"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== Role select modal (shown when joining a room) ===== -->
 <div id="roleModal" class="modal-overlay hidden">
   <div class="modal" style="max-width:520px;">
