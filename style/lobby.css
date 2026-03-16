@@ -44,3 +44,557 @@
 #login-container button {
   width: 100%;
 }
+
+
+/* ================== ANIMATED LOGIN SCENE ================== */
+body{
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+#login-scene{
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 68%, rgba(255,186,92,0.18), transparent 24%),
+    linear-gradient(180deg, #87a6c9 0%, #b8c6d6 34%, #d7c7a5 66%, #6f5538 100%);
+}
+
+#login-scene > *{ position:absolute; }
+
+.login-scene-sky{
+  inset:0;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.55), transparent 13%),
+    radial-gradient(circle at 78% 18%, rgba(255,255,255,0.35), transparent 15%),
+    linear-gradient(180deg, rgba(255,255,255,0.15), transparent 35%);
+}
+
+.login-scene-sun{
+  width: 130px;
+  height: 130px;
+  right: 14%;
+  top: 10%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,241,201,0.95) 0%, rgba(255,214,116,0.85) 48%, rgba(255,214,116,0.08) 72%, transparent 74%);
+  filter: blur(1px);
+  opacity: .7;
+}
+
+.login-scene-clouds{
+  left: -20%;
+  width: 140%;
+  height: 34%;
+  background-repeat: repeat-x;
+  opacity: .55;
+}
+
+.login-scene-clouds::before,
+.login-scene-clouds::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background-repeat: repeat-x;
+}
+
+.login-scene-clouds--back{
+  top: 8%;
+  animation: cloudsDrift 80s linear infinite;
+}
+.login-scene-clouds--back::before{
+  background-image:
+    radial-gradient(ellipse at 10% 50%, rgba(255,255,255,.72) 0 14%, transparent 15%),
+    radial-gradient(ellipse at 26% 46%, rgba(255,255,255,.64) 0 10%, transparent 11%),
+    radial-gradient(ellipse at 47% 55%, rgba(255,255,255,.62) 0 13%, transparent 14%),
+    radial-gradient(ellipse at 71% 48%, rgba(255,255,255,.58) 0 12%, transparent 13%),
+    radial-gradient(ellipse at 89% 58%, rgba(255,255,255,.60) 0 15%, transparent 16%);
+  transform: scaleY(.85);
+}
+
+.login-scene-clouds--front{
+  top: 16%;
+  animation: cloudsDrift 48s linear infinite reverse;
+  opacity:.42;
+}
+.login-scene-clouds--front::before{
+  background-image:
+    radial-gradient(ellipse at 6% 55%, rgba(255,255,255,.70) 0 16%, transparent 17%),
+    radial-gradient(ellipse at 31% 47%, rgba(255,255,255,.56) 0 12%, transparent 13%),
+    radial-gradient(ellipse at 57% 54%, rgba(255,255,255,.54) 0 15%, transparent 16%),
+    radial-gradient(ellipse at 83% 50%, rgba(255,255,255,.58) 0 14%, transparent 15%);
+}
+
+.login-scene-birds{
+  inset: 0;
+}
+.login-scene-birds span{
+  position:absolute;
+  width: 18px;
+  height: 8px;
+  border-top: 2px solid rgba(25,25,25,.62);
+  border-left: 2px solid transparent;
+  border-right: 2px solid transparent;
+  border-radius: 50% 50% 0 0;
+  transform-origin: center;
+  animation: birdFlap 1.2s ease-in-out infinite alternate, birdTravel 22s linear infinite;
+  opacity:.75;
+}
+.login-scene-birds span:nth-child(1){ top:18%; left:-4%; animation-delay:0s, 0s; }
+.login-scene-birds span:nth-child(2){ top:20%; left:-10%; animation-delay:.15s, 4s; transform:scale(.9); }
+.login-scene-birds span:nth-child(3){ top:15%; left:-7%; animation-delay:.3s, 8s; transform:scale(.7); }
+.login-scene-birds span:nth-child(4){ top:23%; left:-8%; animation-delay:.45s, 12s; transform:scale(.8); }
+.login-scene-birds span:nth-child(5){ top:17%; left:-12%; animation-delay:.25s, 15s; transform:scale(.65); }
+.login-scene-birds span:nth-child(6){ top:21%; left:-6%; animation-delay:.55s, 18s; transform:scale(.75); }
+
+.login-scene-city{
+  left:0;
+  width:100%;
+  background-repeat: repeat-x;
+  filter: drop-shadow(0 8px 12px rgba(0,0,0,.18));
+}
+
+.login-scene-city--far{
+  bottom: 33%;
+  height: 25%;
+  opacity:.35;
+  background:
+    linear-gradient(180deg, transparent 0 22%, rgba(46,40,41,.55) 22% 100%);
+  clip-path: polygon(0 100%, 0 68%, 3% 64%, 4.5% 40%, 6% 64%, 10% 66%, 12.5% 36%, 15% 68%, 20% 67%, 23% 42%, 25% 66%, 31% 67%, 33% 47%, 35% 68%, 42% 68%, 45% 38%, 47% 68%, 55% 68%, 58% 32%, 60% 68%, 68% 68%, 71% 44%, 73% 68%, 80% 67%, 83% 39%, 85% 68%, 92% 68%, 95% 43%, 97% 68%, 100% 68%, 100% 100%);
+}
+
+.login-scene-city--mid{
+  bottom: 24%;
+  height: 28%;
+  opacity:.55;
+  background: linear-gradient(180deg, transparent 0 18%, rgba(77,57,42,.82) 18% 100%);
+  clip-path: polygon(0 100%, 0 75%, 4% 74%, 6% 48%, 8% 74%, 13% 73%, 15% 43%, 18% 73%, 24% 72%, 27% 52%, 29% 72%, 37% 73%, 40% 40%, 42% 73%, 49% 72%, 51% 50%, 53% 72%, 59% 72%, 62% 46%, 64% 72%, 71% 73%, 74% 41%, 76% 73%, 83% 72%, 86% 49%, 88% 72%, 95% 73%, 97% 55%, 100% 73%, 100% 100%);
+}
+
+.login-scene-ground{
+  left:0;
+  right:0;
+  bottom:0;
+  height: 34%;
+  background:
+    linear-gradient(180deg, rgba(113,79,52,0) 0%, rgba(94,65,42,.38) 25%, rgba(54,38,26,.78) 100%),
+    radial-gradient(circle at 50% 0%, rgba(255,190,116,.12), transparent 45%);
+}
+
+.login-scene-street{
+  left:50%;
+  transform:translateX(-50%);
+  bottom:0;
+  width: 70%;
+  height: 31%;
+  background:
+    linear-gradient(180deg, rgba(160,124,85,.10), rgba(63,45,31,.75)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 2px, transparent 2px 36px),
+    repeating-linear-gradient(180deg, rgba(0,0,0,.08) 0 2px, transparent 2px 34px);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  opacity:.85;
+}
+
+.login-scene-tavern-wrap{
+  left:50%;
+  bottom: 17%;
+  width: min(920px, 78vw);
+  height: min(470px, 48vh);
+  transform: translateX(-50%);
+}
+
+.login-scene-tavern{
+  position:absolute;
+  inset:auto 0 0 0;
+  margin:auto;
+  width: 58%;
+  min-width: 340px;
+  height: 62%;
+  background:
+    linear-gradient(180deg, #715239 0%, #5d412d 58%, #473323 100%);
+  border: 3px solid rgba(40,24,12,.75);
+  box-shadow:
+    0 32px 70px rgba(0,0,0,.45),
+    inset 0 0 0 2px rgba(255,218,154,.06);
+  clip-path: polygon(10% 18%, 20% 7%, 77% 7%, 91% 18%, 96% 100%, 4% 100%);
+}
+
+.login-scene-tavern::before,
+.login-scene-tavern::after{
+  content:"";
+  position:absolute;
+  bottom: 0;
+  width: 22%;
+  height: 58%;
+  background: linear-gradient(180deg, #624730, #453022);
+  border: 3px solid rgba(40,24,12,.75);
+  box-shadow: inset 0 0 0 2px rgba(255,218,154,.04);
+}
+.login-scene-tavern::before{
+  left: -8%;
+  clip-path: polygon(18% 22%, 43% 0, 100% 10%, 100% 100%, 0 100%, 0 26%);
+}
+.login-scene-tavern::after{
+  right: -8%;
+  clip-path: polygon(0 10%, 58% 0, 84% 22%, 100% 26%, 100% 100%, 0 100%);
+}
+
+.login-scene-roof{
+  position:absolute;
+  left: 6%;
+  top: -6%;
+  width: 88%;
+  height: 31%;
+  background:
+    repeating-linear-gradient(180deg, #7f603f 0 10px, #6c4e35 10px 20px),
+    linear-gradient(180deg, rgba(255,236,186,.08), rgba(0,0,0,.18));
+  border: 3px solid rgba(40,24,12,.8);
+  clip-path: polygon(8% 100%, 23% 16%, 79% 16%, 95% 100%);
+  box-shadow: 0 10px 18px rgba(0,0,0,.22);
+}
+.login-scene-roof--side{
+  width: 36%;
+  height: 22%;
+  left: -5%;
+  top: 10%;
+  clip-path: polygon(18% 100%, 36% 20%, 100% 5%, 93% 100%);
+  transform: skewX(-16deg);
+  opacity:.95;
+}
+
+.login-scene-window,
+.login-scene-door,
+.login-scene-sign,
+.login-scene-chimney-smoke,
+.login-scene-flag{ position:absolute; }
+
+.login-scene-window{
+  width: 12%;
+  height: 16%;
+  background:
+    linear-gradient(90deg, rgba(66,35,7,.8) 0 24%, transparent 24% 30%, rgba(66,35,7,.8) 30% 34%, transparent 34% 66%, rgba(66,35,7,.8) 66% 70%, transparent 70% 76%, rgba(66,35,7,.8) 76%),
+    linear-gradient(180deg, rgba(66,35,7,.82) 0 24%, transparent 24% 30%, rgba(66,35,7,.82) 30% 34%, transparent 34% 66%, rgba(66,35,7,.82) 66% 70%, transparent 70% 76%, rgba(66,35,7,.82) 76%),
+    radial-gradient(circle at 50% 45%, rgba(255,216,124,.92), rgba(255,150,41,.76) 52%, rgba(115,67,0,.95) 100%);
+  border: 3px solid rgba(50,28,10,.78);
+  box-shadow: 0 0 22px rgba(255,167,64,.18);
+}
+.login-scene-window--1{ left: 20%; top: 38%; }
+.login-scene-window--2{ left: 69%; top: 34%; }
+.login-scene-window--3{ right: -1%; top: 48%; width: 10%; height: 14%; }
+
+.login-scene-door{
+  left: 42%;
+  bottom: 0;
+  width: 18%;
+  height: 29%;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.15), transparent 18%, transparent 82%, rgba(0,0,0,.22)),
+    linear-gradient(180deg, #553825, #3b271d);
+  border: 3px solid rgba(46,26,14,.84);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 0 30px rgba(255,156,62,.12), inset 0 0 0 2px rgba(255,213,142,.06);
+}
+.login-scene-door::after{
+  content:"";
+  position:absolute;
+  right: 16%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d7a85d;
+  box-shadow: 0 0 10px rgba(255,216,156,.28);
+}
+
+.login-scene-sign{
+  top: 17%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 78%;
+  padding: 16px 18px 12px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(65,41,25,.96), rgba(43,28,18,.96)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 8px, rgba(0,0,0,.03) 8px 16px);
+  border: 3px solid rgba(123,81,42,.95);
+  box-shadow:
+    0 10px 18px rgba(0,0,0,.28),
+    0 0 24px rgba(255,171,73,.18),
+    inset 0 0 0 2px rgba(255,204,120,.08);
+  text-align:center;
+  animation: signFloat 4.8s ease-in-out infinite;
+}
+
+.login-scene-sign__dice{
+  display:inline-flex;
+  width: 64px;
+  height: 64px;
+  align-items:center;
+  justify-content:center;
+  margin-bottom:10px;
+  font-size: 26px;
+  font-weight: 900;
+  color: #ffeab7;
+  background: linear-gradient(180deg, #b86f1f, #7b4210);
+  clip-path: polygon(50% 0, 96% 27%, 96% 73%, 50% 100%, 4% 73%, 4% 27%);
+  box-shadow: 0 0 20px rgba(255,163,51,.34);
+}
+.login-scene-sign__text{
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 900;
+  letter-spacing: .04em;
+  color: #ffdd95;
+  text-shadow:
+    0 0 8px rgba(255,181,71,.58),
+    0 0 22px rgba(255,122,30,.34),
+    0 3px 10px rgba(0,0,0,.45);
+}
+
+.login-scene-flag{
+  bottom: 62%;
+  width: 14%;
+  height: 38%;
+}
+.login-scene-flag::before{
+  content:"";
+  position:absolute;
+  left: 50%;
+  bottom: 0;
+  width: 4px;
+  height: 100%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #6d5238, #463122);
+  box-shadow: 0 0 0 1px rgba(255,228,175,.08);
+}
+.login-scene-flag span{
+  position:absolute;
+  left: calc(50% + 2px);
+  top: 7%;
+  width: 66%;
+  height: 28%;
+  transform-origin: left center;
+  background:
+    linear-gradient(90deg, #8f2d1f 0 50%, #c59a37 50% 100%);
+  clip-path: polygon(0 0, 100% 0, 85% 48%, 100% 100%, 0 100%);
+  box-shadow: 0 0 10px rgba(0,0,0,.18);
+  animation: flagWave 2.8s ease-in-out infinite;
+}
+.login-scene-flag--left{ left: 14%; }
+.login-scene-flag--right{ right: 12%; }
+.login-scene-flag--right span{ animation-delay: -.9s; }
+
+.login-scene-chimney-smoke{
+  left: 26%;
+  top: -4%;
+  width: 15%;
+  height: 34%;
+}
+.login-scene-chimney-smoke span{
+  position:absolute;
+  bottom: 0;
+  left: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.56), rgba(167,167,167,.20) 66%, transparent 70%);
+  filter: blur(2px);
+  animation: smokeRise 8.5s linear infinite;
+}
+.login-scene-chimney-smoke span:nth-child(2){ animation-delay: 1.8s; left:18px; }
+.login-scene-chimney-smoke span:nth-child(3){ animation-delay: 3.5s; left:7px; }
+.login-scene-chimney-smoke span:nth-child(4){ animation-delay: 5.2s; left:23px; }
+
+.login-scene-npcs{
+  left:0;
+  right:0;
+  bottom: 10%;
+  height: 12%;
+}
+.login-scene-npcs .npc{
+  position:absolute;
+  bottom:0;
+  width: 18px;
+  height: 42px;
+  border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, #2f3943 0 24%, #4f3429 24% 100%);
+  box-shadow: 0 8px 16px rgba(0,0,0,.18);
+  opacity:.82;
+}
+.login-scene-npcs .npc::before{
+  content:"";
+  position:absolute;
+  top: -10px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #d3b08d;
+}
+.login-scene-npcs .npc::after{
+  content:"";
+  position:absolute;
+  left: 50%;
+  bottom: -4px;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(0,0,0,.22);
+}
+.npc--1{ animation: npcWalk1 26s linear infinite; }
+.npc--2{ animation: npcWalk2 34s linear infinite; transform: scale(.88); }
+.npc--3{ animation: npcWalk3 30s linear infinite; transform: scale(.76); }
+.npc--4{ animation: npcWalk4 38s linear infinite; transform: scale(.95); }
+
+.login-scene-vignette{
+  inset:0;
+  background:
+    radial-gradient(circle at center, transparent 40%, rgba(0,0,0,.08) 70%, rgba(0,0,0,.38) 100%),
+    linear-gradient(180deg, rgba(5,8,11,.10), rgba(17,11,8,.22));
+}
+
+#login-container.login-panel{
+  z-index: 2;
+  width: min(520px, calc(100vw - 32px));
+  padding: 24px 24px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,214,151,.22);
+  background:
+    linear-gradient(180deg, rgba(25,20,16,.84), rgba(18,15,13,.88)),
+    radial-gradient(circle at top, rgba(255,180,82,.08), transparent 55%);
+  box-shadow:
+    0 24px 60px rgba(0,0,0,.42),
+    inset 0 0 0 1px rgba(255,255,255,.03);
+  backdrop-filter: blur(8px);
+}
+
+#login-container.login-panel h2{
+  margin: 0 0 16px;
+  font-size: 34px;
+  letter-spacing: .04em;
+  color: #f4e6c7;
+  text-shadow: 0 0 16px rgba(255,172,72,.18);
+}
+
+#login-container.login-panel::before{
+  content:"Таверна ждет новых героев";
+  display:block;
+  margin: 0 0 16px;
+  text-align:center;
+  font-size: 13px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(244,220,182,.72);
+}
+
+#login-container input,
+#login-container button{
+  border-radius: 12px;
+}
+
+#login-container input{
+  margin-bottom: 12px;
+  padding: 13px 14px;
+  border: 1px solid rgba(255,221,170,.16);
+  background: rgba(255,255,255,.06);
+  color: #f3ead9;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+#login-container input::placeholder{ color: rgba(243,234,217,.55); }
+#login-container input:focus{
+  outline:none;
+  border-color: rgba(255,191,94,.48);
+  box-shadow: 0 0 0 3px rgba(255,170,59,.10);
+}
+
+#joinBtn{
+  padding: 13px 16px;
+  font-weight: 800;
+  font-size: 15px;
+  color: #2f1808;
+  background: linear-gradient(180deg, #efbe71, #c98f3f);
+  border: 1px solid rgba(112,61,12,.62);
+  box-shadow:
+    0 12px 26px rgba(0,0,0,.22),
+    inset 0 1px 0 rgba(255,255,255,.42);
+  transition: transform .18s ease, filter .18s ease, box-shadow .18s ease;
+}
+#joinBtn:hover{
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 16px 30px rgba(0,0,0,.26),
+    inset 0 1px 0 rgba(255,255,255,.48);
+}
+
+#loginError{
+  margin: 12px 0 0;
+  text-align: center;
+  font-weight: 700;
+}
+
+@keyframes cloudsDrift {
+  from { transform: translateX(0); }
+  to { transform: translateX(-18%); }
+}
+@keyframes birdFlap {
+  from { transform: scaleX(1) translateY(0) rotate(-6deg); }
+  to { transform: scaleX(.9) translateY(-2px) rotate(6deg); }
+}
+@keyframes birdTravel {
+  from { left: -12%; }
+  to { left: 112%; }
+}
+@keyframes flagWave {
+  0%,100% { transform: perspective(120px) rotateY(0deg) skewY(0deg); }
+  25% { transform: perspective(120px) rotateY(18deg) skewY(3deg); }
+  50% { transform: perspective(120px) rotateY(-8deg) skewY(-2deg); }
+  75% { transform: perspective(120px) rotateY(12deg) skewY(2deg); }
+}
+@keyframes smokeRise {
+  0% { transform: translate(0,0) scale(.45); opacity: 0; }
+  12% { opacity:.42; }
+  55% { opacity:.24; }
+  100% { transform: translate(80px,-150px) scale(2.2); opacity: 0; }
+}
+@keyframes signFloat {
+  0%,100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-5px); }
+}
+@keyframes npcWalk1 {
+  0% { left: 12%; transform: scale(.88); }
+  100% { left: 82%; transform: scale(1.05); }
+}
+@keyframes npcWalk2 {
+  0% { left: 88%; transform: scale(.76); }
+  100% { left: 20%; transform: scale(.94); }
+}
+@keyframes npcWalk3 {
+  0% { left: 22%; transform: scale(.62); }
+  100% { left: 72%; transform: scale(.82); }
+}
+@keyframes npcWalk4 {
+  0% { left: 78%; transform: scale(.82); }
+  100% { left: 8%; transform: scale(1.02); }
+}
+
+@media (max-width: 900px){
+  .login-scene-tavern-wrap{ width: 92vw; height: 38vh; bottom: 18%; }
+  .login-scene-tavern{ width: 72%; min-width: 280px; }
+  .login-scene-sign__text{ font-size: clamp(22px, 4.2vw, 34px); }
+  .login-scene-sign__dice{ width: 52px; height:52px; font-size:22px; }
+}
+
+@media (max-width: 640px){
+  #login-container.login-panel{ padding: 18px 16px 16px; }
+  #login-container.login-panel h2{ font-size: 28px; }
+  .login-scene-city--far{ bottom: 38%; }
+  .login-scene-city--mid{ bottom: 29%; }
+  .login-scene-street{ width: 100%; height: 29%; }
+  .login-scene-tavern-wrap{ bottom: 22%; height: 30vh; }
+  .login-scene-npcs{ display:none; }
+}
