@@ -63,22 +63,18 @@
   <video id="tavern-bg-video" class="tavern-screen__video" autoplay muted loop playsinline preload="auto"></video>
   <div class="tavern-screen__shade"></div>
 
-  <div class="tavern-topbar">
-    <div class="tavern-topbar__title">Таверна «Инициатива»</div>
-    <div class="tavern-topbar__subtitle">Добро пожаловать, <span id="tavern-my-name">путник</span></div>
+  <div class="tavern-headbar">
+    <div class="tavern-topbar">
+      <div class="tavern-topbar__title">Таверна «Инициатива»</div>
+      <div class="tavern-topbar__subtitle">Добро пожаловать, <span id="tavern-my-name">путник</span></div>
+    </div>
+
+    <div class="tavern-toolbar" aria-label="Навигация по таверне">
+      <button id="tavern-hotspot-chat" class="tavern-toolbar__btn" type="button" aria-label="Общий стол">Общий стол</button>
+      <button id="tavern-hotspot-bartender" class="tavern-toolbar__btn" type="button" aria-label="Бармен">Бармен</button>
+      <button id="tavern-hotspot-board" class="tavern-toolbar__btn tavern-toolbar__btn--wide" type="button" aria-label="Доска объявлений">Доска объявлений</button>
+    </div>
   </div>
-
-  <button id="tavern-hotspot-chat" class="tavern-hotspot tavern-hotspot--chat" type="button" aria-label="Общение">
-    <span class="tavern-hotspot__label">Общение</span>
-  </button>
-
-  <button id="tavern-hotspot-bartender" class="tavern-hotspot tavern-hotspot--bartender" type="button" aria-label="Узнать">
-    <span class="tavern-hotspot__label">Узнать</span>
-  </button>
-
-  <button id="tavern-hotspot-board" class="tavern-hotspot tavern-hotspot--board" type="button" aria-label="Доска объявлений - отправиться в путешествие">
-    <span class="tavern-hotspot__label tavern-hotspot__label--wide">Доска объявлений — отправиться в путешествие</span>
-  </button>
 </div>
 
 <!-- ===== Tavern chat modal ===== -->
@@ -86,8 +82,8 @@
   <div class="modal tavern-modal">
     <div class="modal-header">
       <div>
-        <div class="modal-title">Общение</div>
-        <div class="modal-subtitle" id="tavern-chat-subtitle">Разговоры путников в таверне</div>
+        <div class="modal-title">Общий стол</div>
+        <div class="modal-subtitle" id="tavern-chat-subtitle">Разговоры путников за общим столом</div>
       </div>
       <button id="tavernChatClose" class="modal-close">✕</button>
     </div>
