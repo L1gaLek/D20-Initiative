@@ -12,6 +12,27 @@ const roomsDiv = document.getElementById('rooms-container');
 const roomsList = document.getElementById('rooms-list');
 const roomsError = document.getElementById('roomsError');
 
+const tavernDiv = document.getElementById('tavern-container');
+const tavernBgVideo = document.getElementById('tavern-bg-video');
+const tavernMyName = document.getElementById('tavern-my-name');
+const tavernChatModal = document.getElementById('tavernChatModal');
+const tavernChatClose = document.getElementById('tavernChatClose');
+const tavernChatList = document.getElementById('tavern-chat-list');
+const tavernChatInput = document.getElementById('tavern-chat-input');
+const tavernChatSend = document.getElementById('tavern-chat-send');
+const tavernChatSubtitle = document.getElementById('tavern-chat-subtitle');
+const tavernBartenderModal = document.getElementById('tavernBartenderModal');
+const tavernBartenderClose = document.getElementById('tavernBartenderClose');
+const tavernBartenderNote = document.getElementById('tavern-bartender-note');
+const tavernRoomsModal = document.getElementById('tavernRoomsModal');
+const tavernRoomsClose = document.getElementById('tavernRoomsClose');
+const tavernRoomsList = document.getElementById('tavern-rooms-list');
+const tavernRoomsError = document.getElementById('tavernRoomsError');
+const tavernCreateRoomBtn = document.getElementById('tavernCreateRoomBtn');
+const tavernChatHotspot = document.getElementById('tavern-hotspot-chat');
+const tavernBartenderHotspot = document.getElementById('tavern-hotspot-bartender');
+const tavernBoardHotspot = document.getElementById('tavern-hotspot-board');
+
 const createRoomBtn = document.getElementById('createRoomBtn');
 const createRoomModal = document.getElementById('createRoomModal');
 const createRoomClose = document.getElementById('createRoomClose');
@@ -29,7 +50,8 @@ function updateLobbyModeClass() {
   try {
     const loginVisible = !!(loginDiv && loginDiv.style.display !== 'none');
     const roomsVisible = !!(roomsDiv && roomsDiv.style.display !== 'none');
-    const inLobby = loginVisible || roomsVisible;
+    const tavernVisible = !!(tavernDiv && !tavernDiv.classList.contains('hidden') && tavernDiv.style.display !== 'none');
+    const inLobby = loginVisible || roomsVisible || tavernVisible;
     document.body.classList.toggle('lobby-active', inLobby);
   } catch {}
 }
@@ -38,7 +60,7 @@ function watchLobbyVisibility() {
   try {
     const sync = () => updateLobbyModeClass();
     const observer = new MutationObserver(sync);
-    [loginDiv, roomsDiv, gameUI].forEach((el) => {
+    [loginDiv, roomsDiv, tavernDiv, gameUI].forEach((el) => {
       if (!el) return;
       observer.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
     });
@@ -46,6 +68,47 @@ function watchLobbyVisibility() {
   } catch {
     updateLobbyModeClass();
   }
+}
+
+function buildLobbyVideoCandidates(fileName) {
+  try {
+    const path = String(window.location.pathname || '/');
+    const basePath = path.endsWith('/')
+      ? path.replace(/\/$/, '')
+      : path.replace(/\/[^/]*$/, '');
+
+    return [
+      '/lobby/' + fileName,
+      './lobby/' + fileName,
+      (basePath ? basePath : '') + '/lobby/' + fileName
+    ].filter((value, index, arr) => value && arr.indexOf(value) === index);
+  } catch {
+    return ['/lobby/' + fileName];
+  }
+}
+
+function applyVideoSourceWithFallback(video, sources) {
+  if (!video) return;
+  const list = Array.isArray(sources) ? sources.filter(Boolean) : [];
+  if (!list.length) return;
+  let sourceIndex = 0;
+
+  const applySource = (src) => {
+    if (!src) return;
+    if (video.getAttribute('src') === src) return;
+    video.setAttribute('src', src);
+    try { video.load(); } catch {}
+    const playPromise = video.play?.();
+    if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
+  };
+
+  video.addEventListener('error', () => {
+    sourceIndex += 1;
+    const fallback = list[sourceIndex] || '';
+    if (fallback) applySource(fallback);
+  });
+
+  applySource(list[sourceIndex] || '');
 }
 
 function initLobbyVideoBackground() {
@@ -58,23 +121,6 @@ function initLobbyVideoBackground() {
     'lobby-n2.mp4'
   ];
 
-  const buildCandidates = (fileName) => {
-    try {
-      const path = String(window.location.pathname || '/');
-      const basePath = path.endsWith('/')
-        ? path.replace(/\/$/, '')
-        : path.replace(/\/[^/]*$/, '');
-
-      return [
-        '/lobby/' + fileName,
-        './lobby/' + fileName,
-        (basePath ? basePath : '') + '/lobby/' + fileName
-      ].filter((value, index, arr) => value && arr.indexOf(value) === index);
-    } catch {
-      return ['/lobby/' + fileName];
-    }
-  };
-
   let pickedFile = files[0];
   try {
     const last = String(localStorage.getItem('dnd_lobby_last_video_file') || '');
@@ -84,31 +130,188 @@ function initLobbyVideoBackground() {
     localStorage.setItem('dnd_lobby_last_video_file', pickedFile);
   } catch {}
 
-  const sources = buildCandidates(pickedFile);
-  let sourceIndex = 0;
+  applyVideoSourceWithFallback(video, buildLobbyVideoCandidates(pickedFile));
+}
 
-  const applySource = (src) => {
-    if (!src) return;
-    if (video.getAttribute('src') === src) return;
-    video.setAttribute('src', src);
-    try { video.load(); } catch {}
-    const playPromise = video.play?.();
-    if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
-  };
-
-  applySource(sources[sourceIndex] || '');
-
-  video.addEventListener('error', () => {
-    sourceIndex += 1;
-    const fallback = sources[sourceIndex] || '';
-    if (fallback) applySource(fallback);
-  });
+function initTavernVideoBackground() {
+  if (!tavernBgVideo) return;
+  applyVideoSourceWithFallback(tavernBgVideo, buildLobbyVideoCandidates('taverna.mp4'));
 }
 const myNameSpan = document.getElementById('myName');
 const myRoleSpan = document.getElementById('myRole');
 const myRoomSpan = document.getElementById('myRoom');
 const myScenarioSpan = document.getElementById('myScenario');
 const diceViz = document.getElementById('dice-viz');
+
+let tavernChannel = null;
+let tavernPresenceCount = 0;
+let tavernMessageSeq = 0;
+const tavernChatHistory = [];
+
+function hideModalEl(el) {
+  if (!el) return;
+  el.classList.add('hidden');
+}
+
+function showModalEl(el) {
+  if (!el) return;
+  el.classList.remove('hidden');
+}
+
+function isTavernVisible() {
+  return !!(tavernDiv && !tavernDiv.classList.contains('hidden') && tavernDiv.style.display !== 'none');
+}
+
+function openTavern() {
+  if (!tavernDiv) return;
+  loginDiv.style.display = 'none';
+  roomsDiv.style.display = 'none';
+  gameUI.style.display = 'none';
+  tavernDiv.classList.remove('hidden');
+  tavernDiv.setAttribute('aria-hidden', 'false');
+  if (tavernMyName) tavernMyName.textContent = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'путник');
+  initTavernVideoBackground();
+  updateLobbyModeClass();
+}
+
+function closeTavern() {
+  if (!tavernDiv) return;
+  tavernDiv.classList.add('hidden');
+  tavernDiv.setAttribute('aria-hidden', 'true');
+  [tavernChatModal, tavernBartenderModal, tavernRoomsModal].forEach(hideModalEl);
+  updateLobbyModeClass();
+}
+
+function pushTavernMessage(entry) {
+  if (!entry) return;
+  const item = {
+    id: String(entry.id || `tavern-${Date.now()}-${++tavernMessageSeq}`),
+    name: String(entry.name || 'Путник'),
+    text: String(entry.text || ''),
+    ts: Number(entry.ts || Date.now()),
+    system: !!entry.system
+  };
+  if (!item.text && !item.system) return;
+  if (tavernChatHistory.some((x) => String(x.id) === item.id)) return;
+  tavernChatHistory.push(item);
+  while (tavernChatHistory.length > 120) tavernChatHistory.shift();
+  renderTavernChat();
+}
+
+function fmtTavernTime(ts) {
+  try {
+    return new Date(Number(ts) || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+function escapeHtmlLite(s) {
+  return String(s || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function renderTavernChat() {
+  if (!tavernChatList) return;
+  if (!tavernChatHistory.length) {
+    tavernChatList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Пока в таверне тихо. Начните разговор первыми.</div></div>';
+    return;
+  }
+  tavernChatList.innerHTML = tavernChatHistory.map((msg) => `
+    <div class="tavern-chat-item ${msg.system ? 'tavern-chat-item--system' : ''}">
+      <div class="tavern-chat-item__meta">
+        <span>${escapeHtmlLite(msg.system ? 'Таверна' : msg.name)}</span>
+        <span>${escapeHtmlLite(fmtTavernTime(msg.ts))}</span>
+      </div>
+      <div class="tavern-chat-item__text">${escapeHtmlLite(msg.text)}</div>
+    </div>
+  `).join('');
+  tavernChatList.scrollTop = tavernChatList.scrollHeight;
+}
+
+async function ensureTavernChannel() {
+  if (!sbClient) return null;
+  if (tavernChannel) return tavernChannel;
+  const userId = String(localStorage.getItem('dnd_user_id') || myId || 'guest');
+  const userName = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'Путник');
+  tavernChannel = sbClient
+    .channel('tavern:lobby', { config: { presence: { key: userId } } })
+    .on('broadcast', { event: 'chat' }, ({ payload }) => {
+      if (payload?.message) pushTavernMessage(payload.message);
+    })
+    .on('presence', { event: 'sync' }, () => {
+      try {
+        const state = tavernChannel?.presenceState?.() || {};
+        tavernPresenceCount = Object.keys(state).length;
+        if (tavernChatSubtitle) {
+          tavernChatSubtitle.textContent = tavernPresenceCount > 0
+            ? `Разговоры путников в таверне • Сейчас в таверне: ${tavernPresenceCount}`
+            : 'Разговоры путников в таверне';
+        }
+      } catch {}
+    });
+  await tavernChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      try {
+        await tavernChannel.track({ userId, userName, joinedAt: Date.now() });
+      } catch {}
+    }
+  });
+  return tavernChannel;
+}
+
+async function stopTavernChannel() {
+  if (!tavernChannel) return;
+  try { await tavernChannel.unsubscribe(); } catch {}
+  tavernChannel = null;
+  tavernPresenceCount = 0;
+}
+
+async function sendTavernChatMessage() {
+  const text = String(tavernChatInput?.value || '').trim();
+  if (!text) return;
+  const userName = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'Путник');
+  const message = {
+    id: `tavern-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: userName,
+    text,
+    ts: Date.now()
+  };
+  pushTavernMessage(message);
+  try { if (tavernChatInput) tavernChatInput.value = ''; } catch {}
+  try {
+    const ch = await ensureTavernChannel();
+    await ch?.send({ type: 'broadcast', event: 'chat', payload: { message } });
+  } catch {}
+}
+
+function openTavernChat() {
+  showModalEl(tavernChatModal);
+  ensureTavernChannel();
+  renderTavernChat();
+  setTimeout(() => tavernChatInput?.focus(), 0);
+}
+
+function openTavernBartender() {
+  showModalEl(tavernBartenderModal);
+}
+
+function openTavernRooms() {
+  showModalEl(tavernRoomsModal);
+  if (tavernRoomsError) tavernRoomsError.textContent = '';
+  try { sendMessage({ type: 'listRooms' }); } catch {}
+}
+
+window.openTavern = openTavern;
+window.closeTavern = closeTavern;
+window.openTavernRooms = openTavernRooms;
+window.stopTavernChannel = stopTavernChannel;
+window.ensureTavernChannel = ensureTavernChannel;
+window.isTavernVisible = isTavernVisible;
 
 const board = document.getElementById('game-board');
 const boardWrapper = document.getElementById('board-wrapper');
@@ -790,6 +993,45 @@ const userMissingTicks = new Map(); // userId -> missing polls count
 if (diceViz) diceViz.style.display = 'none';
 initLobbyVideoBackground();
 watchLobbyVisibility();
+pushTavernMessage({ system: true, text: 'Собирайтесь у стола, слушайте бармена или выбирайте путешествие на доске объявлений.' });
+
+[tavernChatClose, tavernBartenderClose, tavernRoomsClose].forEach((btn, idx) => {
+  if (!btn) return;
+  const targets = [tavernChatModal, tavernBartenderModal, tavernRoomsModal];
+  btn.addEventListener('click', () => hideModalEl(targets[idx]));
+});
+[tavernChatModal, tavernBartenderModal, tavernRoomsModal].forEach((modal) => {
+  if (!modal) return;
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) hideModalEl(modal);
+  });
+});
+if (tavernChatHotspot) tavernChatHotspot.addEventListener('click', openTavernChat);
+if (tavernBartenderHotspot) tavernBartenderHotspot.addEventListener('click', openTavernBartender);
+if (tavernBoardHotspot) tavernBoardHotspot.addEventListener('click', openTavernRooms);
+if (tavernChatSend) tavernChatSend.addEventListener('click', () => { sendTavernChatMessage(); });
+if (tavernChatInput) {
+  tavernChatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendTavernChatMessage();
+    }
+  });
+}
+document.querySelectorAll('[data-tavern-topic]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const topic = String(btn.getAttribute('data-tavern-topic') || '').trim();
+    if (tavernBartenderNote) {
+      tavernBartenderNote.textContent = topic
+        ? `Раздел «${topic}» подготовлен. Его содержимое добавим следующим шагом.`
+        : 'Этот раздел можно наполнить следующим шагом.';
+    }
+  });
+});
+if (tavernCreateRoomBtn) tavernCreateRoomBtn.addEventListener('click', () => {
+  hideModalEl(tavernRoomsModal);
+  if (typeof openCreateRoomModal === 'function') openCreateRoomModal();
+});
 
 // ================== JOIN GAME ==================
 joinBtn.addEventListener('click', () => {

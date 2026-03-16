@@ -1,20 +1,22 @@
 // ================== ROOMS LOBBY UI ==================
 function renderRooms(rooms) {
-  if (!roomsList) return;
-  roomsError.textContent = '';
-  roomsList.innerHTML = '';
+  const targets = [roomsList, tavernRoomsList].filter(Boolean);
+  if (!targets.length) return;
+  if (roomsError) roomsError.textContent = '';
+  if (tavernRoomsError) tavernRoomsError.textContent = '';
+  targets.forEach((target) => { target.innerHTML = ''; });
 
   // total unique users on server (optional field from listRooms)
   try {
-    const totalEl = document.getElementById('server-users-total');
-    if (totalEl) {
-      const n = Number(window.SERVER_TOTAL_USERS || 0);
-      totalEl.textContent = n ? `Онлайн на сервере: ${n}` : '';
-    }
+    const n = Number(window.SERVER_TOTAL_USERS || 0);
+    ['server-users-total', 'tavern-server-users-total'].forEach((id) => {
+      const totalEl = document.getElementById(id);
+      if (totalEl) totalEl.textContent = n ? `Онлайн на сервере: ${n}` : '';
+    });
   } catch {}
 
   if (!rooms.length) {
-    roomsList.textContent = 'Комнат пока нет.';
+    targets.forEach((target) => { target.textContent = 'Комнат пока нет.'; });
     return;
   }
 
@@ -63,7 +65,22 @@ function renderRooms(rooms) {
     card.appendChild(left);
     card.appendChild(right);
 
-    roomsList.appendChild(card);
+    targets.forEach((target) => { target.appendChild(card.cloneNode(true)); });
+
+    // Wire buttons for each rendered copy
+    targets.forEach((target) => {
+      const lastCard = target.lastElementChild;
+      const btn = lastCard?.querySelector('button');
+      if (btn) {
+        btn.onclick = () => {
+          try {
+            openRoleModalForRoom(r);
+          } catch {
+            sendMessage({ type: 'joinRoom', roomId: r.id, password: '' });
+          }
+        };
+      }
+    });
   });
 }
 
@@ -105,6 +122,7 @@ function openRoleModalForRoom(room) {
     }
   } catch {}
 
+  try { tavernRoomsModal?.classList.add('hidden'); } catch {}
   if (modal) modal.classList.remove('hidden');
 }
 

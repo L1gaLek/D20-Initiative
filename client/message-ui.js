@@ -99,6 +99,8 @@ if (msg.type === 'rooms' && Array.isArray(msg.rooms)) {
 }
 if (msg.type === 'joinedRoom' && msg.room) {
   roomsDiv.style.display = 'none';
+  try { window.closeTavern?.(); } catch {}
+  try { window.stopTavernChannel?.(); } catch {}
   gameUI.style.display = 'block';
 
   currentRoomId = msg.room.id || null;
@@ -130,9 +132,11 @@ myRole = msg.role;
       if (myRoomSpan) myRoomSpan.textContent = '-';
       if (myScenarioSpan) myScenarioSpan.textContent = '-';
 loginDiv.style.display = 'none';
-      roomsDiv.style.display = 'block';
+      roomsDiv.style.display = 'none';
       gameUI.style.display = 'none';
       roomsError.textContent = '';
+      try { window.openTavern?.(); } catch {}
+      try { window.ensureTavernChannel?.(); } catch {}
       sendMessage({ type: 'listRooms' });
 
       applyRoleToUI();
@@ -154,6 +158,8 @@ loginDiv.style.display = 'none';
         loginError.textContent = text;
       } else if (roomsDiv && roomsDiv.style.display !== 'none') {
         roomsError.textContent = text;
+      } else if (typeof window.isTavernVisible === 'function' && window.isTavernVisible()) {
+        if (tavernRoomsError) tavernRoomsError.textContent = text;
       } else {
         // в игре — показываем как быстрое уведомление
         alert(text);
@@ -164,6 +170,7 @@ loginDiv.style.display = 'none';
     if (msg.type === "roomsError") {
       const text = String(msg.message || "Ошибка");
       if (roomsError) roomsError.textContent = text;
+      if (typeof window.isTavernVisible === 'function' && window.isTavernVisible() && tavernRoomsError) tavernRoomsError.textContent = text;
     }
 
     if (msg.type === "users" && Array.isArray(msg.users)) {
@@ -932,22 +939,6 @@ function roleToLabel(role) {
   return "-";
 }
 
-
-function ensurePlayerPlacementSelectionStyle() {
-  try {
-    if (document.getElementById("player-placement-selection-style")) return;
-    const style = document.createElement("style");
-    style.id = "player-placement-selection-style";
-    style.textContent = `
-      .player-list-item.player-selected-for-placement {
-        border-color: #ff9800 !important;
-        box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.9), 0 0 12px rgba(255, 152, 0, 0.28);
-      }
-    `;
-    document.head.appendChild(style);
-  } catch {}
-}
-
 function roleToClass(role) {
   const r = normalizeRoleForUi(role);
   if (r === "GM") return "role-gm";
@@ -1092,12 +1083,6 @@ function updatePlayerList() {
     listPlayers.forEach(p => {
       const li = document.createElement('li');
       li.className = 'player-list-item';
-
-      ensurePlayerPlacementSelectionStyle();
-
-      if (selectedPlayer && String(selectedPlayer?.id || '') === String(p?.id || '')) {
-        li.classList.add('player-selected-for-placement');
-      }
 
       if (currentTurnId && p.id === currentTurnId) {
         li.classList.add('is-current-turn');
@@ -1287,12 +1272,7 @@ function updatePlayerList() {
           if (prev) prev.classList.remove('selected');
         }
 
-        document.querySelectorAll('.player-list-item.player-selected-for-placement')
-          .forEach(el => el.classList.remove('player-selected-for-placement'));
-
         selectedPlayer = cur;
-
-        li.classList.add('player-selected-for-placement');
 
         const curEl = playerElements.get(String(cur?.id || ''));
         if (curEl) curEl.classList.add('selected');
