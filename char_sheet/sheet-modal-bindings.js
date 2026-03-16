@@ -4066,9 +4066,23 @@ function rerenderSpellsTabInPlace(root, player, sheet, canEdit) {
   const main = root.querySelector("#sheet-main");
   if (!main) return;
   const scrollTop = main.scrollTop;
+  const openSpellUrls = new Set(
+    Array.from(main.querySelectorAll('.spell-item[data-spell-url] .spell-item-desc:not(.hidden)'))
+      .map(el => el.closest('.spell-item')?.getAttribute('data-spell-url') || '')
+      .filter(Boolean)
+  );
 
   const freshVm = toViewModel(sheet, player.name);
   main.innerHTML = renderSpellsTab(freshVm);
+
+  if (openSpellUrls.size) {
+    main.querySelectorAll('.spell-item[data-spell-url]').forEach(item => {
+      const href = item.getAttribute('data-spell-url') || '';
+      if (!href || !openSpellUrls.has(href)) return;
+      item.querySelector('.spell-item-desc')?.classList.remove('hidden');
+      item.querySelector('[data-spell-desc-toggle]')?.classList.add('is-open');
+    });
+  }
 
   bindEditableInputs(root, player, canEdit);
   bindSkillBoostDots(root, player, canEdit);
@@ -4657,8 +4671,9 @@ function bindSpellAddAndDesc(root, player, canEdit) {
         const rangeFeet = Math.max(0, safeInt(rangeInput?.value, prev.rangeFeet || 0));
         sheet.spellActions[href] = { ...prev, type, rangeFeet };
       }
+      const tpWrap = item?.querySelector?.('[data-spell-teleport-wrap]');
+      if (tpWrap) tpWrap.style.display = (type === 'teleport') ? 'flex' : 'none';
       scheduleSheetSave(curPlayer);
-      rerenderSpellsTabInPlace(root, curPlayer, sheet, curCanEdit);
       return;
     }
 
