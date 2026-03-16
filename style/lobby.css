@@ -31,22 +31,22 @@ body.lobby-active #lobby-scene {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  filter: saturate(1.02) brightness(0.72);
+  object-fit: contain;
+  object-position: center center;
+  filter: none;
+  background: #090807;
 }
 
 .lobby-scene__overlay {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(180deg, rgba(6,5,4,0.15) 0%, rgba(10,8,6,0.48) 48%, rgba(9,7,5,0.72) 100%),
-    radial-gradient(circle at center, rgba(255,170,76,0.12) 0%, rgba(0,0,0,0) 42%);
+  background: none;
 }
 
 .lobby-scene__vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at center, rgba(0,0,0,0) 32%, rgba(0,0,0,0.2) 58%, rgba(0,0,0,0.62) 100%);
+  background: none;
 }
 
 .lobby-scene__embers {
@@ -58,7 +58,8 @@ body.lobby-active #lobby-scene {
     radial-gradient(circle at 68% 77%, rgba(255, 201, 111, 0.14) 0 1px, transparent 2.5px),
     radial-gradient(circle at 78% 86%, rgba(255, 128, 64, 0.12) 0 1.2px, transparent 2.8px);
   animation: lobby-embers 9s linear infinite;
-  opacity: .55;
+  opacity: .12;
+  mix-blend-mode: screen;
 }
 
 @keyframes lobby-embers {
