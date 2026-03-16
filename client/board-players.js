@@ -1291,6 +1291,10 @@ addPlayerBtn.addEventListener('click', () => {
   const CELL = 50;
   const FEET_PER_CELL = 10;
   const DEFAULT_SPEED = 30;
+  const DIRS = [
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [1, 1], [1, -1], [-1, 1], [-1, -1]
+  ];
 
   function getTurnKey(state) {
     const phase = String(state?.phase || '');
@@ -1341,30 +1345,16 @@ addPlayerBtn.addEventListener('click', () => {
     } catch {}
   }
 
-  function dropSelectionIfInvalid() {
-    try {
-      if (!selectedPlayer) return;
-      if (isGmNow() || !isCombatPhase()) return;
-      const cur = players.find(pp => String(pp?.id) === String(selectedPlayer?.id)) || selectedPlayer;
-      const mine = String(cur?.ownerId || '') === String(myId || '');
-      const currentId = getCurrentTurnActorId();
-      if (!mine || String(cur?.id || '') !== currentId) {
-        clearPlayerSelectionVisual(cur?.id);
-        selectedPlayer = null;
-      }
-    } catch {}
+  function getLivePlayer(playerOrId) {
+    const pid = typeof playerOrId === 'object' ? String(playerOrId?.id || '') : String(playerOrId || '');
+    if (!pid) return null;
+    return players.find(pp => String(pp?.id) === pid) || (typeof playerOrId === 'object' ? playerOrId : null);
   }
 
   function getTracker(player, { create = true } = {}) {
-    if (!player || !isCombatPhase() || isGmNow()) return null;
+    if (!player || !isCombatPhase()) return null;
     const pid = String(player.id || '');
     if (!pid) return null;
-
-    const currentId = getCurrentTurnActorId();
-    if (!currentId || currentId !== pid) return null;
-
-    const mine = String(player.ownerId || '') === String(myId || '');
-    if (!mine) return null;
 
     const store = ensureStore();
     const turnKey = getTurnKey(lastState || {});
@@ -1372,6 +1362,8 @@ addPlayerBtn.addEventListener('click', () => {
 
     const px = Number(player?.x);
     const py = Number(player?.y);
+    const baseX = Number.isFinite(px) ? px : 0;
+    const baseY = Number.isFinite(py) ? py : 0;
 
     if (!create) {
       if (!rec || rec.turnKey !== turnKey) return null;
@@ -1381,12 +1373,19 @@ addPlayerBtn.addEventListener('click', () => {
     if (!rec || rec.turnKey !== turnKey) {
       rec = {
         turnKey,
-        originX: Number.isFinite(px) ? px : 0,
-        originY: Number.isFinite(py) ? py : 0,
-        currentX: Number.isFinite(px) ? px : 0,
-        currentY: Number.isFinite(py) ? py : 0,
+        originX: baseX,
+        originY: baseY,
+        currentX: baseX,
+        currentY: baseY,
         spentFeet: 0,
-        totalFeet: getPlayerSpeedFeet(player)
+        totalFeet: getPlayerSpeedFeet(player),
+        teleportAvailable: false,
+        teleportRangeFeet: 0,
+        teleportUsed: false,
+        teleportActive: false,
+        teleportSourceKind: '',
+        teleportSourceId: '',
+        teleportSourceName: ''
       };
       store.set(pid, rec);
       return rec;
@@ -1411,6 +1410,31 @@ addPlayerBtn.addEventListener('click', () => {
     return rec;
   }
 
+  function isRestrictedForPlayer(player) {
+    try {
+      if (!player || !isCombatPhase() || isGmNow()) return false;
+      const mine = String(player?.ownerId || '') === String(myId || '');
+      const currentId = getCurrentTurnActorId();
+      return !!mine && !!currentId && String(player?.id || '') === currentId;
+    } catch {
+      return false;
+    }
+  }
+
+  function dropSelectionIfInvalid() {
+    try {
+      if (!selectedPlayer) return;
+      if (isGmNow() || !isCombatPhase()) return;
+      const cur = getLivePlayer(selectedPlayer) || selectedPlayer;
+      const hasTeleport = !!getTeleportInfo(cur);
+      if (hasTeleport) return;
+      if (!isRestrictedForPlayer(cur)) {
+        clearPlayerSelectionVisual(cur?.id);
+        selectedPlayer = null;
+      }
+    } catch {}
+  }
+
   function getRemainingFeet(player) {
     const rec = getTracker(player, { create: true });
     if (!rec) return Infinity;
@@ -1421,163 +1445,210 @@ addPlayerBtn.addEventListener('click', () => {
     return Math.max(Math.abs((Number(ax) || 0) - (Number(bx) || 0)), Math.abs((Number(ay) || 0) - (Number(by) || 0)));
   }
 
-  function getMoveCostFeet(fromX, fromY, toX, toY) {
-    return chebyshevSteps(fromX, fromY, toX, toY) * FEET_PER_CELL;
-  }
-
-  function getWallEdgeKey(x, y, dir) {
-    return `${Number(x) || 0},${Number(y) || 0},${String(dir || '').toUpperCase()}`;
-  }
-
-  function buildWallEdgeSet() {
-    const out = new Set();
-    try {
-      const walls = Array.isArray(lastState?.walls) ? lastState.walls : [];
-      for (const w of walls) {
-        const x = Number(w?.x);
-        const y = Number(w?.y);
-        const dir = String(w?.dir || '').toUpperCase();
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-        if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
-        out.add(getWallEdgeKey(x, y, dir));
-      }
-    } catch {}
-    return out;
-  }
-
-  function hasWallOnEdge(edgeSet, x, y, dir) {
-    return !!edgeSet?.has?.(getWallEdgeKey(x, y, dir));
-  }
-
-  function isStepBlockedByWalls(fromX, fromY, dx, dy, size, edgeSet) {
-    const stepX = Number(dx) || 0;
-    const stepY = Number(dy) || 0;
-    const topX = Number(fromX) || 0;
-    const topY = Number(fromY) || 0;
-    const tokenSize = Math.max(1, Number(size) || 1);
-    if (!stepX && !stepY) return false;
-
-    if (stepX > 0) {
-      for (let row = 0; row < tokenSize; row++) {
-        if (hasWallOnEdge(edgeSet, topX + tokenSize - 1, topY + row, 'E')) return true;
-        if (hasWallOnEdge(edgeSet, topX + tokenSize, topY + row, 'W')) return true;
-      }
-    } else if (stepX < 0) {
-      for (let row = 0; row < tokenSize; row++) {
-        if (hasWallOnEdge(edgeSet, topX, topY + row, 'W')) return true;
-        if (hasWallOnEdge(edgeSet, topX - 1, topY + row, 'E')) return true;
-      }
+  function getWallsSet() {
+    const set = new Set();
+    const walls = Array.isArray(lastState?.walls) ? lastState.walls : [];
+    for (const w of walls) {
+      const x = Number(w?.x);
+      const y = Number(w?.y);
+      const dir = String(w?.dir || '').toUpperCase();
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
+      set.add(`${x},${y},${dir}`);
     }
+    return set;
+  }
 
-    if (stepY > 0) {
-      for (let col = 0; col < tokenSize; col++) {
-        if (hasWallOnEdge(edgeSet, topX + col, topY + tokenSize - 1, 'S')) return true;
-        if (hasWallOnEdge(edgeSet, topX + col, topY + tokenSize, 'N')) return true;
+  function hasWallOnEdge(wallsSet, x, y, dir) {
+    return wallsSet.has(`${x},${y},${dir}`);
+  }
+
+  function cardinalStepBlockedByWalls(wallsSet, fromX, fromY, size, dx, dy) {
+    if (dx === 1 && dy === 0) {
+      for (let oy = 0; oy < size; oy++) {
+        if (hasWallOnEdge(wallsSet, fromX + size - 1, fromY + oy, 'E')) return true;
+        if (hasWallOnEdge(wallsSet, fromX + size, fromY + oy, 'W')) return true;
       }
-    } else if (stepY < 0) {
-      for (let col = 0; col < tokenSize; col++) {
-        if (hasWallOnEdge(edgeSet, topX + col, topY, 'N')) return true;
-        if (hasWallOnEdge(edgeSet, topX + col, topY - 1, 'S')) return true;
-      }
+      return false;
     }
-
+    if (dx === -1 && dy === 0) {
+      for (let oy = 0; oy < size; oy++) {
+        if (hasWallOnEdge(wallsSet, fromX, fromY + oy, 'W')) return true;
+        if (hasWallOnEdge(wallsSet, fromX - 1, fromY + oy, 'E')) return true;
+      }
+      return false;
+    }
+    if (dx === 0 && dy === 1) {
+      for (let ox = 0; ox < size; ox++) {
+        if (hasWallOnEdge(wallsSet, fromX + ox, fromY + size - 1, 'S')) return true;
+        if (hasWallOnEdge(wallsSet, fromX + ox, fromY + size, 'N')) return true;
+      }
+      return false;
+    }
+    if (dx === 0 && dy === -1) {
+      for (let ox = 0; ox < size; ox++) {
+        if (hasWallOnEdge(wallsSet, fromX + ox, fromY, 'N')) return true;
+        if (hasWallOnEdge(wallsSet, fromX + ox, fromY - 1, 'S')) return true;
+      }
+      return false;
+    }
     return false;
   }
 
-  function canOccupyCombatCell(player, x, y, size) {
-    return !!isAreaFreeClient(player?.id, x, y, size, { allowWalls: true });
+  function withinBoard(x, y, size) {
+    const bw = Number(boardWidth) || 0;
+    const bh = Number(boardHeight) || 0;
+    return x >= 0 && y >= 0 && (x + size) <= bw && (y + size) <= bh;
   }
 
-  function computeReachableCells(player, recOverride = null) {
-    const live = players.find(pp => String(pp?.id) === String(player?.id)) || player;
-    const rec = recOverride || getTracker(live, { create: true });
-    if (!live || !rec) return null;
+  function canOccupyCell(player, x, y, size) {
+    if (!withinBoard(x, y, size)) return false;
+    try {
+      if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, player)) return false;
+    } catch {}
+    return isAreaFreeClient(player?.id, x, y, size, { allowWalls: true });
+  }
 
+  function canStepCardinal(player, fromX, fromY, size, dx, dy, wallsSet) {
+    const nx = fromX + dx;
+    const ny = fromY + dy;
+    if (!canOccupyCell(player, nx, ny, size)) return false;
+    if (cardinalStepBlockedByWalls(wallsSet, fromX, fromY, size, dx, dy)) return false;
+    return true;
+  }
+
+  function canStepBetween(player, fromX, fromY, toX, toY, size, wallsSet) {
+    const dx = Number(toX) - Number(fromX);
+    const dy = Number(toY) - Number(fromY);
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return false;
+    if (dx === 0 && dy === 0) return true;
+
+    if (dx === 0 || dy === 0) {
+      return canStepCardinal(player, fromX, fromY, size, dx, dy, wallsSet);
+    }
+
+    const viaAOk = canStepCardinal(player, fromX, fromY, size, dx, 0, wallsSet)
+      && canStepCardinal(player, fromX + dx, fromY, size, 0, dy, wallsSet);
+    if (viaAOk) return true;
+
+    const viaBOk = canStepCardinal(player, fromX, fromY, size, 0, dy, wallsSet)
+      && canStepCardinal(player, fromX, fromY + dy, size, dx, 0, wallsSet);
+    return viaBOk;
+  }
+
+  function buildWalkReachableMap(player, rec) {
+    const live = getLivePlayer(player) || player;
+    if (!live || !rec) return new Map();
     const size = Math.max(1, Number(live?.size) || 1);
-    const stepsLeft = Math.max(0, Math.floor(((Number(rec.totalFeet) || 0) - (Number(rec.spentFeet) || 0)) / FEET_PER_CELL));
-    const maxX = Math.max(0, (Number(boardWidth) || 0) - size);
-    const maxY = Math.max(0, (Number(boardHeight) || 0) - size);
-    const edgeSet = buildWallEdgeSet();
-    const startX = Number(rec.currentX) || 0;
-    const startY = Number(rec.currentY) || 0;
+    const stepsLeft = Math.max(0, Math.floor(getRemainingFeet(live) / FEET_PER_CELL));
+    const out = new Map();
+    const wallsSet = getWallsSet();
+    const q = [{ x: Number(rec.currentX) || 0, y: Number(rec.currentY) || 0, d: 0 }];
+    const seen = new Map([[`${Number(rec.currentX) || 0},${Number(rec.currentY) || 0}`, 0]]);
 
-    const dist = new Map();
-    const prev = new Map();
-    const queue = [];
-    const startKey = `${startX},${startY}`;
-    dist.set(startKey, 0);
-    queue.push([startX, startY]);
-
-    const dirs = [
-      [-1, -1], [0, -1], [1, -1],
-      [-1,  0],           [1,  0],
-      [-1,  1], [0,  1], [1,  1],
-    ];
-
-    for (let qi = 0; qi < queue.length; qi++) {
-      const [cx, cy] = queue[qi];
-      const baseKey = `${cx},${cy}`;
-      const baseSteps = Number(dist.get(baseKey) || 0);
-      if (baseSteps >= stepsLeft) continue;
-
-      for (const [dx, dy] of dirs) {
-        const nx = cx + dx;
-        const ny = cy + dy;
-        if (nx < 0 || ny < 0 || nx > maxX || ny > maxY) continue;
-
-        if (dx && dy) {
-          if (isStepBlockedByWalls(cx, cy, dx, 0, size, edgeSet)) continue;
-          if (isStepBlockedByWalls(cx, cy, 0, dy, size, edgeSet)) continue;
-        }
-        if (isStepBlockedByWalls(cx, cy, dx, dy, size, edgeSet)) continue;
-
-        try {
-          if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(nx, ny, live)) continue;
-        } catch {}
-
-        if (!canOccupyCombatCell(live, nx, ny, size)) continue;
-
-        const nKey = `${nx},${ny}`;
-        const nextSteps = baseSteps + 1;
-        const seen = dist.get(nKey);
-        if (seen !== undefined && seen <= nextSteps) continue;
-        dist.set(nKey, nextSteps);
-        prev.set(nKey, baseKey);
-        queue.push([nx, ny]);
+    while (q.length) {
+      const cur = q.shift();
+      if (!cur) continue;
+      if (cur.d >= stepsLeft) continue;
+      for (const [dx, dy] of DIRS) {
+        const nx = cur.x + dx;
+        const ny = cur.y + dy;
+        const nd = cur.d + 1;
+        const key = `${nx},${ny}`;
+        const prev = seen.get(key);
+        if (prev != null && prev <= nd) continue;
+        if (!canStepBetween(live, cur.x, cur.y, nx, ny, size, wallsSet)) continue;
+        seen.set(key, nd);
+        out.set(key, nd);
+        q.push({ x: nx, y: ny, d: nd });
       }
     }
 
+    return out;
+  }
+
+  function getTeleportInfo(player) {
+    const rec = getTracker(player, { create: true });
+    if (!rec) return null;
+    if (!rec.teleportAvailable || rec.teleportUsed) return null;
+    const rangeFeet = Math.max(0, Number(rec.teleportRangeFeet) || 0);
+    if (rangeFeet <= 0) return null;
     return {
-      dist,
-      prev,
-      rec,
-      size,
-      startX,
-      startY,
-      originKey: `${Number(rec.originX) || 0},${Number(rec.originY) || 0}`,
+      rangeFeet,
+      rangeCells: Math.max(0, Math.floor(rangeFeet / FEET_PER_CELL)),
+      sourceKind: String(rec.teleportSourceKind || ''),
+      sourceId: String(rec.teleportSourceId || ''),
+      sourceName: String(rec.teleportSourceName || '')
     };
   }
 
-  function getPathFromReachable(reachable, x, y) {
-    const targetKey = `${Number(x) || 0},${Number(y) || 0}`;
-    if (!reachable?.dist?.has?.(targetKey)) return null;
-    const path = [];
-    let cur = targetKey;
-    while (cur) {
-      const [sx, sy] = String(cur).split(',');
-      path.push({ x: Number(sx) || 0, y: Number(sy) || 0 });
-      cur = reachable.prev.get(cur) || '';
-    }
-    path.reverse();
-    return path;
+  function canTeleportTo(player, x, y) {
+    const live = getLivePlayer(player) || player;
+    const rec = getTracker(live, { create: true });
+    const tp = getTeleportInfo(live);
+    if (!live || !rec || !tp) return false;
+    const nx = Number(x);
+    const ny = Number(y);
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) return false;
+    if (nx === Number(rec.currentX) && ny === Number(rec.currentY)) return false;
+    const size = Math.max(1, Number(live?.size) || 1);
+    if (!withinBoard(nx, ny, size)) return false;
+    try {
+      if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(nx, ny, live)) return false;
+    } catch {}
+    if (!isAreaFreeClient(live.id, nx, ny, size, { allowWalls: true })) return false;
+    return chebyshevSteps(rec.currentX, rec.currentY, nx, ny) <= tp.rangeCells;
+  }
+
+  function activateTeleport(playerOrId, opts = {}) {
+    const live = getLivePlayer(playerOrId);
+    if (!live || !isCombatPhase()) return false;
+    if (live.x === null || live.y === null) return false;
+    if (!isGmNow() && !isRestrictedForPlayer(live)) return false;
+    const rec = getTracker(live, { create: true });
+    if (!rec) return false;
+    if (rec.teleportUsed) return false;
+    const rangeFeet = Math.max(0, Math.trunc(Number(opts?.rangeFeet) || 0));
+    if (rangeFeet <= 0) return false;
+
+    rec.teleportAvailable = true;
+    rec.teleportRangeFeet = rangeFeet;
+    rec.teleportActive = true;
+    rec.teleportSourceKind = String(opts?.sourceKind || '');
+    rec.teleportSourceId = String(opts?.sourceId || '');
+    rec.teleportSourceName = String(opts?.sourceName || '');
+
+    try {
+      if (selectedPlayer) {
+        const prev = playerElements.get(selectedPlayer.id);
+        if (prev) prev.classList.remove('selected');
+      }
+      selectedPlayer = live;
+      const el = playerElements.get(live.id);
+      if (el) el.classList.add('selected');
+    } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.renderCombatMoveOverlay?.(); } catch {}
+    return true;
+  }
+
+  function consumeTeleport(player, x, y) {
+    const rec = getTracker(player, { create: true });
+    if (!rec) return;
+    rec.currentX = Number(x) || 0;
+    rec.currentY = Number(y) || 0;
+    rec.teleportUsed = true;
+    rec.teleportAvailable = false;
+    rec.teleportActive = false;
   }
 
   function canSpendMoveTo(player, x, y) {
     const rec = getTracker(player, { create: true });
     if (!rec) return true;
     if (Number(x) === Number(rec.originX) && Number(y) === Number(rec.originY)) return true;
-    const reachable = computeReachableCells(player, rec);
-    return !!reachable?.dist?.has?.(`${Number(x) || 0},${Number(y) || 0}`);
+    const map = buildWalkReachableMap(player, rec);
+    return map.has(`${Number(x) || 0},${Number(y) || 0}`);
   }
 
   function commitMove(player, x, y) {
@@ -1591,15 +1662,9 @@ addPlayerBtn.addEventListener('click', () => {
       rec.spentFeet = 0;
       return;
     }
-    const reachable = computeReachableCells(player, rec);
-    const path = getPathFromReachable(reachable, nx, ny);
-    if (!Array.isArray(path) || path.length < 2) {
-      rec.currentX = nx;
-      rec.currentY = ny;
-      return;
-    }
-    const pathSteps = Math.max(0, path.length - 1);
-    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (pathSteps * FEET_PER_CELL);
+    const map = buildWalkReachableMap(player, rec);
+    const steps = Number(map.get(`${nx},${ny}`)) || 0;
+    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * FEET_PER_CELL);
     rec.currentX = nx;
     rec.currentY = ny;
   }
@@ -1622,13 +1687,24 @@ addPlayerBtn.addEventListener('click', () => {
   }
 
   function isCombatRestrictedSelection(player) {
-    return !!getTracker(player, { create: true });
+    return isRestrictedForPlayer(player);
   }
 
   function shouldShowCombatOverlay(player) {
     if (!player || !isCombatPhase()) return false;
     if (isCombatRestrictedSelection(player)) return true;
+    if (getTeleportInfo(player)) return true;
     return !!isGmNow();
+  }
+
+  function appendOverlayCell(layer, cls, x, y, size) {
+    const cell = document.createElement('div');
+    cell.className = `combat-move-cell ${cls}`;
+    cell.style.left = `${x * CELL}px`;
+    cell.style.top = `${y * CELL}px`;
+    cell.style.width = `${size * CELL}px`;
+    cell.style.height = `${size * CELL}px`;
+    layer.appendChild(cell);
   }
 
   function renderOverlayForSelected() {
@@ -1641,44 +1717,41 @@ addPlayerBtn.addEventListener('click', () => {
     if (!selectedPlayer || editEnvironment) return;
     if (!shouldShowCombatOverlay(selectedPlayer)) return;
 
-    const live = players.find(pp => String(pp?.id) === String(selectedPlayer?.id)) || selectedPlayer;
-    const rec = isGmNow()
-      ? {
-          originX: Number.isFinite(Number(live?.x)) ? Number(live.x) : 0,
-          originY: Number.isFinite(Number(live?.y)) ? Number(live.y) : 0,
-          currentX: Number.isFinite(Number(live?.x)) ? Number(live.x) : 0,
-          currentY: Number.isFinite(Number(live?.y)) ? Number(live.y) : 0,
-          spentFeet: 0,
-          totalFeet: getPlayerSpeedFeet(live)
-        }
-      : getTracker(live, { create: true });
+    const live = getLivePlayer(selectedPlayer) || selectedPlayer;
+    const rec = getTracker(live, { create: true }) || {
+      originX: Number.isFinite(Number(live?.x)) ? Number(live.x) : 0,
+      originY: Number.isFinite(Number(live?.y)) ? Number(live.y) : 0,
+      currentX: Number.isFinite(Number(live?.x)) ? Number(live.x) : 0,
+      currentY: Number.isFinite(Number(live?.y)) ? Number(live.y) : 0,
+      spentFeet: 0,
+      totalFeet: getPlayerSpeedFeet(live)
+    };
     if (!rec) return;
 
     const size = Math.max(1, Number(live?.size) || 1);
-    const reachable = computeReachableCells(live, rec) || { dist: new Map() };
+    appendOverlayCell(layer, 'combat-move-cell--origin', rec.originX, rec.originY, size);
 
-    const origin = document.createElement('div');
-    origin.className = 'combat-move-cell combat-move-cell--origin';
-    origin.style.left = `${rec.originX * CELL}px`;
-    origin.style.top = `${rec.originY * CELL}px`;
-    origin.style.width = `${size * CELL}px`;
-    origin.style.height = `${size * CELL}px`;
-    layer.appendChild(origin);
+    const tp = getTeleportInfo(live);
+    if (tp && rec.teleportActive) {
+      const maxX = Math.max(0, (Number(boardWidth) || 0) - size);
+      const maxY = Math.max(0, (Number(boardHeight) || 0) - size);
+      for (let y = 0; y <= maxY; y++) {
+        for (let x = 0; x <= maxX; x++) {
+          if (!canTeleportTo(live, x, y)) continue;
+          appendOverlayCell(layer, 'combat-move-cell--teleport', x, y, size);
+        }
+      }
+      return;
+    }
 
-    for (const key of reachable.dist.keys()) {
-      if (!key || key === `${Number(rec.currentX) || 0},${Number(rec.currentY) || 0}`) continue;
-      if (key === `${Number(rec.originX) || 0},${Number(rec.originY) || 0}`) continue;
-      const [sx, sy] = String(key).split(',');
-      const x = Number(sx) || 0;
-      const y = Number(sy) || 0;
-
-      const cell = document.createElement('div');
-      cell.className = 'combat-move-cell combat-move-cell--reachable';
-      cell.style.left = `${x * CELL}px`;
-      cell.style.top = `${y * CELL}px`;
-      cell.style.width = `${size * CELL}px`;
-      cell.style.height = `${size * CELL}px`;
-      layer.appendChild(cell);
+    const walkMap = buildWalkReachableMap(live, rec);
+    for (const [key] of walkMap.entries()) {
+      const parts = key.split(',');
+      const x = Number(parts[0]);
+      const y = Number(parts[1]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (x === rec.originX && y === rec.originY) continue;
+      appendOverlayCell(layer, 'combat-move-cell--reachable', x, y, size);
     }
   }
 
@@ -1696,7 +1769,8 @@ addPlayerBtn.addEventListener('click', () => {
       currentY: rec.currentY,
       spentFeet: Number(rec.spentFeet) || 0,
       totalFeet: Number(rec.totalFeet) || 0,
-      remainingFeet: getRemainingFeet(player)
+      remainingFeet: getRemainingFeet(player),
+      teleport: getTeleportInfo(player)
     };
   };
   window.canSpendCombatMoveTo = canSpendMoveTo;
@@ -1704,6 +1778,10 @@ addPlayerBtn.addEventListener('click', () => {
   window.renderCombatMoveOverlay = renderOverlayForSelected;
   window.hideCombatMoveOverlay = hideOverlay;
   window.isCombatRestrictedSelection = isCombatRestrictedSelection;
+  window.activateCombatTeleportForPlayer = activateTeleport;
+  window.canUseCombatTeleportTo = canTeleportTo;
+  window.consumeCombatTeleportTo = consumeTeleport;
+  window.getCombatTeleportInfo = getTeleportInfo;
 })();
 
 // ================== MOVE PREVIEW ==================
@@ -1762,7 +1840,7 @@ addPlayerBtn.addEventListener('click', () => {
     if (x < 0) x = 0;
     if (y < 0) y = 0;
 
-    if (window.isCombatRestrictedSelection?.(selectedPlayer)) {
+    if (window.isCombatRestrictedSelection?.(selectedPlayer) || window.getCombatTeleportInfo?.(selectedPlayer)?.rangeCells > 0) {
       hideMovePreview();
       try { window.renderCombatMoveOverlay?.(); } catch {}
       return;
@@ -1843,6 +1921,27 @@ board.addEventListener('click', e => {
   const allowWalls = true;
   if (!isAreaFreeClient(selectedPlayer.id, x, y, size, { allowWalls })) {
     alert("Эта клетка занята другим персонажем");
+    return;
+  }
+
+  const teleportInfo = window.getCombatTeleportInfo?.(selectedPlayer);
+  if (teleportInfo?.rangeCells > 0) {
+    if (!window.canUseCombatTeleportTo?.(selectedPlayer, x, y)) {
+      alert('Эта клетка недоступна для телепортации');
+      return;
+    }
+
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
+
+    const movedId = selectedPlayer?.id;
+    try { window.consumeCombatTeleportTo?.(selectedPlayer, x, y); } catch {}
+    try {
+      selectedPlayer = null;
+      const el = playerElements.get(movedId);
+      if (el) el.classList.remove('selected');
+    } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
     return;
   }
 
