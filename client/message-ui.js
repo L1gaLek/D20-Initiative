@@ -217,6 +217,7 @@ loginDiv.style.display = 'none';
       });
       updatePlayerList();
       try { window.RoomChat?.refreshUsers?.(); } catch {}
+      try { window.TavernChat?.refreshUsers?.(); } catch {}
     }
 
     if (msg.type === "diceEvent" && msg.event) {
@@ -247,6 +248,12 @@ loginDiv.style.display = 'none';
     }
 
     // ================== v4: LOG (append-only) ==================
+    if (msg.type === 'tavernLogRow' && msg.row) {
+      try {
+        window.TavernChat?.receiveRealtime?.(msg);
+      } catch {}
+    }
+
     if (msg.type === 'logInit' && Array.isArray(msg.rows)) {
       if (!lastState) lastState = createInitialGameState();
       try { window.RoomChat?.hydrateFromRows?.(msg.rows); } catch {}

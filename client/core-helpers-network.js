@@ -1517,6 +1517,9 @@ function sendWsEnvelope(msg, opts = {}) {
 }
 
 try { window.sendWsEnvelope = sendWsEnvelope; } catch {}
+try { window.connectRoomWs = connectRoomWs; } catch {}
+try { window.disconnectRoomWs = disconnectRoomWs; } catch {}
+try { window.getWsRoomId = () => String(wsRoomId || ''); } catch {}
 
 function handleDetachedWsMessage(msg) {
   try {
