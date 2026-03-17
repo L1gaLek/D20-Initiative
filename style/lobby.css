@@ -473,37 +473,6 @@ body.lobby-active #lobby-scene {
   flex-direction:column;
   gap:12px;
 }
-.tavern-chat-topbar{
-  display:flex;
-  gap:10px;
-  align-items:flex-start;
-  justify-content:space-between;
-}
-.tavern-chat-tabs{
-  flex:1 1 auto;
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-}
-.tavern-chat-tab{
-  width:auto !important;
-  padding:8px 12px;
-  border-radius:999px;
-  background:rgba(255,255,255,0.05) !important;
-  border:1px solid rgba(255,255,255,0.12) !important;
-  color:#eddcc0;
-  font-size:12px;
-}
-.tavern-chat-tab.is-active{
-  background:linear-gradient(180deg, rgba(139,88,31,0.95) 0%, rgba(92,56,20,0.98) 100%) !important;
-  border-color:rgba(255,208,128,0.38) !important;
-  color:#fff4de;
-}
-.tavern-chat-users-btn{
-  width:auto !important;
-  white-space:nowrap;
-  min-width:132px;
-}
 .tavern-chat-list{
   min-height:320px;
   max-height:min(58vh, 560px);
@@ -525,13 +494,6 @@ body.lobby-active #lobby-scene {
 .tavern-chat-item--system{
   background:rgba(255,186,86,0.08);
   border-color:rgba(255,186,86,0.18);
-}
-.tavern-chat-item--direct{
-  background:rgba(112, 74, 156, 0.16);
-  border-color:rgba(174, 140, 236, 0.18);
-}
-.tavern-chat-item--mine{
-  box-shadow: inset 0 0 0 1px rgba(255, 208, 129, 0.14);
 }
 .tavern-chat-item__meta{
   display:flex;
@@ -658,8 +620,6 @@ body.lobby-active #lobby-scene {
 }
 @media (max-width: 640px){
   .tavern-menu-grid{ grid-template-columns:1fr; }
-  .tavern-chat-topbar{ flex-direction:column; }
-  .tavern-chat-users-btn{ width:100% !important; }
   .tavern-chat-form{ flex-direction:column; }
   .tavern-headbar{ top:14px; left:14px; right:14px; gap:10px; }
   .tavern-toolbar{ width:100%; flex-wrap:wrap; }
@@ -667,35 +627,124 @@ body.lobby-active #lobby-scene {
   .tavern-toolbar__btn--wide{ min-width:0; }
 }
 
-.tavern-dm-user-list{
+
+.tavern-chat-modal{
+  position: relative;
+}
+.tavern-chat-header{
+  align-items: center;
+}
+.tavern-chat-header__actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.tavern-chat-users-btn{
+  min-width:auto;
+  padding:7px 12px;
+  border-radius:12px;
+  font-size:12px;
+}
+.tavern-chat-tabs{
+  display:flex;
+  gap:8px;
+  overflow:auto;
+  padding-bottom:2px;
+}
+.tavern-chat-tab{
+  flex:0 0 auto;
+  padding:8px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04);
+  color:#e7d9bf;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.tavern-chat-tab:hover{ filter:brightness(1.06); }
+.tavern-chat-tab.is-active{
+  border-color: rgba(255, 194, 97, 0.35);
+  background: rgba(255, 179, 88, 0.12);
+  color:#fff1d8;
+}
+.tavern-chat-tab__close{
+  margin-left:8px;
+  opacity:.72;
+  font-weight:900;
+}
+.tavern-chat-users-popover{
+  position:absolute;
+  top:76px;
+  right:18px;
+  width:min(300px, calc(100vw - 64px));
+  max-height:min(48vh, 360px);
+  overflow:auto;
+  padding:12px;
+  border-radius:16px;
+  background:rgba(14, 11, 9, 0.98);
+  border:1px solid rgba(255, 196, 102, 0.18);
+  box-shadow:0 20px 40px rgba(0,0,0,0.42);
+  z-index:2;
+}
+.tavern-chat-users-popover.hidden{ display:none; }
+.tavern-chat-users-popover__title{
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:#eac98b;
+  margin-bottom:10px;
+}
+.tavern-chat-users-list{
   display:flex;
   flex-direction:column;
-  gap:10px;
-  max-height:min(56vh, 520px);
-  overflow:auto;
+  gap:8px;
 }
-.tavern-dm-user{
-  width:100%;
+.tavern-chat-user-item{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
-  text-align:left;
-  padding:14px 16px;
-  border-radius:16px;
-}
-.tavern-dm-user__name{
-  font-size:14px;
-  color:#fff4de;
-}
-.tavern-dm-user__meta{
-  font-size:12px;
-  color:#cfb58a;
-}
-.tavern-dm-empty{
-  padding:14px 16px;
-  border-radius:16px;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:12px;
   background:rgba(255,255,255,0.04);
-  border:1px solid rgba(255,255,255,0.08);
-  color:#eadcc2;
+  border:1px solid rgba(255,255,255,0.06);
+}
+.tavern-chat-user-item__meta{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.tavern-chat-user-item__name{
+  color:#f2eadb;
+  font-weight:700;
+}
+.tavern-chat-user-item__hint{
+  color:#bfa67b;
+  font-size:11px;
+}
+.tavern-chat-item--mine{
+  background:rgba(255,196,102,0.08);
+  border-color:rgba(255,196,102,0.18);
+}
+.tavern-chat-item--direct{
+  background:rgba(127, 102, 255, 0.10);
+  border-color:rgba(158, 133, 255, 0.18);
+}
+.tavern-chat-item__badge{
+  display:inline-flex;
+  align-items:center;
+  padding:2px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.08);
+  color:#ead8b8;
+  font-size:11px;
+  font-weight:700;
+}
+.tavern-chat-item__empty{
+  color:#d8c8ab;
+  line-height:1.5;
 }
