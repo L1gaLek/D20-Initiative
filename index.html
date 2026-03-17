@@ -205,6 +205,35 @@
   </div>
 </div>
 
+<!-- ===== Room chat modal ===== -->
+<div id="roomChatModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal tavern-chat-modal room-chat-modal">
+    <div class="modal-header tavern-chat-header">
+      <div>
+        <div class="modal-title">Сообщение</div>
+        <div class="modal-subtitle" id="room-chat-subtitle">Разговоры внутри комнаты</div>
+      </div>
+      <div class="tavern-chat-header__actions">
+        <button id="room-chat-users-btn" type="button" class="tavern-chat-users-btn" title="Пользователи">Люди</button>
+        <button id="roomChatClose" class="modal-close">✕</button>
+      </div>
+    </div>
+    <div class="modal-body tavern-chat-body">
+      <div id="room-chat-tabs" class="tavern-chat-tabs"></div>
+      <div id="room-chat-users-popover" class="tavern-chat-users-popover hidden" aria-hidden="true">
+        <div class="tavern-chat-users-popover__title">Кому написать лично</div>
+        <div id="room-chat-users-list" class="tavern-chat-users-list"></div>
+      </div>
+      <div id="room-chat-list" class="tavern-chat-list"></div>
+      <div id="room-chat-quote" class="tavern-chat-quote hidden" aria-hidden="true"></div>
+      <div class="tavern-chat-form">
+        <input id="room-chat-input" type="text" maxlength="500" placeholder="Напишите сообщение в комнату">
+        <button id="room-chat-send" type="button">Отправить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ================== MAIN GAME ================== -->
 <div id="main-container" style="display:none;">
 
@@ -313,6 +342,15 @@
               <button id="next-turn" class="next-turn-btn" type="button" title="Конец хода (по инициативе)">
                 Конец хода
               </button>
+            </div>
+
+            <div id="room-top-actions" class="room-top-actions" aria-label="Действия комнаты">
+              <button id="room-chat-open" class="room-top-actions__btn room-top-actions__btn--chat" type="button" aria-label="Сообщение">
+                <span class="room-top-actions__btn-label">Сообщение</span>
+                <span id="room-chat-badge-global" class="tavern-toolbar__badge tavern-toolbar__badge--global hidden">0</span>
+                <span id="room-chat-badge-direct" class="tavern-toolbar__badge tavern-toolbar__badge--direct hidden">0</span>
+              </button>
+              <button id="room-return-tavern" class="room-top-actions__btn room-top-actions__btn--return" type="button" aria-label="Вернуться в таверну">Вернуться в таверну</button>
             </div>
 
             <div id="board-settings" class="board-settings-row">
