@@ -1043,3 +1043,229 @@
 
   window.MusicManager = { applyState };
 })();
+
+
+// ===== Lobby / Tavern ambient music =====
+(function () {
+  const ambientAudio = new Audio();
+  ambientAudio.preload = 'auto';
+  ambientAudio.loop = false;
+  try { ambientAudio.playsInline = true; } catch {}
+  try { ambientAudio.setAttribute('playsinline', ''); } catch {}
+  try { ambientAudio.setAttribute('webkit-playsinline', ''); } catch {}
+
+  const LOGIN_TRACK = 'lobby.mp3';
+  const TAVERN_TRACKS = ['teverna.mp3', 'teverna1.mp3', 'teverna2.mp3'];
+  const AMBIENT_DIR = 'ambient';
+  const LS_AMBIENT_VOL = 'dnd_ambient_music_volume';
+
+  let unlocked = false;
+  let currentMode = '';
+  let currentTrack = '';
+  let tavernPool = [];
+  let visibilityObserver = null;
+
+  function clamp01(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(1, n));
+  }
+
+  function loadAmbientVol() {
+    try {
+      const raw = localStorage.getItem(LS_AMBIENT_VOL);
+      const n = Number(raw);
+      if (Number.isFinite(n)) return clamp01(n);
+    } catch {}
+    return 0.42;
+  }
+
+  function applyAmbientVolume() {
+    try {
+      ambientAudio.volume = loadAmbientVol();
+      ambientAudio.muted = false;
+      ambientAudio.defaultMuted = false;
+    } catch {}
+  }
+
+  function buildAmbientCandidates(fileName) {
+    try {
+      const path = String(window.location.pathname || '/');
+      const basePath = path.endsWith('/')
+        ? path.replace(/\/$/, '')
+        : path.replace(/\/[^/]*$/, '');
+
+      return [
+        `/lobby/${AMBIENT_DIR}/${fileName}`,
+        `./lobby/${AMBIENT_DIR}/${fileName}`,
+        (basePath ? basePath : '') + `/lobby/${AMBIENT_DIR}/${fileName}`
+      ].filter((value, index, arr) => value && arr.indexOf(value) === index);
+    } catch {
+      return [`/lobby/${AMBIENT_DIR}/${fileName}`];
+    }
+  }
+
+  function getMode() {
+    try {
+      const loginEl = document.getElementById('login-container');
+      const tavernEl = document.getElementById('tavern-container');
+      const gameEl = document.getElementById('main-container');
+      const loginVisible = !!(loginEl && loginEl.style.display !== 'none');
+      const tavernVisible = !!(tavernEl && !tavernEl.classList.contains('hidden') && tavernEl.style.display !== 'none');
+      const gameVisible = !!(gameEl && gameEl.style.display !== 'none');
+      if (gameVisible) return 'game';
+      if (tavernVisible) return 'tavern';
+      if (loginVisible) return 'login';
+    } catch {}
+    return 'none';
+  }
+
+  function refillTavernPool() {
+    tavernPool = TAVERN_TRACKS.slice();
+    for (let i = tavernPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [tavernPool[i], tavernPool[j]] = [tavernPool[j], tavernPool[i]];
+    }
+    if (tavernPool.length > 1 && tavernPool[0] === currentTrack) {
+      tavernPool.push(tavernPool.shift());
+    }
+  }
+
+  function pickTavernTrack() {
+    if (!tavernPool.length) refillTavernPool();
+    return String(tavernPool.shift() || TAVERN_TRACKS[0]);
+  }
+
+  function stopAmbient(resetTrack = false) {
+    try { ambientAudio.pause(); } catch {}
+    try { ambientAudio.currentTime = 0; } catch {}
+    if (resetTrack) {
+      currentTrack = '';
+      try { ambientAudio.removeAttribute('src'); } catch {}
+    }
+  }
+
+  async function tryPlaySelected() {
+    applyAmbientVolume();
+    if (!ambientAudio.src) return false;
+    try {
+      await ambientAudio.play();
+      unlocked = true;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function setAmbientTrack(fileName, { loop = false, force = false } = {}) {
+    const nextTrack = String(fileName || '');
+    if (!nextTrack) {
+      stopAmbient(true);
+      return;
+    }
+
+    const candidates = buildAmbientCandidates(nextTrack);
+    const nextSrc = String(candidates[0] || '');
+    if (!nextSrc) return;
+
+    ambientAudio.loop = !!loop;
+    applyAmbientVolume();
+
+    if (!force && currentTrack === nextTrack && ambientAudio.getAttribute('src') === nextSrc) {
+      if (unlocked) void tryPlaySelected();
+      return;
+    }
+
+    currentTrack = nextTrack;
+    try { ambientAudio.setAttribute('src', nextSrc); } catch {}
+    try { ambientAudio.load(); } catch {}
+    if (unlocked) void tryPlaySelected();
+  }
+
+  function syncAmbientToUi({ force = false } = {}) {
+    const mode = getMode();
+    if (!force && mode === currentMode) return;
+    currentMode = mode;
+
+    if (mode === 'login') {
+      setAmbientTrack(LOGIN_TRACK, { loop: true, force });
+      return;
+    }
+
+    if (mode === 'tavern') {
+      const nextTrack = force && currentTrack && TAVERN_TRACKS.includes(currentTrack)
+        ? currentTrack
+        : pickTavernTrack();
+      setAmbientTrack(nextTrack, { loop: false, force: true });
+      return;
+    }
+
+    stopAmbient(false);
+  }
+
+  ambientAudio.addEventListener('ended', () => {
+    if (currentMode !== 'tavern') return;
+    const nextTrack = pickTavernTrack();
+    setAmbientTrack(nextTrack, { loop: false, force: true });
+  });
+
+  ambientAudio.addEventListener('error', () => {
+    if (currentMode === 'tavern') {
+      const nextTrack = pickTavernTrack();
+      if (nextTrack && nextTrack !== currentTrack) {
+        setAmbientTrack(nextTrack, { loop: false, force: true });
+      }
+      return;
+    }
+    if (currentMode === 'login') {
+      stopAmbient(true);
+    }
+  });
+
+  function unlockAndSync() {
+    unlocked = true;
+    syncAmbientToUi({ force: true });
+    void tryPlaySelected();
+  }
+
+  function bindUnlockHandlers() {
+    const handler = () => unlockAndSync();
+    const opts = { capture: true, passive: true };
+    window.addEventListener('pointerdown', handler, opts);
+    window.addEventListener('click', handler, opts);
+    window.addEventListener('touchstart', handler, opts);
+    window.addEventListener('keydown', handler, { capture: true });
+  }
+
+  function bindVisibilityWatchers() {
+    if (visibilityObserver) return;
+    const sync = () => syncAmbientToUi();
+    visibilityObserver = new MutationObserver(sync);
+    [document.getElementById('login-container'), document.getElementById('rooms-container'), document.getElementById('tavern-container'), document.getElementById('main-container')].forEach((el) => {
+      if (!el) return;
+      try { visibilityObserver.observe(el, { attributes: true, attributeFilter: ['style', 'class'] }); } catch {}
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') syncAmbientToUi({ force: true });
+    });
+    window.addEventListener('focus', sync);
+    window.addEventListener('load', sync);
+    sync();
+  }
+
+  applyAmbientVolume();
+  bindUnlockHandlers();
+  bindVisibilityWatchers();
+
+  window.AmbientLobbyMusic = {
+    sync: syncAmbientToUi,
+    stop() {
+      currentMode = 'none';
+      stopAmbient(true);
+    },
+    setVolume(v) {
+      try { localStorage.setItem(LS_AMBIENT_VOL, String(clamp01(v))); } catch {}
+      applyAmbientVolume();
+    }
+  };
+})();
