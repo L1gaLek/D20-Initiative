@@ -2601,6 +2601,7 @@ async function refreshRoomMembers(roomId, opts = {}) {
   });
 
   updatePlayerList();
+  try { window.RoomChat?.refreshUsers?.(); } catch {}
 
   const shouldBroadcast = !!opts?.broadcast && !!wsRoomId && !!wsClient && wsClient.readyState === WebSocket.OPEN;
   if (shouldBroadcast) {
@@ -2646,6 +2647,7 @@ async function subscribeRoomMembersDb(roomId) {
             }
           }
           updatePlayerList();
+          try { window.RoomChat?.refreshUsers?.(); } catch {}
         } catch {
           // Fallback to full refresh if realtime payload shape changes
           refreshRoomMembers(roomId);
@@ -4229,4 +4231,5 @@ function updatePhaseUI(state) {
 
 
 try { window.refreshRoomMembers = refreshRoomMembers; } catch {}
+try { window.loadRoomLog = loadRoomLog; } catch {}
 try { window.rememberRoomStateShadow = rememberRoomStateShadow; } catch {}

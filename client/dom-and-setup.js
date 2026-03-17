@@ -943,6 +943,52 @@ const roomChatState = {
   roomId: ''
 };
 
+
+async function syncRoomChatFromDb(forceHydrate = false) {
+  if (!sbClient || !currentRoomId) return;
+  try {
+    const { data, error } = await sbClient
+      .from('room_log')
+      .select('id,text,created_at')
+      .eq('room_id', currentRoomId)
+      .order('created_at', { ascending: true })
+      .limit(200);
+    if (error) throw error;
+    const rows = Array.isArray(data) ? data : [];
+    if (forceHydrate || !roomChatState.loadedHistory) {
+      hydrateRoomChatFromRows(rows);
+      return;
+    }
+    rows.forEach((row) => {
+      const msg = decodeRoomChatLogRow(row?.text || row);
+      if (msg) pushRoomChatMessage(msg);
+    });
+    renderRoomChatTabs();
+    renderRoomChatSubtitle();
+    renderRoomChatUsersList();
+    renderRoomChat();
+  } catch (e) {
+    console.warn('syncRoomChatFromDb failed', e);
+  }
+}
+function stopRoomChatSync() {
+  if (roomChatSyncTimer) {
+    clearInterval(roomChatSyncTimer);
+    roomChatSyncTimer = null;
+  }
+}
+function startRoomChatSync() {
+  stopRoomChatSync();
+  if (!sbClient || !currentRoomId) return;
+  syncRoomChatFromDb(!roomChatState.loadedHistory);
+  roomChatSyncTimer = setInterval(() => {
+    if (!currentRoomId) return;
+    syncRoomChatFromDb(false);
+  }, 3000);
+}
+window.startRoomChatSync = startRoomChatSync;
+window.stopRoomChatSync = stopRoomChatSync;
+
 function encodeRoomChatLogRow(message) {
   return `${ROOM_CHAT_LOG_PREFIX}${JSON.stringify(message || {})}`;
 }
@@ -1274,6 +1320,7 @@ async function sendRoomChatMessage() {
 }
 function openRoomChat() {
   if (!currentRoomId) return;
+  syncRoomChatFromDb(!roomChatState.loadedHistory);
   showModalEl(roomChatModal);
   markRoomChatRead(roomChatState.activeChatKey || 'global');
   renderRoomChatTabs();
@@ -1299,6 +1346,7 @@ async function returnToTavernFromRoom() {
   }
   try { stopHeartbeat(); } catch {}
   try { stopMembersPolling(); } catch {}
+  try { stopRoomChatSync(); } catch {}
   try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('room cleanup failed', e); }
   currentRoomId = null;
   resetRoomChatState('');
@@ -1314,6 +1362,7 @@ window.RoomChat = {
   hydrateFromRows: hydrateRoomChatFromRows,
   pushMessage: pushRoomChatMessage,
   reset: resetRoomChatState,
+  syncFromDb: syncRoomChatFromDb,
   refreshUsers: () => { renderRoomChatUsersList(); renderRoomChatSubtitle(); renderRoomChatTabs(); }
 };
 window.openRoomChat = openRoomChat;
@@ -1905,6 +1954,7 @@ let currentRoomId = null;
 
 let heartbeatTimer = null;
 let membersPollTimer = null;
+let roomChatSyncTimer = null;
 
 function startHeartbeat() {
   stopHeartbeat();
