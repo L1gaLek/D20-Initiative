@@ -148,11 +148,12 @@ function buildLobbyAmbientCandidates(fileName) {
 
     return [
       'lobby/ambient/' + fileName,
-      './lobby/ambient/' + fileName,
-      (basePath ? basePath : '') + '/lobby/ambient/' + fileName
+      '.lobby/ambient/' + fileName,
+      (basePath ? basePath : '') + 'lobby/ambient/' + fileName,
+      'lobby/ambient/' + fileName
     ].filter((value, index, arr) => value && arr.indexOf(value) === index);
   } catch {
-    return ['/lobby/ambient/' + fileName];
+    return ['lobby/ambient/' + fileName, 'lobby/ambient/' + fileName];
   }
 }
 
@@ -166,8 +167,9 @@ const lobbyAmbientAudio = (() => {
 
   const LS_VOL = 'dnd_bg_music_volume';
   const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
+  const LS_TAVERN_BAG = 'dnd_tavern_ambient_bag';
   const lobbyTrack = 'lobby.mp3';
-  const tavernTracks = ['taverna.mp3', 'teverna1.mp3', 'taverna2.mp3'];
+  const tavernTracks = ['teverna.mp3', 'teverna1.mp3', 'teverna2.mp3'];
 
   let activeMode = '';
   let activeFile = '';
@@ -188,16 +190,46 @@ const lobbyAmbientAudio = (() => {
     try { audio.volume = loadVolume(); } catch {}
   }
 
+  function shuffleTracks(list) {
+    const arr = Array.isArray(list) ? list.slice() : [];
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+    return arr;
+  }
+
   function chooseTavernTrack() {
     try {
       const last = String(localStorage.getItem(LS_LAST_TAVERN) || '');
-      const pool = tavernTracks.filter((file) => file !== last);
-      const list = pool.length ? pool : tavernTracks;
-      const picked = list[Math.floor(Math.random() * list.length)] || tavernTracks[0];
+      let bag = [];
+      try {
+        const rawBag = JSON.parse(localStorage.getItem(LS_TAVERN_BAG) || '[]');
+        if (Array.isArray(rawBag)) {
+          bag = rawBag.filter((file) => tavernTracks.includes(file));
+        }
+      } catch {}
+
+      if (!bag.length) {
+        const seed = tavernTracks.filter((file) => file !== last);
+        bag = shuffleTracks(seed.length ? seed : tavernTracks);
+      }
+
+      let picked = String(bag.shift() || '');
+      if (!picked) picked = tavernTracks[0];
+
+      if (bag.length === 1 && bag[0] === picked && tavernTracks.length > 1) {
+        bag = shuffleTracks(tavernTracks.filter((file) => file !== picked));
+      }
+
       localStorage.setItem(LS_LAST_TAVERN, picked);
+      localStorage.setItem(LS_TAVERN_BAG, JSON.stringify(bag));
       return picked;
     } catch {
-      return tavernTracks[Math.floor(Math.random() * tavernTracks.length)] || tavernTracks[0];
+      const fallbackPool = tavernTracks.filter((file) => file !== activeFile);
+      return fallbackPool[Math.floor(Math.random() * fallbackPool.length)] || tavernTracks[0];
     }
   }
 
@@ -218,19 +250,10 @@ const lobbyAmbientAudio = (() => {
   }
 
   async function tryUnlock() {
-    if (unlocked) return true;
     applyVolume();
     try {
-      const hadSrc = !!(audio.getAttribute('src') || audio.src);
-      const prevTime = Number(audio.currentTime) || 0;
       await playPromiseSafe();
-      if (!hadSrc) {
-        try { audio.pause(); } catch {}
-        try { audio.currentTime = 0; } catch {}
-      } else {
-        try { audio.pause(); } catch {}
-        try { audio.currentTime = prevTime; } catch {}
-      }
+      try { audio.pause(); } catch {}
       unlocked = true;
       return true;
     } catch {
@@ -304,10 +327,8 @@ const lobbyAmbientAudio = (() => {
 
     const onGesture = async () => {
       applyVolume();
-      if (!unlocked) {
-        await tryUnlock();
-        sync();
-      }
+      await tryUnlock();
+      sync();
     };
 
     const opts = { capture: true, passive: true };
