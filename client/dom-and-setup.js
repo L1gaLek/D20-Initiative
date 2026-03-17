@@ -39,6 +39,21 @@ const tavernCreateRoomBtn = document.getElementById('tavernCreateRoomBtn');
 const tavernChatHotspot = document.getElementById('tavern-hotspot-chat');
 const tavernBartenderHotspot = document.getElementById('tavern-hotspot-bartender');
 const tavernBoardHotspot = document.getElementById('tavern-hotspot-board');
+const roomChatModal = document.getElementById('roomChatModal');
+const roomChatClose = document.getElementById('roomChatClose');
+const roomChatList = document.getElementById('room-chat-list');
+const roomChatInput = document.getElementById('room-chat-input');
+const roomChatSend = document.getElementById('room-chat-send');
+const roomChatSubtitle = document.getElementById('room-chat-subtitle');
+const roomChatTabs = document.getElementById('room-chat-tabs');
+const roomChatUsersBtn = document.getElementById('room-chat-users-btn');
+const roomChatUsersPopover = document.getElementById('room-chat-users-popover');
+const roomChatUsersList = document.getElementById('room-chat-users-list');
+const roomChatQuote = document.getElementById('room-chat-quote');
+const roomChatBadgeGlobal = document.getElementById('room-chat-badge-global');
+const roomChatBadgeDirect = document.getElementById('room-chat-badge-direct');
+const roomChatOpenBtn = document.getElementById('room-chat-open');
+const roomReturnTavernBtn = document.getElementById('room-return-tavern');
 
 const createRoomBtn = document.getElementById('createRoomBtn');
 const createRoomModal = document.getElementById('createRoomModal');
@@ -912,6 +927,398 @@ function openTavernRooms() {
   try { sendMessage({ type: 'listRooms' }); } catch {}
 }
 
+
+
+const ROOM_CHAT_LOG_PREFIX = 'RCHAT1:';
+const ROOM_CHAT_MAX_MESSAGES = 50;
+const roomChatState = {
+  activeChatKey: 'global',
+  chats: new Map([['global', []]]),
+  tabs: [{ key: 'global', label: 'Общий чат', closable: false }],
+  loadedHistory: false,
+  unreadGlobal: 0,
+  unreadDirect: 0,
+  unreadByChat: new Map(),
+  quoteDraft: null,
+  roomId: ''
+};
+
+function encodeRoomChatLogRow(message) {
+  return `${ROOM_CHAT_LOG_PREFIX}${JSON.stringify(message || {})}`;
+}
+function decodeRoomChatLogRow(rowText) {
+  const raw = String(rowText || '');
+  if (!raw.startsWith(ROOM_CHAT_LOG_PREFIX)) return null;
+  const data = safeJsonParse(raw.slice(ROOM_CHAT_LOG_PREFIX.length), null);
+  return data && typeof data === 'object' ? data : null;
+}
+function isRoomChatLogText(text) {
+  return String(text || '').startsWith(ROOM_CHAT_LOG_PREFIX);
+}
+function resetRoomChatState(roomId = '') {
+  roomChatState.activeChatKey = 'global';
+  roomChatState.chats = new Map([['global', []]]);
+  roomChatState.tabs = [{ key: 'global', label: 'Общий чат', closable: false }];
+  roomChatState.loadedHistory = false;
+  roomChatState.unreadGlobal = 0;
+  roomChatState.unreadDirect = 0;
+  roomChatState.unreadByChat = new Map();
+  roomChatState.quoteDraft = null;
+  roomChatState.roomId = String(roomId || '');
+  clearRoomChatQuoteDraft();
+  updateRoomChatBadges();
+}
+function ensureRoomChat(key, label = 'Диалог') {
+  const chatKey = String(key || '').trim() || 'global';
+  if (!roomChatState.chats.has(chatKey)) roomChatState.chats.set(chatKey, []);
+  if (!roomChatState.tabs.some((tab) => String(tab.key) === chatKey)) {
+    roomChatState.tabs.push({ key: chatKey, label: String(label || 'Диалог'), closable: chatKey !== 'global' });
+  }
+  return roomChatState.chats.get(chatKey);
+}
+function getRoomChatUserName(userId, fallback = 'Собеседник') {
+  const uid = String(userId || '').trim();
+  if (!uid) return fallback;
+  return String(usersById.get(uid)?.name || fallback || 'Собеседник');
+}
+function getRoomDirectChatKey(otherUserId) { return `dm:${String(otherUserId || '').trim()}`; }
+function getRoomUnreadCountForChat(chatKey) { return Number(roomChatState.unreadByChat.get(String(chatKey || 'global')) || 0) || 0; }
+function updateRoomChatBadges() {
+  const apply = (el, count) => {
+    if (!el) return;
+    if (count > 0) {
+      el.classList.remove('hidden');
+      el.textContent = count > 99 ? '99+' : String(count);
+    } else {
+      el.classList.add('hidden');
+      el.textContent = '0';
+    }
+  };
+  apply(roomChatBadgeGlobal, Math.max(0, Number(roomChatState.unreadGlobal) || 0));
+  apply(roomChatBadgeDirect, Math.max(0, Number(roomChatState.unreadDirect) || 0));
+}
+function clearRoomChatQuoteDraft() {
+  roomChatState.quoteDraft = null;
+  if (!roomChatQuote) return;
+  roomChatQuote.classList.add('hidden');
+  roomChatQuote.setAttribute('aria-hidden', 'true');
+  roomChatQuote.innerHTML = '';
+}
+function setRoomChatQuoteDraft(message) {
+  if (!message || message.system) return;
+  roomChatState.quoteDraft = {
+    fromId: String(message.fromId || ''),
+    fromName: String(message.fromName || 'Путник'),
+    text: String(message.text || '').trim().slice(0, 280)
+  };
+  if (!roomChatQuote) return;
+  roomChatQuote.classList.remove('hidden');
+  roomChatQuote.setAttribute('aria-hidden', 'false');
+  roomChatQuote.innerHTML = `
+    <div class="tavern-chat-quote__meta">Ответ для ${escapeHtmlLite(roomChatState.quoteDraft.fromName)}</div>
+    <div class="tavern-chat-quote__text">${escapeHtmlLite(roomChatState.quoteDraft.text)}</div>
+    <button type="button" class="tavern-chat-quote__clear" data-clear-room-quote title="Убрать цитату">✕</button>
+  `;
+}
+function markRoomChatRead(chatKey) {
+  const key = String(chatKey || roomChatState.activeChatKey || 'global');
+  const prev = getRoomUnreadCountForChat(key);
+  if (!prev) return;
+  roomChatState.unreadByChat.set(key, 0);
+  if (key === 'global') roomChatState.unreadGlobal = Math.max(0, (Number(roomChatState.unreadGlobal) || 0) - prev);
+  else roomChatState.unreadDirect = Math.max(0, (Number(roomChatState.unreadDirect) || 0) - prev);
+  updateRoomChatBadges();
+}
+function noteRoomChatUnread(item) {
+  if (!roomChatState.loadedHistory) return;
+  if (!item || item.system || item.mine) return;
+  const modalOpen = !!(roomChatModal && !roomChatModal.classList.contains('hidden'));
+  const isActive = String(roomChatState.activeChatKey || 'global') === String(item.chatKey || 'global');
+  if (modalOpen && isActive) return;
+  const key = String(item.chatKey || 'global');
+  roomChatState.unreadByChat.set(key, getRoomUnreadCountForChat(key) + 1);
+  if (key === 'global') roomChatState.unreadGlobal = (Number(roomChatState.unreadGlobal) || 0) + 1;
+  else roomChatState.unreadDirect = (Number(roomChatState.unreadDirect) || 0) + 1;
+  updateRoomChatBadges();
+}
+function normalizeRoomChatMessage(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const myIdLocal = String(myId || localStorage.getItem('dnd_user_id') || 'guest');
+  const chatType = String(entry.chatType || 'global') === 'direct' ? 'direct' : 'global';
+  const item = {
+    id: String(entry.id || `room-chat-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    chatType,
+    fromId: String(entry.fromId || ''),
+    fromName: String(entry.fromName || getRoomChatUserName(entry.fromId, 'Путник')),
+    toId: String(entry.toId || ''),
+    toName: String(entry.toName || getRoomChatUserName(entry.toId, 'Собеседник')),
+    text: String(entry.text || ''),
+    ts: Number(entry.ts || Date.now()),
+    system: !!entry.system,
+    chatKey: 'global',
+    label: 'Общий чат',
+    mine: false,
+    quote: (entry.quote && typeof entry.quote === 'object') ? {
+      fromId: String(entry.quote.fromId || ''),
+      fromName: String(entry.quote.fromName || 'Путник'),
+      text: String(entry.quote.text || '')
+    } : null
+  };
+  if (!item.text && !item.system) return null;
+  if (chatType === 'direct') {
+    if (!item.fromId || !item.toId) return null;
+    const isMine = item.fromId === myIdLocal;
+    const isForMe = item.toId === myIdLocal;
+    if (!isMine && !isForMe) return null;
+    const otherId = isMine ? item.toId : item.fromId;
+    item.chatKey = getRoomDirectChatKey(otherId);
+    item.label = getRoomChatUserName(otherId, isMine ? item.toName : item.fromName || 'Собеседник');
+    item.mine = isMine;
+  } else {
+    item.mine = item.fromId && item.fromId === myIdLocal;
+  }
+  return item;
+}
+function pushRoomChatMessage(entry) {
+  const item = normalizeRoomChatMessage(entry);
+  if (!item) return;
+  const list = ensureRoomChat(item.chatKey, item.label);
+  if (list.some((x) => String(x.id) === item.id)) return;
+  list.push(item);
+  while (list.length > ROOM_CHAT_MAX_MESSAGES) list.shift();
+  noteRoomChatUnread(item);
+  renderRoomChatTabs();
+  renderRoomChat();
+}
+function getActiveRoomChatMessages() {
+  return roomChatState.chats.get(String(roomChatState.activeChatKey || 'global')) || [];
+}
+function renderRoomChatSubtitle() {
+  if (!roomChatSubtitle) return;
+  const activeKey = String(roomChatState.activeChatKey || 'global');
+  const count = Array.from(usersById.keys()).length;
+  if (activeKey === 'global') {
+    roomChatSubtitle.textContent = count > 0 ? `Разговоры внутри комнаты • Сейчас в комнате: ${count}` : 'Разговоры внутри комнаты';
+    return;
+  }
+  const otherId = activeKey.replace(/^dm:/, '');
+  roomChatSubtitle.textContent = `Личная переписка • ${getRoomChatUserName(otherId, 'Личная беседа')}`;
+}
+function renderRoomChatTabs() {
+  if (!roomChatTabs) return;
+  roomChatTabs.innerHTML = roomChatState.tabs.map((tab) => {
+    const active = String(tab.key) === String(roomChatState.activeChatKey || 'global');
+    const unread = getRoomUnreadCountForChat(tab.key);
+    return `
+      <button class="tavern-chat-tab ${active ? 'is-active' : ''}" type="button" data-room-chat-key="${escapeHtmlLite(tab.key)}">
+        <span>${escapeHtmlLite(tab.label)}</span>
+        ${unread > 0 ? `<span class="tavern-chat-tab__unread">${unread > 99 ? '99+' : unread}</span>` : ''}
+        ${tab.closable ? '<span class="tavern-chat-tab__close" aria-hidden="true">✕</span>' : ''}
+      </button>
+    `;
+  }).join('');
+  updateRoomChatBadges();
+}
+function renderRoomChatUsersList() {
+  if (!roomChatUsersList) return;
+  const myIdLocal = String(myId || localStorage.getItem('dnd_user_id') || 'guest');
+  const users = (usersOrder || [])
+    .map((uid) => ({ id: String(uid), name: String(usersById.get(String(uid))?.name || ''), role: String(usersById.get(String(uid))?.role || '') }))
+    .filter((u) => u.id && u.id !== myIdLocal && u.name)
+    .sort((a,b) => String(a.name).localeCompare(String(b.name), 'ru'));
+  if (!users.length) {
+    roomChatUsersList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Сейчас в комнате больше никого нет.</div></div>';
+    return;
+  }
+  roomChatUsersList.innerHTML = users.map((user) => `
+    <div class="tavern-chat-user-item">
+      <div class="tavern-chat-user-item__meta">
+        <div class="tavern-chat-user-item__name">${escapeHtmlLite(user.name)}</div>
+        <div class="tavern-chat-user-item__hint">${escapeHtmlLite(user.role || 'Игрок')}</div>
+      </div>
+      <button type="button" class="tavern-chat-user-item__btn" data-room-direct-user="${escapeHtmlLite(user.id)}">Написать</button>
+    </div>
+  `).join('');
+}
+function closeRoomChatUsersPopover() {
+  if (!roomChatUsersPopover) return;
+  roomChatUsersPopover.classList.add('hidden');
+  roomChatUsersPopover.setAttribute('aria-hidden', 'true');
+}
+function toggleRoomChatUsersPopover() {
+  if (!roomChatUsersPopover) return;
+  const willOpen = roomChatUsersPopover.classList.contains('hidden');
+  roomChatUsersPopover.classList.toggle('hidden', !willOpen);
+  roomChatUsersPopover.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
+  if (willOpen) renderRoomChatUsersList();
+}
+function ensureDirectRoomChatWithUser(otherUserId, fallbackName = 'Личное') {
+  const uid = String(otherUserId || '').trim();
+  if (!uid) return 'global';
+  const key = getRoomDirectChatKey(uid);
+  ensureRoomChat(key, getRoomChatUserName(uid, fallbackName));
+  const tab = roomChatState.tabs.find((x) => String(x.key) === key);
+  if (tab) tab.label = getRoomChatUserName(uid, fallbackName);
+  renderRoomChatTabs();
+  return key;
+}
+function setActiveRoomChat(chatKey) {
+  const key = String(chatKey || 'global');
+  if (!roomChatState.chats.has(key)) return;
+  roomChatState.activeChatKey = key;
+  markRoomChatRead(key);
+  renderRoomChatTabs();
+  renderRoomChatSubtitle();
+  renderRoomChat();
+  closeRoomChatUsersPopover();
+  try { roomChatInput?.focus(); } catch {}
+}
+function closeRoomChatTab(chatKey) {
+  const key = String(chatKey || '');
+  if (!key || key === 'global') return;
+  markRoomChatRead(key);
+  roomChatState.tabs = roomChatState.tabs.filter((tab) => String(tab.key) !== key);
+  roomChatState.chats.delete(key);
+  roomChatState.unreadByChat.delete(key);
+  if (String(roomChatState.activeChatKey) === key) roomChatState.activeChatKey = 'global';
+  renderRoomChatTabs();
+  renderRoomChatSubtitle();
+  renderRoomChat();
+}
+function renderRoomChat() {
+  if (!roomChatList) return;
+  const messages = getActiveRoomChatMessages();
+  if (!messages.length) {
+    const emptyText = String(roomChatState.activeChatKey || 'global') === 'global'
+      ? 'Пока в комнате тихо. Начните разговор первыми.'
+      : 'Личная переписка пока пуста. Напишите первое сообщение.';
+    roomChatList.innerHTML = `<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__empty">${escapeHtmlLite(emptyText)}</div></div>`;
+    return;
+  }
+  roomChatList.innerHTML = messages.map((msg) => {
+    const name = msg.system ? 'Комната' : msg.fromName;
+    const badge = msg.chatType === 'direct' ? '<span class="tavern-chat-item__badge">Личное</span>' : '';
+    const quoteHtml = msg.quote && msg.quote.text ? `
+      <div class="tavern-chat-item__quote">
+        <div class="tavern-chat-item__quote-name">${escapeHtmlLite(msg.quote.fromName || 'Путник')}</div>
+        <div class="tavern-chat-item__quote-text">${escapeHtmlLite(msg.quote.text)}</div>
+      </div>` : '';
+    const actionsHtml = (!msg.system && !msg.mine && msg.chatType === 'global') ? `
+      <span class="tavern-chat-item__actions">
+        <button type="button" class="tavern-chat-icon-btn" data-room-chat-direct="${escapeHtmlLite(msg.fromId)}" title="Личное сообщение">💬</button>
+        <button type="button" class="tavern-chat-icon-btn" data-room-chat-reply="${escapeHtmlLite(msg.id)}" title="Ответить">↩</button>
+      </span>` : '';
+    return `
+      <div class="tavern-chat-item ${msg.system ? 'tavern-chat-item--system' : ''} ${msg.mine ? 'tavern-chat-item--mine' : ''} ${msg.chatType === 'direct' ? 'tavern-chat-item--direct' : ''}" data-room-message-id="${escapeHtmlLite(msg.id)}">
+        <div class="tavern-chat-item__meta">
+          <span class="tavern-chat-item__meta-main">${escapeHtmlLite(name)} ${badge} ${actionsHtml}</span>
+          <span>${escapeHtmlLite(fmtTavernTime(msg.ts))}</span>
+        </div>
+        ${quoteHtml}
+        <div class="tavern-chat-item__text">${escapeHtmlLite(msg.text)}</div>
+      </div>
+    `;
+  }).join('');
+  roomChatList.scrollTop = roomChatList.scrollHeight;
+}
+function hydrateRoomChatFromRows(rows) {
+  resetRoomChatState(currentRoomId || roomChatState.roomId || '');
+  const list = Array.isArray(rows) ? rows : [];
+  list.forEach((row) => {
+    const msg = decodeRoomChatLogRow(row?.text || row);
+    if (msg) pushRoomChatMessage(msg);
+  });
+  roomChatState.loadedHistory = true;
+  if (!roomChatState.chats.has(String(roomChatState.activeChatKey || 'global'))) roomChatState.activeChatKey = 'global';
+  renderRoomChatTabs();
+  renderRoomChatSubtitle();
+  renderRoomChatUsersList();
+  renderRoomChat();
+}
+async function persistRoomChatMessage(message) {
+  if (!message || !sbClient || !currentRoomId) return;
+  try {
+    await sbClient.from('room_log').insert({ room_id: currentRoomId, text: encodeRoomChatLogRow(message) });
+  } catch (e) {
+    console.warn('persistRoomChatMessage failed', e);
+  }
+}
+async function sendRoomChatMessage() {
+  const text = String(roomChatInput?.value || '').trim();
+  if (!text || !currentRoomId) return;
+  const userId = String(localStorage.getItem('dnd_user_id') || myId || 'guest');
+  const userName = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'Путник');
+  let message = {
+    id: `room-chat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    chatType: 'global',
+    fromId: userId,
+    fromName: userName,
+    text,
+    ts: Date.now(),
+    quote: roomChatState.quoteDraft ? { ...roomChatState.quoteDraft } : null
+  };
+  const activeKey = String(roomChatState.activeChatKey || 'global');
+  if (activeKey !== 'global') {
+    const otherId = activeKey.replace(/^dm:/, '');
+    message = {
+      ...message,
+      chatType: 'direct',
+      toId: otherId,
+      toName: getRoomChatUserName(otherId, 'Собеседник')
+    };
+  }
+  pushRoomChatMessage(message);
+  try { if (roomChatInput) roomChatInput.value = ''; } catch {}
+  clearRoomChatQuoteDraft();
+  await persistRoomChatMessage(message);
+}
+function openRoomChat() {
+  if (!currentRoomId) return;
+  showModalEl(roomChatModal);
+  markRoomChatRead(roomChatState.activeChatKey || 'global');
+  renderRoomChatTabs();
+  renderRoomChatSubtitle();
+  renderRoomChatUsersList();
+  renderRoomChat();
+  setTimeout(() => roomChatInput?.focus(), 0);
+}
+async function returnToTavernFromRoom() {
+  const roomId = String(currentRoomId || '').trim();
+  if (!roomId) {
+    openTavern();
+    await ensureTavernChannel();
+    try { sendMessage({ type: 'listRooms' }); } catch {}
+    return;
+  }
+  try {
+    if (sbClient && myId) {
+      await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', myId);
+    }
+  } catch (e) {
+    console.warn('leave room member cleanup failed', e);
+  }
+  try { stopHeartbeat(); } catch {}
+  try { stopMembersPolling(); } catch {}
+  try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('room cleanup failed', e); }
+  currentRoomId = null;
+  resetRoomChatState('');
+  try { roomChatModal?.classList.add('hidden'); } catch {}
+  try { gameUI.style.display = 'none'; } catch {}
+  openTavern();
+  try { await ensureTavernChannel(); } catch {}
+  try { sendMessage({ type: 'listRooms' }); } catch {}
+}
+window.RoomChat = {
+  isChatLogText: isRoomChatLogText,
+  decodeLogText: decodeRoomChatLogRow,
+  hydrateFromRows: hydrateRoomChatFromRows,
+  pushMessage: pushRoomChatMessage,
+  reset: resetRoomChatState,
+  refreshUsers: () => { renderRoomChatUsersList(); renderRoomChatSubtitle(); renderRoomChatTabs(); }
+};
+window.openRoomChat = openRoomChat;
+window.returnToTavernFromRoom = returnToTavernFromRoom;
+
 window.openTavern = openTavern;
 window.closeTavern = closeTavern;
 window.openTavernRooms = openTavernRooms;
@@ -1693,6 +2100,78 @@ document.querySelectorAll('[data-tavern-topic]').forEach((btn) => {
 if (tavernCreateRoomBtn) tavernCreateRoomBtn.addEventListener('click', () => {
   hideModalEl(tavernRoomsModal);
   if (typeof openCreateRoomModal === 'function') openCreateRoomModal();
+});
+
+
+if (roomChatOpenBtn) roomChatOpenBtn.addEventListener('click', openRoomChat);
+if (roomReturnTavernBtn) roomReturnTavernBtn.addEventListener('click', () => { returnToTavernFromRoom(); });
+if (roomChatClose) roomChatClose.addEventListener('click', () => hideModalEl(roomChatModal));
+if (roomChatModal) {
+  roomChatModal.addEventListener('click', (e) => {
+    if (e.target === roomChatModal) hideModalEl(roomChatModal);
+  });
+}
+if (roomChatSend) roomChatSend.addEventListener('click', () => { sendRoomChatMessage(); });
+if (roomChatUsersBtn) roomChatUsersBtn.addEventListener('click', () => { toggleRoomChatUsersPopover(); });
+if (roomChatTabs) {
+  roomChatTabs.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('[data-room-chat-key]');
+    if (!btn) return;
+    const key = String(btn.getAttribute('data-room-chat-key') || 'global');
+    if (e.target?.closest?.('.tavern-chat-tab__close')) {
+      closeRoomChatTab(key);
+      return;
+    }
+    setActiveRoomChat(key);
+  });
+}
+if (roomChatUsersList) {
+  roomChatUsersList.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('[data-room-direct-user]');
+    if (!btn) return;
+    const userId = String(btn.getAttribute('data-room-direct-user') || '');
+    const key = ensureDirectRoomChatWithUser(userId, getRoomChatUserName(userId, 'Собеседник'));
+    setActiveRoomChat(key);
+  });
+}
+if (roomChatList) {
+  roomChatList.addEventListener('click', (e) => {
+    const directBtn = e.target?.closest?.('[data-room-chat-direct]');
+    if (directBtn) {
+      const userId = String(directBtn.getAttribute('data-room-chat-direct') || '');
+      const key = ensureDirectRoomChatWithUser(userId, getRoomChatUserName(userId, 'Собеседник'));
+      setActiveRoomChat(key);
+      return;
+    }
+    const replyBtn = e.target?.closest?.('[data-room-chat-reply]');
+    if (replyBtn) {
+      const messageId = String(replyBtn.getAttribute('data-room-chat-reply') || '');
+      const msg = getActiveRoomChatMessages().find((x) => String(x.id) === messageId);
+      if (msg) {
+        setRoomChatQuoteDraft(msg);
+        try { roomChatInput?.focus(); } catch {}
+      }
+    }
+  });
+}
+if (roomChatQuote) {
+  roomChatQuote.addEventListener('click', (e) => {
+    if (e.target?.closest?.('[data-clear-room-quote]')) clearRoomChatQuoteDraft();
+  });
+}
+if (roomChatInput) {
+  roomChatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendRoomChatMessage();
+    }
+  });
+}
+document.addEventListener('click', (e) => {
+  if (!roomChatUsersPopover || roomChatUsersPopover.classList.contains('hidden')) return;
+  const target = e.target;
+  if (roomChatUsersPopover.contains(target) || roomChatUsersBtn?.contains?.(target)) return;
+  closeRoomChatUsersPopover();
 });
 
 // ================== JOIN GAME ==================

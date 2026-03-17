@@ -104,6 +104,7 @@ if (msg.type === 'joinedRoom' && msg.room) {
   gameUI.style.display = 'block';
 
   currentRoomId = msg.room.id || null;
+  try { window.RoomChat?.reset?.(currentRoomId); } catch {}
   if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
   if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
   if (diceViz) diceViz.style.display = 'block';
@@ -214,6 +215,7 @@ loginDiv.style.display = 'none';
         return true;
       });
       updatePlayerList();
+      try { window.RoomChat?.refreshUsers?.(); } catch {}
     }
 
     if (msg.type === "diceEvent" && msg.event) {
@@ -246,7 +248,10 @@ loginDiv.style.display = 'none';
     // ================== v4: LOG (append-only) ==================
     if (msg.type === 'logInit' && Array.isArray(msg.rows)) {
       if (!lastState) lastState = createInitialGameState();
-      lastState.log = msg.rows.map(r => String(r?.text || '')).filter(Boolean);
+      try { window.RoomChat?.hydrateFromRows?.(msg.rows); } catch {}
+      lastState.log = msg.rows
+        .map(r => String(r?.text || ''))
+        .filter((text) => text && !window.RoomChat?.isChatLogText?.(text));
       if (lastState.log.length > 200) lastState.log = lastState.log.slice(-200);
       renderLog(lastState.log);
     }
@@ -255,6 +260,13 @@ loginDiv.style.display = 'none';
       if (!Array.isArray(lastState.log)) lastState.log = [];
       const text = String(msg.row.text || '').trim();
       if (text) {
+        if (window.RoomChat?.isChatLogText?.(text)) {
+          try {
+            const item = window.RoomChat.decodeLogText(text);
+            if (item) window.RoomChat.pushMessage(item);
+          } catch {}
+          return;
+        }
         // Анти-дубль: иногда один и тот же лог приходит дважды подряд (optimistic + realtime или повторный bind).
         // Скрываем повтор, если он совпадает с предыдущей строкой и пришёл почти сразу.
         try {

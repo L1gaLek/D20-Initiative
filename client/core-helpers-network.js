@@ -1335,6 +1335,11 @@ function disconnectRoomWs() {
   }
 }
 
+window.__leaveCurrentRoomCleanup = async function __leaveCurrentRoomCleanup() {
+  try { disconnectRoomWs(); } catch {}
+  try { await stopSupabaseRealtimeChannels(); } catch {}
+};
+
 function connectRoomWs(roomId) {
   const rid = String(roomId || '').trim();
   if (!rid || typeof WebSocket === 'undefined') return;
