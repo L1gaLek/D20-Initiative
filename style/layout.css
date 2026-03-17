@@ -4,8 +4,9 @@
 /* Основной контейнер */
 #main-container {
   display: flex;
-  align-items: flex-start; /* выравнивание по верху */
-  gap: 20px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
 }
 
 #content-row {
@@ -16,9 +17,22 @@
 
 /* Статус (Вы | Роль) */
 #status-bar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
   font-weight: bold;
   color: #fff;
-  margin-bottom: 10px;
+  margin-bottom: 0;
+}
+
+.status-bar__meta{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  min-width:0;
 }
 
 /* строка: цвет + размер */
