@@ -167,7 +167,7 @@ const lobbyAmbientAudio = (() => {
   const LS_VOL = 'dnd_bg_music_volume';
   const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
   const lobbyTrack = 'lobby.mp3';
-  const tavernTracks = ['taverna.mp3', 'teverna2.mp3', 'taverna3.mp3'];
+  const tavernTracks = ['taverna.mp3', 'teverna1.mp3', 'taverna2.mp3'];
 
   let activeMode = '';
   let activeFile = '';
