@@ -53,6 +53,7 @@ function updateLobbyModeClass() {
     const tavernVisible = !!(tavernDiv && !tavernDiv.classList.contains('hidden') && tavernDiv.style.display !== 'none');
     const inLobby = loginVisible || roomsVisible || tavernVisible;
     document.body.classList.toggle('lobby-active', inLobby);
+    try { lobbyAmbientAudio.sync(); } catch {}
   } catch {}
 }
 
@@ -137,6 +138,206 @@ function initTavernVideoBackground() {
   if (!tavernBgVideo) return;
   applyVideoSourceWithFallback(tavernBgVideo, buildLobbyVideoCandidates('taverna.mp4'));
 }
+
+function buildLobbyAmbientCandidates(fileName) {
+  try {
+    const path = String(window.location.pathname || '/');
+    const basePath = path.endsWith('/')
+      ? path.replace(/\/$/, '')
+      : path.replace(/\/[^/]*$/, '');
+
+    return [
+      '/lobby/ambient/' + fileName,
+      './lobby/ambient/' + fileName,
+      (basePath ? basePath : '') + '/lobby/ambient/' + fileName
+    ].filter((value, index, arr) => value && arr.indexOf(value) === index);
+  } catch {
+    return ['/lobby/ambient/' + fileName];
+  }
+}
+
+const lobbyAmbientAudio = (() => {
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.loop = false;
+  try { audio.playsInline = true; } catch {}
+  try { audio.setAttribute('playsinline', ''); } catch {}
+  try { audio.setAttribute('webkit-playsinline', ''); } catch {}
+
+  const LS_VOL = 'dnd_bg_music_volume';
+  const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
+  const lobbyTrack = 'lobby.mp3';
+  const tavernTracks = ['teverna.mp3', 'teverna1.mp3', 'teverna2.mp3'];
+
+  let activeMode = '';
+  let activeFile = '';
+  let unlocked = false;
+  let globalBound = false;
+
+  function loadVolume() {
+    try {
+      const raw = Number(localStorage.getItem(LS_VOL));
+      if (Number.isFinite(raw)) return Math.max(0, Math.min(1, raw));
+    } catch {}
+    return 0.4;
+  }
+
+  function applyVolume() {
+    try { audio.muted = false; } catch {}
+    try { audio.defaultMuted = false; } catch {}
+    try { audio.volume = loadVolume(); } catch {}
+  }
+
+  function chooseTavernTrack() {
+    try {
+      const last = String(localStorage.getItem(LS_LAST_TAVERN) || '');
+      const pool = tavernTracks.filter((file) => file !== last);
+      const list = pool.length ? pool : tavernTracks;
+      const picked = list[Math.floor(Math.random() * list.length)] || tavernTracks[0];
+      localStorage.setItem(LS_LAST_TAVERN, picked);
+      return picked;
+    } catch {
+      return tavernTracks[Math.floor(Math.random() * tavernTracks.length)] || tavernTracks[0];
+    }
+  }
+
+  function playPromiseSafe() {
+    try {
+      const p = audio.play?.();
+      if (p && typeof p.catch === 'function') {
+        return p.catch(() => {
+          unlocked = false;
+          return false;
+        });
+      }
+      return Promise.resolve(true);
+    } catch {
+      unlocked = false;
+      return Promise.resolve(false);
+    }
+  }
+
+  async function tryUnlock() {
+    applyVolume();
+    try {
+      await playPromiseSafe();
+      try { audio.pause(); } catch {}
+      unlocked = true;
+      return true;
+    } catch {
+      unlocked = false;
+      return false;
+    }
+  }
+
+  async function start(mode) {
+    const nextMode = String(mode || '');
+    if (nextMode !== 'lobby' && nextMode !== 'tavern') {
+      stop();
+      return;
+    }
+
+    applyVolume();
+    const fileName = nextMode === 'lobby' ? lobbyTrack : (activeMode === 'tavern' && activeFile ? activeFile : chooseTavernTrack());
+    const sources = buildLobbyAmbientCandidates(fileName);
+    const nextSrc = sources[0] || '';
+
+    if (!nextSrc) {
+      stop();
+      return;
+    }
+
+    if (activeMode !== nextMode || activeFile !== fileName || audio.getAttribute('src') !== nextSrc) {
+      activeMode = nextMode;
+      activeFile = fileName;
+      audio.setAttribute('src', nextSrc);
+      try { audio.load(); } catch {}
+    }
+
+    const ok = unlocked ? true : await tryUnlock();
+    if (!ok) return;
+
+    try {
+      await playPromiseSafe();
+    } catch {}
+  }
+
+  function stop() {
+    activeMode = '';
+    activeFile = '';
+    try { audio.pause(); } catch {}
+    try { audio.removeAttribute('src'); audio.load(); } catch {}
+  }
+
+  function sync() {
+    const loginVisible = !!(loginDiv && loginDiv.style.display !== 'none');
+    const tavernVisible = !!(tavernDiv && !tavernDiv.classList.contains('hidden') && tavernDiv.style.display !== 'none');
+    const gameVisible = !!(gameUI && gameUI.style.display !== 'none');
+
+    if (gameVisible) {
+      stop();
+      return;
+    }
+    if (tavernVisible) {
+      start('tavern');
+      return;
+    }
+    if (loginVisible) {
+      start('lobby');
+      return;
+    }
+    stop();
+  }
+
+  function bindGlobalUnlock() {
+    if (globalBound) return;
+    globalBound = true;
+
+    const onGesture = async () => {
+      applyVolume();
+      await tryUnlock();
+      sync();
+    };
+
+    const opts = { capture: true, passive: true };
+    window.addEventListener('pointerdown', onGesture, opts);
+    window.addEventListener('click', onGesture, opts);
+    window.addEventListener('touchstart', onGesture, opts);
+    window.addEventListener('keydown', onGesture, { capture: true });
+    window.addEventListener('storage', (e) => {
+      if (e?.key === LS_VOL) applyVolume();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') sync();
+      else {
+        try { audio.pause(); } catch {}
+      }
+    });
+  }
+
+  audio.addEventListener('ended', () => {
+    if (activeMode !== 'tavern') return;
+    activeFile = chooseTavernTrack();
+    start('tavern');
+  });
+
+  audio.addEventListener('error', () => {
+    if (activeMode === 'tavern') {
+      activeFile = chooseTavernTrack();
+      start('tavern');
+      return;
+    }
+    if (activeMode === 'lobby') {
+      stop();
+    }
+  });
+
+  bindGlobalUnlock();
+  applyVolume();
+
+  return { sync, start, stop, audio };
+})();
+
 const myNameSpan = document.getElementById('myName');
 const myRoleSpan = document.getElementById('myRole');
 const myRoomSpan = document.getElementById('myRoom');
@@ -172,6 +373,7 @@ function openTavern() {
   if (tavernMyName) tavernMyName.textContent = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'путник');
   initTavernVideoBackground();
   updateLobbyModeClass();
+  try { lobbyAmbientAudio.sync(); } catch {}
 }
 
 function closeTavern() {
@@ -180,6 +382,7 @@ function closeTavern() {
   tavernDiv.setAttribute('aria-hidden', 'true');
   [tavernChatModal, tavernBartenderModal, tavernRoomsModal].forEach(hideModalEl);
   updateLobbyModeClass();
+  try { lobbyAmbientAudio.sync(); } catch {}
 }
 
 function pushTavernMessage(entry) {
@@ -993,6 +1196,7 @@ const userMissingTicks = new Map(); // userId -> missing polls count
 if (diceViz) diceViz.style.display = 'none';
 initLobbyVideoBackground();
 watchLobbyVisibility();
+try { lobbyAmbientAudio.sync(); } catch {}
 pushTavernMessage({ system: true, text: 'Собирайтесь у стола, слушайте бармена или выбирайте путешествие на доске объявлений.' });
 
 [tavernChatClose, tavernBartenderClose, tavernRoomsClose].forEach((btn, idx) => {
