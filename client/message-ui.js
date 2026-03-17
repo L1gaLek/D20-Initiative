@@ -105,7 +105,6 @@ if (msg.type === 'joinedRoom' && msg.room) {
 
   currentRoomId = msg.room.id || null;
   try { window.RoomChat?.reset?.(currentRoomId); } catch {}
-  try { window.startRoomChatSync?.(); } catch {}
   if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
   if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
   if (diceViz) diceViz.style.display = 'block';

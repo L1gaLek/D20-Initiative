@@ -939,103 +939,61 @@ const roomChatState = {
   unreadGlobal: 0,
   unreadDirect: 0,
   unreadByChat: new Map(),
-  knownMessageIds: new Set(),
   quoteDraft: null,
-  roomId: ''
+  roomId: '',
+  lastSyncAt: 0,
+  syncInFlight: null
 };
-
-let roomChatRealtimeChannel = null;
-
-async function stopRoomChatRealtime() {
-  if (!roomChatRealtimeChannel) return;
-  try { await roomChatRealtimeChannel.unsubscribe(); } catch {}
-  roomChatRealtimeChannel = null;
-}
-
-async function ensureRoomChatRealtime(roomId) {
-  if (!sbClient || !roomId) return null;
-  const key = String(roomId || '').trim();
-  if (!key) return null;
-
-  const existingTopic = String(roomChatRealtimeChannel?.topic || '');
-  if (roomChatRealtimeChannel && existingTopic === `room-chat:${key}`) return roomChatRealtimeChannel;
-
-  await stopRoomChatRealtime();
-
-  roomChatRealtimeChannel = sbClient
-    .channel(`room-chat:${key}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'room_log', filter: `room_id=eq.${key}` },
-      ({ new: row }) => {
-        try {
-          const msg = decodeRoomChatLogRow(row?.text || row);
-          if (msg) pushRoomChatMessage(msg);
-        } catch (e) {
-          console.warn('room chat realtime push failed', e);
-        }
-      }
-    );
-
-  try {
-    await roomChatRealtimeChannel.subscribe((status) => {
-      if (status === 'CHANNEL_ERROR') {
-        console.warn('room chat realtime channel error');
-      }
-    });
-  } catch (e) {
-    console.warn('room chat realtime subscribe failed', e);
-  }
-
-  return roomChatRealtimeChannel;
-}
 
 
 async function syncRoomChatFromDb(forceHydrate = false) {
   if (!sbClient || !currentRoomId) return;
-  try {
-    const { data, error } = await sbClient
-      .from('room_log')
-      .select('id,text,created_at')
-      .eq('room_id', currentRoomId)
-      .order('created_at', { ascending: true })
-      .limit(200);
-    if (error) throw error;
-    const rows = Array.isArray(data) ? data : [];
-    if (forceHydrate || !roomChatState.loadedHistory) {
-      hydrateRoomChatFromRows(rows);
-      return;
+  if (roomChatState.syncInFlight) return roomChatState.syncInFlight;
+  roomChatState.syncInFlight = (async () => {
+    try {
+      const { data, error } = await sbClient
+        .from('room_log')
+        .select('id,text,created_at')
+        .eq('room_id', currentRoomId)
+        .order('created_at', { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      if (forceHydrate || !roomChatState.loadedHistory) {
+        hydrateRoomChatFromRows(rows);
+      } else {
+        rows.forEach((row) => {
+          const msg = decodeRoomChatLogRow(row?.text || row);
+          if (msg) pushRoomChatMessage(msg);
+        });
+        renderRoomChatTabs();
+        renderRoomChatSubtitle();
+        renderRoomChatUsersList();
+        renderRoomChat();
+      }
+      roomChatState.lastSyncAt = Date.now();
+    } catch (e) {
+      console.warn('syncRoomChatFromDb failed', e);
+    } finally {
+      roomChatState.syncInFlight = null;
     }
-    rows.forEach((row) => {
-      const msg = decodeRoomChatLogRow(row?.text || row);
-      if (msg) pushRoomChatMessage(msg);
-    });
-    renderRoomChatTabs();
-    renderRoomChatSubtitle();
-    renderRoomChatUsersList();
-    renderRoomChat();
-  } catch (e) {
-    console.warn('syncRoomChatFromDb failed', e);
-  }
+  })();
+  return roomChatState.syncInFlight;
 }
-async function stopRoomChatSync() {
+function stopRoomChatSync() {
   if (roomChatSyncTimer) {
     clearInterval(roomChatSyncTimer);
     roomChatSyncTimer = null;
   }
-  await stopRoomChatRealtime();
+  roomChatState.syncInFlight = null;
 }
-async function startRoomChatSync() {
-  await stopRoomChatSync();
+function startRoomChatSync() {
+  stopRoomChatSync();
   if (!sbClient || !currentRoomId) return;
-  await syncRoomChatFromDb(!roomChatState.loadedHistory);
-  await ensureRoomChatRealtime(currentRoomId);
-  roomChatSyncTimer = setInterval(() => {
-    if (!currentRoomId) return;
-    if (!roomChatState.loadedHistory) {
-      syncRoomChatFromDb(true);
-    }
-  }, 20000);
+  // Сообщения комнаты теперь приходят через realtime room_log.
+  // Здесь оставляем только одноразовую инициализацию/ручной fallback без постоянного polling,
+  // чтобы не было задержек и повторных «непрочитанных» личных сообщений.
+  syncRoomChatFromDb(!roomChatState.loadedHistory);
 }
 window.startRoomChatSync = startRoomChatSync;
 window.stopRoomChatSync = stopRoomChatSync;
@@ -1060,9 +1018,10 @@ function resetRoomChatState(roomId = '') {
   roomChatState.unreadGlobal = 0;
   roomChatState.unreadDirect = 0;
   roomChatState.unreadByChat = new Map();
-  roomChatState.knownMessageIds = new Set();
   roomChatState.quoteDraft = null;
   roomChatState.roomId = String(roomId || '');
+  roomChatState.lastSyncAt = 0;
+  roomChatState.syncInFlight = null;
   clearRoomChatQuoteDraft();
   updateRoomChatBadges();
 }
@@ -1180,12 +1139,6 @@ function normalizeRoomChatMessage(entry) {
 function pushRoomChatMessage(entry) {
   const item = normalizeRoomChatMessage(entry);
   if (!item) return;
-  const messageId = String(item.id || '').trim();
-  if (messageId) {
-    if (!roomChatState.knownMessageIds) roomChatState.knownMessageIds = new Set();
-    if (roomChatState.knownMessageIds.has(messageId)) return;
-    roomChatState.knownMessageIds.add(messageId);
-  }
   const list = ensureRoomChat(item.chatKey, item.label);
   if (list.some((x) => String(x.id) === item.id)) return;
   list.push(item);
@@ -1193,11 +1146,6 @@ function pushRoomChatMessage(entry) {
   noteRoomChatUnread(item);
   renderRoomChatTabs();
   renderRoomChat();
-  const modalOpen = !!(roomChatModal && !roomChatModal.classList.contains('hidden'));
-  if (modalOpen && String(roomChatState.activeChatKey || 'global') === String(item.chatKey || 'global')) {
-    markRoomChatRead(item.chatKey);
-    renderRoomChatTabs();
-  }
 }
 function getActiveRoomChatMessages() {
   return roomChatState.chats.get(String(roomChatState.activeChatKey || 'global')) || [];
@@ -1383,7 +1331,10 @@ async function sendRoomChatMessage() {
 }
 function openRoomChat() {
   if (!currentRoomId) return;
-  syncRoomChatFromDb(!roomChatState.loadedHistory);
+  const staleMs = 15000;
+  if (!roomChatState.loadedHistory || ((Date.now() - Number(roomChatState.lastSyncAt || 0)) > staleMs)) {
+    syncRoomChatFromDb(!roomChatState.loadedHistory);
+  }
   showModalEl(roomChatModal);
   markRoomChatRead(roomChatState.activeChatKey || 'global');
   renderRoomChatTabs();
@@ -1426,7 +1377,6 @@ window.RoomChat = {
   pushMessage: pushRoomChatMessage,
   reset: resetRoomChatState,
   syncFromDb: syncRoomChatFromDb,
-  markRead: markRoomChatRead,
   refreshUsers: () => { renderRoomChatUsersList(); renderRoomChatSubtitle(); renderRoomChatTabs(); }
 };
 window.openRoomChat = openRoomChat;
