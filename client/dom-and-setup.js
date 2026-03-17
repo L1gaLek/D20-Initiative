@@ -21,12 +21,6 @@ const tavernChatList = document.getElementById('tavern-chat-list');
 const tavernChatInput = document.getElementById('tavern-chat-input');
 const tavernChatSend = document.getElementById('tavern-chat-send');
 const tavernChatSubtitle = document.getElementById('tavern-chat-subtitle');
-const tavernChatTabs = document.getElementById('tavern-chat-tabs');
-const tavernChatUsersBtn = document.getElementById('tavern-chat-users-btn');
-const tavernChatModalTitle = document.getElementById('tavern-chat-title');
-const tavernDmUserModal = document.getElementById('tavernDmUserModal');
-const tavernDmUserClose = document.getElementById('tavernDmUserClose');
-const tavernDmUserList = document.getElementById('tavern-dm-user-list');
 const tavernBartenderModal = document.getElementById('tavernBartenderModal');
 const tavernBartenderClose = document.getElementById('tavernBartenderClose');
 const tavernBartenderNote = document.getElementById('tavern-bartender-note');
@@ -353,7 +347,199 @@ const diceViz = document.getElementById('dice-viz');
 let tavernChannel = null;
 let tavernPresenceCount = 0;
 let tavernMessageSeq = 0;
-const tavernChatHistory = [];
+const TAVERN_MAX_MESSAGES = 50;
+const TAVERN_CACHE_KEY = 'dnd_tavern_chat_cache_v2';
+const TAVERN_HISTORY_REQUEST_TTL_MS = 15000;
+const tavernUsers = new Map();
+const tavernDialogs = new Map();
+let tavernActiveDialogId = 'global';
+let tavernUiReady = false;
+let tavernUserPicker = null;
+let tavernUserPickerOpen = false;
+let tavernTabsEl = null;
+let tavernDialogBadgeEl = null;
+let tavernUserListBtn = null;
+let tavernActiveLineEl = null;
+let tavernHistoryRequestedAt = 0;
+const tavernSeenMessageIds = new Set();
+
+function getTavernMyUserId() {
+  try { return String(localStorage.getItem('dnd_user_id') || myId || 'guest'); } catch {}
+  return 'guest';
+}
+
+function getTavernMyUserName() {
+  try { return String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'Путник'); } catch {}
+  return 'Путник';
+}
+
+function makeTavernDmDialogId(a, b) {
+  const pair = [String(a || ''), String(b || '')].filter(Boolean).sort();
+  return `dm:${pair.join(':')}`;
+}
+
+function parseTavernDialogId(dialogId) {
+  const raw = String(dialogId || 'global');
+  if (!raw.startsWith('dm:')) return { kind: 'global', ids: [] };
+  return { kind: 'dm', ids: raw.slice(3).split(':').filter(Boolean) };
+}
+
+function ensureTavernStyles() {
+  if (document.getElementById('tavern-chat-enhanced-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'tavern-chat-enhanced-styles';
+  style.textContent = `
+    .tavern-chat-topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+    .tavern-chat-tabs{display:flex;gap:8px;flex-wrap:wrap;min-width:0;}
+    .tavern-chat-tab{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#e8dcc4;font-size:13px;font-weight:700;cursor:pointer;max-width:220px;}
+    .tavern-chat-tab:hover{background:rgba(255,255,255,0.08);}
+    .tavern-chat-tab.is-active{border-color:rgba(224,177,90,0.7);background:rgba(224,177,90,0.16);color:#fff4de;}
+    .tavern-chat-tab__label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .tavern-chat-tab__badge{min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:rgba(255,165,0,0.18);border:1px solid rgba(255,165,0,0.35);font-size:11px;display:none;align-items:center;justify-content:center;color:#ffd28a;}
+    .tavern-chat-tab__badge.has-value{display:inline-flex;}
+    .tavern-chat-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .tavern-chat-users-btn{padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#f1e6cf;font-weight:700;}
+    .tavern-chat-active-line{font-size:12px;color:#cfc2aa;margin:0 0 10px;}
+    .tavern-chat-item{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;}
+    .tavern-chat-item--own{border-color:rgba(224,177,90,0.32);background:rgba(224,177,90,0.08);}
+    .tavern-chat-item__meta{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#bfae92;margin-bottom:6px;}
+    .tavern-chat-item__meta strong{color:#fff1d5;}
+    .tavern-chat-item__text{white-space:pre-wrap;word-break:break-word;line-height:1.45;}
+    .tavern-chat-user-picker{position:absolute;right:16px;top:74px;width:min(320px, calc(100% - 32px));max-height:min(60vh,420px);overflow:auto;padding:12px;border-radius:16px;border:1px solid rgba(255,255,255,0.12);background:rgba(18,14,11,0.98);box-shadow:0 18px 38px rgba(0,0,0,0.45);z-index:2;display:none;}
+    .tavern-chat-user-picker.is-open{display:block;}
+    .tavern-chat-user-picker__head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+    .tavern-chat-user-picker__title{font-weight:800;color:#fff1d5;}
+    .tavern-chat-user-picker__close{padding:4px 8px;}
+    .tavern-chat-user-picker__empty{font-size:13px;color:#c8baa0;padding:6px 2px;}
+    .tavern-chat-user-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,0.06);}
+    .tavern-chat-user-row:first-child{border-top:0;padding-top:0;}
+    .tavern-chat-user-meta{min-width:0;display:flex;flex-direction:column;gap:3px;}
+    .tavern-chat-user-name{font-weight:700;color:#f5e7ca;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .tavern-chat-user-note{font-size:12px;color:#b9ab93;}
+    .tavern-chat-user-row button{padding:7px 10px;white-space:nowrap;}
+    .tavern-chat-form{position:relative;}
+  `;
+  document.head.appendChild(style);
+}
+
+function defaultTavernDialog(dialogId = 'global') {
+  const isGlobal = String(dialogId) === 'global';
+  return {
+    id: String(dialogId),
+    kind: isGlobal ? 'global' : 'dm',
+    title: isGlobal ? 'Общий стол' : 'Личное сообщение',
+    participants: isGlobal ? [] : parseTavernDialogId(dialogId).ids,
+    messages: [],
+    unread: 0,
+    updatedAt: 0,
+    lastMessage: '',
+    lastTs: 0
+  };
+}
+
+function ensureTavernDialog(dialogId, meta = {}) {
+  const id = String(dialogId || 'global');
+  if (!tavernDialogs.has(id)) tavernDialogs.set(id, defaultTavernDialog(id));
+  const dialog = tavernDialogs.get(id);
+  if (meta && typeof meta === 'object') {
+    if (typeof meta.kind === 'string' && meta.kind) dialog.kind = meta.kind;
+    if (typeof meta.title === 'string' && meta.title) dialog.title = meta.title;
+    if (Array.isArray(meta.participants) && meta.participants.length) dialog.participants = meta.participants.map((x) => String(x));
+    if (Number.isFinite(Number(meta.updatedAt))) dialog.updatedAt = Number(meta.updatedAt);
+  }
+  return dialog;
+}
+
+function safeTavernUserNameById(userId, fallback = 'Путник') {
+  const id = String(userId || '');
+  if (!id) return fallback;
+  const tavernUser = tavernUsers.get(id);
+  if (tavernUser?.name) return String(tavernUser.name);
+  const liveUser = usersById?.get?.(id);
+  if (liveUser?.name) return String(liveUser.name);
+  if (id === getTavernMyUserId()) return getTavernMyUserName();
+  return fallback;
+}
+
+function resolveTavernDialogTitle(dialog) {
+  if (!dialog) return 'Общий стол';
+  if (String(dialog.id) === 'global' || dialog.kind === 'global') return 'Общий стол';
+  const myIdSafe = getTavernMyUserId();
+  const otherId = (Array.isArray(dialog.participants) ? dialog.participants : []).find((id) => String(id) !== myIdSafe) || '';
+  return safeTavernUserNameById(otherId, dialog.title || 'Личное сообщение');
+}
+
+function getTavernSerializableCache() {
+  const dialogs = Array.from(tavernDialogs.values()).map((dialog) => ({
+    id: dialog.id,
+    kind: dialog.kind,
+    title: dialog.title,
+    participants: Array.isArray(dialog.participants) ? dialog.participants : [],
+    updatedAt: Number(dialog.updatedAt || 0),
+    lastMessage: String(dialog.lastMessage || ''),
+    lastTs: Number(dialog.lastTs || 0),
+    messages: (Array.isArray(dialog.messages) ? dialog.messages : []).slice(-TAVERN_MAX_MESSAGES)
+  }));
+  return { version: 2, savedAt: Date.now(), activeDialogId: tavernActiveDialogId, dialogs };
+}
+
+function saveTavernCache() {
+  try { localStorage.setItem(TAVERN_CACHE_KEY, JSON.stringify(getTavernSerializableCache())); } catch {}
+}
+
+function importTavernCache(payload, { markUnread = false } = {}) {
+  try {
+    const dialogs = Array.isArray(payload?.dialogs) ? payload.dialogs : [];
+    dialogs.forEach((dialogRaw) => {
+      const dialogId = String(dialogRaw?.id || 'global');
+      const dialog = ensureTavernDialog(dialogId, {
+        kind: dialogRaw?.kind,
+        title: dialogRaw?.title,
+        participants: dialogRaw?.participants,
+        updatedAt: Number(dialogRaw?.updatedAt || 0)
+      });
+      const messages = Array.isArray(dialogRaw?.messages) ? dialogRaw.messages : [];
+      messages.forEach((msg) => pushTavernMessage(msg, { save: false, render: false, markUnread }));
+      if (!dialog.lastTs && Number(dialogRaw?.lastTs || 0)) dialog.lastTs = Number(dialogRaw.lastTs || 0);
+      if (!dialog.lastMessage && dialogRaw?.lastMessage) dialog.lastMessage = String(dialogRaw.lastMessage || '');
+    });
+    if (payload?.activeDialogId && tavernDialogs.has(String(payload.activeDialogId))) {
+      tavernActiveDialogId = String(payload.activeDialogId);
+    }
+  } catch {}
+}
+
+function loadTavernCache() {
+  tavernDialogs.clear();
+  tavernSeenMessageIds.clear();
+  ensureTavernDialog('global', { kind: 'global', title: 'Общий стол' });
+  try {
+    const raw = localStorage.getItem(TAVERN_CACHE_KEY);
+    if (!raw) return;
+    const payload = JSON.parse(raw);
+    importTavernCache(payload, { markUnread: false });
+  } catch {}
+}
+
+function getTavernAllMessagesFlat() {
+  const out = [];
+  tavernDialogs.forEach((dialog) => {
+    (dialog.messages || []).forEach((msg) => out.push(msg));
+  });
+  out.sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+  return out.slice(-TAVERN_MAX_MESSAGES);
+}
+
+function setTavernActiveDialog(dialogId) {
+  const id = String(dialogId || 'global');
+  ensureTavernDialog(id);
+  tavernActiveDialogId = id;
+  const dialog = tavernDialogs.get(id);
+  if (dialog) dialog.unread = 0;
+  renderTavernChat();
+  renderTavernTabs();
+  saveTavernCache();
+}
 
 function hideModalEl(el) {
   if (!el) return;
@@ -363,6 +549,130 @@ function hideModalEl(el) {
 function showModalEl(el) {
   if (!el) return;
   el.classList.remove('hidden');
+}
+
+function closeTavernUserPicker() {
+  tavernUserPickerOpen = false;
+  tavernUserPicker?.classList.remove('is-open');
+}
+
+function openTavernUserPicker() {
+  ensureTavernChatUi();
+  tavernUserPickerOpen = true;
+  renderTavernUserPicker();
+  tavernUserPicker?.classList.add('is-open');
+}
+
+function toggleTavernUserPicker() {
+  if (tavernUserPickerOpen) closeTavernUserPicker();
+  else openTavernUserPicker();
+}
+
+function getTavernKnownUsersList() {
+  const map = new Map();
+  tavernUsers.forEach((value, key) => {
+    if (!key) return;
+    map.set(String(key), { id: String(key), name: String(value?.name || safeTavernUserNameById(key)), online: true });
+  });
+  try {
+    if (Array.isArray(usersOrder)) {
+      usersOrder.forEach((id) => {
+        const sid = String(id || '');
+        if (!sid || sid === getTavernMyUserId()) return;
+        if (!map.has(sid)) {
+          const live = usersById?.get?.(sid);
+          map.set(sid, { id: sid, name: String(live?.name || safeTavernUserNameById(sid)), online: false });
+        }
+      });
+    }
+  } catch {}
+  return Array.from(map.values())
+    .filter((u) => String(u.id) !== getTavernMyUserId())
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+}
+
+function renderTavernUserPicker() {
+  ensureTavernChatUi();
+  if (!tavernUserPicker) return;
+  const users = getTavernKnownUsersList();
+  const rows = users.map((user) => `
+    <div class="tavern-chat-user-row" data-user-id="${escapeHtmlLite(user.id)}">
+      <div class="tavern-chat-user-meta">
+        <div class="tavern-chat-user-name">${escapeHtmlLite(user.name)}</div>
+        <div class="tavern-chat-user-note">${user.online ? 'Сейчас в таверне' : 'Пользователь офлайн'}</div>
+      </div>
+      <button type="button" data-open-dm="${escapeHtmlLite(user.id)}">Написать</button>
+    </div>
+  `).join('');
+  tavernUserPicker.innerHTML = `
+    <div class="tavern-chat-user-picker__head">
+      <div class="tavern-chat-user-picker__title">Личные сообщения</div>
+      <button type="button" class="tavern-chat-user-picker__close" data-close-user-picker>✕</button>
+    </div>
+    ${rows || '<div class="tavern-chat-user-picker__empty">Список пока пуст.</div>'}
+  `;
+}
+
+function ensureTavernChatUi() {
+  if (tavernUiReady || !tavernChatModal) return;
+  ensureTavernStyles();
+  const body = tavernChatModal.querySelector('.tavern-chat-body');
+  if (!body) return;
+
+  const topbar = document.createElement('div');
+  topbar.className = 'tavern-chat-topbar';
+  topbar.innerHTML = `
+    <div class="tavern-chat-tabs" id="tavern-chat-tabs"></div>
+    <div class="tavern-chat-actions">
+      <button type="button" class="tavern-chat-users-btn" id="tavern-users-open">Личные сообщения</button>
+    </div>
+  `;
+  body.insertBefore(topbar, tavernChatList || null);
+  tavernTabsEl = topbar.querySelector('#tavern-chat-tabs');
+  tavernUserListBtn = topbar.querySelector('#tavern-users-open');
+
+  tavernActiveLineEl = document.createElement('div');
+  tavernActiveLineEl.className = 'tavern-chat-active-line';
+  body.insertBefore(tavernActiveLineEl, tavernChatList || null);
+
+  tavernUserPicker = document.createElement('div');
+  tavernUserPicker.className = 'tavern-chat-user-picker';
+  body.appendChild(tavernUserPicker);
+
+  tavernUserListBtn?.addEventListener('click', () => toggleTavernUserPicker());
+  tavernUserPicker.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    const closeBtn = target.closest('[data-close-user-picker]');
+    if (closeBtn) {
+      closeTavernUserPicker();
+      return;
+    }
+    const openDmBtn = target.closest('[data-open-dm]');
+    if (openDmBtn) {
+      const userId = String(openDmBtn.getAttribute('data-open-dm') || '');
+      if (!userId) return;
+      const dialogId = makeTavernDmDialogId(getTavernMyUserId(), userId);
+      ensureTavernDialog(dialogId, {
+        kind: 'dm',
+        participants: [getTavernMyUserId(), userId],
+        title: safeTavernUserNameById(userId, 'Личное сообщение')
+      });
+      setTavernActiveDialog(dialogId);
+      closeTavernUserPicker();
+      setTimeout(() => tavernChatInput?.focus(), 0);
+    }
+  });
+
+  tavernTabsEl?.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    const tabBtn = target.closest('[data-dialog-id]');
+    if (!tabBtn) return;
+    setTavernActiveDialog(String(tabBtn.getAttribute('data-dialog-id') || 'global'));
+  });
+
+  tavernUiReady = true;
 }
 
 function isTavernVisible() {
@@ -377,6 +687,7 @@ function openTavern() {
   tavernDiv.classList.remove('hidden');
   tavernDiv.setAttribute('aria-hidden', 'false');
   if (tavernMyName) tavernMyName.textContent = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'путник');
+  ensureTavernChatUi();
   initTavernVideoBackground();
   updateLobbyModeClass();
   try { lobbyAmbientAudio.sync(); } catch {}
@@ -386,291 +697,167 @@ function closeTavern() {
   if (!tavernDiv) return;
   tavernDiv.classList.add('hidden');
   tavernDiv.setAttribute('aria-hidden', 'true');
-  [tavernChatModal, tavernBartenderModal, tavernRoomsModal, tavernDmUserModal].forEach(hideModalEl);
+  closeTavernUserPicker();
+  [tavernChatModal, tavernBartenderModal, tavernRoomsModal].forEach(hideModalEl);
   updateLobbyModeClass();
   try { lobbyAmbientAudio.sync(); } catch {}
 }
 
-const TAVERN_PUBLIC_LIMIT = 50;
-const TAVERN_DM_LIMIT = 50;
-const TAVERN_HISTORY_REQUEST_COOLDOWN_MS = 4000;
-const LS_TAVERN_PUBLIC = 'dnd_tavern_public_history_v2';
-const LS_TAVERN_DMS = 'dnd_tavern_dm_history_v2';
-let tavernPublicHistoryRequestedAt = 0;
-let tavernActiveThread = { type: 'public', userId: null };
-const tavernDirectMessages = new Map(); // userId -> { userId, name, messages: [] }
-
-function readTavernLs(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return parsed ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeTavernLs(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
-}
-
-function getTavernMyUserId() {
-  try { return String(localStorage.getItem('dnd_user_id') || myId || 'guest'); } catch { return 'guest'; }
-}
-
-function getTavernMyUserName() {
-  try { return String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'Путник'); } catch { return 'Путник'; }
-}
-
-function normalizeTavernText(value) {
-  return String(value || '').replace(/\r\n/g, '\n').trim();
-}
-
-function limitTavernMessages(list, limit) {
-  const arr = Array.isArray(list) ? list.slice() : [];
-  if (arr.length <= limit) return arr;
-  return arr.slice(arr.length - limit);
-}
-
-function getDmThreadKey(userId) {
-  return String(userId || '').trim();
-}
-
-function ensureDmThread(userId, name) {
-  const key = getDmThreadKey(userId);
-  if (!key) return null;
-  let thread = tavernDirectMessages.get(key);
-  if (!thread) {
-    thread = { userId: key, name: String(name || 'Путник'), messages: [] };
-    tavernDirectMessages.set(key, thread);
-  }
-  if (name) thread.name = String(name);
-  if (!Array.isArray(thread.messages)) thread.messages = [];
-  return thread;
-}
-
-function loadTavernChatState() {
-  try {
-    const publicItems = readTavernLs(LS_TAVERN_PUBLIC, []);
-    tavernChatHistory.length = 0;
-    (Array.isArray(publicItems) ? publicItems : []).forEach((entry) => {
-      const item = normalizePublicMessage(entry);
-      if (item) tavernChatHistory.push(item);
-    });
-    const dmMap = readTavernLs(LS_TAVERN_DMS, {});
-    tavernDirectMessages.clear();
-    Object.entries((dmMap && typeof dmMap === 'object') ? dmMap : {}).forEach(([userId, raw]) => {
-      const thread = ensureDmThread(userId, raw?.name || 'Путник');
-      if (!thread) return;
-      const msgs = Array.isArray(raw?.messages) ? raw.messages : [];
-      thread.messages = msgs.map((msg) => normalizeDirectMessage(msg)).filter(Boolean);
-      thread.messages = limitTavernMessages(thread.messages, TAVERN_DM_LIMIT);
-    });
-  } catch {}
-}
-
-function saveTavernPublicHistory() {
-  writeTavernLs(LS_TAVERN_PUBLIC, limitTavernMessages(tavernChatHistory, TAVERN_PUBLIC_LIMIT));
-}
-
-function saveTavernDirectMessages() {
-  const raw = {};
-  tavernDirectMessages.forEach((thread, userId) => {
-    raw[userId] = {
-      name: String(thread?.name || 'Путник'),
-      messages: limitTavernMessages(thread?.messages || [], TAVERN_DM_LIMIT)
-    };
-  });
-  writeTavernLs(LS_TAVERN_DMS, raw);
-}
-
-function normalizePublicMessage(entry) {
+function normalizeIncomingTavernMessage(entry) {
   if (!entry) return null;
-  const item = {
-    id: String(entry.id || `tavern-${Date.now()}-${++tavernMessageSeq}`),
-    type: 'public',
-    name: String(entry.name || 'Путник'),
-    fromId: String(entry.fromId || ''),
-    text: normalizeTavernText(entry.text || ''),
-    ts: Number(entry.ts || Date.now()),
-    system: !!entry.system
+  const myIdSafe = getTavernMyUserId();
+  const kind = String(entry.kind || (entry.toId ? 'dm' : 'global'));
+  const fromId = String(entry.fromId || entry.userId || '');
+  const toId = String(entry.toId || '');
+  const participants = kind === 'dm'
+    ? [fromId, toId].filter(Boolean)
+    : [];
+  const dialogId = String(entry.dialogId || (kind === 'dm' ? makeTavernDmDialogId(fromId, toId) : 'global'));
+  const fromName = String(entry.fromName || entry.name || safeTavernUserNameById(fromId, 'Путник'));
+  const toName = String(entry.toName || safeTavernUserNameById(toId, 'Путник'));
+  const text = String(entry.text || '');
+  const system = !!entry.system;
+  const ts = Number(entry.ts || Date.now());
+  if (!text && !system) return null;
+  const visibleToMe = system || kind === 'global' || fromId === myIdSafe || toId === myIdSafe;
+  return {
+    id: String(entry.id || `tavern-${ts}-${++tavernMessageSeq}`),
+    dialogId,
+    kind,
+    participants,
+    fromId,
+    fromName,
+    toId,
+    toName,
+    name: fromName,
+    text,
+    ts,
+    system,
+    visibleToMe
   };
-  if (!item.text && !item.system) return null;
-  return item;
 }
 
-function normalizeDirectMessage(entry) {
-  if (!entry) return null;
-  const item = {
-    id: String(entry.id || `tavern-dm-${Date.now()}-${++tavernMessageSeq}`),
-    type: 'direct',
-    fromId: String(entry.fromId || ''),
-    fromName: String(entry.fromName || entry.name || 'Путник'),
-    toId: String(entry.toId || ''),
-    toName: String(entry.toName || ''),
-    text: normalizeTavernText(entry.text || ''),
-    ts: Number(entry.ts || Date.now()),
-    system: false
-  };
-  if (!item.text) return null;
-  return item;
-}
+function pushTavernMessage(entry, { save = true, render = true, markUnread = true } = {}) {
+  const item = normalizeIncomingTavernMessage(entry);
+  if (!item || !item.visibleToMe) return false;
+  if (tavernSeenMessageIds.has(item.id)) return false;
+  tavernSeenMessageIds.add(item.id);
 
-function pushTavernMessage(entry) {
-  const item = normalizePublicMessage(entry);
-  if (!item) return;
-  if (tavernChatHistory.some((x) => String(x.id) === item.id)) return;
-  tavernChatHistory.push(item);
-  while (tavernChatHistory.length > TAVERN_PUBLIC_LIMIT) tavernChatHistory.shift();
-  saveTavernPublicHistory();
-  renderTavernChat();
-}
+  const dialog = ensureTavernDialog(item.dialogId, {
+    kind: item.kind,
+    participants: item.participants,
+    title: item.kind === 'dm'
+      ? (item.fromId === getTavernMyUserId() ? item.toName : item.fromName)
+      : 'Общий стол',
+    updatedAt: item.ts
+  });
 
-function pushTavernDirectMessage(entry) {
-  const item = normalizeDirectMessage(entry);
-  if (!item) return;
-  const myUserId = getTavernMyUserId();
-  const isMine = String(item.fromId) === myUserId;
-  const otherUserId = isMine ? String(item.toId || '') : String(item.fromId || '');
-  const otherUserName = isMine ? String(item.toName || 'Путник') : String(item.fromName || 'Путник');
-  const thread = ensureDmThread(otherUserId, otherUserName);
-  if (!thread) return;
-  if (thread.messages.some((x) => String(x.id) === item.id)) return;
-  thread.messages.push(item);
-  thread.messages = limitTavernMessages(thread.messages, TAVERN_DM_LIMIT);
-  if (!tavernActiveThread || tavernActiveThread.type !== 'direct' || String(tavernActiveThread.userId || '') === otherUserId) {
-    tavernActiveThread = { type: 'direct', userId: otherUserId };
+  dialog.messages.push(item);
+  while (dialog.messages.length > TAVERN_MAX_MESSAGES) dialog.messages.shift();
+  dialog.updatedAt = Math.max(Number(dialog.updatedAt || 0), item.ts);
+  dialog.lastTs = item.ts;
+  dialog.lastMessage = item.text;
+  dialog.title = resolveTavernDialogTitle(dialog);
+
+  const isOwn = item.fromId && item.fromId === getTavernMyUserId();
+  if (item.dialogId !== tavernActiveDialogId && !isOwn && markUnread) dialog.unread = Math.min(99, Number(dialog.unread || 0) + 1);
+
+  if (save) saveTavernCache();
+  if (render) {
+    renderTavernTabs();
+    renderTavernChat();
+    renderTavernUserPicker();
   }
-  saveTavernDirectMessages();
-  renderTavernChat();
+  return true;
 }
 
-function getTavernPresenceUsers() {
+function fmtTavernTime(ts) {
   try {
-    const state = tavernChannel?.presenceState?.() || {};
-    const users = [];
-    Object.entries(state).forEach(([uid, metas]) => {
-      const meta = Array.isArray(metas) ? metas[metas.length - 1] : null;
-      users.push({
-        userId: String(uid || meta?.userId || ''),
-        userName: String(meta?.userName || 'Путник'),
-        joinedAt: Number(meta?.joinedAt || 0)
-      });
-    });
-    users.sort((a, b) => a.userName.localeCompare(b.userName, 'ru', { sensitivity: 'base' }));
-    return users;
+    return new Date(Number(ts) || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   } catch {
-    return [];
+    return '';
   }
 }
 
-function getTavernThreadLabel(userId, fallbackName = 'Путник') {
-  const thread = tavernDirectMessages.get(String(userId || ''));
-  return String(thread?.name || fallbackName || 'Путник');
+function escapeHtmlLite(s) {
+  return String(s || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
-function getTavernActiveMessages() {
-  if (!tavernActiveThread || tavernActiveThread.type === 'public') return tavernChatHistory;
-  const thread = tavernDirectMessages.get(String(tavernActiveThread.userId || ''));
-  return Array.isArray(thread?.messages) ? thread.messages : [];
-}
-
-function getTavernThreadList() {
-  const items = [{ type: 'public', userId: '', label: 'Общий стол', ts: tavernChatHistory[tavernChatHistory.length - 1]?.ts || 0 }];
-  tavernDirectMessages.forEach((thread, userId) => {
-    const last = Array.isArray(thread?.messages) ? thread.messages[thread.messages.length - 1] : null;
-    if (!last) return;
-    items.push({ type: 'direct', userId: String(userId), label: getTavernThreadLabel(userId, thread?.name), ts: Number(last?.ts || 0) });
-  });
-  return items.sort((a, b) => {
-    if (a.type === 'public' && b.type !== 'public') return -1;
-    if (b.type === 'public' && a.type !== 'public') return 1;
-    return Number(b.ts || 0) - Number(a.ts || 0);
-  });
-}
-
-function setActiveTavernThread(type, userId = '') {
-  if (type === 'direct' && userId) {
-    ensureDmThread(userId, getTavernThreadLabel(userId));
-    tavernActiveThread = { type: 'direct', userId: String(userId) };
-  } else {
-    tavernActiveThread = { type: 'public', userId: null };
-  }
-  renderTavernChat();
-}
-
-
-function escapeHtmlLite(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+function updateTavernSubtitle() {
+  if (!tavernChatSubtitle) return;
+  const activeDialog = tavernDialogs.get(tavernActiveDialogId) || ensureTavernDialog('global');
+  const base = tavernPresenceCount > 0
+    ? `Сейчас в таверне: ${tavernPresenceCount}`
+    : 'Разговоры путников в таверне';
+  const scope = String(activeDialog?.id || 'global') === 'global'
+    ? 'Общий стол'
+    : `Личная переписка: ${resolveTavernDialogTitle(activeDialog)}`;
+  tavernChatSubtitle.textContent = `${scope} • ${base}`;
 }
 
 function renderTavernTabs() {
-  if (!tavernChatTabs) return;
-  const items = getTavernThreadList();
-  tavernChatTabs.innerHTML = items.map((item) => {
-    const active = item.type === (tavernActiveThread?.type || 'public') && String(item.userId || '') === String(tavernActiveThread?.userId || '');
-    return `<button type="button" class="tavern-chat-tab ${active ? 'is-active' : ''}" data-thread-type="${escapeHtmlLite(item.type)}" data-thread-user="${escapeHtmlLite(item.userId || '')}">${escapeHtmlLite(item.label)}</button>`;
+  ensureTavernChatUi();
+  if (!tavernTabsEl) return;
+  const dialogs = Array.from(tavernDialogs.values())
+    .filter((dialog) => String(dialog.id) === 'global' || (Array.isArray(dialog.messages) && dialog.messages.length))
+    .sort((a, b) => {
+      if (String(a.id) === 'global') return -1;
+      if (String(b.id) === 'global') return 1;
+      return Number(b.lastTs || 0) - Number(a.lastTs || 0);
+    });
+
+  tavernTabsEl.innerHTML = dialogs.map((dialog) => {
+    const title = resolveTavernDialogTitle(dialog);
+    const unread = Math.max(0, Number(dialog.unread || 0));
+    const badgeClass = unread > 0 ? 'tavern-chat-tab__badge has-value' : 'tavern-chat-tab__badge';
+    return `
+      <button type="button" class="tavern-chat-tab ${String(dialog.id) === tavernActiveDialogId ? 'is-active' : ''}" data-dialog-id="${escapeHtmlLite(dialog.id)}" title="${escapeHtmlLite(title)}">
+        <span class="tavern-chat-tab__label">${escapeHtmlLite(title)}</span>
+        <span class="${badgeClass}">${unread > 0 ? unread : ''}</span>
+      </button>
+    `;
   }).join('');
 }
 
-function renderTavernDmUsers() {
-  if (!tavernDmUserList) return;
-  const myUserId = getTavernMyUserId();
-  const users = getTavernPresenceUsers().filter((user) => String(user.userId) !== myUserId);
-  if (!users.length) {
-    tavernDmUserList.innerHTML = '<div class="tavern-dm-empty">Сейчас в таверне нет других пользователей.</div>';
-    return;
-  }
-  tavernDmUserList.innerHTML = users.map((user) => `
-    <button type="button" class="tavern-dm-user" data-user-id="${escapeHtmlLite(user.userId)}" data-user-name="${escapeHtmlLite(user.userName)}">
-      <span class="tavern-dm-user__name">${escapeHtmlLite(user.userName)}</span>
-      <span class="tavern-dm-user__meta">Написать лично</span>
-    </button>
-  `).join('');
-}
-
 function renderTavernChat() {
-  renderTavernTabs();
+  ensureTavernChatUi();
+  const dialog = tavernDialogs.get(tavernActiveDialogId) || ensureTavernDialog('global');
+  dialog.unread = 0;
+  if (tavernActiveLineEl) {
+    tavernActiveLineEl.textContent = String(dialog.id) === 'global'
+      ? 'Общий разговор всех посетителей таверны.'
+      : `Личная переписка с пользователем «${resolveTavernDialogTitle(dialog)}».`;
+  }
+  if (tavernChatInput) {
+    tavernChatInput.placeholder = String(dialog.id) === 'global'
+      ? 'Напишите сообщение в общий стол'
+      : `Сообщение для ${resolveTavernDialogTitle(dialog)}`;
+  }
   if (!tavernChatList) return;
-
-  const activeIsPublic = !tavernActiveThread || tavernActiveThread.type === 'public';
-  if (tavernChatModalTitle) {
-    tavernChatModalTitle.textContent = activeIsPublic ? 'Общий стол' : getTavernThreadLabel(tavernActiveThread?.userId || '', 'Личное общение');
-  }
-  if (tavernChatSubtitle) {
-    if (activeIsPublic) {
-      tavernChatSubtitle.textContent = tavernPresenceCount > 0
-        ? `Разговоры путников в таверне • Сейчас в таверне: ${tavernPresenceCount}`
-        : 'Разговоры путников в таверне';
-    } else {
-      tavernChatSubtitle.textContent = `Личная переписка с ${getTavernThreadLabel(tavernActiveThread?.userId || '', 'путником')}`;
-    }
-  }
-  const list = getTavernActiveMessages();
-  if (!list.length) {
-    tavernChatList.innerHTML = `<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">${activeIsPublic ? 'Пока в таверне тихо. Начните разговор первыми.' : 'Личная переписка пока пуста. Напишите первое сообщение.'}</div></div>`;
+  const messages = Array.isArray(dialog.messages) ? dialog.messages : [];
+  if (!messages.length) {
+    tavernChatList.innerHTML = `<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">${String(dialog.id) === 'global' ? 'Пока в таверне тихо. Начните разговор первыми.' : 'Личная переписка пуста. Напишите первое сообщение.'}</div></div>`;
+    renderTavernTabs();
+    updateTavernSubtitle();
     return;
   }
-  const myUserId = getTavernMyUserId();
-  tavernChatList.innerHTML = list.map((msg) => {
-    const isDirect = String(msg.type || '') === 'direct';
-    const isMine = isDirect && String(msg.fromId || '') === myUserId;
+  const myIdSafe = getTavernMyUserId();
+  tavernChatList.innerHTML = messages.map((msg) => {
+    const own = msg.fromId && String(msg.fromId) === myIdSafe;
     const metaName = msg.system
       ? 'Таверна'
-      : isDirect
-        ? (isMine ? `Вы → ${msg.toName || getTavernThreadLabel(tavernActiveThread?.userId || '', 'Путник')}` : `${msg.fromName || 'Путник'} → вам`)
-        : (msg.name || 'Путник');
+      : (String(dialog.id) === 'global'
+          ? `${msg.fromName}${msg.toId ? ` → ${msg.toName}` : ''}`
+          : (own ? `Вы → ${resolveTavernDialogTitle(dialog)}` : msg.fromName));
     return `
-      <div class="tavern-chat-item ${msg.system ? 'tavern-chat-item--system' : ''} ${isDirect ? 'tavern-chat-item--direct' : ''} ${isMine ? 'tavern-chat-item--mine' : ''}">
+      <div class="tavern-chat-item ${msg.system ? 'tavern-chat-item--system' : ''} ${own ? 'tavern-chat-item--own' : ''}">
         <div class="tavern-chat-item__meta">
-          <span>${escapeHtmlLite(metaName)}</span>
+          <span><strong>${escapeHtmlLite(metaName)}</strong></span>
           <span>${escapeHtmlLite(fmtTavernTime(msg.ts))}</span>
         </div>
         <div class="tavern-chat-item__text">${escapeHtmlLite(msg.text)}</div>
@@ -678,34 +865,67 @@ function renderTavernChat() {
     `;
   }).join('');
   tavernChatList.scrollTop = tavernChatList.scrollHeight;
+  renderTavernTabs();
+  updateTavernSubtitle();
+  saveTavernCache();
 }
 
-function requestTavernHistory(force = false) {
-  const now = Date.now();
-  if (!force && (now - tavernPublicHistoryRequestedAt) < TAVERN_HISTORY_REQUEST_COOLDOWN_MS) return;
-  tavernPublicHistoryRequestedAt = now;
-  Promise.resolve(ensureTavernChannel()).then((ch) => ch?.send({ type: 'broadcast', event: 'chat-history-request', payload: { requesterId: getTavernMyUserId(), requesterName: getTavernMyUserName(), ts: now } })).catch(() => {});
-}
-
-function handleIncomingHistoryResponse(payload) {
-  const targetId = String(payload?.targetId || '');
-  if (targetId && targetId !== getTavernMyUserId()) return;
-  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
-  let changed = false;
-  messages.forEach((entry) => {
-    const before = tavernChatHistory.length;
-    pushTavernMessage(entry);
-    if (tavernChatHistory.length !== before || tavernChatHistory.some((x) => String(x.id) === String(entry?.id || ''))) changed = true;
-  });
-  if (changed) renderTavernChat();
-}
-
-function updateTavernPresenceUi() {
+function updateTavernPresenceUsers(channel) {
+  tavernUsers.clear();
   try {
-    const users = getTavernPresenceUsers();
-    tavernPresenceCount = users.length;
-    renderTavernDmUsers();
-    renderTavernChat();
+    const state = channel?.presenceState?.() || {};
+    Object.entries(state).forEach(([key, entries]) => {
+      const list = Array.isArray(entries) ? entries : [];
+      const latest = list[list.length - 1] || {};
+      tavernUsers.set(String(key), {
+        id: String(latest.userId || key),
+        name: String(latest.userName || safeTavernUserNameById(key)),
+        joinedAt: Number(latest.joinedAt || 0)
+      });
+    });
+  } catch {}
+  tavernPresenceCount = tavernUsers.size;
+  renderTavernUserPicker();
+  updateTavernSubtitle();
+}
+
+async function requestTavernHistory() {
+  if (!tavernChannel) return;
+  const now = Date.now();
+  if ((now - tavernHistoryRequestedAt) < 1500) return;
+  tavernHistoryRequestedAt = now;
+  try {
+    await tavernChannel.send({
+      type: 'broadcast',
+      event: 'history-request',
+      payload: {
+        requesterId: getTavernMyUserId(),
+        requesterName: getTavernMyUserName(),
+        ts: now
+      }
+    });
+  } catch {}
+}
+
+async function respondTavernHistory(payload) {
+  const requesterId = String(payload?.requesterId || '');
+  if (!requesterId || requesterId === getTavernMyUserId()) return;
+  const age = Math.abs(Date.now() - Number(payload?.ts || 0));
+  if (age > TAVERN_HISTORY_REQUEST_TTL_MS) return;
+  const cache = getTavernSerializableCache();
+  const globalMessages = getTavernAllMessagesFlat();
+  if (!globalMessages.length && cache.dialogs.every((x) => !Array.isArray(x.messages) || !x.messages.length)) return;
+  try {
+    await tavernChannel?.send({
+      type: 'broadcast',
+      event: 'history-response',
+      payload: {
+        targetId: requesterId,
+        fromId: getTavernMyUserId(),
+        ts: Date.now(),
+        history: cache
+      }
+    });
   } catch {}
 }
 
@@ -717,35 +937,29 @@ async function ensureTavernChannel() {
   tavernChannel = sbClient
     .channel('tavern:lobby', { config: { presence: { key: userId } } })
     .on('broadcast', { event: 'chat' }, ({ payload }) => {
-      const message = payload?.message;
-      if (!message) return;
-      const kind = String(message?.type || 'public');
-      if (kind === 'direct') {
-        const me = getTavernMyUserId();
-        if (String(message?.toId || '') === me || String(message?.fromId || '') === me) pushTavernDirectMessage(message);
-        return;
-      }
-      pushTavernMessage(message);
+      if (payload?.message) pushTavernMessage(payload.message, { save: true, render: true, markUnread: true });
     })
-    .on('broadcast', { event: 'chat-history-request' }, ({ payload }) => {
-      const requesterId = String(payload?.requesterId || '');
-      if (!requesterId || requesterId === getTavernMyUserId()) return;
-      const messages = limitTavernMessages(tavernChatHistory, TAVERN_PUBLIC_LIMIT);
-      Promise.resolve(tavernChannel?.send({ type: 'broadcast', event: 'chat-history-response', payload: { targetId: requesterId, sourceId: getTavernMyUserId(), messages } })).catch(() => {});
+    .on('broadcast', { event: 'history-request' }, ({ payload }) => {
+      respondTavernHistory(payload);
     })
-    .on('broadcast', { event: 'chat-history-response' }, ({ payload }) => {
-      handleIncomingHistoryResponse(payload || {});
+    .on('broadcast', { event: 'history-response' }, ({ payload }) => {
+      if (String(payload?.targetId || '') !== getTavernMyUserId()) return;
+      importTavernCache(payload?.history || null, { markUnread: false });
+      renderTavernTabs();
+      renderTavernChat();
+      renderTavernUserPicker();
+      saveTavernCache();
     })
     .on('presence', { event: 'sync' }, () => {
-      updateTavernPresenceUi();
+      updateTavernPresenceUsers(tavernChannel);
     });
   await tavernChannel.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
       try {
         await tavernChannel.track({ userId, userName, joinedAt: Date.now() });
       } catch {}
-      updateTavernPresenceUi();
-      requestTavernHistory(true);
+      updateTavernPresenceUsers(tavernChannel);
+      requestTavernHistory();
     }
   });
   return tavernChannel;
@@ -756,64 +970,61 @@ async function stopTavernChannel() {
   try { await tavernChannel.unsubscribe(); } catch {}
   tavernChannel = null;
   tavernPresenceCount = 0;
+  tavernUsers.clear();
+  closeTavernUserPicker();
 }
 
 async function sendTavernChatMessage() {
-  const text = normalizeTavernText(tavernChatInput?.value || '');
+  const text = String(tavernChatInput?.value || '').trim();
   if (!text) return;
-  const myUserId = getTavernMyUserId();
-  const myUserName = getTavernMyUserName();
+  const fromId = getTavernMyUserId();
+  const fromName = getTavernMyUserName();
+  const activeDialog = tavernDialogs.get(tavernActiveDialogId) || ensureTavernDialog('global');
+  let payloadMessage = null;
 
-  if (!tavernActiveThread || tavernActiveThread.type === 'public') {
-    const message = {
+  if (String(activeDialog.id) === 'global') {
+    payloadMessage = {
       id: `tavern-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      type: 'public',
-      fromId: myUserId,
-      name: myUserName,
+      kind: 'global',
+      dialogId: 'global',
+      fromId,
+      fromName,
+      name: fromName,
       text,
       ts: Date.now()
     };
-    pushTavernMessage(message);
-    try { if (tavernChatInput) tavernChatInput.value = ''; } catch {}
-    try {
-      const ch = await ensureTavernChannel();
-      await ch?.send({ type: 'broadcast', event: 'chat', payload: { message } });
-    } catch {}
-    return;
+  } else {
+    const targetId = (Array.isArray(activeDialog.participants) ? activeDialog.participants : []).find((id) => String(id) !== fromId) || '';
+    if (!targetId) return;
+    payloadMessage = {
+      id: `tavern-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      kind: 'dm',
+      dialogId: String(activeDialog.id),
+      fromId,
+      fromName,
+      toId: targetId,
+      toName: safeTavernUserNameById(targetId, activeDialog.title || 'Путник'),
+      text,
+      ts: Date.now()
+    };
   }
 
-  const targetId = String(tavernActiveThread.userId || '');
-  const targetName = getTavernThreadLabel(targetId, 'Путник');
-  if (!targetId) return;
-  const message = {
-    id: `tavern-dm-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    type: 'direct',
-    fromId: myUserId,
-    fromName: myUserName,
-    toId: targetId,
-    toName: targetName,
-    text,
-    ts: Date.now()
-  };
-  pushTavernDirectMessage(message);
+  pushTavernMessage(payloadMessage, { save: true, render: true, markUnread: false });
   try { if (tavernChatInput) tavernChatInput.value = ''; } catch {}
   try {
     const ch = await ensureTavernChannel();
-    await ch?.send({ type: 'broadcast', event: 'chat', payload: { message } });
+    await ch?.send({ type: 'broadcast', event: 'chat', payload: { message: payloadMessage } });
   } catch {}
 }
 
 function openTavernChat() {
+  ensureTavernChatUi();
   showModalEl(tavernChatModal);
-  ensureTavernChannel();
-  renderTavernDmUsers();
+  renderTavernTabs();
   renderTavernChat();
+  renderTavernUserPicker();
+  ensureTavernChannel();
   setTimeout(() => tavernChatInput?.focus(), 0);
-}
-
-function openTavernDmUserModal() {
-  renderTavernDmUsers();
-  showModalEl(tavernDmUserModal);
 }
 
 function openTavernBartender() {
@@ -826,11 +1037,11 @@ function openTavernRooms() {
   try { sendMessage({ type: 'listRooms' }); } catch {}
 }
 
-loadTavernChatState();
+loadTavernCache();
+ensureTavernDialog('global', { kind: 'global', title: 'Общий стол' });
 window.openTavern = openTavern;
 window.closeTavern = closeTavern;
 window.openTavernRooms = openTavernRooms;
-window.openTavernDmUserModal = openTavernDmUserModal;
 window.stopTavernChannel = stopTavernChannel;
 window.ensureTavernChannel = ensureTavernChannel;
 window.isTavernVisible = isTavernVisible;
@@ -1516,16 +1727,14 @@ if (diceViz) diceViz.style.display = 'none';
 initLobbyVideoBackground();
 watchLobbyVisibility();
 try { lobbyAmbientAudio.sync(); } catch {}
-if (!tavernChatHistory.some((msg) => msg?.system && String(msg?.text || '').includes('Собирайтесь у стола'))) {
-  pushTavernMessage({ system: true, text: 'Собирайтесь у стола, слушайте бармена или выбирайте путешествие на доске объявлений.' });
-}
+pushTavernMessage({ system: true, text: 'Собирайтесь у стола, слушайте бармена или выбирайте путешествие на доске объявлений.' });
 
-[tavernChatClose, tavernBartenderClose, tavernRoomsClose, tavernDmUserClose].forEach((btn, idx) => {
+[tavernChatClose, tavernBartenderClose, tavernRoomsClose].forEach((btn, idx) => {
   if (!btn) return;
-  const targets = [tavernChatModal, tavernBartenderModal, tavernRoomsModal, tavernDmUserModal];
+  const targets = [tavernChatModal, tavernBartenderModal, tavernRoomsModal];
   btn.addEventListener('click', () => hideModalEl(targets[idx]));
 });
-[tavernChatModal, tavernBartenderModal, tavernRoomsModal, tavernDmUserModal].forEach((modal) => {
+[tavernChatModal, tavernBartenderModal, tavernRoomsModal].forEach((modal) => {
   if (!modal) return;
   modal.addEventListener('click', (e) => {
     if (e.target === modal) hideModalEl(modal);
@@ -1534,27 +1743,6 @@ if (!tavernChatHistory.some((msg) => msg?.system && String(msg?.text || '').incl
 if (tavernChatHotspot) tavernChatHotspot.addEventListener('click', openTavernChat);
 if (tavernBartenderHotspot) tavernBartenderHotspot.addEventListener('click', openTavernBartender);
 if (tavernBoardHotspot) tavernBoardHotspot.addEventListener('click', openTavernRooms);
-if (tavernChatUsersBtn) tavernChatUsersBtn.addEventListener('click', openTavernDmUserModal);
-if (tavernChatTabs) {
-  tavernChatTabs.addEventListener('click', (e) => {
-    const btn = e.target?.closest?.('[data-thread-type]');
-    if (!btn) return;
-    setActiveTavernThread(String(btn.getAttribute('data-thread-type') || 'public'), String(btn.getAttribute('data-thread-user') || ''));
-  });
-}
-if (tavernDmUserList) {
-  tavernDmUserList.addEventListener('click', (e) => {
-    const btn = e.target?.closest?.('[data-user-id]');
-    if (!btn) return;
-    const userId = String(btn.getAttribute('data-user-id') || '');
-    const userName = String(btn.getAttribute('data-user-name') || 'Путник');
-    ensureDmThread(userId, userName);
-    setActiveTavernThread('direct', userId);
-    hideModalEl(tavernDmUserModal);
-    showModalEl(tavernChatModal);
-    setTimeout(() => tavernChatInput?.focus(), 0);
-  });
-}
 if (tavernChatSend) tavernChatSend.addEventListener('click', () => { sendTavernChatMessage(); });
 if (tavernChatInput) {
   tavernChatInput.addEventListener('keydown', (e) => {
@@ -1564,8 +1752,6 @@ if (tavernChatInput) {
     }
   });
 }
-renderTavernDmUsers();
-renderTavernChat();
 document.querySelectorAll('[data-tavern-topic]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const topic = String(btn.getAttribute('data-tavern-topic') || '').trim();
