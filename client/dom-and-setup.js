@@ -939,11 +939,15 @@ const roomChatState = {
   unreadGlobal: 0,
   unreadDirect: 0,
   unreadByChat: new Map(),
-  lastReadTsByChat: new Map(),
   quoteDraft: null,
-  roomId: ''
+  roomId: '',
+  messageIds: new Set(),
+  hiddenChatKeys: new Set()
 };
 
+function _roomChatBroadcastEventName(roomId) {
+  return `room-chat:${String(roomId || '').trim()}`;
+}
 
 async function syncRoomChatFromDb(forceHydrate = false) {
   if (!sbClient || !currentRoomId) return;
@@ -962,7 +966,7 @@ async function syncRoomChatFromDb(forceHydrate = false) {
     }
     rows.forEach((row) => {
       const msg = decodeRoomChatLogRow(row?.text || row);
-      if (msg) pushRoomChatMessage(msg);
+      if (msg) pushRoomChatMessage(msg, { revealTab: !roomChatState.hiddenChatKeys.has(String(msg?.chatKey || '')) });
     });
     renderRoomChatTabs();
     renderRoomChatSubtitle();
@@ -972,23 +976,48 @@ async function syncRoomChatFromDb(forceHydrate = false) {
     console.warn('syncRoomChatFromDb failed', e);
   }
 }
-function stopRoomChatSync() {
+
+async function stopRoomChatSync() {
   if (roomChatSyncTimer) {
-    clearTimeout(roomChatSyncTimer);
+    clearInterval(roomChatSyncTimer);
     roomChatSyncTimer = null;
   }
+  if (roomChatChannel) {
+    try { await roomChatChannel.unsubscribe(); } catch {}
+    roomChatChannel = null;
+  }
 }
+
+async function ensureRoomChatChannel() {
+  if (!sbClient || !currentRoomId) return null;
+  const roomId = String(currentRoomId || '').trim();
+  if (!roomId) return null;
+  if (roomChatChannel && String(roomChatState.roomId || '') === roomId) return roomChatChannel;
+  await stopRoomChatSync();
+
+  roomChatChannel = sbClient
+    .channel(`room:chat:${roomId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_log', filter: `room_id=eq.${roomId}` }, ({ new: row }) => {
+      const msg = decodeRoomChatLogRow(row?.text || row);
+      if (msg) pushRoomChatMessage(msg, { revealTab: true });
+    })
+    .on('broadcast', { event: _roomChatBroadcastEventName(roomId) }, ({ payload }) => {
+      const msg = payload && typeof payload === 'object' ? payload.message : null;
+      if (msg) pushRoomChatMessage(msg, { revealTab: true });
+    });
+
+  await roomChatChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      await syncRoomChatFromDb(true);
+    }
+  });
+
+  return roomChatChannel;
+}
+
 function startRoomChatSync() {
-  stopRoomChatSync();
   if (!sbClient || !currentRoomId) return;
-  // Сообщения комнаты уже приходят через realtime room_log.
-  // Здесь делаем только одноразовую подстраховочную синхронизацию истории,
-  // чтобы не создавать задержку и не плодить повторные непрочитанные из polling.
-  roomChatSyncTimer = setTimeout(() => {
-    roomChatSyncTimer = null;
-    if (!currentRoomId) return;
-    syncRoomChatFromDb(!roomChatState.loadedHistory);
-  }, 0);
+  ensureRoomChatChannel();
 }
 window.startRoomChatSync = startRoomChatSync;
 window.stopRoomChatSync = stopRoomChatSync;
@@ -1013,18 +1042,21 @@ function resetRoomChatState(roomId = '') {
   roomChatState.unreadGlobal = 0;
   roomChatState.unreadDirect = 0;
   roomChatState.unreadByChat = new Map();
-  roomChatState.lastReadTsByChat = new Map();
   roomChatState.quoteDraft = null;
   roomChatState.roomId = String(roomId || '');
+  roomChatState.messageIds = new Set();
+  roomChatState.hiddenChatKeys = new Set();
   clearRoomChatQuoteDraft();
   updateRoomChatBadges();
 }
-function ensureRoomChat(key, label = 'Диалог') {
+function ensureRoomChat(key, label = 'Диалог', options = null) {
   const chatKey = String(key || '').trim() || 'global';
+  const showTab = options?.showTab !== false;
   if (!roomChatState.chats.has(chatKey)) roomChatState.chats.set(chatKey, []);
-  if (!roomChatState.tabs.some((tab) => String(tab.key) === chatKey)) {
+  if (showTab && !roomChatState.tabs.some((tab) => String(tab.key) === chatKey)) {
     roomChatState.tabs.push({ key: chatKey, label: String(label || 'Диалог'), closable: chatKey !== 'global' });
   }
+  if (showTab) roomChatState.hiddenChatKeys.delete(chatKey);
   return roomChatState.chats.get(chatKey);
 }
 function getRoomChatUserName(userId, fallback = 'Собеседник') {
@@ -1073,33 +1105,20 @@ function setRoomChatQuoteDraft(message) {
 }
 function markRoomChatRead(chatKey) {
   const key = String(chatKey || roomChatState.activeChatKey || 'global');
-  const list = roomChatState.chats.get(key) || [];
-  const lastTs = list.reduce((maxTs, item) => {
-    const ts = Number(item?.ts || 0);
-    return ts > maxTs ? ts : maxTs;
-  }, Number(roomChatState.lastReadTsByChat.get(key) || 0) || 0);
-  roomChatState.lastReadTsByChat.set(key, lastTs);
   const prev = getRoomUnreadCountForChat(key);
+  if (!prev) return;
   roomChatState.unreadByChat.set(key, 0);
-  if (prev > 0) {
-    if (key === 'global') roomChatState.unreadGlobal = Math.max(0, (Number(roomChatState.unreadGlobal) || 0) - prev);
-    else roomChatState.unreadDirect = Math.max(0, (Number(roomChatState.unreadDirect) || 0) - prev);
-  }
+  if (key === 'global') roomChatState.unreadGlobal = Math.max(0, (Number(roomChatState.unreadGlobal) || 0) - prev);
+  else roomChatState.unreadDirect = Math.max(0, (Number(roomChatState.unreadDirect) || 0) - prev);
   updateRoomChatBadges();
 }
 function noteRoomChatUnread(item) {
   if (!roomChatState.loadedHistory) return;
   if (!item || item.system || item.mine) return;
-  const key = String(item.chatKey || 'global');
-  const lastReadTs = Number(roomChatState.lastReadTsByChat.get(key) || 0) || 0;
-  const itemTs = Number(item.ts || 0) || 0;
-  if (lastReadTs && itemTs && itemTs <= lastReadTs) return;
   const modalOpen = !!(roomChatModal && !roomChatModal.classList.contains('hidden'));
-  const isActive = String(roomChatState.activeChatKey || 'global') === key;
-  if (modalOpen && isActive) {
-    roomChatState.lastReadTsByChat.set(key, Math.max(lastReadTs, itemTs));
-    return;
-  }
+  const isActive = String(roomChatState.activeChatKey || 'global') === String(item.chatKey || 'global');
+  if (modalOpen && isActive) return;
+  const key = String(item.chatKey || 'global');
   roomChatState.unreadByChat.set(key, getRoomUnreadCountForChat(key) + 1);
   if (key === 'global') roomChatState.unreadGlobal = (Number(roomChatState.unreadGlobal) || 0) + 1;
   else roomChatState.unreadDirect = (Number(roomChatState.unreadDirect) || 0) + 1;
@@ -1143,17 +1162,26 @@ function normalizeRoomChatMessage(entry) {
   }
   return item;
 }
-function pushRoomChatMessage(entry) {
+function pushRoomChatMessage(entry, options = null) {
   const item = normalizeRoomChatMessage(entry);
   if (!item) return;
-  const list = ensureRoomChat(item.chatKey, item.label);
+  if (roomChatState.messageIds.has(String(item.id))) return;
+  roomChatState.messageIds.add(String(item.id));
+
+  const hidden = roomChatState.hiddenChatKeys.has(String(item.chatKey || 'global'));
+  const shouldRevealHidden = options?.revealTab === true || (!hidden ? (options?.revealTab !== false) : (!item.mine && !roomChatState.loadedHistory));
+  const list = ensureRoomChat(item.chatKey, item.label, { showTab: shouldRevealHidden || !hidden });
   if (list.some((x) => String(x.id) === item.id)) return;
   list.push(item);
-  list.sort((a, b) => (Number(a?.ts || 0) - Number(b?.ts || 0)) || String(a?.id || '').localeCompare(String(b?.id || '')));
   while (list.length > ROOM_CHAT_MAX_MESSAGES) list.shift();
+
+  if (hidden && !shouldRevealHidden) {
+    renderRoomChatTabs();
+    return;
+  }
+
   noteRoomChatUnread(item);
   renderRoomChatTabs();
-  renderRoomChatSubtitle();
   renderRoomChat();
 }
 function getActiveRoomChatMessages() {
@@ -1222,7 +1250,8 @@ function ensureDirectRoomChatWithUser(otherUserId, fallbackName = 'Личное'
   const uid = String(otherUserId || '').trim();
   if (!uid) return 'global';
   const key = getRoomDirectChatKey(uid);
-  ensureRoomChat(key, getRoomChatUserName(uid, fallbackName));
+  roomChatState.hiddenChatKeys.delete(key);
+  ensureRoomChat(key, getRoomChatUserName(uid, fallbackName), { showTab: true });
   const tab = roomChatState.tabs.find((x) => String(x.key) === key);
   if (tab) tab.label = getRoomChatUserName(uid, fallbackName);
   renderRoomChatTabs();
@@ -1243,9 +1272,8 @@ function closeRoomChatTab(chatKey) {
   const key = String(chatKey || '');
   if (!key || key === 'global') return;
   markRoomChatRead(key);
+  roomChatState.hiddenChatKeys.add(key);
   roomChatState.tabs = roomChatState.tabs.filter((tab) => String(tab.key) !== key);
-  roomChatState.chats.delete(key);
-  roomChatState.unreadByChat.delete(key);
   if (String(roomChatState.activeChatKey) === key) roomChatState.activeChatKey = 'global';
   renderRoomChatTabs();
   renderRoomChatSubtitle();
@@ -1259,7 +1287,6 @@ function renderRoomChat() {
       ? 'Пока в комнате тихо. Начните разговор первыми.'
       : 'Личная переписка пока пуста. Напишите первое сообщение.';
     roomChatList.innerHTML = `<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__empty">${escapeHtmlLite(emptyText)}</div></div>`;
-    if (roomChatModal && !roomChatModal.classList.contains('hidden')) markRoomChatRead(roomChatState.activeChatKey || 'global');
     return;
   }
   roomChatList.innerHTML = messages.map((msg) => {
@@ -1287,7 +1314,6 @@ function renderRoomChat() {
     `;
   }).join('');
   roomChatList.scrollTop = roomChatList.scrollHeight;
-  if (roomChatModal && !roomChatModal.classList.contains('hidden')) markRoomChatRead(roomChatState.activeChatKey || 'global');
 }
 function hydrateRoomChatFromRows(rows) {
   resetRoomChatState(currentRoomId || roomChatState.roomId || '');
@@ -1335,14 +1361,28 @@ async function sendRoomChatMessage() {
       toName: getRoomChatUserName(otherId, 'Собеседник')
     };
   }
-  pushRoomChatMessage(message);
+
+  pushRoomChatMessage(message, { revealTab: true });
   try { if (roomChatInput) roomChatInput.value = ''; } catch {}
   clearRoomChatQuoteDraft();
+
+  const channel = await ensureRoomChatChannel();
+  try {
+    await channel?.send?.({
+      type: 'broadcast',
+      event: _roomChatBroadcastEventName(currentRoomId),
+      payload: { message }
+    });
+  } catch (e) {
+    console.warn('room chat broadcast failed', e);
+  }
+
   await persistRoomChatMessage(message);
 }
 function openRoomChat() {
   if (!currentRoomId) return;
-  syncRoomChatFromDb(!roomChatState.loadedHistory);
+  ensureRoomChatChannel();
+  if (!roomChatState.loadedHistory) syncRoomChatFromDb(true);
   showModalEl(roomChatModal);
   markRoomChatRead(roomChatState.activeChatKey || 'global');
   renderRoomChatTabs();
@@ -1977,6 +2017,7 @@ let currentRoomId = null;
 let heartbeatTimer = null;
 let membersPollTimer = null;
 let roomChatSyncTimer = null;
+let roomChatChannel = null;
 
 function startHeartbeat() {
   stopHeartbeat();
