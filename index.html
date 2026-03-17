@@ -70,7 +70,11 @@
     </div>
 
     <div class="tavern-toolbar" aria-label="Навигация по таверне">
-      <button id="tavern-hotspot-chat" class="tavern-toolbar__btn" type="button" aria-label="Общий стол">Общий стол</button>
+      <button id="tavern-hotspot-chat" class="tavern-toolbar__btn tavern-toolbar__btn--chat" type="button" aria-label="Общий стол">
+        <span class="tavern-toolbar__btn-label">Общий стол</span>
+        <span id="tavern-hotspot-chat-badge-global" class="tavern-toolbar__badge tavern-toolbar__badge--global hidden">0</span>
+        <span id="tavern-hotspot-chat-badge-direct" class="tavern-toolbar__badge tavern-toolbar__badge--direct hidden">0</span>
+      </button>
       <button id="tavern-hotspot-bartender" class="tavern-toolbar__btn" type="button" aria-label="Бармен">Бармен</button>
       <button id="tavern-hotspot-board" class="tavern-toolbar__btn tavern-toolbar__btn--wide" type="button" aria-label="Доска объявлений">Доска объявлений</button>
     </div>
@@ -97,6 +101,7 @@
         <div id="tavern-chat-users-list" class="tavern-chat-users-list"></div>
       </div>
       <div id="tavern-chat-list" class="tavern-chat-list"></div>
+      <div id="tavern-chat-quote" class="tavern-chat-quote hidden" aria-hidden="true"></div>
       <div class="tavern-chat-form">
         <input id="tavern-chat-input" type="text" maxlength="500" placeholder="Напишите сообщение в таверну">
         <button id="tavern-chat-send" type="button">Отправить</button>
