@@ -1,3 +1,5 @@
+function escapeHtmlLite(str){if(str==null)return '';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');}
+
 // ================== ELEMENTS ==================
 const loginDiv = document.getElementById('login-container');
 const joinBtn = document.getElementById('joinBtn');
@@ -600,30 +602,44 @@ function pushTavernMessage(entry) {
 
 function syncTavernPresenceUsers() {
   try {
+    const state = tavernChannel?.presenceState?.() || {};
     const seen = new Set();
-    const known = new Set();
-    const myUid = String(getTavernMyUserId() || '').trim();
-
-    const orderedUsers = (Array.isArray(usersOrder) ? usersOrder : [])
-      .map((uid) => [String(uid || ''), usersById.get(String(uid || ''))])
-      .filter(([uid, info]) => uid && info);
-
-    orderedUsers.forEach(([uid, info]) => {
-      if (!uid || uid === myUid) return;
-      known.add(uid);
-      seen.add(uid);
-      rememberTavernUser(uid, String(info?.name || 'Путник'), { online: true });
+    Object.values(state).forEach((entries) => {
+      (Array.isArray(entries) ? entries : []).forEach((entry) => {
+        const uid = String(entry?.userId || entry?.presence_ref || '').trim();
+        if (!uid) return;
+        seen.add(uid);
+        rememberTavernUser(uid, String(entry?.userName || tavernChatState.knownUsers.get(uid)?.name || 'Путник'), { online: true, joinedAt: Number(entry?.joinedAt || 0) || 0 });
+      });
     });
-
     tavernChatState.knownUsers.forEach((value, key) => {
       if (!value) return;
-      value.online = seen.has(String(key || ''));
+      value.online = seen.has(key);
     });
-
     tavernPresenceCount = seen.size;
   } catch {
     tavernPresenceCount = 0;
   }
+  renderTavernUsersList();
+  renderTavernSubtitle();
+  updateTavernHotspotBadges();
+}
+
+function fmtTavernTime(ts) {
+  try {
+    return new Date(Number(ts) || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+function escapeHtmlLite(s) {
+  return String(s || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 function getActiveTavernMessages() {
@@ -811,42 +827,35 @@ async function loadTavernChatHistory() {
 }
 
 async function ensureTavernChannel() {
+  if (!sbClient) return null;
+  if (tavernChannel) return tavernChannel;
   const userId = getTavernMyUserId();
   const userName = getTavernMyUserName();
   rememberTavernUser(userId, userName, { online: true });
-
-  if (!tavernChannel) tavernChannel = { transport: 'vps-ws', roomId: TAVERN_ROOM_LOG_ID };
-
-  try {
-    if (typeof window.connectRoomWs === 'function' && typeof window.getWsRoomId === 'function') {
-      const activeWsRoomId = String(window.getWsRoomId() || '').trim();
-      if (activeWsRoomId !== TAVERN_ROOM_LOG_ID) {
-        window.connectRoomWs(TAVERN_ROOM_LOG_ID);
-      }
+  tavernChannel = sbClient
+    .channel('tavern:lobby', { config: { presence: { key: userId } } })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_log', filter: `room_id=eq.${TAVERN_ROOM_LOG_ID}` }, ({ new: row }) => {
+      const msg = decodeTavernLogRow(row?.text);
+      if (msg) pushTavernMessage(msg);
+    })
+    .on('presence', { event: 'sync' }, () => {
+      syncTavernPresenceUsers();
+    });
+  await tavernChannel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      try {
+        await tavernChannel.track({ userId, userName, joinedAt: Date.now() });
+      } catch {}
+      await loadTavernChatHistory();
+      syncTavernPresenceUsers();
     }
-  } catch (e) {
-    console.warn('ensureTavernChannel ws connect failed', e);
-  }
-
-  if (!tavernChatState.loadedHistory) {
-    await loadTavernChatHistory();
-  }
-  syncTavernPresenceUsers();
+  });
   return tavernChannel;
 }
 
 async function stopTavernChannel() {
   if (!tavernChannel) return;
-  try {
-    if (typeof window.getWsRoomId === 'function' && typeof window.disconnectRoomWs === 'function') {
-      const activeWsRoomId = String(window.getWsRoomId() || '').trim();
-      if (activeWsRoomId === TAVERN_ROOM_LOG_ID) {
-        window.disconnectRoomWs();
-      }
-    }
-  } catch (e) {
-    console.warn('stopTavernChannel ws disconnect failed', e);
-  }
+  try { await tavernChannel.unsubscribe(); } catch {}
   tavernChannel = null;
   tavernPresenceCount = 0;
   tavernChatState.knownUsers.forEach((value) => {
@@ -896,20 +905,6 @@ async function sendTavernChatMessage() {
   try { if (tavernChatInput) tavernChatInput.value = ''; } catch {}
   clearTavernQuoteDraft();
   await ensureTavernChannel();
-
-  const wsRow = {
-    text: encodeTavernLogRow(message),
-    created_at: new Date(message.ts || Date.now()).toISOString()
-  };
-
-  try {
-    if (typeof sendWsEnvelope === 'function') {
-      sendWsEnvelope({ type: 'tavernLogRow', roomId: TAVERN_ROOM_LOG_ID, row: wsRow }, { optimisticApplied: true });
-    }
-  } catch (e) {
-    console.warn('tavern chat ws relay failed', e);
-  }
-
   await persistTavernMessage(message);
 }
 
@@ -1423,15 +1418,6 @@ window.RoomChat = {
 window.openRoomChat = openRoomChat;
 window.returnToTavernFromRoom = returnToTavernFromRoom;
 
-window.TavernChat = {
-  decodeLogText: decodeTavernLogRow,
-  pushMessage: pushTavernMessage,
-  receiveRealtime: (payload) => {
-    const msg = decodeTavernLogRow(payload?.row?.text || payload?.text || payload);
-    if (msg) pushTavernMessage(msg);
-  },
-  refreshUsers: () => { syncTavernPresenceUsers(); renderTavernUsersList(); renderTavernSubtitle(); renderTavernChatTabs(); }
-};
 window.openTavern = openTavern;
 window.closeTavern = closeTavern;
 window.openTavernRooms = openTavernRooms;
