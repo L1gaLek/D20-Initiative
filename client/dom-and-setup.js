@@ -51,6 +51,16 @@ const roomScenarioInput = document.getElementById('roomScenarioInput');
 
 const gameUI = document.getElementById('main-container');
 
+function escapeHtmlLite(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // ===== Lobby scene (video background + screen state) =====
 function updateLobbyModeClass() {
   try {
