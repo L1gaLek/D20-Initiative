@@ -888,10 +888,10 @@ body.lobby-active #lobby-scene {
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  gap:8px;
-  min-height: 38px;
-  padding: 9px 16px;
-  border-radius: 14px;
+  gap:6px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 12px;
   border: 1px solid rgba(224, 177, 90, 0.28);
   background: linear-gradient(180deg, rgba(26,20,15,0.82) 0%, rgba(13,10,8,0.9) 100%);
   color: #f5efe3;
@@ -903,7 +903,7 @@ body.lobby-active #lobby-scene {
   background: linear-gradient(180deg, rgba(39,30,22,0.92) 0%, rgba(20,15,11,0.96) 100%);
 }
 .room-top-actions__btn--chat{
-  padding-right: 38px;
+  padding-right: 32px;
 }
 .room-top-actions__btn-label{ pointer-events:none; }
 .room-top-actions__btn .tavern-toolbar__badge{
