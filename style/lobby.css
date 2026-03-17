@@ -152,6 +152,7 @@ body.lobby-active #lobby-scene {
   margin-bottom: 8px;
   font-size: 12px;
   font-weight: 700;
+  font-size: 13px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(255, 220, 160, 0.72);
@@ -543,7 +544,7 @@ body.lobby-active #lobby-scene {
 .tavern-chat-item__meta-main{
   display:inline-flex;
   align-items:center;
-  gap:6px;
+  gap:5px;
   flex-wrap:wrap;
 }
 .tavern-chat-item__actions{
@@ -888,22 +889,23 @@ body.lobby-active #lobby-scene {
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  gap:6px;
-  min-height: 34px;
-  padding: 7px 12px;
+  gap:5px;
+  min-height: 30px;
+  padding: 5px 10px;
   border-radius: 12px;
   border: 1px solid rgba(224, 177, 90, 0.28);
   background: linear-gradient(180deg, rgba(26,20,15,0.82) 0%, rgba(13,10,8,0.9) 100%);
   color: #f5efe3;
   box-shadow: 0 10px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.04);
   font-weight: 700;
+  font-size: 13px;
 }
 .room-top-actions__btn:hover{
   border-color: rgba(255, 195, 98, 0.48);
   background: linear-gradient(180deg, rgba(39,30,22,0.92) 0%, rgba(20,15,11,0.96) 100%);
 }
 .room-top-actions__btn--chat{
-  padding-right: 34px;
+  padding-right: 30px;
 }
 .room-top-actions__btn-label{ pointer-events:none; }
 .room-top-actions__btn .tavern-toolbar__badge{
