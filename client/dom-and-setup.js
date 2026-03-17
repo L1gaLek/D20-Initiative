@@ -982,42 +982,22 @@ async function stopRoomChatSync() {
     clearInterval(roomChatSyncTimer);
     roomChatSyncTimer = null;
   }
-  if (roomChatChannel) {
-    try { await roomChatChannel.unsubscribe(); } catch {}
-    roomChatChannel = null;
-  }
+  roomChatChannel = null;
 }
 
 async function ensureRoomChatChannel() {
-  if (!sbClient || !currentRoomId) return null;
+  if (!currentRoomId) return null;
   const roomId = String(currentRoomId || '').trim();
   if (!roomId) return null;
-  if (roomChatChannel && String(roomChatState.roomId || '') === roomId) return roomChatChannel;
-  await stopRoomChatSync();
-
-  roomChatChannel = sbClient
-    .channel(`room:chat:${roomId}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_log', filter: `room_id=eq.${roomId}` }, ({ new: row }) => {
-      const msg = decodeRoomChatLogRow(row?.text || row);
-      if (msg) pushRoomChatMessage(msg, { revealTab: true });
-    })
-    .on('broadcast', { event: _roomChatBroadcastEventName(roomId) }, ({ payload }) => {
-      const msg = payload && typeof payload === 'object' ? payload.message : null;
-      if (msg) pushRoomChatMessage(msg, { revealTab: true });
-    });
-
-  await roomChatChannel.subscribe(async (status) => {
-    if (status === 'SUBSCRIBED') {
-      await syncRoomChatFromDb(true);
-    }
-  });
-
+  if (String(roomChatState.roomId || '') !== roomId) resetRoomChatState(roomId);
+  if (!roomChatState.loadedHistory) await syncRoomChatFromDb(true);
+  roomChatChannel = { transport: 'vps-ws', roomId };
   return roomChatChannel;
 }
 
 function startRoomChatSync() {
-  if (!sbClient || !currentRoomId) return;
-  ensureRoomChatChannel();
+  if (!currentRoomId) return;
+  void ensureRoomChatChannel();
 }
 window.startRoomChatSync = startRoomChatSync;
 window.stopRoomChatSync = stopRoomChatSync;
@@ -1366,15 +1346,17 @@ async function sendRoomChatMessage() {
   try { if (roomChatInput) roomChatInput.value = ''; } catch {}
   clearRoomChatQuoteDraft();
 
-  const channel = await ensureRoomChatChannel();
+  const wsRow = {
+    text: encodeRoomChatLogRow(message),
+    created_at: new Date(message.ts || Date.now()).toISOString()
+  };
+
   try {
-    await channel?.send?.({
-      type: 'broadcast',
-      event: _roomChatBroadcastEventName(currentRoomId),
-      payload: { message }
-    });
+    if (typeof sendWsEnvelope === 'function') {
+      sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: wsRow }, { optimisticApplied: true });
+    }
   } catch (e) {
-    console.warn('room chat broadcast failed', e);
+    console.warn('room chat ws relay failed', e);
   }
 
   await persistRoomChatMessage(message);
@@ -1425,6 +1407,10 @@ window.RoomChat = {
   pushMessage: pushRoomChatMessage,
   reset: resetRoomChatState,
   syncFromDb: syncRoomChatFromDb,
+  receiveRealtime: (payload) => {
+    const msg = decodeRoomChatLogRow(payload?.row?.text || payload?.text || payload);
+    if (msg) pushRoomChatMessage(msg, { revealTab: true });
+  },
   refreshUsers: () => { renderRoomChatUsersList(); renderRoomChatSubtitle(); renderRoomChatTabs(); }
 };
 window.openRoomChat = openRoomChat;

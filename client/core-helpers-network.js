@@ -1516,6 +1516,8 @@ function sendWsEnvelope(msg, opts = {}) {
   }
 }
 
+try { window.sendWsEnvelope = sendWsEnvelope; } catch {}
+
 function handleDetachedWsMessage(msg) {
   try {
     if (!msg || typeof msg !== 'object') return false;
