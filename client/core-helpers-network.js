@@ -1602,6 +1602,10 @@ function handleDetachedWsMessage(msg) {
       try { handleMessage({ type: 'users', users: Array.isArray(msg.users) ? msg.users : [] }); } catch {}
       return true;
     }
+    if (type === 'tavernLogRow' && msg.row) {
+      try { handleMessage({ type: 'tavernLogRow', row: msg.row }); } catch {}
+      return true;
+    }
     return false;
   } catch (e) {
     console.warn('[WS] detached message failed', e);
