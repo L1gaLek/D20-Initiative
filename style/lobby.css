@@ -895,9 +895,10 @@ body.lobby-active #lobby-scene {
   border: 1px solid rgba(224, 177, 90, 0.28);
   background: linear-gradient(180deg, rgba(26,20,15,0.82) 0%, rgba(13,10,8,0.9) 100%);
   color: #f5efe3;
-  box-shadow: 0 8px 18px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.1;
 }
 .room-top-actions__btn:hover{
   border-color: rgba(255, 195, 98, 0.48);
