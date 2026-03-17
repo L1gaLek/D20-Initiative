@@ -79,42 +79,28 @@
 
 <!-- ===== Tavern chat modal ===== -->
 <div id="tavernChatModal" class="modal-overlay hidden">
-  <div class="modal tavern-modal">
-    <div class="modal-header">
+  <div class="modal tavern-modal tavern-chat-modal">
+    <div class="modal-header tavern-chat-header">
       <div>
-        <div class="modal-title" id="tavern-chat-title">Общий стол</div>
+        <div class="modal-title">Общий стол</div>
         <div class="modal-subtitle" id="tavern-chat-subtitle">Разговоры путников за общим столом</div>
       </div>
-      <button id="tavernChatClose" class="modal-close">✕</button>
+      <div class="tavern-chat-header__actions">
+        <button id="tavern-chat-users-btn" type="button" class="tavern-chat-users-btn" title="Пользователи">Люди</button>
+        <button id="tavernChatClose" class="modal-close">✕</button>
+      </div>
     </div>
     <div class="modal-body tavern-chat-body">
-      <div class="tavern-chat-topbar">
-        <div id="tavern-chat-tabs" class="tavern-chat-tabs"></div>
-        <button id="tavern-chat-users-btn" class="tavern-chat-users-btn" type="button">Пользователи</button>
+      <div id="tavern-chat-tabs" class="tavern-chat-tabs"></div>
+      <div id="tavern-chat-users-popover" class="tavern-chat-users-popover hidden" aria-hidden="true">
+        <div class="tavern-chat-users-popover__title">Кому написать лично</div>
+        <div id="tavern-chat-users-list" class="tavern-chat-users-list"></div>
       </div>
       <div id="tavern-chat-list" class="tavern-chat-list"></div>
       <div class="tavern-chat-form">
-        <input id="tavern-chat-input" type="text" maxlength="500" placeholder="Напишите сообщение">
+        <input id="tavern-chat-input" type="text" maxlength="500" placeholder="Напишите сообщение в таверну">
         <button id="tavern-chat-send" type="button">Отправить</button>
       </div>
-    </div>
-  </div>
-</div>
-
-
-
-<!-- ===== Tavern DM user picker ===== -->
-<div id="tavernDmUserModal" class="modal-overlay hidden">
-  <div class="modal tavern-modal tavern-dm-modal">
-    <div class="modal-header">
-      <div>
-        <div class="modal-title">Пользователи в таверне</div>
-        <div class="modal-subtitle">Выберите, кому написать лично</div>
-      </div>
-      <button id="tavernDmUserClose" class="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <div id="tavern-dm-user-list" class="tavern-dm-user-list"></div>
     </div>
   </div>
 </div>
