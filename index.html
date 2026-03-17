@@ -239,10 +239,21 @@
 
   <!-- Верхняя строка -->
   <div id="status-bar">
-    <span>Вы: <strong id="myName">-</strong></span> |
-    <span>Роль: <strong id="myRole">-</strong></span> |
-    <span>Комната: <strong id="myRoom">-</strong></span> |
-    <span>Сценарий: <strong id="myScenario">-</strong></span>
+    <div class="status-bar__meta">
+      <span>Вы: <strong id="myName">-</strong></span> |
+      <span>Роль: <strong id="myRole">-</strong></span> |
+      <span>Комната: <strong id="myRoom">-</strong></span> |
+      <span>Сценарий: <strong id="myScenario">-</strong></span>
+    </div>
+
+    <div id="room-top-actions" class="room-top-actions" aria-label="Действия комнаты">
+      <button id="room-chat-open" class="room-top-actions__btn room-top-actions__btn--chat" type="button" aria-label="Сообщение">
+        <span class="room-top-actions__btn-label">Сообщение</span>
+        <span id="room-chat-badge-global" class="tavern-toolbar__badge tavern-toolbar__badge--global hidden">0</span>
+        <span id="room-chat-badge-direct" class="tavern-toolbar__badge tavern-toolbar__badge--direct hidden">0</span>
+      </button>
+      <button id="room-return-tavern" class="room-top-actions__btn room-top-actions__btn--return" type="button" aria-label="Вернуться в таверну">Вернуться в таверну</button>
+    </div>
   </div>
 
   <!-- Контент: 2 колонки -->
@@ -344,14 +355,6 @@
               </button>
             </div>
 
-            <div id="room-top-actions" class="room-top-actions" aria-label="Действия комнаты">
-              <button id="room-chat-open" class="room-top-actions__btn room-top-actions__btn--chat" type="button" aria-label="Сообщение">
-                <span class="room-top-actions__btn-label">Сообщение</span>
-                <span id="room-chat-badge-global" class="tavern-toolbar__badge tavern-toolbar__badge--global hidden">0</span>
-                <span id="room-chat-badge-direct" class="tavern-toolbar__badge tavern-toolbar__badge--direct hidden">0</span>
-              </button>
-              <button id="room-return-tavern" class="room-top-actions__btn room-top-actions__btn--return" type="button" aria-label="Вернуться в таверну">Вернуться в таверну</button>
-            </div>
 
             <div id="board-settings" class="board-settings-row">
             <div id="board-settings-viewport" class="board-settings-box">
