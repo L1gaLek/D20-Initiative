@@ -25,6 +25,9 @@ const tavernChatTabs = document.getElementById('tavern-chat-tabs');
 const tavernChatUsersBtn = document.getElementById('tavern-chat-users-btn');
 const tavernChatUsersPopover = document.getElementById('tavern-chat-users-popover');
 const tavernChatUsersList = document.getElementById('tavern-chat-users-list');
+const tavernChatQuote = document.getElementById('tavern-chat-quote');
+const tavernChatBadgeGlobal = document.getElementById('tavern-hotspot-chat-badge-global');
+const tavernChatBadgeDirect = document.getElementById('tavern-hotspot-chat-badge-direct');
 const tavernBartenderModal = document.getElementById('tavernBartenderModal');
 const tavernBartenderClose = document.getElementById('tavernBartenderClose');
 const tavernBartenderNote = document.getElementById('tavern-bartender-note');
@@ -360,7 +363,11 @@ const tavernChatState = {
   chats: new Map([['global', []]]),
   tabs: [{ key: 'global', label: 'Общий стол', closable: false }],
   knownUsers: new Map(),
-  loadedHistory: false
+  loadedHistory: false,
+  unreadGlobal: 0,
+  unreadDirect: 0,
+  unreadByChat: new Map(),
+  quoteDraft: null
 };
 
 function hideModalEl(el) {
@@ -453,6 +460,73 @@ function getDirectChatLabel(otherUserId, fallback = 'Личное') {
   return String(tavernChatState.knownUsers.get(uid)?.name || fallback || 'Личное');
 }
 
+function getUnreadCountForChat(chatKey) {
+  return Number(tavernChatState.unreadByChat.get(String(chatKey || 'global')) || 0) || 0;
+}
+
+function updateTavernHotspotBadges() {
+  const apply = (el, count) => {
+    if (!el) return;
+    if (count > 0) {
+      el.classList.remove('hidden');
+      el.textContent = count > 99 ? '99+' : String(count);
+    } else {
+      el.classList.add('hidden');
+      el.textContent = '0';
+    }
+  };
+  apply(tavernChatBadgeGlobal, Math.max(0, Number(tavernChatState.unreadGlobal) || 0));
+  apply(tavernChatBadgeDirect, Math.max(0, Number(tavernChatState.unreadDirect) || 0));
+}
+
+function clearTavernQuoteDraft() {
+  tavernChatState.quoteDraft = null;
+  if (!tavernChatQuote) return;
+  tavernChatQuote.classList.add('hidden');
+  tavernChatQuote.setAttribute('aria-hidden', 'true');
+  tavernChatQuote.innerHTML = '';
+}
+
+function setTavernQuoteDraft(message) {
+  if (!message || message.system) return;
+  tavernChatState.quoteDraft = {
+    fromId: String(message.fromId || ''),
+    fromName: String(message.fromName || 'Путник'),
+    text: String(message.text || '').trim().slice(0, 280)
+  };
+  if (!tavernChatQuote) return;
+  tavernChatQuote.classList.remove('hidden');
+  tavernChatQuote.setAttribute('aria-hidden', 'false');
+  tavernChatQuote.innerHTML = `
+    <div class="tavern-chat-quote__meta">Ответ для ${escapeHtmlLite(tavernChatState.quoteDraft.fromName)}</div>
+    <div class="tavern-chat-quote__text">${escapeHtmlLite(tavernChatState.quoteDraft.text)}</div>
+    <button type="button" class="tavern-chat-quote__clear" data-clear-tavern-quote title="Убрать цитату">✕</button>
+  `;
+}
+
+function markTavernChatRead(chatKey) {
+  const key = String(chatKey || tavernChatState.activeChatKey || 'global');
+  const prev = getUnreadCountForChat(key);
+  if (!prev) return;
+  tavernChatState.unreadByChat.set(key, 0);
+  if (key === 'global') tavernChatState.unreadGlobal = Math.max(0, (Number(tavernChatState.unreadGlobal) || 0) - prev);
+  else tavernChatState.unreadDirect = Math.max(0, (Number(tavernChatState.unreadDirect) || 0) - prev);
+  updateTavernHotspotBadges();
+}
+
+function noteTavernUnread(item) {
+  if (!tavernChatState.loadedHistory) return;
+  if (!item || item.system || item.mine) return;
+  const modalOpen = !!(tavernChatModal && !tavernChatModal.classList.contains('hidden'));
+  const isActive = String(tavernChatState.activeChatKey || 'global') === String(item.chatKey || 'global');
+  if (modalOpen && isActive) return;
+  const key = String(item.chatKey || 'global');
+  tavernChatState.unreadByChat.set(key, getUnreadCountForChat(key) + 1);
+  if (key === 'global') tavernChatState.unreadGlobal = (Number(tavernChatState.unreadGlobal) || 0) + 1;
+  else tavernChatState.unreadDirect = (Number(tavernChatState.unreadDirect) || 0) + 1;
+  updateTavernHotspotBadges();
+}
+
 function normalizeTavernMessage(entry) {
   if (!entry || typeof entry !== 'object') return null;
   const myIdLocal = getTavernMyUserId();
@@ -469,7 +543,12 @@ function normalizeTavernMessage(entry) {
     system: !!entry.system,
     chatKey: 'global',
     label: 'Общий стол',
-    mine: false
+    mine: false,
+    quote: (entry.quote && typeof entry.quote === 'object') ? {
+      fromId: String(entry.quote.fromId || ''),
+      fromName: String(entry.quote.fromName || entry.quote.name || 'Путник'),
+      text: String(entry.quote.text || '')
+    } : null
   };
   if (!item.text && !item.system) return null;
   if (item.fromId) rememberTavernUser(item.fromId, item.fromName);
@@ -499,6 +578,7 @@ function pushTavernMessage(entry) {
   if (list.some((x) => String(x.id) === item.id)) return;
   list.push(item);
   while (list.length > TAVERN_MAX_MESSAGES) list.shift();
+  noteTavernUnread(item);
   renderTavernChatTabs();
   renderTavernChat();
 }
@@ -525,6 +605,7 @@ function syncTavernPresenceUsers() {
   }
   renderTavernUsersList();
   renderTavernSubtitle();
+  updateTavernHotspotBadges();
 }
 
 function fmtTavernTime(ts) {
@@ -566,13 +647,16 @@ function renderTavernChatTabs() {
   if (!tavernChatTabs) return;
   tavernChatTabs.innerHTML = tavernChatState.tabs.map((tab) => {
     const active = String(tab.key) === String(tavernChatState.activeChatKey || 'global');
+    const unread = getUnreadCountForChat(tab.key);
     return `
       <button class="tavern-chat-tab ${active ? 'is-active' : ''}" type="button" data-chat-key="${escapeHtmlLite(tab.key)}">
         <span>${escapeHtmlLite(tab.label)}</span>
+        ${unread > 0 ? `<span class="tavern-chat-tab__unread">${unread > 99 ? '99+' : unread}</span>` : ''}
         ${tab.closable ? '<span class="tavern-chat-tab__close" aria-hidden="true">✕</span>' : ''}
       </button>
     `;
   }).join('');
+  updateTavernHotspotBadges();
 }
 
 function renderTavernUsersList() {
@@ -594,7 +678,7 @@ function renderTavernUsersList() {
         <div class="tavern-chat-user-item__name">${escapeHtmlLite(user.name)}</div>
         <div class="tavern-chat-user-item__hint">${user.online ? 'Сейчас в таверне' : 'Недавно общался'}</div>
       </div>
-      <button type="button" data-direct-user="${escapeHtmlLite(user.id)}">Написать</button>
+      <button type="button" class="tavern-chat-user-item__btn" data-direct-user="${escapeHtmlLite(user.id)}">Написать</button>
     </div>
   `).join('');
 }
@@ -621,6 +705,7 @@ function setActiveTavernChat(chatKey) {
   const key = String(chatKey || 'global');
   if (!tavernChatState.chats.has(key)) return;
   tavernChatState.activeChatKey = key;
+  markTavernChatRead(key);
   renderTavernChatTabs();
   renderTavernSubtitle();
   renderTavernChat();
@@ -643,8 +728,10 @@ function ensureDirectChatWithUser(otherUserId, fallbackName = 'Личное') {
 function closeTavernChatTab(chatKey) {
   const key = String(chatKey || '');
   if (!key || key === 'global') return;
+  markTavernChatRead(key);
   tavernChatState.tabs = tavernChatState.tabs.filter((tab) => String(tab.key) !== key);
   tavernChatState.chats.delete(key);
+  tavernChatState.unreadByChat.delete(key);
   if (String(tavernChatState.activeChatKey) === key) tavernChatState.activeChatKey = 'global';
   renderTavernChatTabs();
   renderTavernSubtitle();
@@ -664,12 +751,23 @@ function renderTavernChat() {
   tavernChatList.innerHTML = messages.map((msg) => {
     const name = msg.system ? 'Таверна' : msg.fromName;
     const badge = msg.chatType === 'direct' ? '<span class="tavern-chat-item__badge">Личное</span>' : '';
+    const quoteHtml = msg.quote && msg.quote.text ? `
+      <div class="tavern-chat-item__quote">
+        <div class="tavern-chat-item__quote-name">${escapeHtmlLite(msg.quote.fromName || 'Путник')}</div>
+        <div class="tavern-chat-item__quote-text">${escapeHtmlLite(msg.quote.text)}</div>
+      </div>` : '';
+    const actionsHtml = (!msg.system && !msg.mine && msg.chatType === 'global') ? `
+      <span class="tavern-chat-item__actions">
+        <button type="button" class="tavern-chat-icon-btn" data-chat-direct="${escapeHtmlLite(msg.fromId)}" title="Личное сообщение">💬</button>
+        <button type="button" class="tavern-chat-icon-btn" data-chat-reply="${escapeHtmlLite(msg.id)}" title="Ответить">↩</button>
+      </span>` : '';
     return `
-      <div class="tavern-chat-item ${msg.system ? 'tavern-chat-item--system' : ''} ${msg.mine ? 'tavern-chat-item--mine' : ''} ${msg.chatType === 'direct' ? 'tavern-chat-item--direct' : ''}">
+      <div class="tavern-chat-item ${msg.system ? 'tavern-chat-item--system' : ''} ${msg.mine ? 'tavern-chat-item--mine' : ''} ${msg.chatType === 'direct' ? 'tavern-chat-item--direct' : ''}" data-message-id="${escapeHtmlLite(msg.id)}">
         <div class="tavern-chat-item__meta">
-          <span>${escapeHtmlLite(name)} ${badge}</span>
+          <span class="tavern-chat-item__meta-main">${escapeHtmlLite(name)} ${badge} ${actionsHtml}</span>
           <span>${escapeHtmlLite(fmtTavernTime(msg.ts))}</span>
         </div>
+        ${quoteHtml}
         <div class="tavern-chat-item__text">${escapeHtmlLite(msg.text)}</div>
       </div>
     `;
@@ -690,6 +788,10 @@ async function loadTavernChatHistory() {
 
     tavernChatState.chats = new Map([['global', []]]);
     tavernChatState.tabs = [{ key: 'global', label: 'Общий стол', closable: false }];
+    tavernChatState.unreadGlobal = 0;
+    tavernChatState.unreadDirect = 0;
+    tavernChatState.unreadByChat = new Map();
+    tavernChatState.loadedHistory = false;
     const rows = Array.isArray(data) ? data : [];
     rows.forEach((row) => {
       const msg = decodeTavernLogRow(row?.text);
@@ -766,7 +868,8 @@ async function sendTavernChatMessage() {
     fromId: userId,
     fromName: userName,
     text,
-    ts: Date.now()
+    ts: Date.now(),
+    quote: tavernChatState.quoteDraft ? { ...tavernChatState.quoteDraft } : null
   };
 
   const activeKey = String(tavernChatState.activeChatKey || 'global');
@@ -783,6 +886,7 @@ async function sendTavernChatMessage() {
 
   pushTavernMessage(message);
   try { if (tavernChatInput) tavernChatInput.value = ''; } catch {}
+  clearTavernQuoteDraft();
   await ensureTavernChannel();
   await persistTavernMessage(message);
 }
@@ -790,6 +894,7 @@ async function sendTavernChatMessage() {
 function openTavernChat() {
   showModalEl(tavernChatModal);
   ensureTavernChannel();
+  markTavernChatRead(tavernChatState.activeChatKey || 'global');
   renderTavernChatTabs();
   renderTavernSubtitle();
   renderTavernUsersList();
@@ -1495,6 +1600,7 @@ initLobbyVideoBackground();
 watchLobbyVisibility();
 try { lobbyAmbientAudio.sync(); } catch {}
 pushTavernMessage({ system: true, text: 'Собирайтесь у стола, слушайте бармена или выбирайте путешествие на доске объявлений.' });
+updateTavernHotspotBadges();
 
 [tavernChatClose, tavernBartenderClose, tavernRoomsClose].forEach((btn, idx) => {
   if (!btn) return;
@@ -1532,6 +1638,32 @@ if (tavernChatUsersList) {
     const userName = String(tavernChatState.knownUsers.get(userId)?.name || 'Собеседник');
     const key = ensureDirectChatWithUser(userId, userName);
     setActiveTavernChat(key);
+  });
+}
+if (tavernChatList) {
+  tavernChatList.addEventListener('click', (e) => {
+    const directBtn = e.target?.closest?.('[data-chat-direct]');
+    if (directBtn) {
+      const userId = String(directBtn.getAttribute('data-chat-direct') || '');
+      const userName = String(tavernChatState.knownUsers.get(userId)?.name || 'Собеседник');
+      const key = ensureDirectChatWithUser(userId, userName);
+      setActiveTavernChat(key);
+      return;
+    }
+    const replyBtn = e.target?.closest?.('[data-chat-reply]');
+    if (replyBtn) {
+      const messageId = String(replyBtn.getAttribute('data-chat-reply') || '');
+      const msg = getActiveTavernMessages().find((x) => String(x.id) === messageId);
+      if (msg) {
+        setTavernQuoteDraft(msg);
+        try { tavernChatInput?.focus(); } catch {}
+      }
+    }
+  });
+}
+if (tavernChatQuote) {
+  tavernChatQuote.addEventListener('click', (e) => {
+    if (e.target?.closest?.('[data-clear-tavern-quote]')) clearTavernQuoteDraft();
   });
 }
 if (tavernChatInput) {
