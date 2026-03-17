@@ -148,11 +148,11 @@ function buildLobbyAmbientCandidates(fileName) {
 
     return [
       'lobby/ambient/' + fileName,
-      '.lobby/ambient/' + fileName,
-      (basePath ? basePath : '') + 'lobby/ambient/' + fileName
+      './lobby/ambient/' + fileName,
+      (basePath ? basePath : '') + '/lobby/ambient/' + fileName
     ].filter((value, index, arr) => value && arr.indexOf(value) === index);
   } catch {
-    return ['lobby/ambient/' + fileName];
+    return ['/lobby/ambient/' + fileName];
   }
 }
 
@@ -218,10 +218,19 @@ const lobbyAmbientAudio = (() => {
   }
 
   async function tryUnlock() {
+    if (unlocked) return true;
     applyVolume();
     try {
+      const hadSrc = !!(audio.getAttribute('src') || audio.src);
+      const prevTime = Number(audio.currentTime) || 0;
       await playPromiseSafe();
-      try { audio.pause(); } catch {}
+      if (!hadSrc) {
+        try { audio.pause(); } catch {}
+        try { audio.currentTime = 0; } catch {}
+      } else {
+        try { audio.pause(); } catch {}
+        try { audio.currentTime = prevTime; } catch {}
+      }
       unlocked = true;
       return true;
     } catch {
@@ -238,7 +247,7 @@ const lobbyAmbientAudio = (() => {
     }
 
     applyVolume();
-    const fileName = nextMode === 'lobby' ? lobbyTrack : chooseTavernTrack();
+    const fileName = nextMode === 'lobby' ? lobbyTrack : (activeMode === 'tavern' && activeFile ? activeFile : chooseTavernTrack());
     const sources = buildLobbyAmbientCandidates(fileName);
     const nextSrc = sources[0] || '';
 
@@ -295,8 +304,10 @@ const lobbyAmbientAudio = (() => {
 
     const onGesture = async () => {
       applyVolume();
-      await tryUnlock();
-      sync();
+      if (!unlocked) {
+        await tryUnlock();
+        sync();
+      }
     };
 
     const opts = { capture: true, passive: true };
