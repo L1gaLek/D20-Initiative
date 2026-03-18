@@ -1730,3 +1730,109 @@
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   }
 }
+
+
+/* ===== ROOM UI FIXES: topbar / left alignment / compact board controls ===== */
+#main-container{
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 6px 0 22px;
+  gap: 18px;
+}
+
+#status-bar{
+  margin-bottom: 2px;
+  align-items: center;
+}
+
+#content-row{
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 18px;
+}
+
+#action-log-container{
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+
+#game-container{
+  margin: 0;
+  align-items: flex-start;
+  flex: 0 1 auto;
+}
+
+#board-row{
+  align-items: flex-start;
+}
+
+#board-col{
+  align-items: flex-start;
+}
+
+#board-topbar{
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+}
+
+#current-turn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 16px;
+  min-height: 0;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+#next-turn{
+  min-height: 32px;
+  padding: 6px 11px;
+  border-radius: 11px;
+  font-size: 12px;
+}
+
+#board-settings{
+  width: 100%;
+  justify-content: center;
+  gap: 8px;
+}
+
+.board-settings-row{
+  gap: 8px;
+}
+
+.board-settings-box{
+  padding: 8px 10px;
+  gap: 8px;
+  border-radius: 16px;
+}
+
+.board-settings-box label{
+  gap: 5px;
+  font-size: 11px;
+}
+
+.board-settings-box input[type="number"]{
+  width: 54px;
+  min-height: 32px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
+.board-settings-box button{
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 11px;
+  font-size: 11px;
+}
+
+@media (max-width: 1500px){
+  #content-row{
+    flex-wrap: wrap;
+  }
+}

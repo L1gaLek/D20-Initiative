@@ -973,3 +973,21 @@ body.lobby-active #lobby-scene {
 .room-chat-modal{
   width:min(980px, 96vw);
 }
+
+/* ===== ROOM UI FIXES: top action buttons / separation from main frames ===== */
+.room-top-actions{
+  gap: 10px;
+  padding: 0;
+  margin-left: auto;
+}
+
+.room-top-actions__btn{
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.room-top-actions__btn--chat{
+  padding-right: 28px;
+}

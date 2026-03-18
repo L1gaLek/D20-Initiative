@@ -3238,3 +3238,46 @@ body{
   min-width: 38px;
   min-height: 38px;
 }
+
+
+/* ===== ROOM UI FIXES: active buttons / stronger initiative / toolbar separation ===== */
+#status-bar{
+  position: relative;
+  z-index: 3;
+}
+
+#main-container button.is-active,
+#main-container button.active,
+#main-container .player-tab.active,
+#main-container .marks-seg__btn.is-active,
+#main-container .next-turn-btn.is-active,
+#main-container #edit-environment.is-on,
+#main-container #add-wall.is-active,
+#main-container #remove-wall.is-active{
+  border-color: rgba(255, 210, 126, 0.82) !important;
+  color: #fff8ea !important;
+  background: linear-gradient(180deg, rgba(168, 101, 28, 0.98) 0%, rgba(108, 61, 16, 0.99) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 0 1px rgba(255,210,126,0.24),
+    0 0 18px rgba(255,173,72,0.24),
+    0 14px 26px rgba(0,0,0,0.24) !important;
+}
+
+#main-container #edit-environment.is-on{
+  background: linear-gradient(180deg, rgba(64, 140, 34, 0.98) 0%, rgba(34, 96, 13, 0.99) 100%) !important;
+  border-color: rgba(137, 214, 105, 0.76) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 0 1px rgba(137,214,105,0.22),
+    0 0 20px rgba(96, 192, 76, 0.22),
+    0 14px 26px rgba(0,0,0,0.24) !important;
+}
+
+#main-container button:focus-visible,
+#main-container input:focus-visible,
+#main-container select:focus-visible,
+#main-container textarea:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 176, 81, 0.18), 0 0 0 1px rgba(255, 203, 114, 0.16);
+}

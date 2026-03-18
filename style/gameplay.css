@@ -868,3 +868,135 @@
 .fog-row button{
   flex: 1 1 auto;
 }
+
+
+/* ===== ROOM UI FIXES: marks toolbar / initiative emphasis ===== */
+.marks-toolbar{
+  width: 100%;
+  margin-top: 4px;
+  margin-bottom: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--room-border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(26,20,15,0.84) 0%, rgba(13,10,8,0.93) 100%);
+  box-shadow: var(--room-shadow), inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(8px);
+}
+
+.marks-toolbar__head{
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.marks-toolbar__title{
+  color: #fff0d2;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.marks-toolbar__title:hover{
+  text-decoration: none;
+  color: #ffcf7a;
+}
+
+.marks-switch,
+.marks-field,
+.marks-hint{
+  color: var(--room-text-soft);
+  opacity: 1;
+}
+
+.marks-btn,
+.marks-seg__btn{
+  border-radius: 10px;
+}
+
+.marks-seg{
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  padding: 2px;
+  gap: 2px;
+}
+
+.marks-seg__btn{
+  border-right: 0;
+  background: transparent;
+  color: #e7d9bf;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.marks-seg__btn:hover{
+  background: rgba(255,255,255,0.05);
+}
+
+.marks-seg__btn.is-active{
+  background: linear-gradient(180deg, rgba(168, 101, 28, 0.98) 0%, rgba(108, 61, 16, 0.99) 100%);
+  border-color: rgba(255, 210, 126, 0.82);
+  color: #fff8ea;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 0 1px rgba(255,210,126,0.24),
+    0 0 16px rgba(255,173,72,0.18);
+}
+
+.marks-field span{
+  min-width: auto;
+  color: var(--room-text-soft);
+}
+
+.marks-field input[type="range"]{
+  width: 128px;
+}
+
+.marks-field input[type="number"]{
+  width: 56px;
+}
+
+.marks-label{
+  min-height: 34px;
+  border-radius: 12px;
+}
+
+.dice-viz-btn--initiative{
+  position: relative;
+  border-color: rgba(255, 206, 122, 0.58);
+  background: linear-gradient(180deg, rgba(142, 85, 24, 0.96) 0%, rgba(86, 50, 16, 0.99) 100%);
+  color: #fff7e7;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 0 1px rgba(255,206,122,0.18),
+    0 0 18px rgba(255,165,74,0.18);
+  animation: room-initiative-glow 1.9s ease-in-out infinite;
+}
+
+.dice-viz-btn--initiative:hover{
+  filter: brightness(1.08);
+}
+
+.dice-viz-btn--initiative.is-active{
+  border-color: rgba(137, 214, 105, 0.76);
+  background: linear-gradient(180deg, rgba(64, 140, 34, 0.98) 0%, rgba(34, 96, 13, 0.99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 0 0 1px rgba(137,214,105,0.22),
+    0 0 20px rgba(96, 192, 76, 0.22),
+    0 10px 24px rgba(0,0,0,0.20);
+  animation: none;
+}
+
+@keyframes room-initiative-glow {
+  0%,100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      0 0 0 1px rgba(255,206,122,0.16),
+      0 0 12px rgba(255,165,74,0.14);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      0 0 0 1px rgba(255,206,122,0.24),
+      0 0 22px rgba(255,165,74,0.24);
+  }
+}
