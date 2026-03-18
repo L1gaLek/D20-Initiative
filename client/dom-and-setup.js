@@ -171,22 +171,27 @@ function buildLobbyAmbientCandidates(fileName) {
       : path.replace(/\/[^/]*$/, '');
 
     return [
-      'lobby/ambient/' + fileName,
-      '.lobby/ambient/' + fileName,
-      (basePath ? basePath : '') + 'lobby/ambient/' + fileName
+      '/lobby/ambient/' + fileName,
+      './lobby/ambient/' + fileName,
+      (basePath ? basePath : '') + '/lobby/ambient/' + fileName
     ].filter((value, index, arr) => value && arr.indexOf(value) === index);
   } catch {
-    return ['lobby/ambient/' + fileName];
+    return ['/lobby/ambient/' + fileName];
   }
 }
 
 const lobbyAmbientAudio = (() => {
-  const audio = new Audio();
+  const audio = document.createElement('audio');
+  audio.id = 'lobby-ambient-audio';
   audio.preload = 'auto';
   audio.loop = false;
+  audio.autoplay = false;
+  audio.hidden = true;
+  try { audio.crossOrigin = 'anonymous'; } catch {}
   try { audio.playsInline = true; } catch {}
   try { audio.setAttribute('playsinline', ''); } catch {}
   try { audio.setAttribute('webkit-playsinline', ''); } catch {}
+  try { document.body.appendChild(audio); } catch {}
 
   const LS_VOL = 'dnd_lobby_ambient_volume';
   const LS_VOL_LEGACY = 'dnd_bg_music_volume';
@@ -200,6 +205,7 @@ const lobbyAmbientAudio = (() => {
   let globalBound = false;
   let sourceCandidates = [];
   let sourceIndex = 0;
+  let pendingGestureStart = false;
 
   function clamp01(v, fallback = 0.4) {
     const n = Number(v);
@@ -216,7 +222,6 @@ const lobbyAmbientAudio = (() => {
       const legacy = localStorage.getItem(LS_VOL_LEGACY);
       if (legacy !== null && legacy !== '') {
         const v = clamp01(legacy);
-        // legacy key belongs to room music, so do not keep coupling forever.
         try { localStorage.setItem(LS_VOL, String(v > 0 ? v : 0.4)); } catch {}
         return v > 0 ? v : 0.4;
       }
@@ -273,35 +278,41 @@ const lobbyAmbientAudio = (() => {
 
   async function playPromiseSafe() {
     try {
+      applyVolume();
       const p = audio.play?.();
       if (p && typeof p.catch === 'function') {
-        return p.catch(() => {
-          unlocked = false;
-          return false;
-        });
+        return p.catch(() => false);
       }
       return Promise.resolve(true);
     } catch {
-      unlocked = false;
       return Promise.resolve(false);
     }
   }
 
-  async function tryUnlock() {
+  async function tryUnlock({ pauseAfter = false } = {}) {
     applyVolume();
-    try {
-      await playPromiseSafe();
-      try { audio.pause(); } catch {}
-      unlocked = true;
-      return true;
-    } catch {
+    const ok = await playPromiseSafe();
+    if (!ok) {
       unlocked = false;
       return false;
     }
+    unlocked = true;
+    if (pauseAfter) {
+      try { audio.pause(); } catch {}
+    }
+    return true;
   }
 
-  async function start(mode) {
+  async function ensurePlaybackAfterGesture() {
+    pendingGestureStart = false;
+    if (!activeMode) return false;
+    if (!getAudioSrc() && !applyCurrentSource()) return false;
+    return await tryUnlock({ pauseAfter: false });
+  }
+
+  async function start(mode, options = {}) {
     const nextMode = String(mode || '');
+    const fromGesture = !!options.fromGesture;
     if (nextMode !== 'lobby' && nextMode !== 'tavern') {
       stop();
       return;
@@ -329,12 +340,17 @@ const lobbyAmbientAudio = (() => {
       }
     }
 
-    const ok = unlocked ? true : await tryUnlock();
-    if (!ok) return;
+    if (fromGesture) {
+      await ensurePlaybackAfterGesture();
+      return;
+    }
 
-    try {
-      await playPromiseSafe();
-    } catch {}
+    if (!unlocked) {
+      pendingGestureStart = true;
+      return;
+    }
+
+    await playPromiseSafe();
   }
 
   function stop() {
@@ -342,6 +358,7 @@ const lobbyAmbientAudio = (() => {
     activeFile = '';
     sourceCandidates = [];
     sourceIndex = 0;
+    pendingGestureStart = false;
     try { audio.pause(); } catch {}
     try {
       audio.removeAttribute('src');
@@ -350,7 +367,8 @@ const lobbyAmbientAudio = (() => {
     } catch {}
   }
 
-  function sync() {
+  function sync(options = {}) {
+    const startOpts = options && typeof options === 'object' ? options : {};
     const loginVisible = !!(loginDiv && loginDiv.style.display !== 'none');
     const tavernVisible = !!(tavernDiv && !tavernDiv.classList.contains('hidden') && tavernDiv.style.display !== 'none');
     const gameVisible = !!(gameUI && gameUI.style.display !== 'none');
@@ -360,14 +378,26 @@ const lobbyAmbientAudio = (() => {
       return;
     }
     if (tavernVisible) {
-      start('tavern');
+      start('tavern', startOpts);
       return;
     }
     if (loginVisible) {
-      start('lobby');
+      start('lobby', startOpts);
       return;
     }
     stop();
+  }
+
+  async function nudgeFromGesture() {
+    applyVolume();
+    if (!activeMode) {
+      sync({ fromGesture: true });
+      return;
+    }
+    await ensurePlaybackAfterGesture();
+    if (pendingGestureStart) {
+      sync({ fromGesture: true });
+    }
   }
 
   function bindGlobalUnlock() {
@@ -375,9 +405,7 @@ const lobbyAmbientAudio = (() => {
     globalBound = true;
 
     const onGesture = async () => {
-      applyVolume();
-      await tryUnlock();
-      sync();
+      await nudgeFromGesture();
     };
 
     const opts = { capture: true, passive: true };
@@ -399,26 +427,32 @@ const lobbyAmbientAudio = (() => {
     });
   }
 
+  audio.addEventListener('loadeddata', async () => {
+    applyVolume();
+    if (!activeMode || !unlocked) return;
+    await playPromiseSafe();
+  });
+
   audio.addEventListener('canplay', async () => {
     applyVolume();
     if (!activeMode || !unlocked) return;
-    try { await playPromiseSafe(); } catch {}
+    await playPromiseSafe();
   });
 
   audio.addEventListener('ended', () => {
     if (activeMode !== 'tavern') return;
     activeFile = chooseTavernTrack();
-    start('tavern');
+    start('tavern', { fromGesture: unlocked });
   });
 
   audio.addEventListener('error', () => {
     if (advanceSource()) {
-      if (activeMode) start(activeMode);
+      if (activeMode) start(activeMode, { fromGesture: unlocked });
       return;
     }
     if (activeMode === 'tavern') {
       activeFile = chooseTavernTrack();
-      start('tavern');
+      start('tavern', { fromGesture: unlocked });
       return;
     }
     if (activeMode === 'lobby') {
@@ -429,7 +463,7 @@ const lobbyAmbientAudio = (() => {
   bindGlobalUnlock();
   applyVolume();
 
-  return { sync, start, stop, audio };
+  return { sync, start, stop, nudgeFromGesture, audio };
 })();
 
 const myNameSpan = document.getElementById('myName');
@@ -1152,6 +1186,7 @@ window.SUPABASE_FETCH_FN = "fetch";
   localStorage.setItem("dnd_user_role", "");
 
   // In Supabase-MVP our "myId" is stable localStorage userId
+  try { lobbyAmbientAudio.nudgeFromGesture?.(); } catch {}
   handleMessage({ type: "registered", id: userId, name, role: '' });
 
   // list rooms from DB
