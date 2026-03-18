@@ -4192,6 +4192,7 @@ async function sendMessage(msg) {
 }
 
 function updatePhaseUI(state) {
+  const phase = String(state?.phase || '');
   const combatants = (state?.players || []).filter(p => p && p.inCombat);
   const allRolled = combatants.length
     ? combatants.every(p => p.hasRolledInitiative)
@@ -4207,28 +4208,40 @@ function updatePhaseUI(state) {
   try { if (startInitiativeBtn) startInitiativeBtn.style.color = '#fff'; } catch {}
   try { if (startCombatBtn) startCombatBtn.style.color = '#fff'; } catch {}
 
+  // безопасно сбрасываем disabled перед логикой фазы,
+  // чтобы не залипали старые состояния после переключений.
+  try { if (startExplorationBtn) startExplorationBtn.disabled = false; } catch {}
+  try { if (startInitiativeBtn) startInitiativeBtn.disabled = false; } catch {}
+  try { if (startCombatBtn) startCombatBtn.disabled = false; } catch {}
+
   // ===== initiative roll button only in initiative phase
-  if (state.phase === "initiative") {
-    rollInitiativeBtn.style.display = "inline-block";
-    rollInitiativeBtn.classList.add("is-active");
-  } else {
-    rollInitiativeBtn.style.display = "none";
-    rollInitiativeBtn.classList.remove("is-active");
+  if (rollInitiativeBtn) {
+    if (phase === 'initiative') {
+      rollInitiativeBtn.style.display = 'inline-block';
+      rollInitiativeBtn.classList.add('is-active');
+    } else {
+      rollInitiativeBtn.style.display = 'none';
+      rollInitiativeBtn.classList.remove('is-active');
+    }
   }
 
   // ===== world phase buttons (GM only visually, but keep safe)
-  if (state.phase === 'exploration') {
+  if (phase === 'exploration') {
+    // По нажатию на "Фаза исследования" она сразу считается активной и зелёной.
     startExplorationBtn?.classList.add('active');
     startCombatBtn.disabled = true;
-  } else if (state.phase === 'initiative') {
-    // Кнопка инициативы должна сразу подсвечиваться как активная фаза.
+  } else if (phase === 'initiative') {
+    // По нажатию на "Фаза инициатива" кнопка всегда должна быть активной (зелёной),
+    // независимо от того, бросили уже инициативу все участники или нет.
     startInitiativeBtn?.classList.add('active');
 
-    // Бой можно начать только когда все бросили инициативу.
+    // "Фаза бой" НЕ должна становиться зелёной в фазе инициативы.
+    // Красной она становится только когда все участники бросили инициативу.
     startCombatBtn.disabled = !allRolled;
-    if (allRolled) startCombatBtn.classList.add('pending');
-  } else if (state.phase === 'combat') {
-    startCombatBtn.disabled = false;
+    if (allRolled) {
+      startCombatBtn.classList.add('pending');
+    }
+  } else if (phase === 'combat') {
     startCombatBtn.classList.add('ready');
   } else {
     // lobby or other
