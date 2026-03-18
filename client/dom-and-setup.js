@@ -95,21 +95,36 @@ function watchLobbyVisibility() {
   }
 }
 
-function buildLobbyVideoCandidates(fileName) {
+function getProjectAssetBasePath() {
+  try {
+    const script = Array.from(document.scripts || []).find((node) => {
+      const src = String(node?.getAttribute?.('src') || node?.src || '');
+      return /(?:^|\/)dom-and-setup\.js(?:[?#].*)?$/.test(src);
+    });
+    const src = String(script?.src || script?.getAttribute?.('src') || '');
+    if (src) {
+      const url = new URL(src, window.location.href);
+      const match = url.pathname.match(/^(.*)\/client\/dom-and-setup\.js(?:$|[?#])/);
+      if (match) return String(match[1] || '');
+      return url.pathname.replace(/\/client\/[^/]+$/, '');
+    }
+  } catch {}
+
   try {
     const path = String(window.location.pathname || '/');
-    const basePath = path.endsWith('/')
-      ? path.replace(/\/$/, '')
-      : path.replace(/\/[^/]*$/, '');
+    const clean = path.replace(/[?#].*$/, '');
+    if (/\.(html?)$/i.test(clean)) return clean.replace(/\/[^/]*$/, '');
+    return clean.endsWith('/') ? clean.replace(/\/$/, '') : clean;
+  } catch {}
 
-    return [
-      '/lobby/' + fileName,
-      './lobby/' + fileName,
-      (basePath ? basePath : '') + '/lobby/' + fileName
-    ].filter((value, index, arr) => value && arr.indexOf(value) === index);
-  } catch {
-    return ['/lobby/' + fileName];
-  }
+  return '';
+}
+
+function buildLobbyVideoCandidates(fileName) {
+  const name = String(fileName || '').trim();
+  if (!name) return [];
+  const basePath = String(getProjectAssetBasePath() || '');
+  return [((basePath || '') + '/lobby/' + name).replace(/\/+/g, '/')];
 }
 
 function applyVideoSourceWithFallback(video, sources) {
@@ -166,18 +181,10 @@ function initTavernVideoBackground() {
 function buildLobbyAmbientCandidates(fileName) {
   const normalizedFile = String(fileName || '').trim();
   if (!normalizedFile) return [];
-
-  try {
-    const path = String(window.location.pathname || '/').replace(/\/+/g, '/');
-    const basePath = path.endsWith('/')
-      ? path.replace(/\/$/, '')
-      : path.replace(/\/[^/]*$/, '');
-    const assetPath = (basePath ? basePath : '') + '/lobby/ambient/' + normalizedFile;
-    return [assetPath];
-  } catch {
-    return ['/lobby/ambient/' + normalizedFile];
-  }
+  const basePath = String(getProjectAssetBasePath() || '');
+  return [((basePath || '') + '/lobby/ambient/' + normalizedFile).replace(/\/+/g, '/')];
 }
+
 
 const lobbyAmbientAudio = (() => {
   const audio = document.createElement('audio');
@@ -196,7 +203,7 @@ const lobbyAmbientAudio = (() => {
   const LS_VOL_LEGACY = 'dnd_bg_music_volume';
   const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
   const lobbyTrack = 'lobby.mp3';
-  const tavernTracks = ['taverna1.mp3', 'taverna2.mp3'];
+  const tavernTracks = ['taverna.mp3', 'taverna1.mp3', 'taverna2.mp3'];
   const failedTavernTracks = new Set();
 
   let activeMode = '';
