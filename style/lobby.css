@@ -991,3 +991,80 @@ body.lobby-active #lobby-scene {
 .room-top-actions__btn--chat{
   padding-right: 28px;
 }
+
+/* ===== Room entry / create room modals in tavern style ===== */
+.room-entry-modal{
+  width:min(560px, 96vw);
+}
+.room-entry-modal .modal-header{
+  align-items:center;
+}
+.room-entry-modal .modal-body{
+  padding:18px;
+}
+.room-entry-card{
+  border-radius:18px !important;
+  border:1px solid rgba(255,255,255,0.08) !important;
+  background: linear-gradient(180deg, rgba(17,12,9,0.56) 0%, rgba(9,7,6,0.7) 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  padding:14px !important;
+}
+.room-entry-modal input,
+.room-entry-modal button{
+  min-height:42px;
+  border-radius:14px;
+}
+.room-entry-modal input,
+.room-entry-input{
+  width:100%;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06);
+  color: #f5efe3;
+  padding: 12px 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+.room-entry-modal input::placeholder,
+.room-entry-input::placeholder{
+  color: rgba(229, 219, 199, 0.52);
+}
+.room-entry-modal input:focus,
+.room-entry-input:focus{
+  outline:none;
+  border-color: rgba(255, 195, 98, 0.48);
+  box-shadow: 0 0 0 3px rgba(255, 176, 81, 0.14);
+}
+.room-entry-role-grid{
+  display:grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:10px;
+}
+.room-entry-role-btn{
+  min-width:0 !important;
+}
+.room-entry-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:8px;
+}
+.room-entry-error{
+  margin-top:12px !important;
+  color:#ff8778 !important;
+  font-size:13px;
+}
+.room-entry-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:13px;
+  color:#f0dec1;
+}
+.room-entry-field > span{
+  font-weight:700;
+  letter-spacing:.02em;
+}
+@media (max-width: 640px){
+  .room-entry-role-grid{
+    grid-template-columns:1fr;
+  }
+}
