@@ -167,52 +167,15 @@ function buildLobbyAmbientCandidates(fileName) {
   const normalizedFile = String(fileName || '').trim();
   if (!normalizedFile) return [];
 
-  const ambientFileNames = (() => {
-    const out = [normalizedFile];
-    const tavernAliasMap = {
-      'teverna.mp3': ['taverna.mp3'],
-      'teverna1.mp3': ['taverna1.mp3'],
-      'teverna2.mp3': ['taverna2.mp3'],
-      'taverna.mp3': ['teverna.mp3'],
-      'taverna1.mp3': ['teverna1.mp3'],
-      'taverna2.mp3': ['teverna2.mp3']
-    };
-    (tavernAliasMap[normalizedFile] || []).forEach((alias) => out.push(alias));
-    return out.filter((value, index, arr) => value && arr.indexOf(value) === index);
-  })();
-
   try {
-    const path = String(window.location.pathname || '/');
-    const normalizedPath = path.replace(/\/+/g, '/');
-    const basePath = normalizedPath.endsWith('/')
-      ? normalizedPath.replace(/\/$/, '')
-      : normalizedPath.replace(/\/[^/]*$/, '');
-    const baseHref = String(document.baseURI || window.location.href || '');
-    const candidates = [];
-
-    const pushCandidate = (value) => {
-      const next = String(value || '').trim();
-      if (!next || candidates.includes(next)) return;
-      candidates.push(next);
-    };
-
-    ambientFileNames.forEach((name) => {
-      pushCandidate('lobby/ambient/' + name);
-      pushCandidate('./lobby/ambient/' + name);
-      pushCandidate(basePath ? (basePath + '/lobby/ambient/' + name) : ('lobby/ambient/' + name));
-      pushCandidate('/lobby/ambient/' + name);
-      try { pushCandidate(new URL('lobby/ambient/' + name, baseHref).href); } catch {}
-      try { pushCandidate(new URL('./lobby/ambient/' + name, baseHref).href); } catch {}
-      try { pushCandidate(new URL((basePath ? basePath.replace(/^\//, '') + '/' : '') + 'lobby/ambient/' + name, window.location.origin + '/').href); } catch {}
-    });
-
-    return candidates;
+    const path = String(window.location.pathname || '/').replace(/\/+/g, '/');
+    const basePath = path.endsWith('/')
+      ? path.replace(/\/$/, '')
+      : path.replace(/\/[^/]*$/, '');
+    const assetPath = (basePath ? basePath : '') + '/lobby/ambient/' + normalizedFile;
+    return [assetPath];
   } catch {
-    return ambientFileNames.flatMap((name) => [
-      'lobby/ambient/' + name,
-      './lobby/ambient/' + name,
-      '/lobby/ambient/' + name
-    ]).filter((value, index, arr) => value && arr.indexOf(value) === index);
+    return ['/lobby/ambient/' + normalizedFile];
   }
 }
 
@@ -233,7 +196,7 @@ const lobbyAmbientAudio = (() => {
   const LS_VOL_LEGACY = 'dnd_bg_music_volume';
   const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
   const lobbyTrack = 'lobby.mp3';
-  const tavernTracks = ['taverna.mp3', 'taverna1.mp3', 'taverna2.mp3'];
+  const tavernTracks = ['taverna1.mp3', 'taverna2.mp3'];
   const failedTavernTracks = new Set();
 
   let activeMode = '';
