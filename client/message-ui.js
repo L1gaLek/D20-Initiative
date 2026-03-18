@@ -457,6 +457,7 @@ loginDiv.style.display = 'none';
       let normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
       try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
+      try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
 
       lastState = normalized;
       try { window.rememberRoomStateShadow?.(currentRoomId, normalized); } catch {}

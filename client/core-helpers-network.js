@@ -5,6 +5,41 @@ function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj || null));
 }
 
+function normalizeRoomPassword(raw) {
+  return String(raw || '').trim();
+}
+
+function getRoomPasswordFromState(state) {
+  try {
+    return normalizeRoomPassword(state?.roomAccess?.password || '');
+  } catch {
+    return '';
+  }
+}
+
+function hasRoomPasswordInState(state) {
+  return !!getRoomPasswordFromState(state);
+}
+
+function buildRoomAccessState(password) {
+  const normalized = normalizeRoomPassword(password);
+  return {
+    hasPassword: !!normalized,
+    password: normalized
+  };
+}
+
+function stripRoomSecretsFromState(state) {
+  const next = deepClone(state || {});
+  try {
+    if (next?.roomAccess && typeof next.roomAccess === 'object') {
+      delete next.roomAccess.password;
+      next.roomAccess.hasPassword = !!next.roomAccess.hasPassword;
+    }
+  } catch {}
+  return next;
+}
+
 function createInitialGameState() {
   const sectionId = (crypto?.randomUUID ? crypto.randomUUID() : ("sec-" + Math.random().toString(16).slice(2)));
   const mapId = (crypto?.randomUUID ? crypto.randomUUID() : ("map-" + Math.random().toString(16).slice(2)));
@@ -71,6 +106,11 @@ function createInitialGameState() {
     currentTurnIndex: 0,
     round: 1,
     log: [],
+
+    roomAccess: {
+      hasPassword: false,
+      password: ''
+    },
 
     // Background music (GM-controlled, synced to all)
     bgMusic: {
@@ -1087,6 +1127,20 @@ async function upsertRoomState(roomId, nextState) {
       if (m.playersPos && typeof m.playersPos === 'object') m.playersPos = {};
     });
   } catch {}
+  try {
+    if (latestRoomState?.roomAccess && typeof latestRoomState.roomAccess === 'object') {
+      const latestPw = getRoomPasswordFromState(latestRoomState);
+      if (latestPw && !hasRoomPasswordInState(stSafe)) {
+        stSafe.roomAccess = buildRoomAccessState(latestPw);
+      } else if (!stSafe.roomAccess || typeof stSafe.roomAccess !== 'object') {
+        stSafe.roomAccess = {
+          hasPassword: !!latestRoomState.roomAccess.hasPassword,
+          password: latestPw
+        };
+      }
+    }
+  } catch {}
+
   let syncedState = syncActiveToMap(stSafe);
   try {
     if (latestRoomState) syncedState = mergeNewestPlayerSheets(syncedState, latestRoomState);
@@ -1102,7 +1156,7 @@ async function upsertRoomState(roomId, nextState) {
   if (error) throw error;
   try { rememberRoomStateShadow(roomId, syncedState); } catch {}
   try {
-    sendWsEnvelope({ type: 'state', roomId, state: syncedState }, { optimisticApplied: true });
+    sendWsEnvelope({ type: 'state', roomId, state: stripRoomSecretsFromState(syncedState) }, { optimisticApplied: true });
   } catch {}
 }
 
@@ -2683,6 +2737,25 @@ async function sendMessage(msg) {
           .order("created_at", { ascending: false });
         if (error) throw error;
 
+        const roomIds = (data || []).map((r) => String(r?.id || '')).filter(Boolean);
+        const passwordByRoomId = new Map();
+        try {
+          if (roomIds.length) {
+            const { data: roomStates, error: rsErr } = await sbClient
+              .from('room_state')
+              .select('room_id,state')
+              .in('room_id', roomIds);
+            if (rsErr) throw rsErr;
+            (roomStates || []).forEach((row) => {
+              const rid = String(row?.room_id || '');
+              if (!rid) return;
+              passwordByRoomId.set(rid, hasRoomPasswordInState(row?.state));
+            });
+          }
+        } catch (e) {
+          console.warn('listRooms password lookup failed', e);
+        }
+
         // Unique users per room + total unique users on server (across all rooms)
         let members = [];
         try {
@@ -2709,7 +2782,7 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            hasPassword: false
+            hasPassword: !!passwordByRoomId.get(rid)
           };
         });
 
@@ -2721,10 +2794,12 @@ async function sendMessage(msg) {
         const roomId = (crypto?.randomUUID ? crypto.randomUUID() : ("r-" + Math.random().toString(16).slice(2)));
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
+        const password = normalizeRoomPassword(msg.password || '');
         const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
         if (e1) throw e1;
 
         const initState = createInitialGameState();
+        initState.roomAccess = buildRoomAccessState(password);
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
           phase: initState.phase,
@@ -2745,6 +2820,24 @@ async function sendMessage(msg) {
 
         const { data: room, error: er } = await sbClient.from("rooms").select("*").eq("id", roomId).single();
         if (er) throw er;
+
+        let { data: rs, error: ers } = await sbClient.from("room_state").select("*").eq("room_id", roomId).maybeSingle();
+        if (ers) throw ers;
+        if (!rs) {
+          const initState = createInitialGameState();
+          await sbClient.from("room_state").insert({ room_id: roomId, phase: initState.phase, current_actor_id: null, state: initState });
+          rs = { state: initState };
+        }
+
+        const expectedPassword = getRoomPasswordFromState(rs?.state);
+        const providedPassword = normalizeRoomPassword(msg.password || '');
+        if (expectedPassword && providedPassword !== expectedPassword) {
+          handleMessage({
+            type: 'roomsError',
+            message: 'Неверный пароль комнаты.'
+          });
+          return;
+        }
 
         // ===== Enforce roles: register membership + prevent multiple GMs =====
         const userId = String(localStorage.getItem("dnd_user_id") || myId || "");
@@ -2793,14 +2886,6 @@ async function sendMessage(msg) {
 
 
         startHeartbeat();
-        // ensure room_state exists
-        let { data: rs, error: ers } = await sbClient.from("room_state").select("*").eq("room_id", roomId).maybeSingle();
-        if (ers) throw ers;
-        if (!rs) {
-          const initState = createInitialGameState();
-          await sbClient.from("room_state").insert({ room_id: roomId, phase: initState.phase, current_actor_id: null, state: initState });
-          rs = { state: initState };
-        }
         try { await ensureDetachedBootstrap(roomId, rs.state); } catch (e) { console.warn('detached bootstrap joinRoom failed', e); }
 
         if (USE_SUPABASE_REALTIME) {
@@ -2819,7 +2904,7 @@ async function sendMessage(msg) {
         startRoomMembersPolling(roomId);
         const __initialStateApplied = applyDetachedPayloadToState(rs.state);
         try { rememberRoomStateShadow(roomId, __initialStateApplied); } catch {}
-        handleMessage({ type: "state", state: __initialStateApplied });
+        handleMessage({ type: "state", state: stripRoomSecretsFromState(__initialStateApplied) });
 
         // v4 init: load logs + tokens snapshot after state is applied
         try {
@@ -4261,3 +4346,4 @@ function updatePhaseUI(state) {
 try { window.refreshRoomMembers = refreshRoomMembers; } catch {}
 try { window.loadRoomLog = loadRoomLog; } catch {}
 try { window.rememberRoomStateShadow = rememberRoomStateShadow; } catch {}
+try { window.stripRoomSecretsFromState = stripRoomSecretsFromState; } catch {}

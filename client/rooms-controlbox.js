@@ -1,4 +1,12 @@
 // ================== ROOMS LOBBY UI ==================
+function getRoomPasswordBadge(hasPassword) {
+  const protectedRoom = !!hasPassword;
+  const icon = protectedRoom ? '🔒' : '🔓';
+  const cls = protectedRoom ? 'is-protected' : 'is-open';
+  const text = protectedRoom ? 'установлен' : 'нет';
+  return `<span class="room-lock-badge ${cls}" title="Пароль ${text}"><span class="room-lock-badge__icon" aria-hidden="true">${icon}</span><span class="room-lock-badge__text">${text}</span></span>`;
+}
+
 function renderRooms(rooms) {
   const targets = [roomsList, tavernRoomsList].filter(Boolean);
   if (!targets.length) return;
@@ -34,9 +42,9 @@ function renderRooms(rooms) {
 
       const meta = document.createElement('div');
       meta.className = 'lobby-room-card__meta';
-      meta.textContent =
-        `Пользователей: ${r.uniqueUsers} • Пароль: ${r.hasPassword ? 'да' : 'нет'}`
-        + (r.scenario ? ` • Сценарий: ${r.scenario}` : '');
+      meta.innerHTML =
+        `Пользователей: ${Number(r.uniqueUsers) || 0} • Пароль: ${getRoomPasswordBadge(!!r.hasPassword)}`
+        + (r.scenario ? ` • Сценарий: ${escapeHtmlLite(r.scenario)}` : '');
 
       left.appendChild(title);
       left.appendChild(meta);
