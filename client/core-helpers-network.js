@@ -64,6 +64,67 @@ function hasRoomPasswordInState(state) {
   }
 }
 
+
+function getRoomPasswordHashFromRow(room) {
+  try {
+    return String(room?.password_hash || room?.passwordHash || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function hasRoomPasswordInRow(room) {
+  try {
+    return !!(room?.has_password || room?.hasPassword || getRoomPasswordHashFromRow(room));
+  } catch {
+    return false;
+  }
+}
+
+async function getActiveRoomBanRow(roomId, userId) {
+  try {
+    const rid = String(roomId || '').trim();
+    const uid = String(userId || '').trim();
+    if (!rid || !uid) return null;
+    const nowIso = new Date().toISOString();
+    const { data, error } = await sbClient
+      .from('room_bans')
+      .select('id,room_id,user_id,reason,banned_until,banned_by_user_id,banned_by_name,created_at')
+      .eq('room_id', rid)
+      .eq('user_id', uid)
+      .gt('banned_until', nowIso)
+      .order('banned_until', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const untilMs = Date.parse(String(data?.banned_until || ''));
+    if (!Number.isFinite(untilMs) || untilMs <= Date.now()) return null;
+    return {
+      ...data,
+      bannedUntil: String(data.banned_until || ''),
+      bannedUntilMs: untilMs,
+      reason: String(data.reason || '').trim() || 'Не указана'
+    };
+  } catch (e) {
+    console.warn('getActiveRoomBanRow failed', e);
+    return null;
+  }
+}
+
+async function cleanupExpiredRoomBansTable(roomId, userId) {
+  try {
+    const rid = String(roomId || '').trim();
+    if (!rid) return;
+    let query = sbClient.from('room_bans').delete().eq('room_id', rid).lte('banned_until', new Date().toISOString());
+    const uid = String(userId || '').trim();
+    if (uid) query = query.eq('user_id', uid);
+    await query;
+  } catch (e) {
+    console.warn('cleanupExpiredRoomBansTable failed', e);
+  }
+}
+
 function getAuthorizedUsersMapFromState(state) {
   try {
     const access = getRoomAccessState(state);
@@ -2998,28 +3059,9 @@ async function sendMessage(msg) {
       case "listRooms": {
         const { data, error } = await sbClient
           .from("rooms")
-          .select("id,name,scenario,created_at")
+          .select("id,name,scenario,created_at,has_password,password_hash")
           .order("created_at", { ascending: false });
         if (error) throw error;
-
-        const roomIds = (data || []).map((r) => String(r?.id || '')).filter(Boolean);
-        const passwordByRoomId = new Map();
-        try {
-          if (roomIds.length) {
-            const { data: roomStates, error: rsErr } = await sbClient
-              .from('room_state')
-              .select('room_id,state')
-              .in('room_id', roomIds);
-            if (rsErr) throw rsErr;
-            (roomStates || []).forEach((row) => {
-              const rid = String(row?.room_id || '');
-              if (!rid) return;
-              passwordByRoomId.set(rid, hasRoomPasswordInState(row?.state));
-            });
-          }
-        } catch (e) {
-          console.warn('listRooms password lookup failed', e);
-        }
 
         // Unique users per room + total unique users on server (across all rooms)
         let members = [];
@@ -3047,7 +3089,7 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            hasPassword: !!passwordByRoomId.get(rid)
+            hasPassword: hasRoomPasswordInRow(r)
           };
         });
 
@@ -3060,21 +3102,24 @@ async function sendMessage(msg) {
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
         const password = normalizeRoomPassword(msg.password || '');
-        const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
+        const passwordHash = password ? await sha256Hex(password) : '';
+        const { error: e1 } = await sbClient.from("rooms").insert({
+          id: roomId,
+          name,
+          scenario,
+          has_password: !!passwordHash,
+          password_hash: passwordHash || null
+        });
         if (e1) throw e1;
 
         const initState = createInitialGameState();
-        initState.roomAccess = await buildRoomAccessState(password, initState);
         try {
-          const creatorUserId = String(localStorage.getItem("dnd_user_id") || myId || "");
-          const creatorRole = String(localStorage.getItem("dnd_user_role") || myRole || "");
-          if (hasRoomPasswordInState(initState) && creatorUserId) {
-            initState.roomAccess.authorizedUsers = initState.roomAccess.authorizedUsers || {};
-            initState.roomAccess.authorizedUsers[creatorUserId] = {
-              grantedAt: new Date().toISOString(),
-              role: creatorRole || null
-            };
-          }
+          if (!initState.roomAccess || typeof initState.roomAccess !== 'object') initState.roomAccess = {};
+          initState.roomAccess.hasPassword = !!passwordHash;
+          delete initState.roomAccess.password;
+          delete initState.roomAccess.passwordHash;
+          delete initState.roomAccess.authorizedUsers;
+          delete initState.roomAccess.bannedUsers;
         } catch {}
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
@@ -3187,16 +3232,23 @@ async function sendMessage(msg) {
         let nextState = deepClone(rs.state || createInitialGameState());
         const removedBan = removeRoomUserOwnedPlayers(nextState, targetUserId);
         nextState = removedBan.state;
-        nextState = withRoomBanUser(nextState, targetUserId, {
-          reason,
-          hours,
-          minutes,
-          totalMinutes,
-          bannedAt: new Date().toISOString(),
-          bannedUntil: bannedUntilIso,
-          bannedByUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
-          bannedByName: safeGetUserName()
-        });
+        const bannedByUserId = String(localStorage.getItem('dnd_user_id') || myId || '');
+        const bannedByName = safeGetUserName();
+        try {
+          const { error: banUpsertErr } = await sbClient.from('room_bans').upsert({
+            room_id: roomId,
+            user_id: targetUserId,
+            reason,
+            banned_until: bannedUntilIso,
+            banned_by_user_id: bannedByUserId || null,
+            banned_by_name: bannedByName || null,
+            created_at: new Date().toISOString()
+          }, { onConflict: 'room_id,user_id' });
+          if (banUpsertErr) throw banUpsertErr;
+        } catch (e) {
+          console.warn('banRoomUser room_bans upsert failed', e);
+          throw e;
+        }
         const moderationEvent = {
           id: (crypto?.randomUUID ? crypto.randomUUID() : ('mod-' + Math.random().toString(16).slice(2))),
           type: 'ban',
@@ -3206,8 +3258,8 @@ async function sendMessage(msg) {
           reason,
           bannedUntil: bannedUntilIso,
           createdAt: new Date().toISOString(),
-          actorUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
-          actorName: safeGetUserName()
+          actorUserId: bannedByUserId,
+          actorName: bannedByName
         };
         nextState = withRoomModerationEvent(nextState, moderationEvent);
 
@@ -3270,6 +3322,15 @@ async function sendMessage(msg) {
           await sbClient.from("room_state").insert({ room_id: roomId, phase: initState.phase, current_actor_id: null, state: initState });
           rs = { state: initState };
         }
+        try {
+          if (!rs.state || typeof rs.state !== 'object') rs.state = createInitialGameState();
+          if (!rs.state.roomAccess || typeof rs.state.roomAccess !== 'object') rs.state.roomAccess = {};
+          rs.state.roomAccess.hasPassword = hasRoomPasswordInRow(room) || hasRoomPasswordInState(rs.state);
+          delete rs.state.roomAccess.password;
+          delete rs.state.roomAccess.passwordHash;
+          delete rs.state.roomAccess.authorizedUsers;
+          delete rs.state.roomAccess.bannedUsers;
+        } catch {}
 
         const providedPassword = normalizeRoomPassword(msg.password || '');
 
@@ -3277,24 +3338,9 @@ async function sendMessage(msg) {
         const userId = String(localStorage.getItem("dnd_user_id") || myId || "");
         const role = String(localStorage.getItem("dnd_user_role") || myRole || "");
 
-        try {
-          const cleanup = cleanupExpiredRoomBans(rs?.state);
-          if (cleanup.changed) {
-            rs.state = cleanup.state;
-            await sbClient
-              .from('room_state')
-              .update({
-                phase: String(rs?.phase || rs?.state?.phase || 'lobby'),
-                current_actor_id: (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null,
-                state: rs.state
-              })
-              .eq('room_id', roomId);
-          }
-        } catch (e) {
-          console.warn('joinRoom ban cleanup failed', e);
-        }
+        await cleanupExpiredRoomBansTable(roomId, userId);
 
-        const activeBan = getActiveRoomBanForUser(rs?.state, userId);
+        const activeBan = await getActiveRoomBanRow(roomId, userId);
         if (activeBan) {
           const remaining = formatBanRemainingMs((Number(activeBan.bannedUntilMs) || Date.now()) - Date.now());
           const reason = String(activeBan.reason || '').trim() || 'Не указана';
@@ -3305,10 +3351,9 @@ async function sendMessage(msg) {
           return;
         }
 
-        const roomHasPassword = hasRoomPasswordInState(rs?.state);
-        const alreadyAuthorized = roomHasPassword ? isUserAuthorizedForRoom(rs?.state, userId) : true;
-        if (roomHasPassword && !alreadyAuthorized) {
-          const expectedHash = getRoomPasswordHashFromState(rs?.state);
+        const roomHasPassword = hasRoomPasswordInRow(room) || hasRoomPasswordInState(rs?.state);
+        if (roomHasPassword) {
+          const expectedHash = getRoomPasswordHashFromRow(room) || getRoomPasswordHashFromState(rs?.state);
           const legacyPassword = getRoomLegacyPasswordFromState(rs?.state);
           let isValidPassword = false;
           if (expectedHash) {
@@ -3323,27 +3368,6 @@ async function sendMessage(msg) {
               message: 'Неверный пароль комнаты.'
             });
             return;
-          }
-
-          rs.state = withAuthorizedRoomUser(rs.state, userId, role);
-          if (legacyPassword) {
-            rs.state.roomAccess = await buildRoomAccessState(legacyPassword, rs.state);
-            rs.state = withAuthorizedRoomUser(rs.state, userId, role);
-          }
-          try {
-            const phaseToSave = String(rs?.phase || rs?.state?.phase || 'lobby');
-            const actorToSave = (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null;
-            const { error: saveRoomAccessErr } = await sbClient
-              .from('room_state')
-              .update({
-                phase: phaseToSave,
-                current_actor_id: actorToSave,
-                state: rs.state
-              })
-              .eq('room_id', roomId);
-            if (saveRoomAccessErr) throw saveRoomAccessErr;
-          } catch (e) {
-            console.warn('joinRoom mini lobby auth persist failed', e);
           }
         }
 
