@@ -48,8 +48,14 @@ function openTavern() {
   updateLobbyModeClass();
   try {
     const fromGesture = !!(globalThis.navigator?.userActivation?.isActive);
-    lobbyAmbientAudio.sync({ fromGesture });
+    lobbyAmbientAudio.ensureForCurrentView?.({ fromGesture, forceReload: true });
     if (fromGesture) lobbyAmbientAudio.nudgeFromGesture?.();
+    setTimeout(() => {
+      try { lobbyAmbientAudio.ensureForCurrentView?.({ fromGesture: false, forceReload: false }); } catch {}
+    }, 120);
+    setTimeout(() => {
+      try { lobbyAmbientAudio.ensureForCurrentView?.({ fromGesture: false, forceReload: false }); } catch {}
+    }, 400);
   } catch {}
 }
 

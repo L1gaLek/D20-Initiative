@@ -209,6 +209,8 @@ const lobbyAmbientAudio = (() => {
   let sourceCandidates = [];
   let sourceIndex = 0;
   let pendingGestureStart = false;
+  let ensureTimer = 0;
+  let ensureAttemptsLeft = 0;
 
   function clamp01(v, fallback = 0.4) {
     const n = Number(v);
@@ -320,54 +322,115 @@ const lobbyAmbientAudio = (() => {
     return await tryUnlock({ pauseAfter: false });
   }
 
+  function clearEnsurePlaybackTimer() {
+    if (!ensureTimer) return;
+    try { clearTimeout(ensureTimer); } catch {}
+    ensureTimer = 0;
+    ensureAttemptsLeft = 0;
+  }
+
+  function scheduleEnsurePlayback(mode, options = {}) {
+    const targetMode = String(mode || activeMode || '');
+    if (targetMode !== 'lobby' && targetMode !== 'tavern') return;
+    const attempts = Math.max(1, Number(options.attempts || 10) || 10);
+    const delayMs = Math.max(60, Number(options.delayMs || 180) || 180);
+    ensureAttemptsLeft = attempts;
+    if (ensureTimer) return;
+
+    const tick = async () => {
+      ensureTimer = 0;
+      if (activeMode !== targetMode) {
+        clearEnsurePlaybackTimer();
+        return;
+      }
+      const gameVisible = !!(gameUI && gameUI.style.display !== 'none');
+      if (gameVisible) {
+        clearEnsurePlaybackTimer();
+        return;
+      }
+      if (!audio.paused && getAudioSrc()) {
+        clearEnsurePlaybackTimer();
+        return;
+      }
+      ensureAttemptsLeft -= 1;
+      await start(targetMode, {
+        fromGesture: !!(options.fromGesture || hadUserGesture || unlocked),
+        forceReload: !!options.forceReload
+      });
+      if (!audio.paused && getAudioSrc()) {
+        clearEnsurePlaybackTimer();
+        return;
+      }
+      if (ensureAttemptsLeft <= 0) {
+        clearEnsurePlaybackTimer();
+        return;
+      }
+      ensureTimer = setTimeout(tick, delayMs);
+    };
+
+    ensureTimer = setTimeout(tick, delayMs);
+  }
+
   async function start(mode, options = {}) {
     const nextMode = String(mode || '');
     const fromGesture = !!options.fromGesture;
+    const forceReload = !!options.forceReload;
     if (nextMode !== 'lobby' && nextMode !== 'tavern') {
       stop();
-      return;
+      return false;
     }
 
     applyVolume();
     const fileName = nextMode === 'lobby'
       ? lobbyTrack
-      : (activeMode === 'tavern' && activeFile ? activeFile : chooseTavernTrack());
+      : (activeMode === 'tavern' && activeFile && !forceReload ? activeFile : chooseTavernTrack());
     const sources = buildLobbyAmbientCandidates(fileName);
-    const preferredSrc = getAudioSrc() || getCurrentCandidate() || sources[0] || '';
+    const currentSrc = getAudioSrc();
+    const preferredSrc = forceReload ? (sources[0] || currentSrc || '') : (currentSrc || getCurrentCandidate() || sources[0] || '');
 
     if (!sources.length) {
       stop();
-      return;
+      return false;
     }
 
-    if (activeMode !== nextMode || activeFile !== fileName || !sources.includes(preferredSrc)) {
+    const mustReplaceSource = forceReload || activeMode !== nextMode || activeFile !== fileName || !sources.includes(preferredSrc) || !currentSrc;
+    if (mustReplaceSource) {
       activeMode = nextMode;
       activeFile = fileName;
       setAudioSourceCandidates(sources, preferredSrc);
       if (!applyCurrentSource()) {
         stop();
-        return;
+        return false;
       }
+    } else {
+      activeMode = nextMode;
+      activeFile = fileName;
     }
 
     if (fromGesture) {
-      await ensurePlaybackAfterGesture();
-      return;
+      const ok = await ensurePlaybackAfterGesture();
+      if (!ok) scheduleEnsurePlayback(nextMode, { fromGesture: true, forceReload: false, attempts: 14, delayMs: 160 });
+      return ok;
     }
 
     if (!unlocked) {
       if (hadUserGesture) {
-        await ensurePlaybackAfterGesture();
-        return;
+        const ok = await ensurePlaybackAfterGesture();
+        if (!ok) scheduleEnsurePlayback(nextMode, { fromGesture: true, forceReload: false, attempts: 14, delayMs: 160 });
+        return ok;
       }
       pendingGestureStart = true;
-      return;
+      scheduleEnsurePlayback(nextMode, { fromGesture: false, forceReload: false, attempts: 14, delayMs: 160 });
+      return false;
     }
 
-    await playPromiseSafe();
+    const ok = await playPromiseSafe();
+    if (!ok || audio.paused) scheduleEnsurePlayback(nextMode, { fromGesture: true, forceReload: false, attempts: 14, delayMs: 160 });
+    return ok;
   }
 
   function stop() {
+    clearEnsurePlaybackTimer();
     activeMode = '';
     activeFile = '';
     sourceCandidates = [];
@@ -393,10 +456,22 @@ const lobbyAmbientAudio = (() => {
     }
     if (tavernVisible) {
       start('tavern', startOpts);
+      scheduleEnsurePlayback('tavern', {
+        fromGesture: !!(startOpts.fromGesture || hadUserGesture || unlocked),
+        forceReload: !!startOpts.forceReload,
+        attempts: 16,
+        delayMs: 150
+      });
       return;
     }
     if (loginVisible) {
       start('lobby', startOpts);
+      scheduleEnsurePlayback('lobby', {
+        fromGesture: !!(startOpts.fromGesture || hadUserGesture || unlocked),
+        forceReload: !!startOpts.forceReload,
+        attempts: 12,
+        delayMs: 150
+      });
       return;
     }
     stop();
@@ -406,12 +481,13 @@ const lobbyAmbientAudio = (() => {
     hadUserGesture = true;
     applyVolume();
     if (!activeMode) {
-      sync({ fromGesture: true });
+      sync({ fromGesture: true, forceReload: true });
       return;
     }
     await ensurePlaybackAfterGesture();
+    scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 10, delayMs: 140 });
     if (pendingGestureStart) {
-      sync({ fromGesture: true });
+      sync({ fromGesture: true, forceReload: false });
     }
   }
 
@@ -448,10 +524,12 @@ const lobbyAmbientAudio = (() => {
     if (!activeMode) return;
     if (unlocked) {
       await playPromiseSafe();
+      scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 6, delayMs: 120 });
       return;
     }
     if (hadUserGesture) {
       await ensurePlaybackAfterGesture();
+      scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 6, delayMs: 120 });
     }
   });
 
@@ -460,11 +538,20 @@ const lobbyAmbientAudio = (() => {
     if (!activeMode) return;
     if (unlocked) {
       await playPromiseSafe();
+      scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 6, delayMs: 120 });
       return;
     }
     if (hadUserGesture) {
       await ensurePlaybackAfterGesture();
+      scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 6, delayMs: 120 });
     }
+  });
+
+  audio.addEventListener('pause', () => {
+    if (!activeMode) return;
+    const gameVisible = !!(gameUI && gameUI.style.display !== 'none');
+    if (gameVisible) return;
+    scheduleEnsurePlayback(activeMode, { fromGesture: !!(hadUserGesture || unlocked), forceReload: false, attempts: 8, delayMs: 180 });
   });
 
   audio.addEventListener('ended', () => {
@@ -491,7 +578,11 @@ const lobbyAmbientAudio = (() => {
   bindGlobalUnlock();
   applyVolume();
 
-  return { sync, start, stop, nudgeFromGesture, audio };
+  function ensureForCurrentView(options = {}) {
+    sync(options);
+  }
+
+  return { sync, start, stop, nudgeFromGesture, ensureForCurrentView, audio };
 })();
 
 const myNameSpan = document.getElementById('myName');
