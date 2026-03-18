@@ -171,12 +171,12 @@ function buildLobbyAmbientCandidates(fileName) {
       : path.replace(/\/[^/]*$/, '');
 
     return [
-      'lobby/ambient/' + fileName,
-      '.lobby/ambient/' + fileName,
-      (basePath ? basePath : '') + 'lobby/ambient/' + fileName
+      '/lobby/ambient/' + fileName,
+      './lobby/ambient/' + fileName,
+      (basePath ? basePath : '') + '/lobby/ambient/' + fileName
     ].filter((value, index, arr) => value && arr.indexOf(value) === index);
   } catch {
-    return ['lobby/ambient/' + fileName];
+    return ['/lobby/ambient/' + fileName];
   }
 }
 
@@ -188,7 +188,8 @@ const lobbyAmbientAudio = (() => {
   try { audio.setAttribute('playsinline', ''); } catch {}
   try { audio.setAttribute('webkit-playsinline', ''); } catch {}
 
-  const LS_VOL = 'dnd_bg_music_volume';
+  const LS_VOL = 'dnd_lobby_ambient_volume';
+  const LS_VOL_LEGACY = 'dnd_bg_music_volume';
   const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
   const lobbyTrack = 'lobby.mp3';
   const tavernTracks = ['teverna.mp3', 'teverna1.mp3', 'teverna2.mp3'];
@@ -197,19 +198,38 @@ const lobbyAmbientAudio = (() => {
   let activeFile = '';
   let unlocked = false;
   let globalBound = false;
+  let sourceCandidates = [];
+  let sourceIndex = 0;
+
+  function clamp01(v, fallback = 0.4) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(1, n));
+  }
 
   function loadVolume() {
     try {
-      const raw = Number(localStorage.getItem(LS_VOL));
-      if (Number.isFinite(raw)) return Math.max(0, Math.min(1, raw));
+      const own = localStorage.getItem(LS_VOL);
+      if (own !== null && own !== '') return clamp01(own);
+    } catch {}
+    try {
+      const legacy = localStorage.getItem(LS_VOL_LEGACY);
+      if (legacy !== null && legacy !== '') {
+        const v = clamp01(legacy);
+        // legacy key belongs to room music, so do not keep coupling forever.
+        try { localStorage.setItem(LS_VOL, String(v > 0 ? v : 0.4)); } catch {}
+        return v > 0 ? v : 0.4;
+      }
     } catch {}
     return 0.4;
   }
 
   function applyVolume() {
+    const vol = loadVolume();
     try { audio.muted = false; } catch {}
     try { audio.defaultMuted = false; } catch {}
-    try { audio.volume = loadVolume(); } catch {}
+    try { audio.volume = vol; } catch {}
+    return vol;
   }
 
   function chooseTavernTrack() {
@@ -225,7 +245,33 @@ const lobbyAmbientAudio = (() => {
     }
   }
 
-  function playPromiseSafe() {
+  function getAudioSrc() {
+    return String(audio.currentSrc || audio.src || audio.getAttribute?.('src') || '');
+  }
+
+  function setAudioSourceCandidates(sources) {
+    sourceCandidates = Array.isArray(sources) ? sources.filter(Boolean) : [];
+    sourceIndex = 0;
+  }
+
+  function applyCurrentSource() {
+    const nextSrc = String(sourceCandidates[sourceIndex] || '');
+    if (!nextSrc) return false;
+    if (getAudioSrc() === nextSrc) return true;
+    try { audio.pause(); } catch {}
+    try { audio.src = nextSrc; } catch {}
+    try { audio.load(); } catch {}
+    return true;
+  }
+
+  function advanceSource() {
+    if (!Array.isArray(sourceCandidates) || !sourceCandidates.length) return false;
+    sourceIndex += 1;
+    if (sourceIndex >= sourceCandidates.length) return false;
+    return applyCurrentSource();
+  }
+
+  async function playPromiseSafe() {
     try {
       const p = audio.play?.();
       if (p && typeof p.catch === 'function') {
@@ -262,7 +308,9 @@ const lobbyAmbientAudio = (() => {
     }
 
     applyVolume();
-    const fileName = nextMode === 'lobby' ? lobbyTrack : (activeMode === 'tavern' && activeFile ? activeFile : chooseTavernTrack());
+    const fileName = nextMode === 'lobby'
+      ? lobbyTrack
+      : (activeMode === 'tavern' && activeFile ? activeFile : chooseTavernTrack());
     const sources = buildLobbyAmbientCandidates(fileName);
     const nextSrc = sources[0] || '';
 
@@ -271,11 +319,14 @@ const lobbyAmbientAudio = (() => {
       return;
     }
 
-    if (activeMode !== nextMode || activeFile !== fileName || audio.getAttribute('src') !== nextSrc) {
+    if (activeMode !== nextMode || activeFile !== fileName || getAudioSrc() !== nextSrc) {
       activeMode = nextMode;
       activeFile = fileName;
-      audio.setAttribute('src', nextSrc);
-      try { audio.load(); } catch {}
+      setAudioSourceCandidates(sources);
+      if (!applyCurrentSource()) {
+        stop();
+        return;
+      }
     }
 
     const ok = unlocked ? true : await tryUnlock();
@@ -289,8 +340,14 @@ const lobbyAmbientAudio = (() => {
   function stop() {
     activeMode = '';
     activeFile = '';
+    sourceCandidates = [];
+    sourceIndex = 0;
     try { audio.pause(); } catch {}
-    try { audio.removeAttribute('src'); audio.load(); } catch {}
+    try {
+      audio.removeAttribute('src');
+      audio.src = '';
+      audio.load();
+    } catch {}
   }
 
   function sync() {
@@ -329,7 +386,10 @@ const lobbyAmbientAudio = (() => {
     window.addEventListener('touchstart', onGesture, opts);
     window.addEventListener('keydown', onGesture, { capture: true });
     window.addEventListener('storage', (e) => {
-      if (e?.key === LS_VOL) applyVolume();
+      if (e?.key === LS_VOL || e?.key === LS_VOL_LEGACY) {
+        applyVolume();
+        sync();
+      }
     });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') sync();
@@ -339,6 +399,12 @@ const lobbyAmbientAudio = (() => {
     });
   }
 
+  audio.addEventListener('canplay', async () => {
+    applyVolume();
+    if (!activeMode || !unlocked) return;
+    try { await playPromiseSafe(); } catch {}
+  });
+
   audio.addEventListener('ended', () => {
     if (activeMode !== 'tavern') return;
     activeFile = chooseTavernTrack();
@@ -346,6 +412,10 @@ const lobbyAmbientAudio = (() => {
   });
 
   audio.addEventListener('error', () => {
+    if (advanceSource()) {
+      if (activeMode) start(activeMode);
+      return;
+    }
     if (activeMode === 'tavern') {
       activeFile = chooseTavernTrack();
       start('tavern');
