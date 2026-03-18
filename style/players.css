@@ -659,3 +659,42 @@
 .placement-indicator.not-placed{
   box-shadow: 0 0 0 2px rgba(208, 104, 62, 0.16);
 }
+
+/* ===== GM moderation actions (kick / ban) ===== */
+.owner-header-actions{
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.moderation-btn{
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.moderation-btn--kick{
+  border-color: rgba(255, 190, 105, 0.35);
+  background: rgba(120, 77, 24, 0.32);
+}
+
+.moderation-btn--kick:hover{
+  background: rgba(162, 101, 28, 0.42);
+}
+
+.moderation-btn--ban{
+  border-color: rgba(214, 84, 84, 0.38);
+  background: rgba(110, 28, 28, 0.34);
+}
+
+.moderation-btn--ban:hover{
+  background: rgba(149, 36, 36, 0.44);
+}
