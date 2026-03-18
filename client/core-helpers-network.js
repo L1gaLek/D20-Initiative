@@ -4202,6 +4202,11 @@ function updatePhaseUI(state) {
   startInitiativeBtn?.classList.remove('active', 'ready', 'pending');
   startCombatBtn?.classList.remove('active', 'ready', 'pending');
 
+  // гарантируем стандартный светлый текст у фазовых кнопок
+  try { if (startExplorationBtn) startExplorationBtn.style.color = '#fff'; } catch {}
+  try { if (startInitiativeBtn) startInitiativeBtn.style.color = '#fff'; } catch {}
+  try { if (startCombatBtn) startCombatBtn.style.color = '#fff'; } catch {}
+
   // ===== initiative roll button only in initiative phase
   if (state.phase === "initiative") {
     rollInitiativeBtn.style.display = "inline-block";
