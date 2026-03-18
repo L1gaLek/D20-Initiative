@@ -8,6 +8,10 @@ let tavernMessageSeq = 0;
 const TAVERN_ROOM_LOG_ID = '__tavern_lobby__';
 const TAVERN_LOG_PREFIX = 'TVRN1:';
 const TAVERN_MAX_MESSAGES = 50;
+const CHAT_TTL_MS = 24 * 60 * 60 * 1000;
+const CHAT_CLEANUP_THROTTLE_MS = 5 * 60 * 1000;
+let _lastTavernCleanupAt = 0;
+let _lastRoomCleanupAt = 0;
 const tavernChatState = {
   activeChatKey: 'global',
   chats: new Map([['global', []]]),
@@ -19,8 +23,92 @@ const tavernChatState = {
   unreadByChat: new Map(),
   quoteDraft: null,
   messageIds: new Set(),
-  wsConnected: false
+  wsConnected: false,
+  hiddenChatKeys: new Set()
 };
+
+function getChatTtlCutoffMs(now = Date.now()) {
+  return Number(now || Date.now()) - CHAT_TTL_MS;
+}
+
+function isChatEntryExpired(entry, now = Date.now()) {
+  return Number(entry?.ts || 0) > 0 && Number(entry.ts) < getChatTtlCutoffMs(now);
+}
+
+function buildChatStorageKey(scope, roomId = '') {
+  const userId = String(localStorage.getItem('dnd_user_id') || myId || 'guest').trim() || 'guest';
+  return scope === 'room'
+    ? `dnd_room_chat_ui:${userId}:${String(roomId || '').trim() || 'room'}`
+    : `dnd_tavern_chat_ui:${userId}`;
+}
+
+function readChatUiPrefs(scope, roomId = '') {
+  try {
+    const raw = localStorage.getItem(buildChatStorageKey(scope, roomId));
+    const data = raw ? JSON.parse(raw) : null;
+    return (data && typeof data === 'object') ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeChatUiPrefs(scope, roomId, payload) {
+  try {
+    localStorage.setItem(buildChatStorageKey(scope, roomId), JSON.stringify(payload || {}));
+  } catch {}
+}
+
+function listVisibleDirectChatKeys(chatsMap) {
+  return Array.from(chatsMap instanceof Map ? chatsMap.keys() : [])
+    .map((key) => String(key || ''))
+    .filter((key) => key && key !== 'global');
+}
+
+function saveTavernChatUiState() {
+  writeChatUiPrefs('tavern', '', {
+    activeChatKey: String(tavernChatState.activeChatKey || 'global'),
+    visibleChatKeys: listVisibleDirectChatKeys(new Map((tavernChatState.tabs || []).map((tab) => [String(tab?.key || ''), true]))),
+    hiddenChatKeys: Array.from(tavernChatState.hiddenChatKeys || []).map((key) => String(key || '')).filter(Boolean)
+  });
+}
+
+function applyTavernChatUiPrefs() {
+  const prefs = readChatUiPrefs('tavern', '');
+  tavernChatState.hiddenChatKeys = new Set((Array.isArray(prefs.hiddenChatKeys) ? prefs.hiddenChatKeys : []).map((key) => String(key || '')).filter(Boolean));
+  const visible = new Set((Array.isArray(prefs.visibleChatKeys) ? prefs.visibleChatKeys : []).map((key) => String(key || '')).filter(Boolean));
+  tavernChatState.tabs = [{ key: 'global', label: 'Общий стол', closable: false }];
+  visible.forEach((key) => {
+    if (!key || key === 'global') return;
+    const otherId = String(key).replace(/^dm:/, '');
+    tavernChatState.tabs.push({ key, label: getDirectChatLabel(otherId, 'Личное'), closable: true });
+    tavernChatState.hiddenChatKeys.delete(key);
+  });
+  const active = String(prefs.activeChatKey || 'global');
+  tavernChatState.activeChatKey = (active === 'global' || visible.has(active)) ? active : 'global';
+}
+
+function saveRoomChatUiState() {
+  writeChatUiPrefs('room', roomChatState.roomId || currentRoomId || '', {
+    activeChatKey: String(roomChatState.activeChatKey || 'global'),
+    visibleChatKeys: listVisibleDirectChatKeys(new Map((roomChatState.tabs || []).map((tab) => [String(tab?.key || ''), true]))),
+    hiddenChatKeys: Array.from(roomChatState.hiddenChatKeys || []).map((key) => String(key || '')).filter(Boolean)
+  });
+}
+
+function applyRoomChatUiPrefs(roomId = '') {
+  const prefs = readChatUiPrefs('room', roomId);
+  roomChatState.hiddenChatKeys = new Set((Array.isArray(prefs.hiddenChatKeys) ? prefs.hiddenChatKeys : []).map((key) => String(key || '')).filter(Boolean));
+  const visible = new Set((Array.isArray(prefs.visibleChatKeys) ? prefs.visibleChatKeys : []).map((key) => String(key || '')).filter(Boolean));
+  roomChatState.tabs = [{ key: 'global', label: 'Общий чат', closable: false }];
+  visible.forEach((key) => {
+    if (!key || key === 'global') return;
+    const otherId = String(key).replace(/^dm:/, '');
+    roomChatState.tabs.push({ key, label: getRoomChatUserName(otherId, 'Личное'), closable: true });
+    roomChatState.hiddenChatKeys.delete(key);
+  });
+  const active = String(prefs.activeChatKey || 'global');
+  roomChatState.activeChatKey = (active === 'global' || visible.has(active)) ? active : 'global';
+}
 
 function hideModalEl(el) {
   if (!el) return;
@@ -46,17 +134,7 @@ function openTavern() {
   if (tavernMyName) tavernMyName.textContent = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'путник');
   initTavernVideoBackground();
   updateLobbyModeClass();
-  try {
-    const fromGesture = !!(globalThis.navigator?.userActivation?.isActive);
-    lobbyAmbientAudio.ensureForCurrentView?.({ fromGesture, forceReload: true });
-    if (fromGesture) lobbyAmbientAudio.nudgeFromGesture?.();
-    setTimeout(() => {
-      try { lobbyAmbientAudio.ensureForCurrentView?.({ fromGesture: false, forceReload: false }); } catch {}
-    }, 120);
-    setTimeout(() => {
-      try { lobbyAmbientAudio.ensureForCurrentView?.({ fromGesture: false, forceReload: false }); } catch {}
-    }, 400);
-  } catch {}
+  try { lobbyAmbientAudio.sync(); } catch {}
 }
 
 function closeTavern() {
@@ -92,12 +170,14 @@ function decodeTavernLogRow(rowText) {
   return data && typeof data === 'object' ? data : null;
 }
 
-function ensureTavernChat(key, label = 'Диалог') {
+function ensureTavernChat(key, label = 'Диалог', options = null) {
   const chatKey = String(key || '').trim() || 'global';
+  const showTab = options?.showTab !== false;
   if (!tavernChatState.chats.has(chatKey)) tavernChatState.chats.set(chatKey, []);
-  if (!tavernChatState.tabs.some((tab) => String(tab.key) === chatKey)) {
+  if (showTab && !tavernChatState.tabs.some((tab) => String(tab.key) === chatKey)) {
     tavernChatState.tabs.push({ key: chatKey, label: String(label || 'Диалог'), closable: chatKey !== 'global' });
   }
+  if (showTab) tavernChatState.hiddenChatKeys.delete(chatKey);
   return tavernChatState.chats.get(chatKey);
 }
 
@@ -233,26 +313,32 @@ function normalizeTavernMessage(entry) {
   return item;
 }
 
-function pushTavernMessage(entry) {
+function pushTavernMessage(entry, options = null) {
   const item = normalizeTavernMessage(entry);
-  if (!item) return;
+  if (!item || isChatEntryExpired(item)) return;
   const itemId = String(item.id || '').trim();
   if (itemId) {
     if (!(tavernChatState.messageIds instanceof Set)) tavernChatState.messageIds = new Set();
     if (tavernChatState.messageIds.has(itemId)) return;
     tavernChatState.messageIds.add(itemId);
   }
-  const list = ensureTavernChat(item.chatKey, item.label);
+  const hidden = tavernChatState.hiddenChatKeys.has(String(item.chatKey || 'global'));
+  const shouldRevealHidden = options?.revealTab === true || (!hidden && options?.revealTab !== false);
+  const list = ensureTavernChat(item.chatKey, item.label, { showTab: shouldRevealHidden || !hidden });
   if (list.some((x) => String(x.id) === item.id)) return;
   list.push(item);
   while (list.length > TAVERN_MAX_MESSAGES) {
-    const removed = list.shift();
-    const removedId = String(removed?.id || '').trim();
-    if (removedId && tavernChatState.messageIds instanceof Set) tavernChatState.messageIds.add(removedId);
+    list.shift();
+  }
+  if (hidden && !shouldRevealHidden) {
+    renderTavernChatTabs();
+    saveTavernChatUiState();
+    return;
   }
   noteTavernUnread(item);
   renderTavernChatTabs();
   renderTavernChat();
+  saveTavernChatUiState();
 }
 
 function syncTavernPresenceUsers() {
@@ -331,28 +417,48 @@ function renderTavernChatTabs() {
   updateTavernHotspotBadges();
 }
 
+function renderUserListSectionHtml(title, users, emptyText, dataAttr) {
+  const list = Array.isArray(users) ? users : [];
+  return `
+    <section class="tavern-chat-users-section">
+      <div class="tavern-chat-users-section__title">${escapeHtmlLite(title)}</div>
+      <div class="tavern-chat-users-section__list">
+        ${list.length ? list.map((user) => `
+          <div class="tavern-chat-user-item">
+            <div class="tavern-chat-user-item__meta">
+              <div class="tavern-chat-user-item__name">${escapeHtmlLite(user.name)}</div>
+              <div class="tavern-chat-user-item__hint">${escapeHtmlLite(user.hint || '')}</div>
+            </div>
+            <button type="button" class="tavern-chat-user-item__btn" ${dataAttr}="${escapeHtmlLite(user.id)}">Написать</button>
+          </div>
+        `).join('') : `<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">${escapeHtmlLite(emptyText)}</div></div>`}
+      </div>
+    </section>
+  `;
+}
+
 function renderTavernUsersList() {
   if (!tavernChatUsersList) return;
   const myIdLocal = getTavernMyUserId();
-  const users = Array.from(tavernChatState.knownUsers.values())
+  const allUsers = Array.from(tavernChatState.knownUsers.values())
     .filter((u) => u && String(u.id) && String(u.id) !== myIdLocal)
-    .sort((a, b) => {
-      if (!!b.online !== !!a.online) return Number(b.online) - Number(a.online);
-      return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
-    });
-  if (!users.length) {
-    tavernChatUsersList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Пока никто не появился. Когда путники войдут в таверну, их можно будет выбрать здесь.</div></div>';
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru'));
+  const onlineUsers = allUsers
+    .filter((user) => !!user.online)
+    .map((user) => ({ ...user, hint: 'Сейчас в таверне' }));
+  const recentUsers = allUsers
+    .filter((user) => tavernChatState.chats.has(getDirectChatKey(user.id)))
+    .map((user) => ({ ...user, hint: user.online ? 'Есть личный диалог • сейчас онлайн' : 'Есть личный диалог' }));
+
+  if (!onlineUsers.length && !recentUsers.length) {
+    tavernChatUsersList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Пока никто не появился. Когда путники войдут в таверну или вы начнёте личную переписку, они появятся здесь.</div></div>';
     return;
   }
-  tavernChatUsersList.innerHTML = users.map((user) => `
-    <div class="tavern-chat-user-item">
-      <div class="tavern-chat-user-item__meta">
-        <div class="tavern-chat-user-item__name">${escapeHtmlLite(user.name)}</div>
-        <div class="tavern-chat-user-item__hint">${user.online ? 'Сейчас в таверне' : 'Недавно общался'}</div>
-      </div>
-      <button type="button" class="tavern-chat-user-item__btn" data-direct-user="${escapeHtmlLite(user.id)}">Написать</button>
-    </div>
-  `).join('');
+
+  tavernChatUsersList.innerHTML = `
+    ${renderUserListSectionHtml('Таверна', onlineUsers, 'Сейчас в таверне больше никого нет.', 'data-direct-user')}
+    ${renderUserListSectionHtml('С кем общался', recentUsers, 'Личных диалогов пока нет.', 'data-direct-user')}
+  `;
 }
 
 function closeTavernUsersPopover() {
@@ -382,6 +488,7 @@ function setActiveTavernChat(chatKey) {
   renderTavernSubtitle();
   renderTavernChat();
   closeTavernUsersPopover();
+  saveTavernChatUiState();
   try { tavernChatInput?.focus(); } catch {}
 }
 
@@ -390,10 +497,12 @@ function ensureDirectChatWithUser(otherUserId, fallbackName = 'Личное') {
   if (!uid) return 'global';
   rememberTavernUser(uid, fallbackName);
   const key = getDirectChatKey(uid);
-  ensureTavernChat(key, getDirectChatLabel(uid, fallbackName));
+  tavernChatState.hiddenChatKeys.delete(key);
+  ensureTavernChat(key, getDirectChatLabel(uid, fallbackName), { showTab: true });
   const tab = tavernChatState.tabs.find((x) => String(x.key) === key);
   if (tab) tab.label = getDirectChatLabel(uid, fallbackName);
   renderTavernChatTabs();
+  saveTavernChatUiState();
   return key;
 }
 
@@ -401,13 +510,13 @@ function closeTavernChatTab(chatKey) {
   const key = String(chatKey || '');
   if (!key || key === 'global') return;
   markTavernChatRead(key);
+  tavernChatState.hiddenChatKeys.add(key);
   tavernChatState.tabs = tavernChatState.tabs.filter((tab) => String(tab.key) !== key);
-  tavernChatState.chats.delete(key);
-  tavernChatState.unreadByChat.delete(key);
   if (String(tavernChatState.activeChatKey) === key) tavernChatState.activeChatKey = 'global';
   renderTavernChatTabs();
   renderTavernSubtitle();
   renderTavernChat();
+  saveTavernChatUiState();
 }
 
 function renderTavernChat() {
@@ -447,28 +556,50 @@ function renderTavernChat() {
   tavernChatList.scrollTop = tavernChatList.scrollHeight;
 }
 
+async function cleanupExpiredTavernMessagesDb(force = false) {
+  if (!sbClient) return;
+  const now = Date.now();
+  if (!force && (now - _lastTavernCleanupAt) < CHAT_CLEANUP_THROTTLE_MS) return;
+  _lastTavernCleanupAt = now;
+  try {
+    await sbClient.from('room_log')
+      .delete()
+      .eq('room_id', TAVERN_ROOM_LOG_ID)
+      .like('text', `${TAVERN_LOG_PREFIX}%`)
+      .lt('created_at', new Date(getChatTtlCutoffMs(now)).toISOString());
+  } catch (e) {
+    console.warn('cleanupExpiredTavernMessagesDb failed', e);
+  }
+}
+
 async function loadTavernChatHistory() {
   if (!sbClient) return;
   try {
+    void cleanupExpiredTavernMessagesDb(true);
     const { data, error } = await sbClient
       .from('room_log')
       .select('id,text,created_at')
       .eq('room_id', TAVERN_ROOM_LOG_ID)
+      .like('text', `${TAVERN_LOG_PREFIX}%`)
+      .gte('created_at', new Date(getChatTtlCutoffMs()).toISOString())
       .order('created_at', { ascending: true })
       .limit(300);
     if (error) throw error;
 
     tavernChatState.chats = new Map([['global', []]]);
-    tavernChatState.tabs = [{ key: 'global', label: 'Общий стол', closable: false }];
     tavernChatState.unreadGlobal = 0;
     tavernChatState.unreadDirect = 0;
     tavernChatState.unreadByChat = new Map();
     tavernChatState.messageIds = new Set();
     tavernChatState.loadedHistory = false;
+    applyTavernChatUiPrefs();
     const rows = Array.isArray(data) ? data : [];
     rows.forEach((row) => {
       const msg = decodeTavernLogRow(row?.text);
-      if (msg) pushTavernMessage(msg);
+      if (!msg) return;
+      const normalized = normalizeTavernMessage(msg);
+      const reveal = normalized?.chatKey ? tavernChatState.tabs.some((tab) => String(tab.key) === String(normalized.chatKey)) : true;
+      pushTavernMessage(msg, { revealTab: reveal });
     });
     tavernChatState.loadedHistory = true;
     if (!tavernChatState.chats.has(String(tavernChatState.activeChatKey || 'global'))) {
@@ -477,6 +608,7 @@ async function loadTavernChatHistory() {
     renderTavernChatTabs();
     renderTavernSubtitle();
     renderTavernChat();
+    saveTavernChatUiState();
   } catch (e) {
     console.warn('loadTavernChatHistory failed', e);
   }
@@ -532,6 +664,7 @@ async function persistTavernMessage(message) {
   if (!message || !sbClient) return;
   try {
     await sbClient.from('room_log').insert({ room_id: TAVERN_ROOM_LOG_ID, text: encodeTavernLogRow(message) });
+    void cleanupExpiredTavernMessagesDb();
   } catch (e) {
     console.warn('persistTavernMessage failed', e);
   }
@@ -629,13 +762,32 @@ function _roomChatBroadcastEventName(roomId) {
   return `room-chat:${String(roomId || '').trim()}`;
 }
 
+async function cleanupExpiredRoomChatMessagesDb(force = false) {
+  if (!sbClient || !currentRoomId) return;
+  const now = Date.now();
+  if (!force && (now - _lastRoomCleanupAt) < CHAT_CLEANUP_THROTTLE_MS) return;
+  _lastRoomCleanupAt = now;
+  try {
+    await sbClient.from('room_log')
+      .delete()
+      .eq('room_id', currentRoomId)
+      .like('text', `${ROOM_CHAT_LOG_PREFIX}%`)
+      .lt('created_at', new Date(getChatTtlCutoffMs(now)).toISOString());
+  } catch (e) {
+    console.warn('cleanupExpiredRoomChatMessagesDb failed', e);
+  }
+}
+
 async function syncRoomChatFromDb(forceHydrate = false) {
   if (!sbClient || !currentRoomId) return;
   try {
+    void cleanupExpiredRoomChatMessagesDb(forceHydrate);
     const { data, error } = await sbClient
       .from('room_log')
       .select('id,text,created_at')
       .eq('room_id', currentRoomId)
+      .like('text', `${ROOM_CHAT_LOG_PREFIX}%`)
+      .gte('created_at', new Date(getChatTtlCutoffMs()).toISOString())
       .order('created_at', { ascending: true })
       .limit(200);
     if (error) throw error;
@@ -706,6 +858,7 @@ function resetRoomChatState(roomId = '') {
   roomChatState.roomId = String(roomId || '');
   roomChatState.messageIds = new Set();
   roomChatState.hiddenChatKeys = new Set();
+  applyRoomChatUiPrefs(roomChatState.roomId);
   clearRoomChatQuoteDraft();
   updateRoomChatBadges();
 }
@@ -824,12 +977,12 @@ function normalizeRoomChatMessage(entry) {
 }
 function pushRoomChatMessage(entry, options = null) {
   const item = normalizeRoomChatMessage(entry);
-  if (!item) return;
+  if (!item || isChatEntryExpired(item)) return;
   if (roomChatState.messageIds.has(String(item.id))) return;
   roomChatState.messageIds.add(String(item.id));
 
   const hidden = roomChatState.hiddenChatKeys.has(String(item.chatKey || 'global'));
-  const shouldRevealHidden = options?.revealTab === true || (!hidden ? (options?.revealTab !== false) : (!item.mine && !roomChatState.loadedHistory));
+  const shouldRevealHidden = options?.revealTab === true || (!hidden && options?.revealTab !== false);
   const list = ensureRoomChat(item.chatKey, item.label, { showTab: shouldRevealHidden || !hidden });
   if (list.some((x) => String(x.id) === item.id)) return;
   list.push(item);
@@ -837,12 +990,14 @@ function pushRoomChatMessage(entry, options = null) {
 
   if (hidden && !shouldRevealHidden) {
     renderRoomChatTabs();
+    saveRoomChatUiState();
     return;
   }
 
   noteRoomChatUnread(item);
   renderRoomChatTabs();
   renderRoomChat();
+  saveRoomChatUiState();
 }
 function getActiveRoomChatMessages() {
   return roomChatState.chats.get(String(roomChatState.activeChatKey || 'global')) || [];
@@ -876,23 +1031,22 @@ function renderRoomChatTabs() {
 function renderRoomChatUsersList() {
   if (!roomChatUsersList) return;
   const myIdLocal = String(myId || localStorage.getItem('dnd_user_id') || 'guest');
-  const users = (usersOrder || [])
+  const allUsers = (usersOrder || [])
     .map((uid) => ({ id: String(uid), name: String(usersById.get(String(uid))?.name || ''), role: String(usersById.get(String(uid))?.role || '') }))
     .filter((u) => u.id && u.id !== myIdLocal && u.name)
     .sort((a,b) => String(a.name).localeCompare(String(b.name), 'ru'));
-  if (!users.length) {
+  const roomUsers = allUsers.map((user) => ({ ...user, hint: user.role || 'Игрок' }));
+  const recentUsers = allUsers
+    .filter((user) => roomChatState.chats.has(getRoomDirectChatKey(user.id)))
+    .map((user) => ({ ...user, hint: `Есть личный диалог${user.role ? ` • ${user.role}` : ''}` }));
+  if (!roomUsers.length && !recentUsers.length) {
     roomChatUsersList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Сейчас в комнате больше никого нет.</div></div>';
     return;
   }
-  roomChatUsersList.innerHTML = users.map((user) => `
-    <div class="tavern-chat-user-item">
-      <div class="tavern-chat-user-item__meta">
-        <div class="tavern-chat-user-item__name">${escapeHtmlLite(user.name)}</div>
-        <div class="tavern-chat-user-item__hint">${escapeHtmlLite(user.role || 'Игрок')}</div>
-      </div>
-      <button type="button" class="tavern-chat-user-item__btn" data-room-direct-user="${escapeHtmlLite(user.id)}">Написать</button>
-    </div>
-  `).join('');
+  roomChatUsersList.innerHTML = `
+    ${renderUserListSectionHtml('В комнате', roomUsers, 'Сейчас в комнате больше никого нет.', 'data-room-direct-user')}
+    ${renderUserListSectionHtml('С кем общался', recentUsers, 'Личных диалогов в этой комнате пока нет.', 'data-room-direct-user')}
+  `;
 }
 function closeRoomChatUsersPopover() {
   if (!roomChatUsersPopover) return;
@@ -915,6 +1069,7 @@ function ensureDirectRoomChatWithUser(otherUserId, fallbackName = 'Личное'
   const tab = roomChatState.tabs.find((x) => String(x.key) === key);
   if (tab) tab.label = getRoomChatUserName(uid, fallbackName);
   renderRoomChatTabs();
+  saveRoomChatUiState();
   return key;
 }
 function setActiveRoomChat(chatKey) {
@@ -926,6 +1081,7 @@ function setActiveRoomChat(chatKey) {
   renderRoomChatSubtitle();
   renderRoomChat();
   closeRoomChatUsersPopover();
+  saveRoomChatUiState();
   try { roomChatInput?.focus(); } catch {}
 }
 function closeRoomChatTab(chatKey) {
@@ -938,6 +1094,7 @@ function closeRoomChatTab(chatKey) {
   renderRoomChatTabs();
   renderRoomChatSubtitle();
   renderRoomChat();
+  saveRoomChatUiState();
 }
 function renderRoomChat() {
   if (!roomChatList) return;
@@ -980,7 +1137,10 @@ function hydrateRoomChatFromRows(rows) {
   const list = Array.isArray(rows) ? rows : [];
   list.forEach((row) => {
     const msg = decodeRoomChatLogRow(row?.text || row);
-    if (msg) pushRoomChatMessage(msg);
+    if (!msg) return;
+    const normalized = normalizeRoomChatMessage(msg);
+    const reveal = normalized?.chatKey ? roomChatState.tabs.some((tab) => String(tab.key) === String(normalized.chatKey)) : true;
+    pushRoomChatMessage(msg, { revealTab: reveal });
   });
   roomChatState.loadedHistory = true;
   if (!roomChatState.chats.has(String(roomChatState.activeChatKey || 'global'))) roomChatState.activeChatKey = 'global';
@@ -988,11 +1148,13 @@ function hydrateRoomChatFromRows(rows) {
   renderRoomChatSubtitle();
   renderRoomChatUsersList();
   renderRoomChat();
+  saveRoomChatUiState();
 }
 async function persistRoomChatMessage(message) {
   if (!message || !sbClient || !currentRoomId) return;
   try {
     await sbClient.from('room_log').insert({ room_id: currentRoomId, text: encodeRoomChatLogRow(message) });
+    void cleanupExpiredRoomChatMessagesDb();
   } catch (e) {
     console.warn('persistRoomChatMessage failed', e);
   }
@@ -1104,6 +1266,8 @@ window.TavernChat = {
     tavernChatState.unreadByChat = new Map();
     tavernChatState.messageIds = new Set();
     tavernChatState.loadedHistory = false;
+    tavernChatState.hiddenChatKeys = new Set();
+    applyTavernChatUiPrefs();
     clearTavernQuoteDraft();
     renderTavernChatTabs();
     renderTavernSubtitle();
