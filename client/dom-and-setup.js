@@ -209,6 +209,8 @@ const lobbyAmbientAudio = (() => {
   let sourceCandidates = [];
   let sourceIndex = 0;
   let pendingGestureStart = false;
+  let forcedMode = '';
+  let forcedModeUntil = 0;
 
   function clamp01(v, fallback = 0.4) {
     const n = Number(v);
@@ -383,15 +385,28 @@ const lobbyAmbientAudio = (() => {
 
   function sync(options = {}) {
     const startOpts = options && typeof options === 'object' ? options : {};
+    const now = Date.now();
+    if (forcedMode && forcedModeUntil && now >= forcedModeUntil) {
+      forcedMode = '';
+      forcedModeUntil = 0;
+    }
     const loginVisible = !!(loginDiv && loginDiv.style.display !== 'none');
     const tavernVisible = !!(tavernDiv && !tavernDiv.classList.contains('hidden') && tavernDiv.style.display !== 'none');
     const gameVisible = !!(gameUI && gameUI.style.display !== 'none');
 
     if (gameVisible) {
+      forcedMode = '';
+      forcedModeUntil = 0;
       stop();
       return;
     }
+    if (forcedMode === 'tavern' && forcedModeUntil > now) {
+      start('tavern', Object.assign({}, startOpts, { fromGesture: !!startOpts.fromGesture || hadUserGesture }));
+      return;
+    }
     if (tavernVisible) {
+      forcedMode = '';
+      forcedModeUntil = 0;
       start('tavern', startOpts);
       return;
     }
@@ -418,11 +433,31 @@ const lobbyAmbientAudio = (() => {
   async function restartTavernFromGesture() {
     hadUserGesture = true;
     pendingGestureStart = false;
+    forcedMode = 'tavern';
+    forcedModeUntil = Date.now() + 15000;
     activeMode = 'tavern';
     activeFile = chooseTavernTrack();
     setAudioSourceCandidates(buildLobbyAmbientCandidates(activeFile), '');
     if (!applyCurrentSource()) return false;
     return await ensurePlaybackAfterGesture();
+  }
+
+  async function primeTavernEntryFromGesture() {
+    hadUserGesture = true;
+    pendingGestureStart = false;
+    forcedMode = 'tavern';
+    forcedModeUntil = Date.now() + 15000;
+    activeMode = 'tavern';
+    if (!activeFile || activeMode !== 'tavern') activeFile = chooseTavernTrack();
+    setAudioSourceCandidates(buildLobbyAmbientCandidates(activeFile || chooseTavernTrack()), '');
+    if (!applyCurrentSource()) return false;
+    applyVolume();
+    try { audio.currentTime = 0; } catch {}
+    const ok = await tryUnlock({ pauseAfter: false });
+    if (ok) {
+      try { audio.muted = false; } catch {}
+    }
+    return ok;
   }
 
   function bindGlobalUnlock() {
@@ -501,7 +536,7 @@ const lobbyAmbientAudio = (() => {
   bindGlobalUnlock();
   applyVolume();
 
-  return { sync, start, stop, nudgeFromGesture, restartTavernFromGesture, audio };
+  return { sync, start, stop, nudgeFromGesture, restartTavernFromGesture, primeTavernEntryFromGesture, audio };
 })();
 
 const myNameSpan = document.getElementById('myName');
@@ -1224,11 +1259,14 @@ window.SUPABASE_FETCH_FN = "fetch";
   localStorage.setItem("dnd_user_role", "");
 
   // In Supabase-MVP our "myId" is stable localStorage userId
+  try { lobbyAmbientAudio.primeTavernEntryFromGesture?.(); } catch {}
   try { lobbyAmbientAudio.nudgeFromGesture?.(); } catch {}
   handleMessage({ type: "registered", id: userId, name, role: '' });
   try {
     requestAnimationFrame(() => {
       try { lobbyAmbientAudio.restartTavernFromGesture?.(); } catch {}
+      try { setTimeout(() => { try { lobbyAmbientAudio.sync?.({ fromGesture: true }); } catch {} }, 120); } catch {}
+      try { setTimeout(() => { try { lobbyAmbientAudio.sync?.({ fromGesture: true }); } catch {} }, 400); } catch {}
     });
   } catch {
     try { setTimeout(() => { try { lobbyAmbientAudio.restartTavernFromGesture?.(); } catch {} }, 0); } catch {}
