@@ -39,8 +39,9 @@ function getRoomAccessState(state) {
 
 function getRoomPasswordHashFromState(state) {
   try {
-    const access = getRoomAccessState(state);
-    return String(access.passwordHash || '').trim();
+    // Пароль комнаты больше не читается из room_state.
+    // Единственный источник истины — таблица rooms.
+    return '';
   } catch {
     return '';
   }
@@ -48,8 +49,8 @@ function getRoomPasswordHashFromState(state) {
 
 function getRoomLegacyPasswordFromState(state) {
   try {
-    const access = getRoomAccessState(state);
-    return normalizeRoomPassword(access.password || '');
+    // Legacy-пароль из room_state больше не используем.
+    return '';
   } catch {
     return '';
   }
@@ -58,7 +59,8 @@ function getRoomLegacyPasswordFromState(state) {
 function hasRoomPasswordInState(state) {
   try {
     const access = getRoomAccessState(state);
-    return !!(access.hasPassword || getRoomPasswordHashFromState(state) || getRoomLegacyPasswordFromState(state));
+    // В room_state оставляем только UI-флаг, без секретов и без валидации.
+    return !!access.hasPassword;
   } catch {
     return false;
   }
@@ -250,29 +252,16 @@ async function buildRoomAccessState(password, previousState) {
   const prevAccess = getRoomAccessState(previousState);
   const next = {
     hasPassword: !!normalized,
-    passwordHash: '',
-    authorizedUsers: {},
     bannedUsers: {},
     moderationEvent: (prevAccess.moderationEvent && typeof prevAccess.moderationEvent === 'object') ? deepClone(prevAccess.moderationEvent) : null
   };
 
-  try {
-    if (prevAccess.authorizedUsers && typeof prevAccess.authorizedUsers === 'object') {
-      next.authorizedUsers = deepClone(prevAccess.authorizedUsers);
-    }
-  } catch {}
   try {
     if (prevAccess.bannedUsers && typeof prevAccess.bannedUsers === 'object') {
       next.bannedUsers = deepClone(prevAccess.bannedUsers);
     }
   } catch {}
 
-  if (!normalized) {
-    next.authorizedUsers = {};
-    return next;
-  }
-
-  next.passwordHash = await sha256Hex(normalized);
   return next;
 }
 
@@ -280,16 +269,6 @@ function withAuthorizedRoomUser(state, userId, role) {
   const next = deepClone(state || {});
   try {
     if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
-    if (!next.roomAccess.authorizedUsers || typeof next.roomAccess.authorizedUsers !== 'object') {
-      next.roomAccess.authorizedUsers = {};
-    }
-    const uid = String(userId || '').trim();
-    if (uid) {
-      next.roomAccess.authorizedUsers[uid] = {
-        grantedAt: new Date().toISOString(),
-        role: String(role || '').trim() || null
-      };
-    }
     next.roomAccess.hasPassword = hasRoomPasswordInState(next);
   } catch {}
   return next;
@@ -1403,7 +1382,7 @@ async function upsertRoomState(roomId, nextState) {
     if (latestRoomState?.roomAccess && typeof latestRoomState.roomAccess === 'object') {
       const latestAccess = getRoomAccessState(latestRoomState);
       if (!stSafe.roomAccess || typeof stSafe.roomAccess !== 'object') stSafe.roomAccess = {};
-      stSafe.roomAccess.hasPassword = !!(latestAccess.hasPassword || latestAccess.passwordHash || latestAccess.password);
+      stSafe.roomAccess.hasPassword = !!latestAccess.hasPassword;
     }
   } catch {}
 
@@ -3044,25 +3023,17 @@ async function sendMessage(msg) {
       case "listRooms": {
         const { data, error } = await sbClient
           .from("rooms")
-          .select("id,name,scenario,created_at")
+          .select("id,name,scenario,created_at,has_password,password_hash")
           .order("created_at", { ascending: false });
         if (error) throw error;
 
-        const roomIds = (data || []).map((r) => String(r?.id || '')).filter(Boolean);
         const passwordByRoomId = new Map();
         try {
-          if (roomIds.length) {
-            const { data: roomStates, error: rsErr } = await sbClient
-              .from('room_state')
-              .select('room_id,state')
-              .in('room_id', roomIds);
-            if (rsErr) throw rsErr;
-            (roomStates || []).forEach((row) => {
-              const rid = String(row?.room_id || '');
-              if (!rid) return;
-              passwordByRoomId.set(rid, hasRoomPasswordInState(row?.state));
-            });
-          }
+          (data || []).forEach((row) => {
+            const rid = String(row?.id || '');
+            if (!rid) return;
+            passwordByRoomId.set(rid, !!(row?.has_password || row?.password_hash));
+          });
         } catch (e) {
           console.warn('listRooms password lookup failed', e);
         }
@@ -3106,22 +3077,18 @@ async function sendMessage(msg) {
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
         const password = normalizeRoomPassword(msg.password || '');
-        const { error: e1 } = await sbClient.from("rooms").insert({ id: roomId, name, scenario });
+        const roomPasswordHash = password ? await sha256Hex(password) : '';
+        const { error: e1 } = await sbClient.from("rooms").insert({
+          id: roomId,
+          name,
+          scenario,
+          has_password: !!password,
+          password_hash: roomPasswordHash || null
+        });
         if (e1) throw e1;
 
         const initState = createInitialGameState();
         initState.roomAccess = await buildRoomAccessState(password, initState);
-        try {
-          const creatorUserId = String(localStorage.getItem("dnd_user_id") || myId || "");
-          const creatorRole = String(localStorage.getItem("dnd_user_role") || myRole || "");
-          if (hasRoomPasswordInState(initState) && creatorUserId) {
-            initState.roomAccess.authorizedUsers = initState.roomAccess.authorizedUsers || {};
-            initState.roomAccess.authorizedUsers[creatorUserId] = {
-              grantedAt: new Date().toISOString(),
-              role: creatorRole || null
-            };
-          }
-        } catch {}
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
           phase: initState.phase,
@@ -3385,45 +3352,24 @@ async function sendMessage(msg) {
           return;
         }
 
-        const roomHasPassword = hasRoomPasswordInState(rs?.state);
-        const alreadyAuthorized = roomHasPassword ? isUserAuthorizedForRoom(rs?.state, userId) : true;
-        if (roomHasPassword && !alreadyAuthorized) {
-          const expectedHash = getRoomPasswordHashFromState(rs?.state);
-          const legacyPassword = getRoomLegacyPasswordFromState(rs?.state);
-          let isValidPassword = false;
-          if (expectedHash) {
-            isValidPassword = !!providedPassword && (await sha256Hex(providedPassword)) === expectedHash;
-          } else if (legacyPassword) {
-            isValidPassword = providedPassword === legacyPassword;
-          }
-
+        const roomPasswordHash = String(room?.password_hash || '').trim();
+        const roomHasPassword = !!(room?.has_password || roomPasswordHash);
+        try {
+          if (!rs.state || typeof rs.state !== 'object') rs.state = createInitialGameState();
+          if (!rs.state.roomAccess || typeof rs.state.roomAccess !== 'object') rs.state.roomAccess = {};
+          rs.state.roomAccess.hasPassword = roomHasPassword;
+          delete rs.state.roomAccess.password;
+          delete rs.state.roomAccess.passwordHash;
+          delete rs.state.roomAccess.authorizedUsers;
+        } catch {}
+        if (roomHasPassword) {
+          const isValidPassword = !!roomPasswordHash && !!providedPassword && (await sha256Hex(providedPassword)) === roomPasswordHash;
           if (!isValidPassword) {
             handleMessage({
               type: 'roomsError',
               message: 'Неверный пароль комнаты.'
             });
             return;
-          }
-
-          rs.state = withAuthorizedRoomUser(rs.state, userId, role);
-          if (legacyPassword) {
-            rs.state.roomAccess = await buildRoomAccessState(legacyPassword, rs.state);
-            rs.state = withAuthorizedRoomUser(rs.state, userId, role);
-          }
-          try {
-            const phaseToSave = String(rs?.phase || rs?.state?.phase || 'lobby');
-            const actorToSave = (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null;
-            const { error: saveRoomAccessErr } = await sbClient
-              .from('room_state')
-              .update({
-                phase: phaseToSave,
-                current_actor_id: actorToSave,
-                state: rs.state
-              })
-              .eq('room_id', roomId);
-            if (saveRoomAccessErr) throw saveRoomAccessErr;
-          } catch (e) {
-            console.warn('joinRoom mini lobby auth persist failed', e);
           }
         }
 
