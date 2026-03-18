@@ -126,16 +126,31 @@
     }, { passive: false });
 
     // ===== World phases (GM only) =====
+    function applyLocalPhaseUi(kind) {
+      try {
+        [startExplorationBtn, startInitiativeBtn, startCombatBtn].forEach((btn) => btn?.classList.remove('active', 'ready', 'pending'));
+        if (startExplorationBtn) startExplorationBtn.style.color = '#fff';
+        if (startInitiativeBtn) startInitiativeBtn.style.color = '#fff';
+        if (startCombatBtn) startCombatBtn.style.color = '#fff';
+        if (kind === 'exploration') startExplorationBtn?.classList.add('active');
+        if (kind === 'initiative') startInitiativeBtn?.classList.add('active');
+        if (kind === 'combat') startCombatBtn?.classList.add('active');
+      } catch {}
+    }
+
     startExplorationBtn?.addEventListener("click", () => {
       if (!ctx.isGM?.()) return;
+      applyLocalPhaseUi('exploration');
       ctx.sendMessage?.({ type: "startExploration" });
     });
     startInitiativeBtn?.addEventListener("click", () => {
       if (!ctx.isGM?.()) return;
+      applyLocalPhaseUi('initiative');
       ctx.sendMessage?.({ type: "startInitiative" });
     });
     startCombatBtn?.addEventListener("click", () => {
       if (!ctx.isGM?.()) return;
+      applyLocalPhaseUi('combat');
       ctx.sendMessage?.({ type: "startCombat" });
     });
 

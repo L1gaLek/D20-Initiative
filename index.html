@@ -155,7 +155,7 @@
 
 <!-- ===== Role select modal (shown when joining a room) ===== -->
 <div id="roleModal" class="modal-overlay hidden">
-  <div class="modal" style="max-width:520px;">
+  <div class="modal tavern-modal room-entry-modal" style="max-width:520px;">
     <div class="modal-header">
       <div>
         <div class="modal-title">Выберите роль</div>
@@ -164,24 +164,24 @@
       <button id="roleModalClose" class="modal-close">✕</button>
     </div>
     <div class="modal-body">
-      <div class="sheet-card" style="display:flex; flex-direction:column; gap:10px;">
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button id="rolePickGM" type="button" style="flex:1; min-width:140px;">GM</button>
-          <button id="rolePickPlayer" type="button" style="flex:1; min-width:140px;">Игрок</button>
-          <button id="rolePickSpectator" type="button" style="flex:1; min-width:140px;">Наблюдатель</button>
+      <div class="sheet-card room-entry-card" style="display:flex; flex-direction:column; gap:10px;">
+        <div class="room-entry-role-grid" style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button id="rolePickGM" class="room-entry-role-btn" type="button" style="flex:1; min-width:140px;">GM</button>
+          <button id="rolePickPlayer" class="room-entry-role-btn" type="button" style="flex:1; min-width:140px;">Игрок</button>
+          <button id="rolePickSpectator" class="room-entry-role-btn" type="button" style="flex:1; min-width:140px;">Наблюдатель</button>
         </div>
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+        <div class="room-entry-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
           <button id="roleModalCancel" type="button">Отмена</button>
         </div>
       </div>
-      <div id="roleModalError" style="color:#ff6b6b; margin-top:10px;"></div>
+      <div id="roleModalError" class="room-entry-error" style="color:#ff6b6b; margin-top:10px;"></div>
     </div>
   </div>
 </div>
 
 <!-- ===== Create room modal ===== -->
 <div id="createRoomModal" class="modal-overlay hidden">
-  <div class="modal" style="max-width:520px;">
+  <div class="modal tavern-modal room-entry-modal" style="max-width:520px;">
     <div class="modal-header">
       <div>
         <div class="modal-title">Создать комнату</div>
@@ -191,12 +191,12 @@
     </div>
 
     <div class="modal-body">
-      <div class="sheet-card" style="display:flex; flex-direction:column; gap:10px;">
+      <div class="sheet-card room-entry-card" style="display:flex; flex-direction:column; gap:10px;">
         <input id="roomNameInput" type="text" placeholder="Название комнаты">
         <input id="roomPasswordInput" type="text" placeholder="Пароль (необязательно)">
         <input id="roomScenarioInput" type="text" placeholder="Название сценария D&D (необязательно)">
 
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+        <div class="room-entry-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
           <button id="createRoomCancel">Отмена</button>
           <button id="createRoomSubmit">Создать</button>
         </div>
