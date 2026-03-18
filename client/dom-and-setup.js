@@ -173,12 +173,12 @@ function buildLobbyAmbientCandidates(fileName) {
 
     return [
       'lobby/ambient/' + fileName,
-      '.lobby/ambient/' + fileName,
-      (basePath ? (basePath + 'lobby/ambient/' + fileName) : ('lobby/ambient/' + fileName)),
-      'lobby/ambient/' + fileName
+      './lobby/ambient/' + fileName,
+      (basePath ? (basePath + '/lobby/ambient/' + fileName) : ('lobby/ambient/' + fileName)),
+      '/lobby/ambient/' + fileName
     ].filter((value, index, arr) => value && arr.indexOf(value) === index);
   } catch {
-    return ['lobby/ambient/' + fileName, '.lobby/ambient/' + fileName, 'lobby/ambient/' + fileName];
+    return ['lobby/ambient/' + fileName, './lobby/ambient/' + fileName, '/lobby/ambient/' + fileName];
   }
 }
 
@@ -204,6 +204,7 @@ const lobbyAmbientAudio = (() => {
   let activeMode = '';
   let activeFile = '';
   let unlocked = false;
+  let hadUserGesture = false;
   let globalBound = false;
   let sourceCandidates = [];
   let sourceIndex = 0;
@@ -313,6 +314,7 @@ const lobbyAmbientAudio = (() => {
 
   async function ensurePlaybackAfterGesture() {
     pendingGestureStart = false;
+    hadUserGesture = true;
     if (!activeMode) return false;
     if (!getAudioSrc() && !applyCurrentSource()) return false;
     return await tryUnlock({ pauseAfter: false });
@@ -354,6 +356,10 @@ const lobbyAmbientAudio = (() => {
     }
 
     if (!unlocked) {
+      if (hadUserGesture) {
+        await ensurePlaybackAfterGesture();
+        return;
+      }
       pendingGestureStart = true;
       return;
     }
@@ -397,6 +403,7 @@ const lobbyAmbientAudio = (() => {
   }
 
   async function nudgeFromGesture() {
+    hadUserGesture = true;
     applyVolume();
     if (!activeMode) {
       sync({ fromGesture: true });
@@ -413,6 +420,7 @@ const lobbyAmbientAudio = (() => {
     globalBound = true;
 
     const onGesture = async () => {
+      hadUserGesture = true;
       await nudgeFromGesture();
     };
 
@@ -437,14 +445,26 @@ const lobbyAmbientAudio = (() => {
 
   audio.addEventListener('loadeddata', async () => {
     applyVolume();
-    if (!activeMode || !unlocked) return;
-    await playPromiseSafe();
+    if (!activeMode) return;
+    if (unlocked) {
+      await playPromiseSafe();
+      return;
+    }
+    if (hadUserGesture) {
+      await ensurePlaybackAfterGesture();
+    }
   });
 
   audio.addEventListener('canplay', async () => {
     applyVolume();
-    if (!activeMode || !unlocked) return;
-    await playPromiseSafe();
+    if (!activeMode) return;
+    if (unlocked) {
+      await playPromiseSafe();
+      return;
+    }
+    if (hadUserGesture) {
+      await ensurePlaybackAfterGesture();
+    }
   });
 
   audio.addEventListener('ended', () => {
