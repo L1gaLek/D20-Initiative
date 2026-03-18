@@ -169,39 +169,20 @@ function removeRoomUserOwnedPlayers(state, userId) {
       if (owned && p?.id) removedIds.push(String(p.id));
       return !owned;
     });
-    if (removedIds.length) {
+    if (Array.isArray(next.turnOrder) && removedIds.length) {
       const removed = new Set(removedIds);
-      if (Array.isArray(next.turnOrder)) {
-        next.turnOrder = next.turnOrder.filter((id) => !removed.has(String(id)));
-      }
+      next.turnOrder = next.turnOrder.filter((id) => !removed.has(String(id)));
       const curId = String(next.current_actor_id || '');
       if (curId && removed.has(curId)) next.current_actor_id = null;
-      if (Array.isArray(next.turnOrder) && next.turnOrder.length) {
-        const currentTurnTokenId = String(next.turnOrder?.[Number(next.currentTurnIndex) || 0] || '');
-        if (currentTurnTokenId && removed.has(currentTurnTokenId)) {
-          next.currentTurnIndex = 0;
-        } else {
-          const idx = Math.max(0, Math.min(Number(next.currentTurnIndex) || 0, next.turnOrder.length - 1));
-          next.currentTurnIndex = idx;
-        }
+      const currentTurnTokenId = String(next.turnOrder?.[Number(next.currentTurnIndex) || 0] || '');
+      if (currentTurnTokenId && removed.has(currentTurnTokenId)) {
+        next.currentTurnIndex = 0;
+      } else if (Array.isArray(next.turnOrder) && next.turnOrder.length) {
+        const idx = Math.max(0, Math.min(Number(next.currentTurnIndex) || 0, next.turnOrder.length - 1));
+        next.currentTurnIndex = idx;
       } else {
         next.currentTurnIndex = 0;
       }
-
-      try {
-        if (next.playersPos && typeof next.playersPos === 'object') {
-          removedIds.forEach((id) => { try { delete next.playersPos[id]; } catch {} });
-        }
-      } catch {}
-      try {
-        const maps = Array.isArray(next.maps) ? next.maps : [];
-        maps.forEach((m) => {
-          if (!m || typeof m !== 'object') return;
-          if (m.playersPos && typeof m.playersPos === 'object') {
-            removedIds.forEach((id) => { try { delete m.playersPos[id]; } catch {} });
-          }
-        });
-      } catch {}
     }
   } catch {}
   return { state: next, removedPlayerIds: removedIds };
@@ -1961,13 +1942,16 @@ async function subscribeRoomTokensDb(roomId) {
       'postgres_changes',
       { event: '*', schema: 'public', table: 'room_tokens', filter: `room_id=eq.${roomId}` },
       (payload) => {
-        if (payload?.eventType === 'DELETE') {
-          const oldRow = payload.old || {};
-          handleMessage({ type: 'tokenDelete', row: oldRow, tokenId: oldRow?.token_id || null, roomId });
-          return;
-        }
-        const row = payload.new;
-        if (row) handleMessage({ type: 'tokenRow', row });
+        try {
+          const ev = String(payload?.eventType || '').toUpperCase();
+          if (ev === 'DELETE') {
+            const row = payload?.old;
+            if (row) handleMessage({ type: 'tokenRowDeleted', row });
+            return;
+          }
+          const row = payload?.new;
+          if (row) handleMessage({ type: 'tokenRow', row });
+        } catch {}
       }
     );
   await window.roomTokensDbChannel.subscribe();
@@ -2680,6 +2664,43 @@ async function upsertRoomMusicState(roomId, bgMusic) {
   try { sendWsEnvelope({ type: 'musicRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
 }
 
+
+function applyTokenDeleteToLocalState(row) {
+  try {
+    if (!row) return;
+    const tokenId = String(row.token_id || '').trim();
+    if (!tokenId) return;
+
+    if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
+      const p = lastState.players.find(pp => String(pp?.id) === tokenId);
+      if (p) {
+        p.x = null;
+        p.y = null;
+      }
+    }
+
+    try {
+      const el = (typeof playerElements !== 'undefined') ? playerElements.get(tokenId) : null;
+      if (el) {
+        try { el.remove(); } catch {}
+        try { playerElements.delete(tokenId); } catch {}
+      }
+    } catch {}
+
+    try {
+      const bars = (typeof hpBarElements !== 'undefined') ? hpBarElements.get(tokenId) : null;
+      try { bars?.main?.remove?.(); } catch {}
+      try { bars?.temp?.remove?.(); } catch {}
+      try { hpBarElements.delete(tokenId); } catch {}
+    } catch {}
+
+    try {
+      window.FogWar?.onTokenPositionsChanged?.(lastState);
+      if (lastState) renderBoard?.(lastState);
+    } catch {}
+  } catch {}
+}
+
 async function ensureDetachedBootstrap(roomId, fullState) {
   await ensureSupabaseReady();
   const st = ensureStateHasMaps(deepClone(fullState));
@@ -3123,20 +3144,22 @@ async function sendMessage(msg) {
         const { error: delErr } = await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
         if (delErr) throw delErr;
 
+        const publicStateKick = stripRoomSecretsFromState(nextState);
+        try { handleMessage({ type: 'state', state: publicStateKick }); } catch {}
         try {
           const removedIds = Array.isArray(removedKick?.removedPlayerIds) ? removedKick.removedPlayerIds.filter(Boolean) : [];
           removedIds.forEach((tokenId) => {
-            try { sendWsEnvelope({ type: 'tokenDelete', roomId, tokenId: String(tokenId) }, { optimisticApplied: true }); } catch {}
-          });
-        } catch {}
-        try {
-          const removedIds = Array.isArray(removedBan?.removedPlayerIds) ? removedBan.removedPlayerIds.filter(Boolean) : [];
-          removedIds.forEach((tokenId) => {
-            try { sendWsEnvelope({ type: 'tokenDelete', roomId, tokenId: String(tokenId) }, { optimisticApplied: true }); } catch {}
+            try { handleMessage({ type: 'tokenRowDeleted', row: { room_id: roomId, token_id: String(tokenId) } }); } catch {}
           });
         } catch {}
         try { sendWsEnvelope({ type: 'moderationEvent', roomId, event: moderationEvent }, { optimisticApplied: true }); } catch {}
-        try { sendWsEnvelope({ type: 'state', roomId, state: stripRoomSecretsFromState(nextState) }, { optimisticApplied: true }); } catch {}
+        try { sendWsEnvelope({ type: 'state', roomId, state: publicStateKick }, { optimisticApplied: true }); } catch {}
+        try {
+          const removedIds = Array.isArray(removedKick?.removedPlayerIds) ? removedKick.removedPlayerIds.filter(Boolean) : [];
+          removedIds.forEach((tokenId) => {
+            try { sendWsEnvelope({ type: 'tokenRowDeleted', roomId, row: { room_id: roomId, token_id: String(tokenId) } }, { optimisticApplied: true }); } catch {}
+          });
+        } catch {}
         await refreshRoomMembers(roomId, { broadcast: true });
         break;
       }
@@ -3149,11 +3172,9 @@ async function sendMessage(msg) {
 
         const hoursRaw = Number(msg.hours);
         const minutesRaw = Number(msg.minutes);
-        const hours = Math.max(0, Math.min(24, Math.trunc(Number.isFinite(hoursRaw) ? hoursRaw : 1)));
+        const hours = Math.max(0, Math.min(24, Math.trunc(Number.isFinite(hoursRaw) ? hoursRaw : 0)));
         const minutes = Math.max(0, Math.min(59, Math.trunc(Number.isFinite(minutesRaw) ? minutesRaw : 0)));
-        const totalMinutes = Math.max(1, Math.min(24 * 60, (hours * 60) + minutes));
-        const normalizedHours = Math.floor(totalMinutes / 60);
-        const normalizedMinutes = totalMinutes % 60;
+        const totalMinutes = Math.max(1, (hours * 60) + minutes);
         const reason = String(msg.reason || '').trim() || 'Не указана';
 
         const { data: room, error: roomErr } = await sbClient.from('rooms').select('id,name').eq('id', roomId).maybeSingle();
@@ -3168,9 +3189,9 @@ async function sendMessage(msg) {
         nextState = removedBan.state;
         nextState = withRoomBanUser(nextState, targetUserId, {
           reason,
-          hours: normalizedHours,
-          minutes: normalizedMinutes,
-          durationMinutes: totalMinutes,
+          hours,
+          minutes,
+          totalMinutes,
           bannedAt: new Date().toISOString(),
           bannedUntil: bannedUntilIso,
           bannedByUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
@@ -3215,8 +3236,22 @@ async function sendMessage(msg) {
         const { error: delErr } = await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
         if (delErr) throw delErr;
 
+        const publicStateBan = stripRoomSecretsFromState(nextState);
+        try { handleMessage({ type: 'state', state: publicStateBan }); } catch {}
+        try {
+          const removedIds = Array.isArray(removedBan?.removedPlayerIds) ? removedBan.removedPlayerIds.filter(Boolean) : [];
+          removedIds.forEach((tokenId) => {
+            try { handleMessage({ type: 'tokenRowDeleted', row: { room_id: roomId, token_id: String(tokenId) } }); } catch {}
+          });
+        } catch {}
         try { sendWsEnvelope({ type: 'moderationEvent', roomId, event: moderationEvent }, { optimisticApplied: true }); } catch {}
-        try { sendWsEnvelope({ type: 'state', roomId, state: stripRoomSecretsFromState(nextState) }, { optimisticApplied: true }); } catch {}
+        try { sendWsEnvelope({ type: 'state', roomId, state: publicStateBan }, { optimisticApplied: true }); } catch {}
+        try {
+          const removedIds = Array.isArray(removedBan?.removedPlayerIds) ? removedBan.removedPlayerIds.filter(Boolean) : [];
+          removedIds.forEach((tokenId) => {
+            try { sendWsEnvelope({ type: 'tokenRowDeleted', roomId, row: { room_id: roomId, token_id: String(tokenId) } }, { optimisticApplied: true }); } catch {}
+          });
+        } catch {}
         await refreshRoomMembers(roomId, { broadcast: true });
         break;
       }

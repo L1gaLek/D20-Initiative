@@ -332,6 +332,23 @@ loginDiv.style.display = 'none';
         window.FogWar?.onTokenPositionsChanged?.(lastState);
       } catch {}
     }
+    if (msg.type === 'tokenRowDeleted' && msg.row) {
+      try { applyTokenDeleteToLocalState(msg.row); } catch {}
+
+      try {
+        const pid = String(msg.row.token_id || '');
+        const p = (lastState?.players || []).find(pp => String(pp?.id) === pid);
+        if (p) {
+          p.x = null;
+          p.y = null;
+        }
+        renderBoard(lastState);
+      } catch {}
+
+      try {
+        window.FogWar?.onTokenPositionsChanged?.(lastState);
+      } catch {}
+    }
     if (msg.type === 'tokenRow' && msg.row) {
       try { applyTokenRowToLocalState(msg.row); } catch {}
 
@@ -383,65 +400,6 @@ loginDiv.style.display = 'none';
       // v4: keep fog-of-war LOS synced to token movement.
       try {
         window.FogWar?.onTokenPositionsChanged?.(lastState);
-      } catch {}
-    }
-
-    if (msg.type === 'tokenDelete') {
-      try {
-        const tokenId = String(msg?.tokenId || msg?.row?.token_id || '').trim();
-        if (tokenId) {
-          if (lastState && Array.isArray(lastState.players)) {
-            lastState.players = lastState.players.filter((p) => String(p?.id || '') !== tokenId);
-            try {
-              if (Array.isArray(lastState.turnOrder)) {
-                lastState.turnOrder = lastState.turnOrder.filter((id) => String(id || '') !== tokenId);
-                const nextLen = lastState.turnOrder.length;
-                lastState.currentTurnIndex = nextLen ? Math.max(0, Math.min(Number(lastState.currentTurnIndex) || 0, nextLen - 1)) : 0;
-              }
-            } catch {}
-          }
-
-          try {
-            const el = playerElements.get(tokenId);
-            if (el) el.remove();
-            playerElements.delete(tokenId);
-          } catch {}
-          try {
-            const bars = hpBarElements.get(tokenId);
-            bars?.main?.remove?.();
-            bars?.temp?.remove?.();
-            hpBarElements.delete(tokenId);
-          } catch {}
-          try {
-            const pid = String(tokenId);
-            const m = window._fogLastKnown;
-            if (m && typeof m.forEach === 'function') {
-              const toDel = [];
-              m.forEach((_, k) => {
-                if (String(k).endsWith(`:${pid}`)) toDel.push(k);
-              });
-              toDel.forEach((k) => { try { m.delete(k); } catch {} });
-            } else {
-              window._fogLastKnown?.delete?.(pid);
-            }
-          } catch {}
-
-          try {
-            const visiblePlayers = Array.isArray(lastState?.players)
-              ? lastState.players.filter((p) => isPlayerVisibleToMe(p, lastState))
-              : [];
-            players = visiblePlayers;
-          } catch {
-            players = Array.isArray(lastState?.players) ? lastState.players : players;
-          }
-
-          try { if (lastState) renderBoard(lastState); } catch {}
-          try { updatePlayerList(); } catch {}
-          try { updateCurrentPlayer(lastState); } catch {}
-          try { renderTurnOrderBox(lastState); } catch {}
-          try { window.InfoModal?.refresh?.(players); } catch {}
-          try { window.FogWar?.onTokenPositionsChanged?.(lastState); } catch {}
-        }
       } catch {}
     }
 
@@ -1164,16 +1122,16 @@ function ensureBanUserModal() {
             <span>Причина</span>
             <input id="banUserReason" class="room-entry-input" type="text" maxlength="220" placeholder="Например: нарушение правил">
           </label>
-          <div class="room-entry-field">
+          <div class="room-entry-field" style="display:flex; flex-direction:column; gap:8px;">
             <span>Время бана</span>
-            <div class="room-entry-duration" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px;">
               <label class="room-entry-field" style="margin:0;">
                 <span>Часы (0–24)</span>
-                <input id="banUserHours" class="room-entry-input" type="number" min="0" max="24" step="1" value="1">
+                <input id="banUserHours" class="room-entry-input" type="number" min="0" max="24" step="1" value="0">
               </label>
               <label class="room-entry-field" style="margin:0;">
                 <span>Минуты (0–59)</span>
-                <input id="banUserMinutes" class="room-entry-input" type="number" min="0" max="59" step="1" value="0">
+                <input id="banUserMinutes" class="room-entry-input" type="number" min="0" max="59" step="1" value="5">
               </label>
             </div>
           </div>
@@ -1208,10 +1166,6 @@ function ensureBanUserModal() {
       if (err) err.textContent = 'Укажите время бана больше 0 минут.';
       return;
     }
-    if (totalMinutes > (24 * 60)) {
-      if (err) err.textContent = 'Максимальная длительность бана — 24 часа.';
-      return;
-    }
     if (err) err.textContent = '';
     sendMessage({ type: 'banRoomUser', roomId: currentRoomId, targetUserId, reason, hours, minutes });
     close();
@@ -1229,8 +1183,8 @@ function openBanUserModal(userId, userName) {
   const err = document.getElementById('banUserModalError');
   if (subtitle) subtitle.textContent = `Пользователь: ${String(userName || 'игрок')}`;
   if (reason) reason.value = '';
-  if (hours) hours.value = '1';
-  if (minutes) minutes.value = '0';
+  if (hours) hours.value = '0';
+  if (minutes) minutes.value = '5';
   if (err) err.textContent = '';
   overlay.classList.remove('hidden');
   setTimeout(() => reason?.focus?.(), 0);
