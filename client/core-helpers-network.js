@@ -156,6 +156,38 @@ function withRoomBanUser(state, userId, payload) {
   return next;
 }
 
+
+function removeRoomUserOwnedPlayers(state, userId) {
+  const next = deepClone(state || {});
+  const removedIds = [];
+  try {
+    const uid = String(userId || '').trim();
+    if (!uid) return { state: next, removedPlayerIds: removedIds };
+    const prevPlayers = Array.isArray(next.players) ? next.players : [];
+    next.players = prevPlayers.filter((p) => {
+      const owned = String(p?.ownerId || '').trim() === uid;
+      if (owned && p?.id) removedIds.push(String(p.id));
+      return !owned;
+    });
+    if (Array.isArray(next.turnOrder) && removedIds.length) {
+      const removed = new Set(removedIds);
+      next.turnOrder = next.turnOrder.filter((id) => !removed.has(String(id)));
+      const curId = String(next.current_actor_id || '');
+      if (curId && removed.has(curId)) next.current_actor_id = null;
+      const currentTurnTokenId = String(next.turnOrder?.[Number(next.currentTurnIndex) || 0] || '');
+      if (currentTurnTokenId && removed.has(currentTurnTokenId)) {
+        next.currentTurnIndex = 0;
+      } else if (Array.isArray(next.turnOrder) && next.turnOrder.length) {
+        const idx = Math.max(0, Math.min(Number(next.currentTurnIndex) || 0, next.turnOrder.length - 1));
+        next.currentTurnIndex = idx;
+      } else {
+        next.currentTurnIndex = 0;
+      }
+    }
+  } catch {}
+  return { state: next, removedPlayerIds: removedIds };
+}
+
 function isUserAuthorizedForRoom(state, userId) {
   try {
     const uid = String(userId || '').trim();
@@ -3026,6 +3058,8 @@ async function sendMessage(msg) {
         if (!rs) return;
 
         let nextState = deepClone(rs.state || createInitialGameState());
+        const removedKick = removeRoomUserOwnedPlayers(nextState, targetUserId);
+        nextState = removedKick.state;
         const moderationEvent = {
           id: (crypto?.randomUUID ? crypto.randomUUID() : ('mod-' + Math.random().toString(16).slice(2))),
           type: 'kick',
@@ -3040,16 +3074,33 @@ async function sendMessage(msg) {
         };
         nextState = withRoomModerationEvent(nextState, moderationEvent);
 
+        const currentActorKick = (typeof nextState?.current_actor_id !== 'undefined')
+          ? nextState.current_actor_id
+          : ((typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null);
         const { error: updErr } = await sbClient.from('room_state').update({
           phase: String(rs?.phase || nextState?.phase || 'lobby'),
-          current_actor_id: (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null,
+          current_actor_id: currentActorKick,
           state: nextState
         }).eq('room_id', roomId);
         if (updErr) throw updErr;
 
+        try {
+          await ensureSupabaseReady();
+          const removedIds = Array.isArray(removedKick?.removedPlayerIds) ? removedKick.removedPlayerIds.filter(Boolean) : [];
+          for (const tokenId of removedIds) {
+            try {
+              await sbClient.from('room_tokens').delete().eq('room_id', roomId).eq('token_id', String(tokenId));
+            } catch (e) {
+              console.warn('kickRoomUser room_tokens delete failed', e);
+            }
+          }
+        } catch {}
+
         const { error: delErr } = await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
         if (delErr) throw delErr;
 
+        try { sendWsEnvelope({ type: 'moderationEvent', roomId, event: moderationEvent }, { optimisticApplied: true }); } catch {}
+        try { sendWsEnvelope({ type: 'state', roomId, state: stripRoomSecretsFromState(nextState) }, { optimisticApplied: true }); } catch {}
         await refreshRoomMembers(roomId, { broadcast: true });
         break;
       }
@@ -3072,6 +3123,8 @@ async function sendMessage(msg) {
 
         const bannedUntilIso = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
         let nextState = deepClone(rs.state || createInitialGameState());
+        const removedBan = removeRoomUserOwnedPlayers(nextState, targetUserId);
+        nextState = removedBan.state;
         nextState = withRoomBanUser(nextState, targetUserId, {
           reason,
           hours,
@@ -3094,16 +3147,33 @@ async function sendMessage(msg) {
         };
         nextState = withRoomModerationEvent(nextState, moderationEvent);
 
+        const currentActorBan = (typeof nextState?.current_actor_id !== 'undefined')
+          ? nextState.current_actor_id
+          : ((typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null);
         const { error: updErr } = await sbClient.from('room_state').update({
           phase: String(rs?.phase || nextState?.phase || 'lobby'),
-          current_actor_id: (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null,
+          current_actor_id: currentActorBan,
           state: nextState
         }).eq('room_id', roomId);
         if (updErr) throw updErr;
 
+        try {
+          await ensureSupabaseReady();
+          const removedIds = Array.isArray(removedBan?.removedPlayerIds) ? removedBan.removedPlayerIds.filter(Boolean) : [];
+          for (const tokenId of removedIds) {
+            try {
+              await sbClient.from('room_tokens').delete().eq('room_id', roomId).eq('token_id', String(tokenId));
+            } catch (e) {
+              console.warn('banRoomUser room_tokens delete failed', e);
+            }
+          }
+        } catch {}
+
         const { error: delErr } = await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
         if (delErr) throw delErr;
 
+        try { sendWsEnvelope({ type: 'moderationEvent', roomId, event: moderationEvent }, { optimisticApplied: true }); } catch {}
+        try { sendWsEnvelope({ type: 'state', roomId, state: stripRoomSecretsFromState(nextState) }, { optimisticApplied: true }); } catch {}
         await refreshRoomMembers(roomId, { broadcast: true });
         break;
       }

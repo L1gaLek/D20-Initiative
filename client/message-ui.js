@@ -111,6 +111,7 @@ if (msg.type === 'joinedRoom' && msg.room) {
   gameUI.style.display = 'block';
 
   currentRoomId = msg.room.id || null;
+  try { window.__currentRoomJoinedAtMs = Date.now(); } catch {}
   try { window.RoomChat?.reset?.(currentRoomId); } catch {}
   if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
   if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
@@ -193,6 +194,10 @@ loginDiv.style.display = 'none';
           window.showRoomAccessPopup?.(text, 'Ошибка входа');
         }
       } catch {}
+    }
+
+    if (msg.type === 'moderationEvent') {
+      if (handleOwnModerationEvent(msg.event || msg)) return;
     }
 
     if (msg.type === "users" && Array.isArray(msg.users)) {
@@ -481,26 +486,7 @@ loginDiv.style.display = 'none';
 
       try {
         const modEvent = getRoomModerationEventForUi(normalized);
-        const modId = String(modEvent?.id || '');
-        const targetUserId = String(modEvent?.targetUserId || '');
-        const myUserId = String(myId || '');
-        const isMine = !!(modId && targetUserId && myUserId && targetUserId === myUserId);
-        const isCurrentRoom = !!(String(modEvent?.roomId || '') && String(modEvent?.roomId || '') === String(currentRoomId || ''));
-        const lastSeenModId = String(window.__lastHandledRoomModerationEventId || '');
-        if (isMine && isCurrentRoom && modId !== lastSeenModId) {
-          window.__lastHandledRoomModerationEventId = modId;
-          const roomName = String(modEvent?.roomName || myRoomSpan?.textContent || 'комната');
-          const reason = String(modEvent?.reason || '').trim();
-          const type = String(modEvent?.type || '');
-          const popupTitle = (type === 'ban') ? 'Вы забанены' : 'Вы выгнаны из комнаты';
-          const popupText = (type === 'ban')
-            ? `Вы забанены в комнате «${roomName}». Причина: ${reason || 'Не указана'}. Время бана: ${formatModerationRemaining(modEvent?.bannedUntil) || 'уточняется'}.`
-            : `Вы выгнаны из комнаты «${roomName}».`;
-          Promise.resolve(window.returnToTavernFromRoom?.()).finally(() => {
-            try { window.showRoomAccessPopup?.(popupText, popupTitle); } catch {}
-          });
-          return;
-        }
+        if (handleOwnModerationEvent(modEvent)) return;
       } catch {}
 
       lastState = normalized;
@@ -1048,6 +1034,38 @@ function getRoomModerationEventForUi(state) {
       : null;
   } catch {
     return null;
+  }
+}
+
+
+function handleOwnModerationEvent(modEvent) {
+  try {
+    const modId = String(modEvent?.id || '');
+    const targetUserId = String(modEvent?.targetUserId || '');
+    const myUserId = String(myId || '');
+    const roomId = String(modEvent?.roomId || '');
+    const currentRid = String(currentRoomId || '');
+    if (!modId || !targetUserId || !myUserId || targetUserId !== myUserId) return false;
+    if (!roomId || roomId !== currentRid) return false;
+    const joinedAt = Number(window.__currentRoomJoinedAtMs || 0);
+    const createdAtMs = Date.parse(String(modEvent?.createdAt || ''));
+    if (Number.isFinite(createdAtMs) && joinedAt > 0 && createdAtMs <= joinedAt) return false;
+    const lastSeenModId = String(window.__lastHandledRoomModerationEventId || '');
+    if (modId === lastSeenModId) return true;
+    window.__lastHandledRoomModerationEventId = modId;
+    const roomName = String(modEvent?.roomName || myRoomSpan?.textContent || 'комната');
+    const reason = String(modEvent?.reason || '').trim();
+    const type = String(modEvent?.type || '');
+    const popupTitle = (type === 'ban') ? 'Вы забанены' : 'Вы выгнаны из комнаты';
+    const popupText = (type === 'ban')
+      ? `Вы забанены в комнате «${roomName}». Причина: ${reason || 'Не указана'}. Время бана: ${formatModerationRemaining(modEvent?.bannedUntil) || 'уточняется'}.`
+      : `Вы выгнаны из комнаты «${roomName}».`;
+    Promise.resolve(window.returnToTavernFromRoom?.()).finally(() => {
+      try { window.showRoomAccessPopup?.(popupText, popupTitle); } catch {}
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 
