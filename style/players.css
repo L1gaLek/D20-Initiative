@@ -554,3 +554,108 @@
   pointer-events: none;
   opacity: 0.7;
 }
+
+
+/* ===== ROOM THEME OVERRIDES: left panels / players ===== */
+#action-log,
+#player-management,
+#player-list-container,
+#turn-order-box{
+  border: 1px solid var(--room-border);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(26,20,15,0.82) 0%, rgba(13,10,8,0.92) 100%);
+  box-shadow: var(--room-shadow), inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter: blur(8px);
+  color: var(--room-text);
+}
+
+#action-log h3,
+#player-management h3,
+#player-list-container h3{
+  color: #fff0d2;
+  font-size: 14px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+#log-list li{
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #e9dcc5;
+}
+
+.player-tab{
+  border-radius: 12px;
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.035);
+  color: #e7d9bf;
+}
+
+.player-tab.active{
+  border-color: rgba(255, 194, 97, 0.35);
+  background: rgba(255, 179, 88, 0.12);
+  color: #fff1d8;
+}
+
+.player-list-item{
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+}
+
+.player-list-item:hover{
+  border-color: rgba(255, 201, 119, 0.25);
+  background: rgba(255,255,255,0.055);
+}
+
+.player-list-item.is-current-turn{
+  outline: none;
+  border-color: rgba(255, 194, 97, 0.48);
+  box-shadow: 0 0 0 2px rgba(255, 179, 88, 0.14);
+}
+
+.player-name-text{
+  color: #f3ead9;
+  font-weight: 700;
+}
+
+.eye-btn{
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  min-height: 24px;
+}
+
+.eye-btn:hover{
+  border-color: rgba(255, 214, 142, 0.36);
+  background: rgba(255,255,255,0.08);
+}
+
+.player-actions button,
+.mini-action-btn,
+.player-actions-top .sheet-btn{
+  border-radius: 10px;
+}
+
+.player-actions-top .sheet-btn{
+  font-weight: 800;
+}
+
+.player-color-input{
+  border-color: rgba(255,255,255,0.12);
+  border-radius: 8px;
+}
+
+.owner-header{
+  color: #ffde9d;
+}
+
+.placement-indicator.placed{
+  box-shadow: 0 0 0 2px rgba(70, 185, 91, 0.16);
+}
+
+.placement-indicator.not-placed{
+  box-shadow: 0 0 0 2px rgba(208, 104, 62, 0.16);
+}
