@@ -674,6 +674,26 @@ body.lobby-active #lobby-scene {
   line-height:1.45;
   font-size:12px;
 }
+.room-lock-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-weight:700;
+  vertical-align:middle;
+}
+.room-lock-badge__icon{
+  font-size:14px;
+  line-height:1;
+}
+.room-lock-badge__text{
+  opacity:0.95;
+}
+.room-lock-badge.is-open{
+  color:#9a9a9a;
+}
+.room-lock-badge.is-protected{
+  color:#d7b24f;
+}
 .lobby-room-card__actions{
   display:flex;
   gap:8px;
