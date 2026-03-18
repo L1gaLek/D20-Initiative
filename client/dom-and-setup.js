@@ -209,8 +209,6 @@ const lobbyAmbientAudio = (() => {
   let sourceCandidates = [];
   let sourceIndex = 0;
   let pendingGestureStart = false;
-  let replayTimers = [];
-  let switchNonce = 0;
 
   function clamp01(v, fallback = 0.4) {
     const n = Number(v);
@@ -270,56 +268,13 @@ const lobbyAmbientAudio = (() => {
     return String(sourceCandidates[sourceIndex] || '');
   }
 
-  function clearReplayTimers() {
-    try {
-      replayTimers.forEach((id) => clearTimeout(id));
-    } catch {}
-    replayTimers = [];
-  }
-
-  async function replayNow() {
-    if (!activeMode) return false;
-    applyVolume();
-    if (!getAudioSrc() && !applyCurrentSource()) return false;
-    if (hadUserGesture || unlocked) {
-      const ok = await playPromiseSafe();
-      if (ok) unlocked = true;
-      return !!ok;
-    }
-    return false;
-  }
-
-  function scheduleReplayAttempts(nonce) {
-    clearReplayTimers();
-    const delays = [0, 120, 350, 800, 1600];
-    delays.forEach((delay) => {
-      const id = setTimeout(() => {
-        if (nonce !== switchNonce) return;
-        replayNow();
-      }, delay);
-      replayTimers.push(id);
-    });
-  }
-
   function applyCurrentSource() {
     const nextSrc = String(sourceCandidates[sourceIndex] || '');
     if (!nextSrc) return false;
-    const currentAttrSrc = String(audio.getAttribute?.('src') || audio.src || '');
-    const currentResolvedSrc = getAudioSrc();
-    if (currentAttrSrc === nextSrc || currentResolvedSrc === nextSrc) {
-      try { audio.currentTime = 0; } catch {}
-      return true;
-    }
+    if (getAudioSrc() === nextSrc) return true;
     try { audio.pause(); } catch {}
-    try { audio.removeAttribute('src'); } catch {}
-    try { audio.src = ''; } catch {}
-    try { audio.load(); } catch {}
     try { audio.src = nextSrc; } catch {}
-    try { audio.setAttribute('src', nextSrc); } catch {}
-    try { audio.currentTime = 0; } catch {}
     try { audio.load(); } catch {}
-    switchNonce += 1;
-    scheduleReplayAttempts(switchNonce);
     return true;
   }
 
@@ -368,7 +323,6 @@ const lobbyAmbientAudio = (() => {
   async function start(mode, options = {}) {
     const nextMode = String(mode || '');
     const fromGesture = !!options.fromGesture;
-    const forceRestart = !!options.forceRestart;
     if (nextMode !== 'lobby' && nextMode !== 'tavern') {
       stop();
       return;
@@ -386,7 +340,7 @@ const lobbyAmbientAudio = (() => {
       return;
     }
 
-    if (activeMode !== nextMode || activeFile !== fileName || !sources.includes(preferredSrc) || forceRestart) {
+    if (activeMode !== nextMode || activeFile !== fileName || !sources.includes(preferredSrc)) {
       activeMode = nextMode;
       activeFile = fileName;
       setAudioSourceCandidates(sources, preferredSrc);
@@ -419,7 +373,6 @@ const lobbyAmbientAudio = (() => {
     sourceCandidates = [];
     sourceIndex = 0;
     pendingGestureStart = false;
-    clearReplayTimers();
     try { audio.pause(); } catch {}
     try {
       audio.removeAttribute('src');
@@ -439,7 +392,7 @@ const lobbyAmbientAudio = (() => {
       return;
     }
     if (tavernVisible) {
-      start('tavern', { ...startOpts, fromGesture: !!(startOpts.fromGesture || hadUserGesture || unlocked) });
+      start('tavern', startOpts);
       return;
     }
     if (loginVisible) {
@@ -460,6 +413,16 @@ const lobbyAmbientAudio = (() => {
     if (pendingGestureStart) {
       sync({ fromGesture: true });
     }
+  }
+
+  async function restartTavernFromGesture() {
+    hadUserGesture = true;
+    pendingGestureStart = false;
+    activeMode = 'tavern';
+    activeFile = chooseTavernTrack();
+    setAudioSourceCandidates(buildLobbyAmbientCandidates(activeFile), '');
+    if (!applyCurrentSource()) return false;
+    return await ensurePlaybackAfterGesture();
   }
 
   function bindGlobalUnlock() {
@@ -499,9 +462,7 @@ const lobbyAmbientAudio = (() => {
     }
     if (hadUserGesture) {
       await ensurePlaybackAfterGesture();
-      return;
     }
-    replayNow();
   });
 
   audio.addEventListener('canplay', async () => {
@@ -513,29 +474,23 @@ const lobbyAmbientAudio = (() => {
     }
     if (hadUserGesture) {
       await ensurePlaybackAfterGesture();
-      return;
     }
-    replayNow();
-  });
-
-  audio.addEventListener('playing', () => {
-    clearReplayTimers();
   });
 
   audio.addEventListener('ended', () => {
     if (activeMode !== 'tavern') return;
     activeFile = chooseTavernTrack();
-    start('tavern', { fromGesture: true, forceRestart: true });
+    start('tavern', { fromGesture: unlocked });
   });
 
   audio.addEventListener('error', () => {
     if (advanceSource()) {
-      if (activeMode) start(activeMode, { fromGesture: true, forceRestart: true });
+      if (activeMode) start(activeMode, { fromGesture: unlocked });
       return;
     }
     if (activeMode === 'tavern') {
       activeFile = chooseTavernTrack();
-      start('tavern', { fromGesture: true, forceRestart: true });
+      start('tavern', { fromGesture: unlocked });
       return;
     }
     if (activeMode === 'lobby') {
@@ -545,14 +500,6 @@ const lobbyAmbientAudio = (() => {
 
   bindGlobalUnlock();
   applyVolume();
-
-  function restartTavernFromGesture() {
-    hadUserGesture = true;
-    unlocked = true;
-    clearReplayTimers();
-    activeFile = '';
-    start('tavern', { fromGesture: true, forceRestart: true });
-  }
 
   return { sync, start, stop, nudgeFromGesture, restartTavernFromGesture, audio };
 })();
@@ -1279,7 +1226,13 @@ window.SUPABASE_FETCH_FN = "fetch";
   // In Supabase-MVP our "myId" is stable localStorage userId
   try { lobbyAmbientAudio.nudgeFromGesture?.(); } catch {}
   handleMessage({ type: "registered", id: userId, name, role: '' });
-  try { lobbyAmbientAudio.restartTavernFromGesture?.(); } catch {}
+  try {
+    requestAnimationFrame(() => {
+      try { lobbyAmbientAudio.restartTavernFromGesture?.(); } catch {}
+    });
+  } catch {
+    try { setTimeout(() => { try { lobbyAmbientAudio.restartTavernFromGesture?.(); } catch {} }, 0); } catch {}
+  }
 
   // list rooms from DB
   sendMessage({ type: 'listRooms' });
