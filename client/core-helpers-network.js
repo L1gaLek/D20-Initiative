@@ -4221,11 +4221,12 @@ function updatePhaseUI(state) {
     startExplorationBtn?.classList.add('active');
     startCombatBtn.disabled = true;
   } else if (state.phase === 'initiative') {
-    startInitiativeBtn?.classList.add(allRolled ? 'ready' : 'active');
+    // Кнопка инициативы должна сразу подсвечиваться как активная фаза.
+    startInitiativeBtn?.classList.add('active');
 
-    // бой можно начать только когда все бросили
+    // Бой можно начать только когда все бросили инициативу.
     startCombatBtn.disabled = !allRolled;
-    startCombatBtn.classList.add(allRolled ? 'pending' : 'active');
+    if (allRolled) startCombatBtn.classList.add('pending');
   } else if (state.phase === 'combat') {
     startCombatBtn.disabled = false;
     startCombatBtn.classList.add('ready');
