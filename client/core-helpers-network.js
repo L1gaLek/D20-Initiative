@@ -9,24 +9,122 @@ function normalizeRoomPassword(raw) {
   return String(raw || '').trim();
 }
 
-function getRoomPasswordFromState(state) {
+async function sha256Hex(input) {
+  const raw = String(input || '');
   try {
-    return normalizeRoomPassword(state?.roomAccess?.password || '');
+    if (globalThis.crypto?.subtle) {
+      const bytes = new TextEncoder().encode(raw);
+      const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {}
+
+  // Fallback non-crypto hash only if subtle API is unavailable.
+  let h1 = 0x811c9dc5;
+  let h2 = 0x811c9dc5;
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw.charCodeAt(i);
+    h1 ^= ch; h1 = Math.imul(h1, 0x01000193);
+    h2 ^= (ch + i + 17); h2 = Math.imul(h2, 0x01000193);
+  }
+  return `fallback-${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+function getRoomAccessState(state) {
+  try {
+    if (state?.roomAccess && typeof state.roomAccess === 'object') return state.roomAccess;
+  } catch {}
+  return {};
+}
+
+function getRoomPasswordHashFromState(state) {
+  try {
+    const access = getRoomAccessState(state);
+    return String(access.passwordHash || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function getRoomLegacyPasswordFromState(state) {
+  try {
+    const access = getRoomAccessState(state);
+    return normalizeRoomPassword(access.password || '');
   } catch {
     return '';
   }
 }
 
 function hasRoomPasswordInState(state) {
-  return !!getRoomPasswordFromState(state);
+  try {
+    const access = getRoomAccessState(state);
+    return !!(access.hasPassword || getRoomPasswordHashFromState(state) || getRoomLegacyPasswordFromState(state));
+  } catch {
+    return false;
+  }
 }
 
-function buildRoomAccessState(password) {
+function getAuthorizedUsersMapFromState(state) {
+  try {
+    const access = getRoomAccessState(state);
+    return (access.authorizedUsers && typeof access.authorizedUsers === 'object') ? access.authorizedUsers : {};
+  } catch {
+    return {};
+  }
+}
+
+function isUserAuthorizedForRoom(state, userId) {
+  try {
+    const uid = String(userId || '').trim();
+    if (!uid) return false;
+    const auth = getAuthorizedUsersMapFromState(state);
+    return !!auth[uid];
+  } catch {
+    return false;
+  }
+}
+
+async function buildRoomAccessState(password, previousState) {
   const normalized = normalizeRoomPassword(password);
-  return {
+  const prevAccess = getRoomAccessState(previousState);
+  const next = {
     hasPassword: !!normalized,
-    password: normalized
+    passwordHash: '',
+    authorizedUsers: {}
   };
+
+  try {
+    if (prevAccess.authorizedUsers && typeof prevAccess.authorizedUsers === 'object') {
+      next.authorizedUsers = deepClone(prevAccess.authorizedUsers);
+    }
+  } catch {}
+
+  if (!normalized) {
+    next.authorizedUsers = {};
+    return next;
+  }
+
+  next.passwordHash = await sha256Hex(normalized);
+  return next;
+}
+
+function withAuthorizedRoomUser(state, userId, role) {
+  const next = deepClone(state || {});
+  try {
+    if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
+    if (!next.roomAccess.authorizedUsers || typeof next.roomAccess.authorizedUsers !== 'object') {
+      next.roomAccess.authorizedUsers = {};
+    }
+    const uid = String(userId || '').trim();
+    if (uid) {
+      next.roomAccess.authorizedUsers[uid] = {
+        grantedAt: new Date().toISOString(),
+        role: String(role || '').trim() || null
+      };
+    }
+    next.roomAccess.hasPassword = hasRoomPasswordInState(next);
+  } catch {}
+  return next;
 }
 
 function stripRoomSecretsFromState(state) {
@@ -34,6 +132,8 @@ function stripRoomSecretsFromState(state) {
   try {
     if (next?.roomAccess && typeof next.roomAccess === 'object') {
       delete next.roomAccess.password;
+      delete next.roomAccess.passwordHash;
+      delete next.roomAccess.authorizedUsers;
       next.roomAccess.hasPassword = !!next.roomAccess.hasPassword;
     }
   } catch {}
@@ -109,7 +209,8 @@ function createInitialGameState() {
 
     roomAccess: {
       hasPassword: false,
-      password: ''
+      passwordHash: '',
+      authorizedUsers: {}
     },
 
     // Background music (GM-controlled, synced to all)
@@ -1129,15 +1230,9 @@ async function upsertRoomState(roomId, nextState) {
   } catch {}
   try {
     if (latestRoomState?.roomAccess && typeof latestRoomState.roomAccess === 'object') {
-      const latestPw = getRoomPasswordFromState(latestRoomState);
-      if (latestPw && !hasRoomPasswordInState(stSafe)) {
-        stSafe.roomAccess = buildRoomAccessState(latestPw);
-      } else if (!stSafe.roomAccess || typeof stSafe.roomAccess !== 'object') {
-        stSafe.roomAccess = {
-          hasPassword: !!latestRoomState.roomAccess.hasPassword,
-          password: latestPw
-        };
-      }
+      const latestAccess = getRoomAccessState(latestRoomState);
+      if (!stSafe.roomAccess || typeof stSafe.roomAccess !== 'object') stSafe.roomAccess = {};
+      stSafe.roomAccess.hasPassword = !!(latestAccess.hasPassword || latestAccess.passwordHash || latestAccess.password);
     }
   } catch {}
 
@@ -2799,7 +2894,18 @@ async function sendMessage(msg) {
         if (e1) throw e1;
 
         const initState = createInitialGameState();
-        initState.roomAccess = buildRoomAccessState(password);
+        initState.roomAccess = await buildRoomAccessState(password, initState);
+        try {
+          const creatorUserId = String(localStorage.getItem("dnd_user_id") || myId || "");
+          const creatorRole = String(localStorage.getItem("dnd_user_role") || myRole || "");
+          if (hasRoomPasswordInState(initState) && creatorUserId) {
+            initState.roomAccess.authorizedUsers = initState.roomAccess.authorizedUsers || {};
+            initState.roomAccess.authorizedUsers[creatorUserId] = {
+              grantedAt: new Date().toISOString(),
+              role: creatorRole || null
+            };
+          }
+        } catch {}
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
           phase: initState.phase,
@@ -2829,19 +2935,53 @@ async function sendMessage(msg) {
           rs = { state: initState };
         }
 
-        const expectedPassword = getRoomPasswordFromState(rs?.state);
         const providedPassword = normalizeRoomPassword(msg.password || '');
-        if (expectedPassword && providedPassword !== expectedPassword) {
-          handleMessage({
-            type: 'roomsError',
-            message: 'Неверный пароль комнаты.'
-          });
-          return;
-        }
 
         // ===== Enforce roles: register membership + prevent multiple GMs =====
         const userId = String(localStorage.getItem("dnd_user_id") || myId || "");
         const role = String(localStorage.getItem("dnd_user_role") || myRole || "");
+
+        const roomHasPassword = hasRoomPasswordInState(rs?.state);
+        const alreadyAuthorized = roomHasPassword ? isUserAuthorizedForRoom(rs?.state, userId) : true;
+        if (roomHasPassword && !alreadyAuthorized) {
+          const expectedHash = getRoomPasswordHashFromState(rs?.state);
+          const legacyPassword = getRoomLegacyPasswordFromState(rs?.state);
+          let isValidPassword = false;
+          if (expectedHash) {
+            isValidPassword = !!providedPassword && (await sha256Hex(providedPassword)) === expectedHash;
+          } else if (legacyPassword) {
+            isValidPassword = providedPassword === legacyPassword;
+          }
+
+          if (!isValidPassword) {
+            handleMessage({
+              type: 'roomsError',
+              message: 'Неверный пароль комнаты.'
+            });
+            return;
+          }
+
+          rs.state = withAuthorizedRoomUser(rs.state, userId, role);
+          if (legacyPassword) {
+            rs.state.roomAccess = await buildRoomAccessState(legacyPassword, rs.state);
+            rs.state = withAuthorizedRoomUser(rs.state, userId, role);
+          }
+          try {
+            const phaseToSave = String(rs?.phase || rs?.state?.phase || 'lobby');
+            const actorToSave = (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null;
+            const { error: saveRoomAccessErr } = await sbClient
+              .from('room_state')
+              .update({
+                phase: phaseToSave,
+                current_actor_id: actorToSave,
+                state: rs.state
+              })
+              .eq('room_id', roomId);
+            if (saveRoomAccessErr) throw saveRoomAccessErr;
+          } catch (e) {
+            console.warn('joinRoom mini lobby auth persist failed', e);
+          }
+        }
 
         // ✅ Мягкая проверка до upsert (чтобы сразу показать текстовое предупреждение)
         if (role === "GM" && userId) {
