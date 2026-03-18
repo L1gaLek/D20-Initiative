@@ -199,6 +199,60 @@ body {
   color: #ddd;
 }
 
+
+/* ===== Global themed form controls / dropdowns ===== */
+select{
+  color-scheme: dark;
+  background: linear-gradient(180deg, rgba(70,45,24,0.96) 0%, rgba(46,28,14,0.98) 100%);
+  color: #fff0d2;
+  border: 1px solid rgba(224, 177, 90, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 22px rgba(0,0,0,0.16);
+}
+
+select option,
+select optgroup{
+  background: #1b120c;
+  color: #fff0d2;
+}
+
+select:focus{
+  outline: none;
+  border-color: rgba(255, 203, 114, 0.62);
+  box-shadow: 0 0 0 3px rgba(255,176,81,0.16), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+/* ===== Global scrollbar theme ===== */
+html{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(194, 126, 42, 0.92) rgba(24, 15, 10, 0.92);
+}
+
+*::-webkit-scrollbar{
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track{
+  background: linear-gradient(180deg, rgba(26,20,15,0.92) 0%, rgba(14,10,8,0.95) 100%);
+  border-radius: 999px;
+  border: 1px solid rgba(224, 177, 90, 0.14);
+}
+
+*::-webkit-scrollbar-thumb{
+  background: linear-gradient(180deg, rgba(178, 113, 33, 0.98) 0%, rgba(110, 65, 20, 0.99) 100%);
+  border-radius: 999px;
+  border: 2px solid rgba(20, 12, 8, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10);
+}
+
+*::-webkit-scrollbar-thumb:hover{
+  background: linear-gradient(180deg, rgba(206, 140, 54, 0.99) 0%, rgba(125, 75, 24, 0.99) 100%);
+}
+
+*::-webkit-scrollbar-corner{
+  background: rgba(18, 12, 8, 0.96);
+}
+
 .pm-row--size{ justify-content: space-between; }
 
 .pm-size-label{ font-size: 12px; opacity: .9; }
@@ -2144,10 +2198,10 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .spell-ability-select{ background: rgba(32,32,32,0.95); }
 
 .sheet-select-dark{ background: rgba(32,32,32,0.95); }
-.sheet-select-dark option{ background: #2a2a2a; }
+.sheet-select-dark option{ background: #1b120c; color:#fff0d2; }
 
 
-.spell-ability-select option{ background: #2a2a2a; }
+.spell-ability-select option{ background: #1b120c; color:#fff0d2; }
 
 .spell-item-head{
   gap: 8px;
@@ -2333,8 +2387,8 @@ textarea[data-sheet-path="text.profPlain.value"]{
 }
 
 .coin-select option{
-  background: #2a2a2a;
-  color: #fff;
+  background: #1b120c;
+  color: #fff0d2;
 }
 
 .exchange-tooltip{

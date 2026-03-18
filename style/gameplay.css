@@ -48,25 +48,21 @@
   max-height: 200px;
 }
 
-#start-initiative.active {
-  background-color: red;
-  color: white;
+#start-exploration.active,
+#start-initiative.active,
+#start-initiative.ready,
+#start-combat.ready{
+  background: linear-gradient(180deg, rgba(52, 135, 49, 0.98) 0%, rgba(28, 91, 25, 0.99) 100%);
+  border-color: rgba(123, 235, 118, 0.62);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(93, 190, 87, 0.24), 0 10px 22px rgba(21, 71, 20, 0.28);
 }
 
-#start-initiative.ready {
-  background-color: green;
-  color: white;
-}
-
-/* Оранжевая подсветка: можно начинать бой */
-#start-combat.pending {
-  background-color: orange;
-  color: black;
-}
-
-#start-combat.ready {
-  background-color: green;
-  color: white;
+#start-combat.pending{
+  background: linear-gradient(180deg, rgba(154, 36, 36, 0.98) 0%, rgba(106, 19, 19, 0.99) 100%);
+  border-color: rgba(255, 118, 118, 0.62);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255, 118, 118, 0.22), 0 10px 22px rgba(79, 16, 16, 0.28);
 }
 
 /* ===== Очередность хода (над полем) ===== */
@@ -332,6 +328,9 @@
 
 .weapon-select option,
 .dice-viz-select option,
+#wall-tool option,
+#wall-type option,
+#wall-thickness option,
 .weapon-select optgroup,
 .dice-viz-select optgroup{
   background: #1e1e1e;           /* тёмно-серый фон шторки */
