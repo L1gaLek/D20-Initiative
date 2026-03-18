@@ -164,21 +164,55 @@ function initTavernVideoBackground() {
 }
 
 function buildLobbyAmbientCandidates(fileName) {
+  const normalizedFile = String(fileName || '').trim();
+  if (!normalizedFile) return [];
+
+  const ambientFileNames = (() => {
+    const out = [normalizedFile];
+    const tavernAliasMap = {
+      'teverna.mp3': ['taverna.mp3'],
+      'teverna1.mp3': ['taverna1.mp3'],
+      'teverna2.mp3': ['taverna2.mp3'],
+      'taverna.mp3': ['teverna.mp3'],
+      'taverna1.mp3': ['teverna1.mp3'],
+      'taverna2.mp3': ['teverna2.mp3']
+    };
+    (tavernAliasMap[normalizedFile] || []).forEach((alias) => out.push(alias));
+    return out.filter((value, index, arr) => value && arr.indexOf(value) === index);
+  })();
+
   try {
     const path = String(window.location.pathname || '/');
     const normalizedPath = path.replace(/\/+/g, '/');
     const basePath = normalizedPath.endsWith('/')
       ? normalizedPath.replace(/\/$/, '')
       : normalizedPath.replace(/\/[^/]*$/, '');
+    const baseHref = String(document.baseURI || window.location.href || '');
+    const candidates = [];
 
-    return [
-      'lobby/ambient/' + fileName,
-      '.lobby/ambient/' + fileName,
-      (basePath ? (basePath + 'lobby/ambient/' + fileName) : ('lobby/ambient/' + fileName)),
-      'lobby/ambient/' + fileName
-    ].filter((value, index, arr) => value && arr.indexOf(value) === index);
+    const pushCandidate = (value) => {
+      const next = String(value || '').trim();
+      if (!next || candidates.includes(next)) return;
+      candidates.push(next);
+    };
+
+    ambientFileNames.forEach((name) => {
+      pushCandidate('lobby/ambient/' + name);
+      pushCandidate('./lobby/ambient/' + name);
+      pushCandidate(basePath ? (basePath + '/lobby/ambient/' + name) : ('lobby/ambient/' + name));
+      pushCandidate('/lobby/ambient/' + name);
+      try { pushCandidate(new URL('lobby/ambient/' + name, baseHref).href); } catch {}
+      try { pushCandidate(new URL('./lobby/ambient/' + name, baseHref).href); } catch {}
+      try { pushCandidate(new URL((basePath ? basePath.replace(/^\//, '') + '/' : '') + 'lobby/ambient/' + name, window.location.origin + '/').href); } catch {}
+    });
+
+    return candidates;
   } catch {
-    return ['lobby/ambient/' + fileName, '.lobby/ambient/' + fileName, 'lobby/ambient/' + fileName];
+    return ambientFileNames.flatMap((name) => [
+      'lobby/ambient/' + name,
+      './lobby/ambient/' + name,
+      '/lobby/ambient/' + name
+    ]).filter((value, index, arr) => value && arr.indexOf(value) === index);
   }
 }
 
@@ -199,7 +233,8 @@ const lobbyAmbientAudio = (() => {
   const LS_VOL_LEGACY = 'dnd_bg_music_volume';
   const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
   const lobbyTrack = 'lobby.mp3';
-  const tavernTracks = ['teverna.mp3', 'teverna1.mp3', 'teverna2.mp3'];
+  const tavernTracks = ['taverna.mp3', 'taverna1.mp3', 'taverna2.mp3'];
+  const failedTavernTracks = new Set();
 
   let activeMode = '';
   let activeFile = '';
@@ -209,8 +244,6 @@ const lobbyAmbientAudio = (() => {
   let sourceCandidates = [];
   let sourceIndex = 0;
   let pendingGestureStart = false;
-  let ensureTimer = 0;
-  let ensureAttemptsLeft = 0;
 
   function clamp01(v, fallback = 0.4) {
     const n = Number(v);
@@ -243,15 +276,18 @@ const lobbyAmbientAudio = (() => {
   }
 
   function chooseTavernTrack() {
+    const availableTracks = tavernTracks.filter((file) => !failedTavernTracks.has(file));
+    const sourceTracks = availableTracks.length ? availableTracks : tavernTracks;
+
     try {
       const last = String(localStorage.getItem(LS_LAST_TAVERN) || '');
-      const pool = tavernTracks.filter((file) => file !== last);
-      const list = pool.length ? pool : tavernTracks;
-      const picked = list[Math.floor(Math.random() * list.length)] || tavernTracks[0];
+      const pool = sourceTracks.filter((file) => file !== last);
+      const list = pool.length ? pool : sourceTracks;
+      const picked = list[Math.floor(Math.random() * list.length)] || sourceTracks[0] || tavernTracks[0];
       localStorage.setItem(LS_LAST_TAVERN, picked);
       return picked;
     } catch {
-      return tavernTracks[Math.floor(Math.random() * tavernTracks.length)] || tavernTracks[0];
+      return sourceTracks[Math.floor(Math.random() * sourceTracks.length)] || tavernTracks[0];
     }
   }
 
@@ -322,115 +358,54 @@ const lobbyAmbientAudio = (() => {
     return await tryUnlock({ pauseAfter: false });
   }
 
-  function clearEnsurePlaybackTimer() {
-    if (!ensureTimer) return;
-    try { clearTimeout(ensureTimer); } catch {}
-    ensureTimer = 0;
-    ensureAttemptsLeft = 0;
-  }
-
-  function scheduleEnsurePlayback(mode, options = {}) {
-    const targetMode = String(mode || activeMode || '');
-    if (targetMode !== 'lobby' && targetMode !== 'tavern') return;
-    const attempts = Math.max(1, Number(options.attempts || 10) || 10);
-    const delayMs = Math.max(60, Number(options.delayMs || 180) || 180);
-    ensureAttemptsLeft = attempts;
-    if (ensureTimer) return;
-
-    const tick = async () => {
-      ensureTimer = 0;
-      if (activeMode !== targetMode) {
-        clearEnsurePlaybackTimer();
-        return;
-      }
-      const gameVisible = !!(gameUI && gameUI.style.display !== 'none');
-      if (gameVisible) {
-        clearEnsurePlaybackTimer();
-        return;
-      }
-      if (!audio.paused && getAudioSrc()) {
-        clearEnsurePlaybackTimer();
-        return;
-      }
-      ensureAttemptsLeft -= 1;
-      await start(targetMode, {
-        fromGesture: !!(options.fromGesture || hadUserGesture || unlocked),
-        forceReload: !!options.forceReload
-      });
-      if (!audio.paused && getAudioSrc()) {
-        clearEnsurePlaybackTimer();
-        return;
-      }
-      if (ensureAttemptsLeft <= 0) {
-        clearEnsurePlaybackTimer();
-        return;
-      }
-      ensureTimer = setTimeout(tick, delayMs);
-    };
-
-    ensureTimer = setTimeout(tick, delayMs);
-  }
-
   async function start(mode, options = {}) {
     const nextMode = String(mode || '');
     const fromGesture = !!options.fromGesture;
-    const forceReload = !!options.forceReload;
     if (nextMode !== 'lobby' && nextMode !== 'tavern') {
       stop();
-      return false;
+      return;
     }
 
     applyVolume();
     const fileName = nextMode === 'lobby'
       ? lobbyTrack
-      : (activeMode === 'tavern' && activeFile && !forceReload ? activeFile : chooseTavernTrack());
+      : (activeMode === 'tavern' && activeFile && !failedTavernTracks.has(activeFile) ? activeFile : chooseTavernTrack());
     const sources = buildLobbyAmbientCandidates(fileName);
-    const currentSrc = getAudioSrc();
-    const preferredSrc = forceReload ? (sources[0] || currentSrc || '') : (currentSrc || getCurrentCandidate() || sources[0] || '');
+    const preferredSrc = getAudioSrc() || getCurrentCandidate() || sources[0] || '';
 
     if (!sources.length) {
       stop();
-      return false;
+      return;
     }
 
-    const mustReplaceSource = forceReload || activeMode !== nextMode || activeFile !== fileName || !sources.includes(preferredSrc) || !currentSrc;
-    if (mustReplaceSource) {
+    if (activeMode !== nextMode || activeFile !== fileName || !sources.includes(preferredSrc)) {
       activeMode = nextMode;
       activeFile = fileName;
       setAudioSourceCandidates(sources, preferredSrc);
       if (!applyCurrentSource()) {
         stop();
-        return false;
+        return;
       }
-    } else {
-      activeMode = nextMode;
-      activeFile = fileName;
     }
 
     if (fromGesture) {
-      const ok = await ensurePlaybackAfterGesture();
-      if (!ok) scheduleEnsurePlayback(nextMode, { fromGesture: true, forceReload: false, attempts: 14, delayMs: 160 });
-      return ok;
+      await ensurePlaybackAfterGesture();
+      return;
     }
 
     if (!unlocked) {
       if (hadUserGesture) {
-        const ok = await ensurePlaybackAfterGesture();
-        if (!ok) scheduleEnsurePlayback(nextMode, { fromGesture: true, forceReload: false, attempts: 14, delayMs: 160 });
-        return ok;
+        await ensurePlaybackAfterGesture();
+        return;
       }
       pendingGestureStart = true;
-      scheduleEnsurePlayback(nextMode, { fromGesture: false, forceReload: false, attempts: 14, delayMs: 160 });
-      return false;
+      return;
     }
 
-    const ok = await playPromiseSafe();
-    if (!ok || audio.paused) scheduleEnsurePlayback(nextMode, { fromGesture: true, forceReload: false, attempts: 14, delayMs: 160 });
-    return ok;
+    await playPromiseSafe();
   }
 
   function stop() {
-    clearEnsurePlaybackTimer();
     activeMode = '';
     activeFile = '';
     sourceCandidates = [];
@@ -455,23 +430,14 @@ const lobbyAmbientAudio = (() => {
       return;
     }
     if (tavernVisible) {
+      if (activeMode !== 'tavern' && failedTavernTracks.size >= tavernTracks.length) {
+        failedTavernTracks.clear();
+      }
       start('tavern', startOpts);
-      scheduleEnsurePlayback('tavern', {
-        fromGesture: !!(startOpts.fromGesture || hadUserGesture || unlocked),
-        forceReload: !!startOpts.forceReload,
-        attempts: 16,
-        delayMs: 150
-      });
       return;
     }
     if (loginVisible) {
       start('lobby', startOpts);
-      scheduleEnsurePlayback('lobby', {
-        fromGesture: !!(startOpts.fromGesture || hadUserGesture || unlocked),
-        forceReload: !!startOpts.forceReload,
-        attempts: 12,
-        delayMs: 150
-      });
       return;
     }
     stop();
@@ -481,13 +447,12 @@ const lobbyAmbientAudio = (() => {
     hadUserGesture = true;
     applyVolume();
     if (!activeMode) {
-      sync({ fromGesture: true, forceReload: true });
+      sync({ fromGesture: true });
       return;
     }
     await ensurePlaybackAfterGesture();
-    scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 10, delayMs: 140 });
     if (pendingGestureStart) {
-      sync({ fromGesture: true, forceReload: false });
+      sync({ fromGesture: true });
     }
   }
 
@@ -524,12 +489,10 @@ const lobbyAmbientAudio = (() => {
     if (!activeMode) return;
     if (unlocked) {
       await playPromiseSafe();
-      scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 6, delayMs: 120 });
       return;
     }
     if (hadUserGesture) {
       await ensurePlaybackAfterGesture();
-      scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 6, delayMs: 120 });
     }
   });
 
@@ -538,20 +501,11 @@ const lobbyAmbientAudio = (() => {
     if (!activeMode) return;
     if (unlocked) {
       await playPromiseSafe();
-      scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 6, delayMs: 120 });
       return;
     }
     if (hadUserGesture) {
       await ensurePlaybackAfterGesture();
-      scheduleEnsurePlayback(activeMode, { fromGesture: true, forceReload: false, attempts: 6, delayMs: 120 });
     }
-  });
-
-  audio.addEventListener('pause', () => {
-    if (!activeMode) return;
-    const gameVisible = !!(gameUI && gameUI.style.display !== 'none');
-    if (gameVisible) return;
-    scheduleEnsurePlayback(activeMode, { fromGesture: !!(hadUserGesture || unlocked), forceReload: false, attempts: 8, delayMs: 180 });
   });
 
   audio.addEventListener('ended', () => {
@@ -566,8 +520,21 @@ const lobbyAmbientAudio = (() => {
       return;
     }
     if (activeMode === 'tavern') {
-      activeFile = chooseTavernTrack();
-      start('tavern', { fromGesture: unlocked });
+      if (activeFile) failedTavernTracks.add(activeFile);
+      const nextTrack = chooseTavernTrack();
+      if (nextTrack && (!activeFile || nextTrack !== activeFile || failedTavernTracks.size < tavernTracks.length)) {
+        activeFile = nextTrack;
+        start('tavern', { fromGesture: unlocked });
+        return;
+      }
+      activeFile = lobbyTrack;
+      const lobbySources = buildLobbyAmbientCandidates(lobbyTrack);
+      setAudioSourceCandidates(lobbySources, lobbySources[0] || '');
+      if (applyCurrentSource()) {
+        playPromiseSafe();
+        return;
+      }
+      stop();
       return;
     }
     if (activeMode === 'lobby') {
@@ -578,11 +545,7 @@ const lobbyAmbientAudio = (() => {
   bindGlobalUnlock();
   applyVolume();
 
-  function ensureForCurrentView(options = {}) {
-    sync(options);
-  }
-
-  return { sync, start, stop, nudgeFromGesture, ensureForCurrentView, audio };
+  return { sync, start, stop, nudgeFromGesture, audio };
 })();
 
 const myNameSpan = document.getElementById('myName');
@@ -1307,8 +1270,6 @@ window.SUPABASE_FETCH_FN = "fetch";
   // In Supabase-MVP our "myId" is stable localStorage userId
   try { lobbyAmbientAudio.nudgeFromGesture?.(); } catch {}
   handleMessage({ type: "registered", id: userId, name, role: '' });
-  try { lobbyAmbientAudio.sync({ fromGesture: true }); } catch {}
-  try { lobbyAmbientAudio.nudgeFromGesture?.(); } catch {}
 
   // list rooms from DB
   sendMessage({ type: 'listRooms' });
