@@ -166,17 +166,19 @@ function initTavernVideoBackground() {
 function buildLobbyAmbientCandidates(fileName) {
   try {
     const path = String(window.location.pathname || '/');
-    const basePath = path.endsWith('/')
-      ? path.replace(/\/$/, '')
-      : path.replace(/\/[^/]*$/, '');
+    const normalizedPath = path.replace(/\/+/g, '/');
+    const basePath = normalizedPath.endsWith('/')
+      ? normalizedPath.replace(/\/$/, '')
+      : normalizedPath.replace(/\/[^/]*$/, '');
 
     return [
       'lobby/ambient/' + fileName,
-      '.lobby/ambient/' + fileName,
-      (basePath ? basePath : '') + 'lobby/ambient/' + fileName
+      './lobby/ambient/' + fileName,
+      (basePath ? (basePath + '/lobby/ambient/' + fileName) : ('lobby/ambient/' + fileName)),
+      '/lobby/ambient/' + fileName
     ].filter((value, index, arr) => value && arr.indexOf(value) === index);
   } catch {
-    return ['lobby/ambient/' + fileName];
+    return ['lobby/ambient/' + fileName, './lobby/ambient/' + fileName, '/lobby/ambient/' + fileName];
   }
 }
 
@@ -254,9 +256,15 @@ const lobbyAmbientAudio = (() => {
     return String(audio.currentSrc || audio.src || audio.getAttribute?.('src') || '');
   }
 
-  function setAudioSourceCandidates(sources) {
+  function setAudioSourceCandidates(sources, preferredSrc = '') {
     sourceCandidates = Array.isArray(sources) ? sources.filter(Boolean) : [];
-    sourceIndex = 0;
+    const preferred = String(preferredSrc || '');
+    const foundIndex = preferred ? sourceCandidates.indexOf(preferred) : -1;
+    sourceIndex = foundIndex >= 0 ? foundIndex : 0;
+  }
+
+  function getCurrentCandidate() {
+    return String(sourceCandidates[sourceIndex] || '');
   }
 
   function applyCurrentSource() {
@@ -323,17 +331,17 @@ const lobbyAmbientAudio = (() => {
       ? lobbyTrack
       : (activeMode === 'tavern' && activeFile ? activeFile : chooseTavernTrack());
     const sources = buildLobbyAmbientCandidates(fileName);
-    const nextSrc = sources[0] || '';
+    const preferredSrc = getAudioSrc() || getCurrentCandidate() || sources[0] || '';
 
-    if (!nextSrc) {
+    if (!sources.length) {
       stop();
       return;
     }
 
-    if (activeMode !== nextMode || activeFile !== fileName || getAudioSrc() !== nextSrc) {
+    if (activeMode !== nextMode || activeFile !== fileName || !sources.includes(preferredSrc)) {
       activeMode = nextMode;
       activeFile = fileName;
-      setAudioSourceCandidates(sources);
+      setAudioSourceCandidates(sources, preferredSrc);
       if (!applyCurrentSource()) {
         stop();
         return;
