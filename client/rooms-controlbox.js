@@ -74,6 +74,87 @@ function renderRooms(rooms) {
 }
 
 // ================== ROLE PICK MODAL ==================
+
+const ROOM_PASSWORDS_LS_KEY = 'dnd_room_passwords_cache';
+let lastJoinAttempt = { roomId: '', role: '', password: '', hadPassword: false, roomName: '' };
+
+function readRoomPasswordsCache() {
+  try {
+    const raw = localStorage.getItem(ROOM_PASSWORDS_LS_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    return (data && typeof data === 'object') ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function getRememberedRoomPassword(roomId) {
+  try {
+    const rid = String(roomId || '').trim();
+    if (!rid) return '';
+    const cache = readRoomPasswordsCache();
+    return String(cache[rid] || '');
+  } catch {
+    return '';
+  }
+}
+
+function rememberRoomPassword(roomId, password) {
+  try {
+    const rid = String(roomId || '').trim();
+    const pw = String(password || '');
+    if (!rid || !pw) return;
+    const cache = readRoomPasswordsCache();
+    cache[rid] = pw;
+    localStorage.setItem(ROOM_PASSWORDS_LS_KEY, JSON.stringify(cache));
+  } catch {}
+}
+
+function showRoomAccessPopup(message, title = 'Ошибка входа') {
+  try {
+    let overlay = document.getElementById('roomAccessPopup');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'roomAccessPopup';
+      overlay.className = 'modal-overlay hidden';
+      overlay.innerHTML = `
+        <div class="modal tavern-modal room-entry-modal" style="max-width:460px;">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title" id="roomAccessPopupTitle">Ошибка входа</div>
+            </div>
+            <button id="roomAccessPopupClose" class="modal-close">✕</button>
+          </div>
+          <div class="modal-body">
+            <div id="roomAccessPopupText" class="room-entry-popup-text" style="line-height:1.55; color:#f3e7d0;"></div>
+            <div class="room-entry-actions" style="display:flex; justify-content:flex-end; margin-top:14px;">
+              <button id="roomAccessPopupOk" type="button">Понятно</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const closePopup = () => overlay.classList.add('hidden');
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) closePopup(); });
+      overlay.querySelector('#roomAccessPopupClose')?.addEventListener('click', closePopup);
+      overlay.querySelector('#roomAccessPopupOk')?.addEventListener('click', closePopup);
+    }
+    const titleEl = document.getElementById('roomAccessPopupTitle');
+    const textEl = document.getElementById('roomAccessPopupText');
+    if (titleEl) titleEl.textContent = String(title || 'Ошибка входа');
+    if (textEl) textEl.textContent = String(message || 'Произошла ошибка.');
+    overlay.classList.remove('hidden');
+  } catch {
+    alert(String(message || 'Произошла ошибка.'));
+  }
+}
+
+window.showRoomAccessPopup = showRoomAccessPopup;
+window.rememberRoomPassword = rememberRoomPassword;
+window.getRememberedRoomPassword = getRememberedRoomPassword;
+window.getLastJoinAttempt = function () { return { ...lastJoinAttempt }; };
+window.clearLastJoinAttempt = function () { lastJoinAttempt = { roomId: '', role: '', password: '', hadPassword: false, roomName: '' }; };
+
 let pendingJoinRoomId = null;
 let pendingJoinRoomHasPassword = false;
 function openRoleModalForRoom(room) {
@@ -107,7 +188,7 @@ function openRoleModalForRoom(room) {
       }
       pwRow.style.display = pendingJoinRoomHasPassword ? '' : 'none';
       const inp = body.querySelector('#roleModalPassword');
-      if (inp) inp.value = '';
+      if (inp) inp.value = pendingJoinRoomHasPassword ? getRememberedRoomPassword(pendingJoinRoomId) : '';
     }
   } catch {}
 
@@ -139,16 +220,28 @@ function pickRoleAndJoin(roleDb) {
     } catch {}
   } catch {}
 
-  // If the room is protected, ask for password.
+  // If the room is protected, use typed password from modal.
   let password = '';
   try {
     if (needsPw) {
       const inp = document.getElementById('roleModalPassword');
       password = String(inp?.value || '').trim();
-      // fallback prompt if user closed modal without input element
-      if (!password) password = String(prompt('Введите пароль комнаты:') || '').trim();
+      if (!password) {
+        const err = document.getElementById('roleModalError');
+        if (err) err.textContent = 'Введите пароль комнаты.';
+        showRoomAccessPopup('Введите пароль комнаты, чтобы войти.', 'Требуется пароль');
+        return;
+      }
     }
   } catch {}
+
+  lastJoinAttempt = {
+    roomId: rid,
+    role: String(roleDb || ''),
+    password,
+    hadPassword: needsPw,
+    roomName: String(document.getElementById('roleModalRoomName')?.textContent || '')
+  };
 
   closeRoleModal();
 

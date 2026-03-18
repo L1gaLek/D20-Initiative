@@ -98,6 +98,13 @@ if (msg.type === 'rooms' && Array.isArray(msg.rooms)) {
   if (!currentRoomId && diceViz) diceViz.style.display = 'none';
 }
 if (msg.type === 'joinedRoom' && msg.room) {
+  try {
+    const attempt = (typeof window.getLastJoinAttempt === 'function') ? window.getLastJoinAttempt() : null;
+    if (attempt && String(attempt.roomId || '') === String(msg.room.id || '') && attempt.hadPassword && attempt.password) {
+      window.rememberRoomPassword?.(attempt.roomId, attempt.password);
+    }
+    window.clearLastJoinAttempt?.();
+  } catch {}
   roomsDiv.style.display = 'none';
   try { window.closeTavern?.(); } catch {}
   try { window.stopTavernChannel?.(); } catch {}
@@ -168,11 +175,22 @@ loginDiv.style.display = 'none';
       }
     }
 
-    // Сообщения лобби (например, "GM уже в комнате")
+    // Сообщения лобби (например, неверный пароль или GM уже в комнате)
     if (msg.type === "roomsError") {
       const text = String(msg.message || "Ошибка");
       if (roomsError) roomsError.textContent = text;
       if (typeof window.isTavernVisible === 'function' && window.isTavernVisible() && tavernRoomsError) tavernRoomsError.textContent = text;
+
+      try {
+        const lower = text.toLowerCase();
+        if (lower.includes('парол')) {
+          window.showRoomAccessPopup?.(text, 'Неверный пароль');
+        } else if (lower.includes('gm') || lower.includes('гм')) {
+          window.showRoomAccessPopup?.(text, 'GM уже в комнате');
+        } else {
+          window.showRoomAccessPopup?.(text, 'Ошибка входа');
+        }
+      } catch {}
     }
 
     if (msg.type === "users" && Array.isArray(msg.users)) {
