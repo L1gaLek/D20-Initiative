@@ -46,7 +46,11 @@ function openTavern() {
   if (tavernMyName) tavernMyName.textContent = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'путник');
   initTavernVideoBackground();
   updateLobbyModeClass();
-  try { lobbyAmbientAudio.sync(); } catch {}
+  try {
+    const fromGesture = !!(globalThis.navigator?.userActivation?.isActive);
+    lobbyAmbientAudio.sync({ fromGesture });
+    if (fromGesture) lobbyAmbientAudio.nudgeFromGesture?.();
+  } catch {}
 }
 
 function closeTavern() {
