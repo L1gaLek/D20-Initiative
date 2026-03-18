@@ -183,7 +183,9 @@ loginDiv.style.display = 'none';
 
       try {
         const lower = text.toLowerCase();
-        if (lower.includes('парол')) {
+        if (lower.includes('забан')) {
+          window.showRoomAccessPopup?.(text, 'Доступ запрещён');
+        } else if (lower.includes('парол')) {
           window.showRoomAccessPopup?.(text, 'Неверный пароль');
         } else if (lower.includes('gm') || lower.includes('гм')) {
           window.showRoomAccessPopup?.(text, 'GM уже в комнате');
@@ -476,6 +478,30 @@ loginDiv.style.display = 'none';
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
       try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
+
+      try {
+        const modEvent = getRoomModerationEventForUi(normalized);
+        const modId = String(modEvent?.id || '');
+        const targetUserId = String(modEvent?.targetUserId || '');
+        const myUserId = String(myId || '');
+        const isMine = !!(modId && targetUserId && myUserId && targetUserId === myUserId);
+        const isCurrentRoom = !!(String(modEvent?.roomId || '') && String(modEvent?.roomId || '') === String(currentRoomId || ''));
+        const lastSeenModId = String(window.__lastHandledRoomModerationEventId || '');
+        if (isMine && isCurrentRoom && modId !== lastSeenModId) {
+          window.__lastHandledRoomModerationEventId = modId;
+          const roomName = String(modEvent?.roomName || myRoomSpan?.textContent || 'комната');
+          const reason = String(modEvent?.reason || '').trim();
+          const type = String(modEvent?.type || '');
+          const popupTitle = (type === 'ban') ? 'Вы забанены' : 'Вы выгнаны из комнаты';
+          const popupText = (type === 'ban')
+            ? `Вы забанены в комнате «${roomName}». Причина: ${reason || 'Не указана'}. Время бана: ${formatModerationRemaining(modEvent?.bannedUntil) || 'уточняется'}.`
+            : `Вы выгнаны из комнаты «${roomName}».`;
+          Promise.resolve(window.returnToTavernFromRoom?.()).finally(() => {
+            try { window.showRoomAccessPopup?.(popupText, popupTitle); } catch {}
+          });
+          return;
+        }
+      } catch {}
 
       lastState = normalized;
       try { window.rememberRoomStateShadow?.(currentRoomId, normalized); } catch {}
@@ -1013,6 +1039,104 @@ window.setPlayerListView = (view) => {
 };
 window.getPlayerListView = () => playerListView;
 
+
+function getRoomModerationEventForUi(state) {
+  try {
+    const access = state?.roomAccess;
+    return (access && typeof access === 'object' && access.moderationEvent && typeof access.moderationEvent === 'object')
+      ? access.moderationEvent
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatModerationRemaining(iso) {
+  try {
+    const untilMs = Date.parse(String(iso || ''));
+    if (!Number.isFinite(untilMs)) return '';
+    const totalMinutes = Math.max(1, Math.ceil(Math.max(0, untilMs - Date.now()) / 60000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0 && minutes > 0) return `${hours} ч. ${minutes} мин.`;
+    if (hours > 0) return `${hours} ч.`;
+    return `${minutes} мин.`;
+  } catch {
+    return '';
+  }
+}
+
+function ensureBanUserModal() {
+  let overlay = document.getElementById('banUserModal');
+  if (overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'banUserModal';
+  overlay.className = 'modal-overlay hidden';
+  overlay.innerHTML = `
+    <div class="modal tavern-modal room-entry-modal" style="max-width:460px;">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Забанить пользователя</div>
+          <div class="modal-subtitle" id="banUserModalSubtitle">Укажите причину и время бана</div>
+        </div>
+        <button id="banUserModalClose" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="sheet-card room-entry-card" style="display:flex; flex-direction:column; gap:10px;">
+          <label class="room-entry-field">
+            <span>Причина</span>
+            <input id="banUserReason" class="room-entry-input" type="text" maxlength="220" placeholder="Например: нарушение правил">
+          </label>
+          <label class="room-entry-field">
+            <span>Время бана (часы, 1–24)</span>
+            <input id="banUserHours" class="room-entry-input" type="number" min="1" max="24" step="1" value="1">
+          </label>
+          <div id="banUserModalError" class="room-entry-error" style="color:#ff6b6b;"></div>
+          <div class="room-entry-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
+            <button id="banUserModalCancel" type="button">Отмена</button>
+            <button id="banUserModalSubmit" type="button">Забанить</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.classList.add('hidden');
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('#banUserModalClose')?.addEventListener('click', close);
+  overlay.querySelector('#banUserModalCancel')?.addEventListener('click', close);
+  overlay.querySelector('#banUserModalSubmit')?.addEventListener('click', () => {
+    const targetUserId = String(overlay.dataset.targetUserId || '').trim();
+    if (!targetUserId) return close();
+    const reason = String(document.getElementById('banUserReason')?.value || '').trim();
+    const hoursRaw = Number(document.getElementById('banUserHours')?.value || 1);
+    const hours = Math.max(1, Math.min(24, Math.trunc(Number.isFinite(hoursRaw) ? hoursRaw : 1)));
+    const err = document.getElementById('banUserModalError');
+    if (!reason) {
+      if (err) err.textContent = 'Укажите причину бана.';
+      return;
+    }
+    if (err) err.textContent = '';
+    sendMessage({ type: 'banRoomUser', roomId: currentRoomId, targetUserId, reason, hours });
+    close();
+  });
+  return overlay;
+}
+
+function openBanUserModal(userId, userName) {
+  const overlay = ensureBanUserModal();
+  overlay.dataset.targetUserId = String(userId || '');
+  const subtitle = document.getElementById('banUserModalSubtitle');
+  const reason = document.getElementById('banUserReason');
+  const hours = document.getElementById('banUserHours');
+  const err = document.getElementById('banUserModalError');
+  if (subtitle) subtitle.textContent = `Пользователь: ${String(userName || 'игрок')}`;
+  if (reason) reason.value = '';
+  if (hours) hours.value = '1';
+  if (err) err.textContent = '';
+  overlay.classList.remove('hidden');
+  setTimeout(() => reason?.focus?.(), 0);
+}
+
 function updatePlayerList() {
   if (!playerList) return;
   // sync from global (in case dom-and-setup changed it before this file loaded)
@@ -1102,6 +1226,37 @@ function updatePlayerList() {
 
     ownerHeader.appendChild(ownerNameSpan);
     ownerHeader.appendChild(badge);
+
+    if (myRole === 'GM' && currentRoomId && ownerId && String(ownerId) !== String(myId || '')) {
+      const modActions = document.createElement('div');
+      modActions.className = 'owner-header-actions';
+
+      const kickBtn = document.createElement('button');
+      kickBtn.type = 'button';
+      kickBtn.className = 'moderation-btn moderation-btn--kick';
+      kickBtn.title = `Выгнать пользователя ${ownerNameSpan.textContent}`;
+      kickBtn.setAttribute('aria-label', kickBtn.title);
+      kickBtn.textContent = '⤴';
+      kickBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sendMessage({ type: 'kickRoomUser', roomId: currentRoomId, targetUserId: ownerId });
+      });
+
+      const banBtn = document.createElement('button');
+      banBtn.type = 'button';
+      banBtn.className = 'moderation-btn moderation-btn--ban';
+      banBtn.title = `Забанить пользователя ${ownerNameSpan.textContent}`;
+      banBtn.setAttribute('aria-label', banBtn.title);
+      banBtn.textContent = '⛔';
+      banBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openBanUserModal(ownerId, ownerNameSpan.textContent || 'игрок');
+      });
+
+      modActions.appendChild(kickBtn);
+      modActions.appendChild(banBtn);
+      ownerHeader.appendChild(modActions);
+    }
 
     const ul = document.createElement('ul');
     ul.className = 'owner-players';

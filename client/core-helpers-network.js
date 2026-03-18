@@ -73,6 +73,89 @@ function getAuthorizedUsersMapFromState(state) {
   }
 }
 
+function getRoomBansMapFromState(state) {
+  try {
+    const access = getRoomAccessState(state);
+    return (access.bannedUsers && typeof access.bannedUsers === 'object') ? access.bannedUsers : {};
+  } catch {
+    return {};
+  }
+}
+
+function getRoomModerationEvent(state) {
+  try {
+    const access = getRoomAccessState(state);
+    return (access.moderationEvent && typeof access.moderationEvent === 'object') ? access.moderationEvent : null;
+  } catch {
+    return null;
+  }
+}
+
+function getActiveRoomBanForUser(state, userId) {
+  try {
+    const uid = String(userId || '').trim();
+    if (!uid) return null;
+    const bans = getRoomBansMapFromState(state);
+    const entry = (bans && typeof bans === 'object') ? bans[uid] : null;
+    if (!entry || typeof entry !== 'object') return null;
+    const untilMs = Date.parse(String(entry.bannedUntil || ''));
+    if (!Number.isFinite(untilMs)) return null;
+    if (untilMs <= Date.now()) return null;
+    return { ...entry, bannedUntilMs: untilMs };
+  } catch {
+    return null;
+  }
+}
+
+function formatBanRemainingMs(ms) {
+  const total = Math.max(0, Math.floor(Number(ms) || 0));
+  const totalMinutes = Math.max(1, Math.ceil(total / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0 && minutes > 0) return `${hours} ч. ${minutes} мин.`;
+  if (hours > 0) return `${hours} ч.`;
+  return `${minutes} мин.`;
+}
+
+function cleanupExpiredRoomBans(state) {
+  const next = deepClone(state || {});
+  let changed = false;
+  try {
+    if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
+    const bans = (next.roomAccess.bannedUsers && typeof next.roomAccess.bannedUsers === 'object')
+      ? next.roomAccess.bannedUsers
+      : {};
+    const clean = {};
+    Object.entries(bans).forEach(([uid, entry]) => {
+      const untilMs = Date.parse(String(entry?.bannedUntil || ''));
+      if (Number.isFinite(untilMs) && untilMs > Date.now()) clean[String(uid)] = entry;
+      else changed = true;
+    });
+    next.roomAccess.bannedUsers = clean;
+  } catch {}
+  return { state: next, changed };
+}
+
+function withRoomModerationEvent(state, event) {
+  const next = deepClone(state || {});
+  try {
+    if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
+    next.roomAccess.moderationEvent = deepClone(event || null);
+  } catch {}
+  return next;
+}
+
+function withRoomBanUser(state, userId, payload) {
+  const next = deepClone(state || {});
+  try {
+    if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
+    if (!next.roomAccess.bannedUsers || typeof next.roomAccess.bannedUsers !== 'object') next.roomAccess.bannedUsers = {};
+    const uid = String(userId || '').trim();
+    if (uid) next.roomAccess.bannedUsers[uid] = deepClone(payload || {});
+  } catch {}
+  return next;
+}
+
 function isUserAuthorizedForRoom(state, userId) {
   try {
     const uid = String(userId || '').trim();
@@ -90,12 +173,19 @@ async function buildRoomAccessState(password, previousState) {
   const next = {
     hasPassword: !!normalized,
     passwordHash: '',
-    authorizedUsers: {}
+    authorizedUsers: {},
+    bannedUsers: {},
+    moderationEvent: (prevAccess.moderationEvent && typeof prevAccess.moderationEvent === 'object') ? deepClone(prevAccess.moderationEvent) : null
   };
 
   try {
     if (prevAccess.authorizedUsers && typeof prevAccess.authorizedUsers === 'object') {
       next.authorizedUsers = deepClone(prevAccess.authorizedUsers);
+    }
+  } catch {}
+  try {
+    if (prevAccess.bannedUsers && typeof prevAccess.bannedUsers === 'object') {
+      next.bannedUsers = deepClone(prevAccess.bannedUsers);
     }
   } catch {}
 
@@ -134,6 +224,7 @@ function stripRoomSecretsFromState(state) {
       delete next.roomAccess.password;
       delete next.roomAccess.passwordHash;
       delete next.roomAccess.authorizedUsers;
+      delete next.roomAccess.bannedUsers;
       next.roomAccess.hasPassword = !!next.roomAccess.hasPassword;
     }
   } catch {}
@@ -210,7 +301,9 @@ function createInitialGameState() {
     roomAccess: {
       hasPassword: false,
       passwordHash: '',
-      authorizedUsers: {}
+      authorizedUsers: {},
+      bannedUsers: {},
+      moderationEvent: null
     },
 
     // Background music (GM-controlled, synced to all)
@@ -2920,6 +3013,101 @@ async function sendMessage(msg) {
         break;
       }
 
+      case "kickRoomUser": {
+        const roomId = String(currentRoomId || msg.roomId || '').trim();
+        const targetUserId = String(msg.targetUserId || '').trim();
+        if (!roomId || !targetUserId) return;
+        if (String(localStorage.getItem('dnd_user_role') || myRole || '') !== 'GM') return;
+
+        const { data: room, error: roomErr } = await sbClient.from('rooms').select('id,name').eq('id', roomId).maybeSingle();
+        if (roomErr) throw roomErr;
+        const { data: rs, error: rsErr } = await sbClient.from('room_state').select('*').eq('room_id', roomId).maybeSingle();
+        if (rsErr) throw rsErr;
+        if (!rs) return;
+
+        let nextState = deepClone(rs.state || createInitialGameState());
+        const moderationEvent = {
+          id: (crypto?.randomUUID ? crypto.randomUUID() : ('mod-' + Math.random().toString(16).slice(2))),
+          type: 'kick',
+          targetUserId,
+          roomId,
+          roomName: String(room?.name || msg.roomName || 'Комната'),
+          reason: '',
+          bannedUntil: null,
+          createdAt: new Date().toISOString(),
+          actorUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
+          actorName: safeGetUserName()
+        };
+        nextState = withRoomModerationEvent(nextState, moderationEvent);
+
+        const { error: updErr } = await sbClient.from('room_state').update({
+          phase: String(rs?.phase || nextState?.phase || 'lobby'),
+          current_actor_id: (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null,
+          state: nextState
+        }).eq('room_id', roomId);
+        if (updErr) throw updErr;
+
+        const { error: delErr } = await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
+        if (delErr) throw delErr;
+
+        await refreshRoomMembers(roomId, { broadcast: true });
+        break;
+      }
+
+      case "banRoomUser": {
+        const roomId = String(currentRoomId || msg.roomId || '').trim();
+        const targetUserId = String(msg.targetUserId || '').trim();
+        if (!roomId || !targetUserId) return;
+        if (String(localStorage.getItem('dnd_user_role') || myRole || '') !== 'GM') return;
+
+        const hoursRaw = Number(msg.hours);
+        const hours = Math.max(1, Math.min(24, Math.trunc(Number.isFinite(hoursRaw) ? hoursRaw : 1)));
+        const reason = String(msg.reason || '').trim() || 'Не указана';
+
+        const { data: room, error: roomErr } = await sbClient.from('rooms').select('id,name').eq('id', roomId).maybeSingle();
+        if (roomErr) throw roomErr;
+        const { data: rs, error: rsErr } = await sbClient.from('room_state').select('*').eq('room_id', roomId).maybeSingle();
+        if (rsErr) throw rsErr;
+        if (!rs) return;
+
+        const bannedUntilIso = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+        let nextState = deepClone(rs.state || createInitialGameState());
+        nextState = withRoomBanUser(nextState, targetUserId, {
+          reason,
+          hours,
+          bannedAt: new Date().toISOString(),
+          bannedUntil: bannedUntilIso,
+          bannedByUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
+          bannedByName: safeGetUserName()
+        });
+        const moderationEvent = {
+          id: (crypto?.randomUUID ? crypto.randomUUID() : ('mod-' + Math.random().toString(16).slice(2))),
+          type: 'ban',
+          targetUserId,
+          roomId,
+          roomName: String(room?.name || msg.roomName || 'Комната'),
+          reason,
+          bannedUntil: bannedUntilIso,
+          createdAt: new Date().toISOString(),
+          actorUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
+          actorName: safeGetUserName()
+        };
+        nextState = withRoomModerationEvent(nextState, moderationEvent);
+
+        const { error: updErr } = await sbClient.from('room_state').update({
+          phase: String(rs?.phase || nextState?.phase || 'lobby'),
+          current_actor_id: (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null,
+          state: nextState
+        }).eq('room_id', roomId);
+        if (updErr) throw updErr;
+
+        const { error: delErr } = await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
+        if (delErr) throw delErr;
+
+        await refreshRoomMembers(roomId, { broadcast: true });
+        break;
+      }
+
       case "joinRoom": {
         const roomId = String(msg.roomId || "");
         if (!roomId) return;
@@ -2940,6 +3128,34 @@ async function sendMessage(msg) {
         // ===== Enforce roles: register membership + prevent multiple GMs =====
         const userId = String(localStorage.getItem("dnd_user_id") || myId || "");
         const role = String(localStorage.getItem("dnd_user_role") || myRole || "");
+
+        try {
+          const cleanup = cleanupExpiredRoomBans(rs?.state);
+          if (cleanup.changed) {
+            rs.state = cleanup.state;
+            await sbClient
+              .from('room_state')
+              .update({
+                phase: String(rs?.phase || rs?.state?.phase || 'lobby'),
+                current_actor_id: (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null,
+                state: rs.state
+              })
+              .eq('room_id', roomId);
+          }
+        } catch (e) {
+          console.warn('joinRoom ban cleanup failed', e);
+        }
+
+        const activeBan = getActiveRoomBanForUser(rs?.state, userId);
+        if (activeBan) {
+          const remaining = formatBanRemainingMs((Number(activeBan.bannedUntilMs) || Date.now()) - Date.now());
+          const reason = String(activeBan.reason || '').trim() || 'Не указана';
+          handleMessage({
+            type: 'roomsError',
+            message: `Вы забанены в комнате. Причина: ${reason}. До снятия бана: ${remaining}`
+          });
+          return;
+        }
 
         const roomHasPassword = hasRoomPasswordInState(rs?.state);
         const alreadyAuthorized = roomHasPassword ? isUserAuthorizedForRoom(rs?.state, userId) : true;
