@@ -87,9 +87,9 @@ function openRoleModalForRoom(room) {
         pwRow.id = 'roleModalPwRow';
         pwRow.style.marginTop = '10px';
         pwRow.innerHTML = `
-          <label style="display:flex; flex-direction:column; gap:6px; font-size:13px; color:#ddd;">
-            Пароль комнаты
-            <input id="roleModalPassword" type="password" autocomplete="off" placeholder="Введите пароль" style="padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.18); background:rgba(0,0,0,0.22); color:#fff;" />
+          <label class="room-entry-field">
+            <span>Пароль комнаты</span>
+            <input id="roleModalPassword" class="room-entry-input" type="password" autocomplete="off" placeholder="Введите пароль" />
           </label>
         `;
         // Insert before error block (if present), otherwise append.
