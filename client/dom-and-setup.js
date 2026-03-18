@@ -173,12 +173,12 @@ function buildLobbyAmbientCandidates(fileName) {
 
     return [
       'lobby/ambient/' + fileName,
-      './lobby/ambient/' + fileName,
-      (basePath ? (basePath + '/lobby/ambient/' + fileName) : ('lobby/ambient/' + fileName)),
-      '/lobby/ambient/' + fileName
+      '.lobby/ambient/' + fileName,
+      (basePath ? (basePath + 'lobby/ambient/' + fileName) : ('lobby/ambient/' + fileName)),
+      'lobby/ambient/' + fileName
     ].filter((value, index, arr) => value && arr.indexOf(value) === index);
   } catch {
-    return ['lobby/ambient/' + fileName, './lobby/ambient/' + fileName, '/lobby/ambient/' + fileName];
+    return ['lobby/ambient/' + fileName, '.lobby/ambient/' + fileName, 'lobby/ambient/' + fileName];
   }
 }
 
