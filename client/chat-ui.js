@@ -1250,7 +1250,8 @@ function openRoomChat() {
   renderRoomChat();
   setTimeout(() => roomChatInput?.focus(), 0);
 }
-async function returnToTavernFromRoom() {
+async function returnToTavernFromRoom(options = null) {
+  const opts = (options && typeof options === 'object') ? options : {};
   const roomId = String(currentRoomId || '').trim();
   if (!roomId) {
     openTavern();
@@ -1258,12 +1259,14 @@ async function returnToTavernFromRoom() {
     try { sendMessage({ type: 'listRooms' }); } catch {}
     return;
   }
-  try {
-    if (sbClient && myId) {
-      await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', myId);
+  if (!opts.skipMemberCleanup) {
+    try {
+      if (sbClient && myId) {
+        await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', myId);
+      }
+    } catch (e) {
+      console.warn('leave room member cleanup failed', e);
     }
-  } catch (e) {
-    console.warn('leave room member cleanup failed', e);
   }
   try { stopHeartbeat(); } catch {}
   try { stopMembersPolling(); } catch {}
@@ -1505,4 +1508,3 @@ document.addEventListener('click', (e) => {
   if (roomChatUsersPopover.contains(target) || roomChatUsersBtn?.contains?.(target)) return;
   closeRoomChatUsersPopover();
 });
-

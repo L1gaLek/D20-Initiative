@@ -92,34 +92,7 @@ function handleMessage(msg) {
   }
 
 // ===== Rooms lobby messages =====
-if (msg.type === 'rooms' && Array.isArray(msg.rooms)) {
-  try { window.SERVER_TOTAL_USERS = Number(msg.totalUsers || 0) || 0; } catch {}
-  renderRooms(msg.rooms);
-  if (!currentRoomId && diceViz) diceViz.style.display = 'none';
-}
-if (msg.type === 'joinedRoom' && msg.room) {
-  try {
-    const attempt = (typeof window.getLastJoinAttempt === 'function') ? window.getLastJoinAttempt() : null;
-    if (attempt && String(attempt.roomId || '') === String(msg.room.id || '') && attempt.hadPassword && attempt.password) {
-      window.rememberRoomPassword?.(attempt.roomId, attempt.password);
-    }
-    window.clearLastJoinAttempt?.();
-  } catch {}
-  roomsDiv.style.display = 'none';
-  try { window.closeTavern?.(); } catch {}
-  try { window.stopTavernChannel?.(); } catch {}
-  gameUI.style.display = 'block';
-
-  currentRoomId = msg.room.id || null;
-  try { window.__currentRoomJoinedAtMs = Date.now(); } catch {}
-  try { window.RoomChat?.reset?.(currentRoomId); } catch {}
-  if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
-  if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
-  if (diceViz) diceViz.style.display = 'block';
-  applyRoleToUI();
-  startHeartbeat();
-  startMembersPolling();
-}
+try { handleLobbyRoomMessage?.(msg); } catch {}
 
 if (msg.type === "registered") {
       myId = msg.id;
@@ -174,26 +147,6 @@ loginDiv.style.display = 'none';
         // в игре — показываем как быстрое уведомление
         alert(text);
       }
-    }
-
-    // Сообщения лобби (например, неверный пароль или GM уже в комнате)
-    if (msg.type === "roomsError") {
-      const text = String(msg.message || "Ошибка");
-      if (roomsError) roomsError.textContent = text;
-      if (typeof window.isTavernVisible === 'function' && window.isTavernVisible() && tavernRoomsError) tavernRoomsError.textContent = text;
-
-      try {
-        const lower = text.toLowerCase();
-        if (lower.includes('забан')) {
-          window.showRoomAccessPopup?.(text, 'Доступ запрещён');
-        } else if (lower.includes('парол')) {
-          window.showRoomAccessPopup?.(text, 'Неверный пароль');
-        } else if (lower.includes('gm') || lower.includes('гм')) {
-          window.showRoomAccessPopup?.(text, 'GM уже в комнате');
-        } else {
-          window.showRoomAccessPopup?.(text, 'Ошибка входа');
-        }
-      } catch {}
     }
 
     if (msg.type === 'moderationEvent') {
