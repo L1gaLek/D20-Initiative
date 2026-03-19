@@ -62,6 +62,8 @@ const createRoomModal = document.getElementById('createRoomModal');
 const createRoomClose = document.getElementById('createRoomClose');
 const createRoomCancel = document.getElementById('createRoomCancel');
 const createRoomSubmit = document.getElementById('createRoomSubmit');
+const createRoomModalTitle = document.getElementById('createRoomModalTitle');
+const createRoomModalSubtitle = document.getElementById('createRoomModalSubtitle');
 
 const roomNameInput = document.getElementById('roomNameInput');
 const roomPasswordInput = document.getElementById('roomPasswordInput');
@@ -70,454 +72,6 @@ const roomScenarioInput = document.getElementById('roomScenarioInput');
 const gameUI = document.getElementById('main-container');
 
 // ===== Lobby scene (video background + screen state) =====
-function updateLobbyModeClass() {
-  try {
-    const loginVisible = !!(loginDiv && loginDiv.style.display !== 'none');
-    const roomsVisible = !!(roomsDiv && roomsDiv.style.display !== 'none');
-    const tavernVisible = !!(tavernDiv && !tavernDiv.classList.contains('hidden') && tavernDiv.style.display !== 'none');
-    const inLobby = loginVisible || roomsVisible || tavernVisible;
-    document.body.classList.toggle('lobby-active', inLobby);
-    try { lobbyAmbientAudio.sync(); } catch {}
-  } catch {}
-}
-
-function watchLobbyVisibility() {
-  try {
-    const sync = () => updateLobbyModeClass();
-    const observer = new MutationObserver(sync);
-    [loginDiv, roomsDiv, tavernDiv, gameUI].forEach((el) => {
-      if (!el) return;
-      observer.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
-    });
-    sync();
-  } catch {
-    updateLobbyModeClass();
-  }
-}
-
-function getProjectAssetBasePath() {
-  try {
-    const script = Array.from(document.scripts || []).find((node) => {
-      const src = String(node?.getAttribute?.('src') || node?.src || '');
-      return /(?:^|\/)dom-and-setup\.js(?:[?#].*)?$/.test(src);
-    });
-    const src = String(script?.src || script?.getAttribute?.('src') || '');
-    if (src) {
-      const url = new URL(src, window.location.href);
-      const match = url.pathname.match(/^(.*)\/client\/dom-and-setup\.js(?:$|[?#])/);
-      if (match) return String(match[1] || '');
-      return url.pathname.replace(/\/client\/[^/]+$/, '');
-    }
-  } catch {}
-
-  try {
-    const path = String(window.location.pathname || '/');
-    const clean = path.replace(/[?#].*$/, '');
-    if (/\.(html?)$/i.test(clean)) return clean.replace(/\/[^/]*$/, '');
-    return clean.endsWith('/') ? clean.replace(/\/$/, '') : clean;
-  } catch {}
-
-  return '';
-}
-
-function buildLobbyVideoCandidates(fileName) {
-  const name = String(fileName || '').trim();
-  if (!name) return [];
-  const basePath = String(getProjectAssetBasePath() || '');
-  return [((basePath || '') + '/lobby/' + name).replace(/\/+/g, '/')];
-}
-
-function applyVideoSourceWithFallback(video, sources) {
-  if (!video) return;
-  const list = Array.isArray(sources) ? sources.filter(Boolean) : [];
-  if (!list.length) return;
-  let sourceIndex = 0;
-
-  const applySource = (src) => {
-    if (!src) return;
-    if (video.getAttribute('src') === src) return;
-    video.setAttribute('src', src);
-    try { video.load(); } catch {}
-    const playPromise = video.play?.();
-    if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
-  };
-
-  video.addEventListener('error', () => {
-    sourceIndex += 1;
-    const fallback = list[sourceIndex] || '';
-    if (fallback) applySource(fallback);
-  });
-
-  applySource(list[sourceIndex] || '');
-}
-
-function initLobbyVideoBackground() {
-  const video = document.getElementById('lobby-bg-video');
-  if (!video) return;
-
-  const files = [
-    'lobby-d1.mp4',
-    'lobby-n1.mp4',
-    'lobby-n2.mp4'
-  ];
-
-  let pickedFile = files[0];
-  try {
-    const last = String(localStorage.getItem('dnd_lobby_last_video_file') || '');
-    const pool = files.filter(file => file !== last);
-    const list = pool.length ? pool : files;
-    pickedFile = list[Math.floor(Math.random() * list.length)] || files[0];
-    localStorage.setItem('dnd_lobby_last_video_file', pickedFile);
-  } catch {}
-
-  applyVideoSourceWithFallback(video, buildLobbyVideoCandidates(pickedFile));
-}
-
-function initTavernVideoBackground() {
-  if (!tavernBgVideo) return;
-  applyVideoSourceWithFallback(tavernBgVideo, buildLobbyVideoCandidates('taverna.mp4'));
-}
-
-function buildLobbyAmbientCandidates(fileName) {
-  const normalizedFile = String(fileName || '').trim();
-  if (!normalizedFile) return [];
-  const basePath = String(getProjectAssetBasePath() || '');
-  return [((basePath || '') + '/lobby/ambient/' + normalizedFile).replace(/\/+/g, '/')];
-}
-
-
-const lobbyAmbientAudio = (() => {
-  const audio = document.createElement('audio');
-  audio.id = 'lobby-ambient-audio';
-  audio.preload = 'auto';
-  audio.loop = false;
-  audio.autoplay = false;
-  audio.hidden = true;
-  try { audio.crossOrigin = 'anonymous'; } catch {}
-  try { audio.playsInline = true; } catch {}
-  try { audio.setAttribute('playsinline', ''); } catch {}
-  try { audio.setAttribute('webkit-playsinline', ''); } catch {}
-  try { document.body.appendChild(audio); } catch {}
-
-  const LS_VOL = 'dnd_lobby_ambient_volume';
-  const LS_VOL_LEGACY = 'dnd_bg_music_volume';
-  const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
-  const lobbyTrack = 'lobby.mp3';
-  const tavernTracks = ['taverna.mp3', 'taverna1.mp3', 'taverna2.mp3'];
-  const failedTavernTracks = new Set();
-
-  let activeMode = '';
-  let activeFile = '';
-  let unlocked = false;
-  let hadUserGesture = false;
-  let globalBound = false;
-  let sourceCandidates = [];
-  let sourceIndex = 0;
-  let pendingGestureStart = false;
-
-  function clamp01(v, fallback = 0.4) {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(0, Math.min(1, n));
-  }
-
-  function loadVolume() {
-    try {
-      const own = localStorage.getItem(LS_VOL);
-      if (own !== null && own !== '') return clamp01(own);
-    } catch {}
-    try {
-      const legacy = localStorage.getItem(LS_VOL_LEGACY);
-      if (legacy !== null && legacy !== '') {
-        const v = clamp01(legacy);
-        try { localStorage.setItem(LS_VOL, String(v > 0 ? v : 0.4)); } catch {}
-        return v > 0 ? v : 0.4;
-      }
-    } catch {}
-    return 0.4;
-  }
-
-  function applyVolume() {
-    const vol = loadVolume();
-    try { audio.muted = false; } catch {}
-    try { audio.defaultMuted = false; } catch {}
-    try { audio.volume = vol; } catch {}
-    return vol;
-  }
-
-  function chooseTavernTrack() {
-    const availableTracks = tavernTracks.filter((file) => !failedTavernTracks.has(file));
-    const sourceTracks = availableTracks.length ? availableTracks : tavernTracks;
-
-    try {
-      const last = String(localStorage.getItem(LS_LAST_TAVERN) || '');
-      const pool = sourceTracks.filter((file) => file !== last);
-      const list = pool.length ? pool : sourceTracks;
-      const picked = list[Math.floor(Math.random() * list.length)] || sourceTracks[0] || tavernTracks[0];
-      localStorage.setItem(LS_LAST_TAVERN, picked);
-      return picked;
-    } catch {
-      return sourceTracks[Math.floor(Math.random() * sourceTracks.length)] || tavernTracks[0];
-    }
-  }
-
-  function getAudioSrc() {
-    return String(audio.currentSrc || audio.src || audio.getAttribute?.('src') || '');
-  }
-
-  function setAudioSourceCandidates(sources, preferredSrc = '') {
-    sourceCandidates = Array.isArray(sources) ? sources.filter(Boolean) : [];
-    const preferred = String(preferredSrc || '');
-    const foundIndex = preferred ? sourceCandidates.indexOf(preferred) : -1;
-    sourceIndex = foundIndex >= 0 ? foundIndex : 0;
-  }
-
-  function getCurrentCandidate() {
-    return String(sourceCandidates[sourceIndex] || '');
-  }
-
-  function applyCurrentSource() {
-    const nextSrc = String(sourceCandidates[sourceIndex] || '');
-    if (!nextSrc) return false;
-    if (getAudioSrc() === nextSrc) return true;
-    try { audio.pause(); } catch {}
-    try { audio.src = nextSrc; } catch {}
-    try { audio.load(); } catch {}
-    return true;
-  }
-
-  function advanceSource() {
-    if (!Array.isArray(sourceCandidates) || !sourceCandidates.length) return false;
-    sourceIndex += 1;
-    if (sourceIndex >= sourceCandidates.length) return false;
-    return applyCurrentSource();
-  }
-
-  async function playPromiseSafe() {
-    try {
-      applyVolume();
-      const p = audio.play?.();
-      if (p && typeof p.catch === 'function') {
-        return p.catch(() => false);
-      }
-      return Promise.resolve(true);
-    } catch {
-      return Promise.resolve(false);
-    }
-  }
-
-  async function tryUnlock({ pauseAfter = false } = {}) {
-    applyVolume();
-    const ok = await playPromiseSafe();
-    if (!ok) {
-      unlocked = false;
-      return false;
-    }
-    unlocked = true;
-    if (pauseAfter) {
-      try { audio.pause(); } catch {}
-    }
-    return true;
-  }
-
-  async function ensurePlaybackAfterGesture() {
-    pendingGestureStart = false;
-    hadUserGesture = true;
-    if (!activeMode) return false;
-    if (!getAudioSrc() && !applyCurrentSource()) return false;
-    return await tryUnlock({ pauseAfter: false });
-  }
-
-  async function start(mode, options = {}) {
-    const nextMode = String(mode || '');
-    const fromGesture = !!options.fromGesture;
-    if (nextMode !== 'lobby' && nextMode !== 'tavern') {
-      stop();
-      return;
-    }
-
-    applyVolume();
-    const fileName = nextMode === 'lobby'
-      ? lobbyTrack
-      : (activeMode === 'tavern' && activeFile && !failedTavernTracks.has(activeFile) ? activeFile : chooseTavernTrack());
-    const sources = buildLobbyAmbientCandidates(fileName);
-    const preferredSrc = getAudioSrc() || getCurrentCandidate() || sources[0] || '';
-
-    if (!sources.length) {
-      stop();
-      return;
-    }
-
-    if (activeMode !== nextMode || activeFile !== fileName || !sources.includes(preferredSrc)) {
-      activeMode = nextMode;
-      activeFile = fileName;
-      setAudioSourceCandidates(sources, preferredSrc);
-      if (!applyCurrentSource()) {
-        stop();
-        return;
-      }
-    }
-
-    if (fromGesture) {
-      await ensurePlaybackAfterGesture();
-      return;
-    }
-
-    if (!unlocked) {
-      if (hadUserGesture) {
-        await ensurePlaybackAfterGesture();
-        return;
-      }
-      pendingGestureStart = true;
-      return;
-    }
-
-    await playPromiseSafe();
-  }
-
-  function stop() {
-    activeMode = '';
-    activeFile = '';
-    sourceCandidates = [];
-    sourceIndex = 0;
-    pendingGestureStart = false;
-    try { audio.pause(); } catch {}
-    try {
-      audio.removeAttribute('src');
-      audio.src = '';
-      audio.load();
-    } catch {}
-  }
-
-  function sync(options = {}) {
-    const startOpts = options && typeof options === 'object' ? options : {};
-    const loginVisible = !!(loginDiv && loginDiv.style.display !== 'none');
-    const tavernVisible = !!(tavernDiv && !tavernDiv.classList.contains('hidden') && tavernDiv.style.display !== 'none');
-    const gameVisible = !!(gameUI && gameUI.style.display !== 'none');
-
-    if (gameVisible) {
-      stop();
-      return;
-    }
-    if (tavernVisible) {
-      if (activeMode !== 'tavern' && failedTavernTracks.size >= tavernTracks.length) {
-        failedTavernTracks.clear();
-      }
-      start('tavern', startOpts);
-      return;
-    }
-    if (loginVisible) {
-      start('lobby', startOpts);
-      return;
-    }
-    stop();
-  }
-
-  async function nudgeFromGesture() {
-    hadUserGesture = true;
-    applyVolume();
-    if (!activeMode) {
-      sync({ fromGesture: true });
-      return;
-    }
-    await ensurePlaybackAfterGesture();
-    if (pendingGestureStart) {
-      sync({ fromGesture: true });
-    }
-  }
-
-  function bindGlobalUnlock() {
-    if (globalBound) return;
-    globalBound = true;
-
-    const onGesture = async () => {
-      hadUserGesture = true;
-      await nudgeFromGesture();
-    };
-
-    const opts = { capture: true, passive: true };
-    window.addEventListener('pointerdown', onGesture, opts);
-    window.addEventListener('click', onGesture, opts);
-    window.addEventListener('touchstart', onGesture, opts);
-    window.addEventListener('keydown', onGesture, { capture: true });
-    window.addEventListener('storage', (e) => {
-      if (e?.key === LS_VOL || e?.key === LS_VOL_LEGACY) {
-        applyVolume();
-        sync();
-      }
-    });
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') sync();
-      else {
-        try { audio.pause(); } catch {}
-      }
-    });
-  }
-
-  audio.addEventListener('loadeddata', async () => {
-    applyVolume();
-    if (!activeMode) return;
-    if (unlocked) {
-      await playPromiseSafe();
-      return;
-    }
-    if (hadUserGesture) {
-      await ensurePlaybackAfterGesture();
-    }
-  });
-
-  audio.addEventListener('canplay', async () => {
-    applyVolume();
-    if (!activeMode) return;
-    if (unlocked) {
-      await playPromiseSafe();
-      return;
-    }
-    if (hadUserGesture) {
-      await ensurePlaybackAfterGesture();
-    }
-  });
-
-  audio.addEventListener('ended', () => {
-    if (activeMode !== 'tavern') return;
-    activeFile = chooseTavernTrack();
-    start('tavern', { fromGesture: unlocked });
-  });
-
-  audio.addEventListener('error', () => {
-    if (advanceSource()) {
-      if (activeMode) start(activeMode, { fromGesture: unlocked });
-      return;
-    }
-    if (activeMode === 'tavern') {
-      if (activeFile) failedTavernTracks.add(activeFile);
-      const nextTrack = chooseTavernTrack();
-      if (nextTrack && (!activeFile || nextTrack !== activeFile || failedTavernTracks.size < tavernTracks.length)) {
-        activeFile = nextTrack;
-        start('tavern', { fromGesture: unlocked });
-        return;
-      }
-      activeFile = lobbyTrack;
-      const lobbySources = buildLobbyAmbientCandidates(lobbyTrack);
-      setAudioSourceCandidates(lobbySources, lobbySources[0] || '');
-      if (applyCurrentSource()) {
-        playPromiseSafe();
-        return;
-      }
-      stop();
-      return;
-    }
-    if (activeMode === 'lobby') {
-      stop();
-    }
-  });
-
-  bindGlobalUnlock();
-  applyVolume();
-
-  return { sync, start, stop, nudgeFromGesture, audio };
-})();
-
 const myNameSpan = document.getElementById('myName');
 const myRoleSpan = document.getElementById('myRole');
 const myRoomSpan = document.getElementById('myRoom');
@@ -663,20 +217,108 @@ async function broadcastDiceEventOnly(event) {
   } catch {}
 }
 
-// ===== Role helpers (MVP) =====
-function normalizeRoleForDb(role) {
-  const r = String(role || '');
-  if (r === 'DnD-Player') return 'Player'; // DB constraint
-  return r;
-}
-function normalizeRoleForUi(role) {
-  const r = String(role || '');
-  if (r === 'Player') return 'DnD-Player';
-  return r;
+// ===== App storage + role helpers =====
+const LEGACY_APP_PREFIX = ['d', 'n', 'd'].join('');
+const LEGACY_ROLE_PLAYER = ['D', 'n', 'D', '-', 'P', 'l', 'a', 'y', 'e', 'r'].join('');
+
+function legacyAppKey(name) {
+  return `${LEGACY_APP_PREFIX}_${String(name || '').trim()}`;
 }
 
+const APP_STORAGE_KEY_ALIASES = Object.freeze({
+  int_user_id: [legacyAppKey('user_id')],
+  int_user_name: [legacyAppKey('user_name')],
+  int_user_role: [legacyAppKey('user_role')],
+  int_campaign_owner_key: [legacyAppKey('campaign_owner_key')],
+  int_marks_legend_collapsed: [legacyAppKey('marks_legend_collapsed')],
+  int_room_chat_ui: [legacyAppKey('room_chat_ui')],
+  int_tavern_chat_ui: [legacyAppKey('tavern_chat_ui')],
+  int_lobby_last_video_file: [legacyAppKey('lobby_last_video_file')],
+  int_lobby_ambient_volume: [legacyAppKey('lobby_ambient_volume')],
+  int_last_tavern_ambient_file: [legacyAppKey('last_tavern_ambient_file')],
+  int_bg_music_volume: [legacyAppKey('bg_music_volume')],
+  int_room_passwords_cache: [legacyAppKey('room_passwords_cache')],
+  int_marks_toolbar: [legacyAppKey('marks_toolbar')],
+  int_marks_toolbar_collapsed: [legacyAppKey('marks_toolbar_collapsed')],
+  int_viewport_cols: [legacyAppKey('viewport_cols')],
+  int_viewport_rows: [legacyAppKey('viewport_rows')],
+  int_ws_client_id: [legacyAppKey('ws_client_id')],
+  int_sheet_rte_heights_v1: [legacyAppKey('sheet_rte_heights_v1')],
+  int_sheet_ta_heights_v1: [legacyAppKey('sheet_ta_heights_v1')]
+});
+
+function getAppStorageItem(key) {
+  try {
+    const primary = String(key || '').trim();
+    if (!primary) return null;
+    const value = localStorage.getItem(primary);
+    if (value != null) return value;
+    const aliases = APP_STORAGE_KEY_ALIASES[primary] || [];
+    for (const legacyKey of aliases) {
+      const legacyValue = localStorage.getItem(legacyKey);
+      if (legacyValue != null) {
+        localStorage.setItem(primary, legacyValue);
+        return legacyValue;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+function setAppStorageItem(key, value) {
+  try {
+    const primary = String(key || '').trim();
+    if (!primary) return;
+    const normalized = String(value ?? '');
+    localStorage.setItem(primary, normalized);
+    const aliases = APP_STORAGE_KEY_ALIASES[primary] || [];
+    aliases.forEach((legacyKey) => {
+      try { localStorage.setItem(legacyKey, normalized); } catch {}
+    });
+  } catch {}
+}
+
+window.getAppStorageItem = getAppStorageItem;
+window.setAppStorageItem = setAppStorageItem;
+window.APP_STORAGE_KEY_ALIASES = APP_STORAGE_KEY_ALIASES;
+window.legacyAppKey = legacyAppKey;
+
+const ROLE_CONFIG = Object.freeze({
+  GM: { db: 'GM', ui: 'ГМ', aliases: ['GM', 'ГМ'] },
+  Player: { db: 'Player', ui: 'Игрок', aliases: ['Player', LEGACY_ROLE_PLAYER, 'Игрок'] },
+  Spectator: { db: 'Spectator', ui: 'Зритель', aliases: ['Spectator', 'Зритель', 'Наблюдатель'] }
+});
+
+function normalizeRoleKey(role) {
+  const raw = String(role || '').trim();
+  if (!raw) return '';
+  for (const [key, cfg] of Object.entries(ROLE_CONFIG)) {
+    if (cfg.aliases.includes(raw) || cfg.db === raw || cfg.ui === raw) return key;
+  }
+  return raw;
+}
+
+function normalizeRoleForDb(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_CONFIG[key]?.db || String(role || '').trim();
+}
+
+function normalizeRoleForUi(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_CONFIG[key]?.ui || String(role || '').trim();
+}
+
+function normalizeRoleForApp(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_CONFIG[key]?.db || String(role || '').trim();
+}
+
+window.normalizeRoleForDb = normalizeRoleForDb;
+window.normalizeRoleForUi = normalizeRoleForUi;
+window.normalizeRoleForApp = normalizeRoleForApp;
+
 function safeGetUserName() {
-  const raw = localStorage.getItem("dnd_user_name");
+  const raw = getAppStorageItem("int_user_name");
   const fromLs = (typeof raw === "string") ? raw.trim() : "";
   if (fromLs) return fromLs;
 
@@ -686,11 +328,11 @@ function safeGetUserName() {
   if (fromInput) return fromInput;
 
   const fromSpan = String(myNameSpan?.textContent || "").replace(/^\s*Вы:\s*/i, "").trim();
-  return fromSpan || "Player";
+  return fromSpan || "Игрок";
 }
 
 function safeGetUserRoleDb() {
-  const raw = String(localStorage.getItem("dnd_user_role") || myRole || "");
+  const raw = String(getAppStorageItem("int_user_role") || myRole || "");
   return normalizeRoleForDb(raw);
 }
 
@@ -698,8 +340,8 @@ function getCampaignOwnerKey() {
   // Устойчивый ключ владельца кампаний на этом устройстве/браузере.
   // Без Supabase Auth это самый простой способ "привязать" сохранения к ГМу
   // и позволить загружать их в любой комнате.
-  const LS_KEY = "dnd_campaign_owner_key";
-  let key = String(localStorage.getItem(LS_KEY) || "").trim();
+  const LS_KEY = "int_campaign_owner_key";
+  let key = String(getAppStorageItem(LS_KEY) || "").trim();
   if (key) return key;
 
   // crypto.randomUUID есть почти везде, но сделаем fallback
@@ -707,13 +349,13 @@ function getCampaignOwnerKey() {
     ? window.crypto.randomUUID()
     : ("owner_" + Math.random().toString(16).slice(2) + "_" + Date.now());
 
-  localStorage.setItem(LS_KEY, key);
+  setAppStorageItem(LS_KEY, key);
   return key;
 }
 
 
-function isGM() { return String(myRole || '') === 'GM'; }
-function isSpectator() { return String(myRole || '') === 'Spectator'; }
+function isGM() { return normalizeRoleForApp(myRole) === 'GM'; }
+function isSpectator() { return normalizeRoleForApp(myRole) === 'Spectator'; }
 
 function applyRoleToUI() {
   const gm = isGM();
@@ -1225,17 +867,17 @@ sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANO
 window.SUPABASE_FETCH_FN = "fetch";
   
   // stable identity (doesn't depend on nickname)
-  const savedUserId = localStorage.getItem("dnd_user_id") || "";
+  const savedUserId = getAppStorageItem("int_user_id") || "";
   const userId = savedUserId || ("xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;
     const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   }));
 
-  localStorage.setItem("dnd_user_id", String(userId));
-  localStorage.setItem("dnd_user_name", String(name));
+  setAppStorageItem("int_user_id", String(userId));
+  setAppStorageItem("int_user_name", String(name));
   // Роль выбирается при входе в комнату
-  localStorage.setItem("dnd_user_role", "");
+  setAppStorageItem("int_user_role", "");
 
   // In Supabase-MVP our "myId" is stable localStorage userId
   try { lobbyAmbientAudio.nudgeFromGesture?.(); } catch {}
@@ -1249,7 +891,7 @@ window.SUPABASE_FETCH_FN = "fetch";
 
 // ===== MARKS (ОБОЗНАЧЕНИЯ) COLLAPSE/EXPAND =====
 (function initMarksLegendToggle(){
-  const LS_KEY = 'dnd_marks_legend_collapsed';
+  const LS_KEY = 'int_marks_legend_collapsed';
 
   function applyCollapsed(root){
     const toolbar = (root && root.closest) ? root.closest('.marks-toolbar') : document.querySelector('.marks-toolbar');

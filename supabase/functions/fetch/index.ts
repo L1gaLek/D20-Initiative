@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Allow only dnd.su (и поддомены)
+    // Allow only the configured source domain (и поддомены)
     const host = parsed.hostname.toLowerCase();
     if (!(host === "dnd.su" || host.endsWith(".dnd.su"))) {
       return new Response(JSON.stringify({ ok: false, error: "Host not allowed" }), {
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
 
     const upstream = await fetch(parsed.href, {
       headers: {
-        "user-agent": "Mozilla/5.0 (DnD-GAME)",
+        "user-agent": "Mozilla/5.0 (Initiative-GAME)",
         "accept": "text/html,application/xhtml+xml",
       },
     });

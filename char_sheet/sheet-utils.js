@@ -1,4 +1,4 @@
-/* sheet-utils.js — вынесено из info-dnd-player.js */
+/* sheet-utils.js — вынесено из info-sheet-player.js */
 
 // UI-состояние модалки (чтобы обновления state не сбрасывали вкладку/скролл)
 // Map<playerId, { activeTab: string, scrollTopByTab: Record<string, number>, lastInteractAt: number }>

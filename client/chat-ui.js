@@ -37,10 +37,10 @@ function isChatEntryExpired(entry, now = Date.now()) {
 }
 
 function buildChatStorageKey(scope, roomId = '') {
-  const userId = String(localStorage.getItem('dnd_user_id') || myId || 'guest').trim() || 'guest';
+  const userId = String(getAppStorageItem('int_user_id') || myId || 'guest').trim() || 'guest';
   return scope === 'room'
-    ? `dnd_room_chat_ui:${userId}:${String(roomId || '').trim() || 'room'}`
-    : `dnd_tavern_chat_ui:${userId}`;
+    ? `int_room_chat_ui:${userId}:${String(roomId || '').trim() || 'room'}`
+    : `int_tavern_chat_ui:${userId}`;
 }
 
 function readChatUiPrefs(scope, roomId = '') {
@@ -134,7 +134,7 @@ function openTavern() {
   gameUI.style.display = 'none';
   tavernDiv.classList.remove('hidden');
   tavernDiv.setAttribute('aria-hidden', 'false');
-  if (tavernMyName) tavernMyName.textContent = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'путник');
+  if (tavernMyName) tavernMyName.textContent = String(getAppStorageItem('int_user_name') || myNameSpan?.textContent || 'путник');
   initTavernVideoBackground();
   updateLobbyModeClass();
   try { lobbyAmbientAudio.sync(); } catch {}
@@ -151,11 +151,11 @@ function closeTavern() {
 }
 
 function getTavernMyUserId() {
-  return String(localStorage.getItem('dnd_user_id') || myId || 'guest');
+  return String(getAppStorageItem('int_user_id') || myId || 'guest');
 }
 
 function getTavernMyUserName() {
-  return String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'Путник');
+  return String(getAppStorageItem('int_user_name') || myNameSpan?.textContent || 'Путник');
 }
 
 function safeJsonParse(raw, fallback = null) {
@@ -955,7 +955,7 @@ function noteRoomChatUnread(item) {
 }
 function normalizeRoomChatMessage(entry) {
   if (!entry || typeof entry !== 'object') return null;
-  const myIdLocal = String(myId || localStorage.getItem('dnd_user_id') || 'guest');
+  const myIdLocal = String(myId || getAppStorageItem('int_user_id') || 'guest');
   const chatType = String(entry.chatType || 'global') === 'direct' ? 'direct' : 'global';
   const item = {
     id: String(entry.id || `room-chat-${Date.now()}-${Math.random().toString(16).slice(2)}`),
@@ -1064,11 +1064,11 @@ function getRoomUsersSnapshot() {
 }
 function renderRoomChatUsersList() {
   if (!roomChatUsersList) return;
-  const myIdLocal = String(myId || localStorage.getItem('dnd_user_id') || 'guest');
+  const myIdLocal = String(myId || getAppStorageItem('int_user_id') || 'guest');
   const allUsers = getRoomUsersSnapshot()
     .filter((u) => u.id !== myIdLocal)
     .sort((a,b) => String(a.name).localeCompare(String(b.name), 'ru'));
-  const roomUsers = allUsers.map((user) => ({ ...user, hint: user.role || 'Игрок' }));
+  const roomUsers = allUsers.map((user) => ({ ...user, hint: normalizeRoleForUi(user.role || 'Игрок') }));
   if (!roomUsers.length) {
     roomChatUsersList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Сейчас в комнате больше никого нет.</div></div>';
     return;
@@ -1197,8 +1197,8 @@ async function persistRoomChatMessage(message) {
 async function sendRoomChatMessage() {
   const text = String(roomChatInput?.value || '').trim();
   if (!text || !currentRoomId) return;
-  const userId = String(localStorage.getItem('dnd_user_id') || myId || 'guest');
-  const userName = String(localStorage.getItem('dnd_user_name') || myNameSpan?.textContent || 'Путник');
+  const userId = String(getAppStorageItem('int_user_id') || myId || 'guest');
+  const userName = String(getAppStorageItem('int_user_name') || myNameSpan?.textContent || 'Путник');
   let message = {
     id: `room-chat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     chatType: 'global',
@@ -1250,7 +1250,8 @@ function openRoomChat() {
   renderRoomChat();
   setTimeout(() => roomChatInput?.focus(), 0);
 }
-async function returnToTavernFromRoom() {
+async function returnToTavernFromRoom(options = null) {
+  const opts = (options && typeof options === 'object') ? options : {};
   const roomId = String(currentRoomId || '').trim();
   if (!roomId) {
     openTavern();
@@ -1258,12 +1259,14 @@ async function returnToTavernFromRoom() {
     try { sendMessage({ type: 'listRooms' }); } catch {}
     return;
   }
-  try {
-    if (sbClient && myId) {
-      await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', myId);
+  if (!opts.skipMemberCleanup) {
+    try {
+      if (sbClient && myId) {
+        await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', myId);
+      }
+    } catch (e) {
+      console.warn('leave room member cleanup failed', e);
     }
-  } catch (e) {
-    console.warn('leave room member cleanup failed', e);
   }
   try { stopHeartbeat(); } catch {}
   try { stopMembersPolling(); } catch {}
@@ -1505,4 +1508,3 @@ document.addEventListener('click', (e) => {
   if (roomChatUsersPopover.contains(target) || roomChatUsersBtn?.contains?.(target)) return;
   closeRoomChatUsersPopover();
 });
-

@@ -119,14 +119,14 @@
   }
 
   // local volume (per user)
-  const LS_VOL = "dnd_bg_music_volume";
+  const LS_VOL = "int_bg_music_volume";
   function loadLocalVol() {
-    const raw = localStorage.getItem(LS_VOL);
+    const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(LS_VOL) : localStorage.getItem(LS_VOL));
     const n = Number(raw);
     return Number.isFinite(n) ? clamp01(n) : 0.4;
   }
   function saveLocalVol(v) {
-    try { localStorage.setItem(LS_VOL, String(clamp01(v))); } catch {}
+    try { (typeof setAppStorageItem === "function" ? setAppStorageItem(LS_VOL, String(clamp01(v))) : localStorage.setItem(LS_VOL, String(clamp01(v)))); } catch {}
   }
   audio.volume = loadLocalVol();
 

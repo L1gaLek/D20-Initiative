@@ -1029,11 +1029,11 @@ function normalizeHref(href) {
 // often does NOT have data-sheet-path, so a key based only on data-sheet-path was empty
 // and height couldn't persist across tab switches (DOM is re-rendered).
 // Build a stable per-player key from data attributes / surrounding metadata.
-const RTE_HEIGHT_LS_KEY = 'dnd_sheet_rte_heights_v1';
+const RTE_HEIGHT_LS_KEY = 'int_sheet_rte_heights_v1';
 
 function loadRteHeights() {
   try {
-    const raw = localStorage.getItem(RTE_HEIGHT_LS_KEY);
+    const raw = (typeof getAppStorageItem === 'function' ? getAppStorageItem(RTE_HEIGHT_LS_KEY) : localStorage.getItem(RTE_HEIGHT_LS_KEY));
     const obj = raw ? JSON.parse(raw) : {};
     return (obj && typeof obj === 'object') ? obj : {};
   } catch {
@@ -1043,7 +1043,7 @@ function loadRteHeights() {
 
 function saveRteHeights(obj) {
   try {
-    localStorage.setItem(RTE_HEIGHT_LS_KEY, JSON.stringify(obj || {}));
+    (typeof setAppStorageItem === 'function' ? setAppStorageItem(RTE_HEIGHT_LS_KEY, JSON.stringify(obj || {})) : localStorage.setItem(RTE_HEIGHT_LS_KEY, JSON.stringify(obj || {})));
   } catch {}
 }
 
@@ -2179,11 +2179,11 @@ if (path === "proficiency" || path === "proficiencyCustom") {
   }
 
 // ===================== Textarea height persistence =====================
-const TA_HEIGHT_LS_KEY = 'dnd_sheet_ta_heights_v1';
+const TA_HEIGHT_LS_KEY = 'int_sheet_ta_heights_v1';
 
 function loadTextareaHeights() {
   try {
-    const raw = localStorage.getItem(TA_HEIGHT_LS_KEY);
+    const raw = (typeof getAppStorageItem === 'function' ? getAppStorageItem(TA_HEIGHT_LS_KEY) : localStorage.getItem(TA_HEIGHT_LS_KEY));
     const obj = raw ? JSON.parse(raw) : {};
     return (obj && typeof obj === 'object') ? obj : {};
   } catch {
@@ -2193,7 +2193,7 @@ function loadTextareaHeights() {
 
 function saveTextareaHeights(obj) {
   try {
-    localStorage.setItem(TA_HEIGHT_LS_KEY, JSON.stringify(obj || {}));
+    (typeof setAppStorageItem === 'function' ? setAppStorageItem(TA_HEIGHT_LS_KEY, JSON.stringify(obj || {})) : localStorage.setItem(TA_HEIGHT_LS_KEY, JSON.stringify(obj || {})));
   } catch {}
 }
 
