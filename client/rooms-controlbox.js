@@ -7,12 +7,72 @@ function getRoomPasswordBadge(hasPassword) {
   return `<span class="room-lock-badge ${cls}" title="Пароль ${text}"><span class="room-lock-badge__icon" aria-hidden="true">${icon}</span><span class="room-lock-badge__text">${text}</span></span>`;
 }
 
+let roomEditorMode = 'create';
+let editingRoomId = '';
+
+function setCreateRoomButtonsDisabled(disabled, message = '') {
+  [createRoomBtn, tavernCreateRoomBtn].filter(Boolean).forEach((btn) => {
+    btn.disabled = !!disabled;
+    btn.title = disabled ? String(message || 'У вас уже есть комната.') : '';
+  });
+}
+
+function updateRoomCreationAvailability(rooms = []) {
+  const mine = Array.isArray(rooms) ? rooms.find((room) => room?.isMine) : null;
+  const message = mine
+    ? 'У вас уже есть своя комната. Её можно редактировать или удалить.'
+    : '';
+  setCreateRoomButtonsDisabled(!!mine, message);
+}
+
+function openCreateRoomModal(room = null) {
+  const editing = !!room;
+  roomEditorMode = editing ? 'edit' : 'create';
+  editingRoomId = editing ? String(room.id || '') : '';
+  roomNameInput.value = editing ? String(room.name || '') : '';
+  roomPasswordInput.value = '';
+  roomScenarioInput.value = editing ? String(room.scenario || '') : '';
+  roomPasswordInput.placeholder = editing
+    ? 'Новый пароль (оставьте пустым, чтобы убрать)'
+    : 'Пароль (необязательно)';
+  if (createRoomModalTitle) createRoomModalTitle.textContent = editing ? 'Редактировать комнату' : 'Создать комнату';
+  if (createRoomModalSubtitle) {
+    createRoomModalSubtitle.textContent = editing
+      ? 'Измените название, сценарий и пароль комнаты. Пустой пароль снимет защиту.'
+      : 'Пароль необязателен';
+  }
+  if (createRoomSubmit) createRoomSubmit.textContent = editing ? 'Сохранить' : 'Создать';
+  if (roomsError) roomsError.textContent = '';
+  if (tavernRoomsError) tavernRoomsError.textContent = '';
+  createRoomModal.classList.remove('hidden');
+}
+
+function closeCreateRoomModal() {
+  createRoomModal.classList.add('hidden');
+  roomEditorMode = 'create';
+  editingRoomId = '';
+  if (createRoomModalTitle) createRoomModalTitle.textContent = 'Создать комнату';
+  if (createRoomModalSubtitle) createRoomModalSubtitle.textContent = 'Пароль необязателен';
+  roomPasswordInput.placeholder = 'Пароль (необязательно)';
+  if (createRoomSubmit) createRoomSubmit.textContent = 'Создать';
+}
+
+function confirmDeleteRoom(room) {
+  const roomId = String(room?.id || '').trim();
+  if (!roomId) return;
+  const roomName = String(room?.name || 'Комната');
+  const confirmed = window.confirm(`Удалить комнату «${roomName}»? Это действие удалит комнату для всех пользователей.`);
+  if (!confirmed) return;
+  sendMessage({ type: 'deleteRoom', roomId });
+}
+
 function renderRooms(rooms) {
   const targets = [roomsList, tavernRoomsList].filter(Boolean);
   if (!targets.length) return;
   if (roomsError) roomsError.textContent = '';
   if (tavernRoomsError) tavernRoomsError.textContent = '';
   targets.forEach((target) => { target.innerHTML = ''; });
+  updateRoomCreationAvailability(rooms);
 
   // total unique users on server (optional field from listRooms)
   try {
@@ -44,7 +104,9 @@ function renderRooms(rooms) {
       meta.className = 'lobby-room-card__meta';
       meta.innerHTML =
         `Пользователей: ${Number(r.uniqueUsers) || 0} • Пароль: ${getRoomPasswordBadge(!!r.hasPassword)}`
-        + (r.scenario ? ` • Сценарий: ${escapeHtmlLite(r.scenario)}` : '');
+        + (r.scenario ? ` • Сценарий: ${escapeHtmlLite(r.scenario)}` : '')
+        + (r.ownerName ? ` • Владелец: ${escapeHtmlLite(r.ownerName)}` : '')
+        + (r.isMine ? ' • <strong>Моя комната</strong>' : '');
 
       left.appendChild(title);
       left.appendChild(meta);
@@ -62,6 +124,21 @@ function renderRooms(rooms) {
           sendMessage({ type: 'joinRoom', roomId: r.id, password: '' });
         }
       };
+
+      if (r.isMine) {
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.textContent = 'Редактировать';
+        editBtn.onclick = () => openCreateRoomModal(r);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = 'Удалить';
+        deleteBtn.onclick = () => confirmDeleteRoom(r);
+
+        right.appendChild(editBtn);
+        right.appendChild(deleteBtn);
+      }
 
       right.appendChild(joinBtn2);
       card.appendChild(left);
@@ -262,17 +339,6 @@ try {
   if (pickSp) pickSp.addEventListener('click', () => pickRoleAndJoin('Spectator'));
 } catch {}
 
-function openCreateRoomModal() {
-  roomNameInput.value = '';
-  roomPasswordInput.value = '';
-  roomScenarioInput.value = '';
-  createRoomModal.classList.remove('hidden');
-}
-
-function closeCreateRoomModal() {
-  createRoomModal.classList.add('hidden');
-}
-
 if (createRoomBtn) createRoomBtn.addEventListener('click', openCreateRoomModal);
 if (createRoomClose) createRoomClose.addEventListener('click', closeCreateRoomModal);
 if (createRoomCancel) createRoomCancel.addEventListener('click', closeCreateRoomModal);
@@ -287,7 +353,11 @@ if (createRoomSubmit) createRoomSubmit.addEventListener('click', () => {
     return;
   }
 
-  sendMessage({ type: 'createRoom', name, password, scenario });
+  if (roomEditorMode === 'edit' && editingRoomId) {
+    sendMessage({ type: 'updateRoom', roomId: editingRoomId, name, password, scenario });
+  } else {
+    sendMessage({ type: 'createRoom', name, password, scenario });
+  }
   closeCreateRoomModal();
 });
 
