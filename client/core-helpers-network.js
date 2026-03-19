@@ -438,6 +438,38 @@ async function subscribeRoomDb(roomId) {
   await roomChannel.subscribe();
 }
 
+// ================== Detached table query helpers ==================
+async function loadRoomScopedRows(table, roomId, opts = {}) {
+  await ensureSupabaseReady();
+  if (!roomId) return opts.maybeSingle ? null : [];
+
+  const {
+    select = '*',
+    mapId = null,
+    orderBy = null,
+    ascending = true,
+    limit = null,
+    maybeSingle = false,
+    missingColumn = ''
+  } = opts || {};
+
+  let query = sbClient.from(table).select(select).eq('room_id', roomId);
+  if (mapId) query = query.eq('map_id', mapId);
+  if (orderBy) query = query.order(orderBy, { ascending: !!ascending });
+  if (Number.isFinite(Number(limit)) && Number(limit) > 0) query = query.limit(Number(limit));
+  if (maybeSingle) query = query.maybeSingle();
+
+  const { data, error } = await query;
+  if (error) {
+    if (missingColumn && _isMissingColumnError(error, missingColumn)) {
+      throw new Error(`room_marks schema is outdated: missing '${missingColumn}' jsonb column. Run the migration SQL before using detached marks.`);
+    }
+    throw error;
+  }
+
+  return data ?? (maybeSingle ? null : []);
+}
+
 // ================== v4: TOKENS / LOG / DICE (dedicated tables) ==================
 async function subscribeRoomTokensDb(roomId) {
   if (!USE_SUPABASE_REALTIME) {
@@ -471,13 +503,7 @@ async function subscribeRoomTokensDb(roomId) {
 }
 
 async function loadRoomTokens(roomId, mapId) {
-  await ensureSupabaseReady();
-  if (!roomId) return [];
-  let q = sbClient.from('room_tokens').select('*').eq('room_id', roomId);
-  if (mapId) q = q.eq('map_id', mapId);
-  const { data, error } = await q;
-  if (error) throw error;
-  return data || [];
+  return loadRoomScopedRows('room_tokens', roomId, { mapId });
 }
 
 async function subscribeRoomLogDb(roomId) {
@@ -504,16 +530,12 @@ async function subscribeRoomLogDb(roomId) {
 }
 
 async function loadRoomLog(roomId, limit = 200) {
-  await ensureSupabaseReady();
-  if (!roomId) return [];
-  const { data, error } = await sbClient
-    .from('room_log')
-    .select('id,text,created_at')
-    .eq('room_id', roomId)
-    .order('created_at', { ascending: true })
-    .limit(Math.max(1, Math.min(500, Number(limit) || 200)));
-  if (error) throw error;
-  return data || [];
+  return loadRoomScopedRows('room_log', roomId, {
+    select: 'id,text,created_at',
+    orderBy: 'created_at',
+    ascending: true,
+    limit: Math.max(1, Math.min(500, Number(limit) || 200))
+  });
 }
 
 async function subscribeRoomDiceDb(roomId) {
@@ -540,78 +562,32 @@ async function subscribeRoomDiceDb(roomId) {
 }
 
 async function loadRoomDice(roomId, limit = 50) {
-  await ensureSupabaseReady();
-  if (!roomId) return [];
-  const { data, error } = await sbClient
-    .from('room_dice_events')
-    .select('*')
-    .eq('room_id', roomId)
-    .order('created_at', { ascending: false })
-    .limit(Math.max(1, Math.min(200, Number(limit) || 50)));
-  if (error) throw error;
-  return data || [];
+  return loadRoomScopedRows('room_dice_events', roomId, {
+    orderBy: 'created_at',
+    ascending: false,
+    limit: Math.max(1, Math.min(200, Number(limit) || 50))
+  });
 }
 
 // ================== Detached low-frequency tables ==================
 async function loadRoomMapMeta(roomId) {
-  await ensureSupabaseReady();
-  if (!roomId) return [];
-  const { data, error } = await sbClient
-    .from('room_map_meta')
-    .select('*')
-    .eq('room_id', roomId);
-  if (error) throw error;
-  return data || [];
+  return loadRoomScopedRows('room_map_meta', roomId);
 }
 
 async function loadRoomWalls(roomId) {
-  await ensureSupabaseReady();
-  if (!roomId) return [];
-  const { data, error } = await sbClient
-    .from('room_walls')
-    .select('*')
-    .eq('room_id', roomId);
-  if (error) throw error;
-  return data || [];
+  return loadRoomScopedRows('room_walls', roomId);
 }
 
 async function loadRoomMarks(roomId) {
-  await ensureSupabaseReady();
-  if (!roomId) return [];
-  const { data, error } = await sbClient
-    .from('room_marks')
-    .select('*')
-    .eq('room_id', roomId);
-  if (error) {
-    if (_isMissingColumnError(error, 'payload')) {
-      throw new Error("room_marks schema is outdated: missing 'payload' jsonb column. Run the migration SQL before using detached marks.");
-    }
-    throw error;
-  }
-  return data || [];
+  return loadRoomScopedRows('room_marks', roomId, { missingColumn: 'payload' });
 }
 
 async function loadRoomFog(roomId) {
-  await ensureSupabaseReady();
-  if (!roomId) return [];
-  const { data, error } = await sbClient
-    .from('room_fog')
-    .select('*')
-    .eq('room_id', roomId);
-  if (error) throw error;
-  return data || [];
+  return loadRoomScopedRows('room_fog', roomId);
 }
 
 async function loadRoomMusic(roomId) {
-  await ensureSupabaseReady();
-  if (!roomId) return null;
-  const { data, error } = await sbClient
-    .from('room_music_state')
-    .select('*')
-    .eq('room_id', roomId)
-    .maybeSingle();
-  if (error) throw error;
-  return data || null;
+  return loadRoomScopedRows('room_music_state', roomId, { maybeSingle: true });
 }
 
 async function subscribeRoomMapMetaDb(roomId) {

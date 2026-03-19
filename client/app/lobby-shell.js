@@ -1,5 +1,7 @@
 // Lobby / tavern shell helpers extracted from client/dom-and-setup.js.
 
+let __projectAssetBasePathCache = null;
+
 function updateLobbyModeClass() {
   try {
     const loginVisible = !!(loginDiv && loginDiv.style.display !== 'none');
@@ -26,6 +28,7 @@ function watchLobbyVisibility() {
 }
 
 function getProjectAssetBasePath() {
+  if (__projectAssetBasePathCache !== null) return __projectAssetBasePathCache;
   try {
     const script = Array.from(document.scripts || []).find((node) => {
       const src = String(node?.getAttribute?.('src') || node?.src || '');
@@ -35,19 +38,22 @@ function getProjectAssetBasePath() {
     if (src) {
       const url = new URL(src, window.location.href);
       const match = url.pathname.match(/^(.*)\/client\/dom-and-setup\.js(?:$|[?#])/);
-      if (match) return String(match[1] || '');
-      return url.pathname.replace(/\/client\/[^/]+$/, '');
+      __projectAssetBasePathCache = match ? String(match[1] || '') : url.pathname.replace(/\/client\/[^/]+$/, '');
+      return __projectAssetBasePathCache;
     }
   } catch {}
 
   try {
     const path = String(window.location.pathname || '/');
     const clean = path.replace(/[?#].*$/, '');
-    if (/\.(html?)$/i.test(clean)) return clean.replace(/\/[^/]*$/, '');
-    return clean.endsWith('/') ? clean.replace(/\/$/, '') : clean;
+    __projectAssetBasePathCache = /\.(html?)$/i.test(clean)
+      ? clean.replace(/\/[^/]*$/, '')
+      : (clean.endsWith('/') ? clean.replace(/\/$/, '') : clean);
+    return __projectAssetBasePathCache;
   } catch {}
 
-  return '';
+  __projectAssetBasePathCache = '';
+  return __projectAssetBasePathCache;
 }
 
 function buildLobbyVideoCandidates(fileName) {
@@ -61,24 +67,36 @@ function applyVideoSourceWithFallback(video, sources) {
   if (!video) return;
   const list = Array.isArray(sources) ? sources.filter(Boolean) : [];
   if (!list.length) return;
-  let sourceIndex = 0;
 
-  const applySource = (src) => {
-    if (!src) return;
-    if (video.getAttribute('src') === src) return;
-    video.setAttribute('src', src);
-    try { video.load(); } catch {}
-    const playPromise = video.play?.();
-    if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
-  };
+  if (!video.__fallbackSourceState) {
+    const state = {
+      sources: [],
+      sourceIndex: 0,
+      applySource(src) {
+        if (!src) return;
+        if (video.getAttribute('src') === src) return;
+        video.setAttribute('src', src);
+        try { video.load(); } catch {}
+        const playPromise = video.play?.();
+        if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
+      }
+    };
+    video.__fallbackSourceState = state;
+    video.addEventListener('error', () => {
+      const currentState = video.__fallbackSourceState;
+      if (!currentState || !Array.isArray(currentState.sources)) return;
+      currentState.sourceIndex += 1;
+      const fallback = currentState.sources[currentState.sourceIndex] || '';
+      if (fallback) currentState.applySource(fallback);
+    });
+  }
 
-  video.addEventListener('error', () => {
-    sourceIndex += 1;
-    const fallback = list[sourceIndex] || '';
-    if (fallback) applySource(fallback);
-  });
-
-  applySource(list[sourceIndex] || '');
+  const state = video.__fallbackSourceState;
+  state.sources = list.slice();
+  const currentSrc = String(video.getAttribute('src') || '');
+  const currentIndex = currentSrc ? state.sources.indexOf(currentSrc) : -1;
+  state.sourceIndex = currentIndex >= 0 ? currentIndex : 0;
+  state.applySource(state.sources[state.sourceIndex] || '');
 }
 
 function initLobbyVideoBackground() {

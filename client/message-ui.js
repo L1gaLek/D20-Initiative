@@ -1,95 +1,121 @@
 // ================== MESSAGE HANDLER (used by Supabase subscriptions) ==================
-function handleMessage(msg) {
-
-  function makeDiceDedupKey(ev) {
-    try {
-      const rolls = Array.isArray(ev?.rolls) ? ev.rolls.map(n => Number(n) || 0).join(',') : '';
-      return [
-        String(ev?.fromId || ''),
-        String(ev?.fromName || ''),
-        String(ev?.kindText || ''),
-        String(ev?.sides ?? ''),
-        String(ev?.count ?? ''),
-        String(Number(ev?.bonus) || 0),
-        rolls,
-        String(ev?.total ?? ''),
-        String(ev?.crit || '')
-      ].join('|');
-    } catch {
-      return '';
-    }
+function makeDiceDedupKey(ev) {
+  try {
+    const rolls = Array.isArray(ev?.rolls) ? ev.rolls.map(n => Number(n) || 0).join(',') : '';
+    return [
+      String(ev?.fromId || ''),
+      String(ev?.fromName || ''),
+      String(ev?.kindText || ''),
+      String(ev?.sides ?? ''),
+      String(ev?.count ?? ''),
+      String(Number(ev?.bonus) || 0),
+      rolls,
+      String(ev?.total ?? ''),
+      String(ev?.crit || '')
+    ].join('|');
+  } catch {
+    return '';
   }
+}
 
-  function shouldSkipDuplicateOtherDice(ev, explicitId) {
-    try {
-      const now = Date.now();
-      const ttlMs = 1500;
-      window._recentOtherDiceKeys = window._recentOtherDiceKeys || new Map();
-      const recent = window._recentOtherDiceKeys;
+function shouldSkipDuplicateOtherDice(ev, explicitId) {
+  try {
+    const now = Date.now();
+    const ttlMs = 1500;
+    window._recentOtherDiceKeys = window._recentOtherDiceKeys || new Map();
+    const recent = window._recentOtherDiceKeys;
 
-      for (const [k, ts] of recent.entries()) {
-        if ((now - Number(ts || 0)) > ttlMs) recent.delete(k);
-      }
+    for (const [k, ts] of recent.entries()) {
+      if ((now - Number(ts || 0)) > ttlMs) recent.delete(k);
+    }
 
-      const idKey = explicitId ? `id:${String(explicitId)}` : '';
-      const sigKey = `sig:${makeDiceDedupKey(ev)}`;
-      if (idKey && recent.has(idKey)) return true;
-      if (sigKey && recent.has(sigKey)) return true;
-      if (idKey) recent.set(idKey, now);
-      if (sigKey) recent.set(sigKey, now);
+    const idKey = explicitId ? `id:${String(explicitId)}` : '';
+    const sigKey = `sig:${makeDiceDedupKey(ev)}`;
+    if (idKey && recent.has(idKey)) return true;
+    if (sigKey && recent.has(sigKey)) return true;
+    if (idKey) recent.set(idKey, now);
+    if (sigKey) recent.set(sigKey, now);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function syncUsersSnapshot(users) {
+  const incoming = new Set();
+  (Array.isArray(users) ? users : []).forEach((u) => {
+    if (!u || !u.id) return;
+    const uid = String(u.id);
+    incoming.add(uid);
+    if (!usersOrder.includes(uid)) usersOrder.push(uid);
+    userMissingTicks.set(uid, 0);
+    usersById.set(uid, { name: u.name, role: u.role });
+  });
+
+  Array.from(usersById.keys()).forEach((id) => {
+    if (!incoming.has(String(id))) usersById.delete(id);
+  });
+
+  (usersOrder || []).forEach((id) => {
+    const sid = String(id);
+    if (incoming.has(sid)) return;
+    const n = (userMissingTicks.get(sid) || 0) + 1;
+    userMissingTicks.set(sid, n);
+  });
+
+  const DROP_AFTER = 3; // 3 * 5s = 15s
+  usersOrder = (usersOrder || []).filter((id) => {
+    const sid = String(id);
+    const n = userMissingTicks.get(sid) || 0;
+    if (incoming.has(sid)) return true;
+    if (n >= DROP_AFTER) {
+      userMissingTicks.delete(sid);
       return false;
-    } catch {
-      return false;
     }
-  }
-
-  // ================== VISIBILITY HELPERS ==================
-  // Rules requested:
-  // 1) "Союзник" is GM-only.
-  // 2) GM-created characters are hidden from other players unless isAlly.
-  // 3) HP-bar / double-click mini / sheet are only available for visible tokens.
-  // 4) GM-created non-base non-ally characters are scoped to the active map (mapId).
-  function getOwnerRoleForPlayer(p) {
-    const direct = String(p?.ownerRole || '').trim();
-    if (direct) return direct;
-    const u = p?.ownerId ? usersById.get(String(p.ownerId)) : null;
-    return String(u?.role || '').trim();
-  }
-
-  function isPlayerVisibleToMe(p, state) {
-    if (!p) return false;
-    const ownerRole = getOwnerRoleForPlayer(p);
-    const curMapId = String(state?.currentMapId || '').trim();
-
-    if (myRole === 'GM') {
-      // GM view mode:
-      // - 'gm'     : show everything (with map-local scoping)
-      // - 'player' : treat visibility like a regular player
-      const gmView = String(state?.fog?.gmViewMode || 'gm');
-      if (gmView !== 'player') {
-        // Map-local GM NPCs/monsters: show only on their map.
-        if (ownerRole === 'GM' && !p.isBase && !p.isAlly) {
-          const pidMap = String(p?.mapId || '').trim();
-          if (pidMap && curMapId && pidMap !== curMapId) return false;
-        }
-        return true;
-      }
-      // else: fall through to non-GM rules
-    }
-
-    // Non-GM:
-    // GM-created non-allies are hidden unless GM explicitly made them public (eye).
-    // This must work consistently in ALL phases (including exploration).
-    if (ownerRole === 'GM' && !p.isAlly) {
-      const pub = !!p.isPublic;
-      if (!pub) return false;
-    }
-
-    // Safety: if a GM-created map-local somehow leaked as visible, still gate by map.
-    const pidMap = String(p?.mapId || '').trim();
-    if (ownerRole === 'GM' && pidMap && curMapId && pidMap !== curMapId && !p.isAlly) return false;
     return true;
+  });
+}
+
+function refreshUsersUi() {
+  updatePlayerList();
+  try { window.RoomChat?.refreshUsers?.(); } catch {}
+  try { window.TavernChat?.refreshUsers?.(); } catch {}
+}
+
+function getOwnerRoleForPlayer(p) {
+  const direct = String(p?.ownerRole || '').trim();
+  if (direct) return direct;
+  const u = p?.ownerId ? usersById.get(String(p.ownerId)) : null;
+  return String(u?.role || '').trim();
+}
+
+function isPlayerVisibleToMe(p, state) {
+  if (!p) return false;
+  const ownerRole = getOwnerRoleForPlayer(p);
+  const curMapId = String(state?.currentMapId || '').trim();
+
+  if (myRole === 'GM') {
+    const gmView = String(state?.fog?.gmViewMode || 'gm');
+    if (gmView !== 'player') {
+      if (ownerRole === 'GM' && !p.isBase && !p.isAlly) {
+        const pidMap = String(p?.mapId || '').trim();
+        if (pidMap && curMapId && pidMap !== curMapId) return false;
+      }
+      return true;
+    }
   }
+
+  if (ownerRole === 'GM' && !p.isAlly) {
+    const pub = !!p.isPublic;
+    if (!pub) return false;
+  }
+
+  const pidMap = String(p?.mapId || '').trim();
+  if (ownerRole === 'GM' && pidMap && curMapId && pidMap !== curMapId && !p.isAlly) return false;
+  return true;
+}
+
+function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
 try { handleLobbyRoomMessage?.(msg); } catch {}
@@ -100,48 +126,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
     }
 
     if (msg.type === "users" && Array.isArray(msg.users)) {
-      // Не пересоздаём Map целиком, чтобы не ломать порядок пользователей.
-      // Порядок фиксируем по первому появлению пользователя.
-      const incoming = new Set();
-      msg.users.forEach((u) => {
-        if (!u || !u.id) return;
-        const uid = String(u.id);
-        incoming.add(uid);
-
-        // запоминаем "первый приход" навсегда, чтобы порядок не менялся
-        if (!usersOrder.includes(uid)) {
-          usersOrder.push(uid);
-        }
-        userMissingTicks.set(uid, 0);
-        usersById.set(uid, { name: u.name, role: u.role });
-      });
-
-      // удаляем тех, кто вышел (с задержкой, чтобы не было "прыжков" из‑за кратких сбоев polling)
-      // 1) из текущей Map — сразу
-      Array.from(usersById.keys()).forEach((id) => {
-        if (!incoming.has(String(id))) usersById.delete(id);
-      });
-      // 2) из порядка — только если отсутствует несколько опросов подряд
-      (usersOrder || []).forEach((id) => {
-        const sid = String(id);
-        if (incoming.has(sid)) return;
-        const n = (userMissingTicks.get(sid) || 0) + 1;
-        userMissingTicks.set(sid, n);
-      });
-      const DROP_AFTER = 3; // 3 * 5s = 15s
-      usersOrder = (usersOrder || []).filter((id) => {
-        const sid = String(id);
-        const n = userMissingTicks.get(sid) || 0;
-        if (incoming.has(sid)) return true;
-        if (n >= DROP_AFTER) {
-          userMissingTicks.delete(sid);
-          return false;
-        }
-        return true;
-      });
-      updatePlayerList();
-      try { window.RoomChat?.refreshUsers?.(); } catch {}
-      try { window.TavernChat?.refreshUsers?.(); } catch {}
+      syncUsersSnapshot(msg.users);
+      refreshUsersUi();
     }
 
     if (msg.type === "diceEvent" && msg.event) {
@@ -1441,10 +1427,7 @@ function updatePlayerList() {
 
 // ================== UI PERMISSIONS HELPERS ==================
 function getOwnerRoleForPlayerUI(p) {
-  const direct = String(p?.ownerRole || '').trim();
-  if (direct) return direct;
-  const u = p?.ownerId ? usersById.get(String(p.ownerId)) : null;
-  return String(u?.role || '').trim();
+  return getOwnerRoleForPlayer(p);
 }
 
 // "Sensitive" = sheet modal, HP, dblclick mini.
