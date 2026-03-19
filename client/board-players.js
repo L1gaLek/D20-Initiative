@@ -87,15 +87,68 @@ function renderBoard(state) {
 }
 
 // ================== WALL EDGES RENDER ==================
+function normalizeWallEdgeData(w) {
+  if (!w || typeof w !== 'object') return null;
+  const x = Number(w.x);
+  const y = Number(w.y);
+  const dir = String(w.dir || '').toUpperCase();
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return null;
+  return {
+    x,
+    y,
+    dir,
+    type: String(w.type || 'stone').toLowerCase(),
+    thickness: Math.max(1, Math.min(12, Number(w.thickness) || 4))
+  };
+}
+
+function buildWallEdgeElement(wall, { withDataset = false } = {}) {
+  const CELL = 50;
+  const normalized = normalizeWallEdgeData(wall);
+  if (!normalized) return null;
+
+  const { x, y, dir, type, thickness } = normalized;
+  const el = document.createElement('div');
+  el.className = `wall-edge wall-type-${type}`;
+  el.style.setProperty('--t', `${thickness}px`);
+  if (withDataset) el.dataset.wallKey = `${x},${y},${dir}`;
+
+  const left = x * CELL;
+  const top = y * CELL;
+
+  if (dir === 'N') {
+    el.style.left = `${left}px`;
+    el.style.top = `${top - Math.floor(thickness / 2)}px`;
+    el.style.width = `${CELL}px`;
+    el.style.height = `${thickness}px`;
+  } else if (dir === 'S') {
+    el.style.left = `${left}px`;
+    el.style.top = `${top + CELL - Math.floor(thickness / 2)}px`;
+    el.style.width = `${CELL}px`;
+    el.style.height = `${thickness}px`;
+  } else if (dir === 'W') {
+    el.style.left = `${left - Math.floor(thickness / 2)}px`;
+    el.style.top = `${top}px`;
+    el.style.width = `${thickness}px`;
+    el.style.height = `${CELL}px`;
+  } else if (dir === 'E') {
+    el.style.left = `${left + CELL - Math.floor(thickness / 2)}px`;
+    el.style.top = `${top}px`;
+    el.style.width = `${thickness}px`;
+    el.style.height = `${CELL}px`;
+  }
+
+  return { el, key: `${x},${y},${dir}` };
+}
+
 function renderWallEdges(state, layerEl) {
   if (!layerEl) return;
 
   const CELL = 50;
   const stWalls = Array.isArray(state?.walls) ? state.walls : [];
 
-  // Remove previous nodes
   layerEl.innerHTML = '';
-  // Reset incremental DOM cache for optimistic updates
   try { window.__wallEdgeDomMap = new Map(); } catch {}
 
   const bw = Number(state?.boardWidth) || boardWidth || 10;
@@ -103,50 +156,16 @@ function renderWallEdges(state, layerEl) {
   layerEl.style.width = `${bw * CELL}px`;
   layerEl.style.height = `${bh * CELL}px`;
 
-  for (const w of stWalls) {
-    if (!w || typeof w !== 'object') continue;
-    const x = Number(w.x);
-    const y = Number(w.y);
-    const dir = String(w.dir || '').toUpperCase();
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') continue;
-
-    const type = String(w.type || 'stone').toLowerCase();
-    const thickness = Math.max(1, Math.min(12, Number(w.thickness) || 4));
-
-    const el = document.createElement('div');
-    el.className = `wall-edge wall-type-${type}`;
-    el.style.setProperty('--t', `${thickness}px`);
-
-    // Position
-    const left = x * CELL;
-    const top = y * CELL;
-
-    if (dir === 'N') {
-      el.style.left = `${left}px`;
-      el.style.top = `${top - Math.floor(thickness / 2)}px`;
-      el.style.width = `${CELL}px`;
-      el.style.height = `${thickness}px`;
-    } else if (dir === 'S') {
-      el.style.left = `${left}px`;
-      el.style.top = `${top + CELL - Math.floor(thickness / 2)}px`;
-      el.style.width = `${CELL}px`;
-      el.style.height = `${thickness}px`;
-    } else if (dir === 'W') {
-      el.style.left = `${left - Math.floor(thickness / 2)}px`;
-      el.style.top = `${top}px`;
-      el.style.width = `${thickness}px`;
-      el.style.height = `${CELL}px`;
-    } else if (dir === 'E') {
-      el.style.left = `${left + CELL - Math.floor(thickness / 2)}px`;
-      el.style.top = `${top}px`;
-      el.style.width = `${thickness}px`;
-      el.style.height = `${CELL}px`;
-    }
-
-    layerEl.appendChild(el);
-    try { window.__wallEdgeDomMap?.set?.(`${x},${y},${dir}`, el); } catch {}
+  const fragment = document.createDocumentFragment();
+  const domMap = new Map();
+  for (const wall of stWalls) {
+    const built = buildWallEdgeElement(wall, { withDataset: true });
+    if (!built) continue;
+    fragment.appendChild(built.el);
+    domMap.set(built.key, built.el);
   }
+  layerEl.appendChild(fragment);
+  try { window.__wallEdgeDomMap = domMap; } catch {}
 }
 
 // ================== OPTIMISTIC WALL UPDATES (GM drawing feels instant) ==================
@@ -160,46 +179,8 @@ const legacyEventName = (name) => `${LEGACY_EVENT_PREFIX}_${String(name || '').t
   }
 
   function makeEdgeEl(w) {
-    const CELL = 50;
-    const x = Number(w?.x);
-    const y = Number(w?.y);
-    const dir = String(w?.dir || '').toUpperCase();
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    if (dir !== 'N' && dir !== 'E' && dir !== 'S' && dir !== 'W') return null;
-
-    const type = String(w?.type || 'stone').toLowerCase();
-    const thickness = Math.max(1, Math.min(12, Number(w?.thickness) || 4));
-
-    const el = document.createElement('div');
-    el.className = `wall-edge wall-type-${type}`;
-    el.style.setProperty('--t', `${thickness}px`);
-    el.dataset.wallKey = `${x},${y},${dir}`;
-
-    const left = x * CELL;
-    const top = y * CELL;
-
-    if (dir === 'N') {
-      el.style.left = `${left}px`;
-      el.style.top = `${top - Math.floor(thickness / 2)}px`;
-      el.style.width = `${CELL}px`;
-      el.style.height = `${thickness}px`;
-    } else if (dir === 'S') {
-      el.style.left = `${left}px`;
-      el.style.top = `${top + CELL - Math.floor(thickness / 2)}px`;
-      el.style.width = `${CELL}px`;
-      el.style.height = `${thickness}px`;
-    } else if (dir === 'W') {
-      el.style.left = `${left - Math.floor(thickness / 2)}px`;
-      el.style.top = `${top}px`;
-      el.style.width = `${thickness}px`;
-      el.style.height = `${CELL}px`;
-    } else if (dir === 'E') {
-      el.style.left = `${left + CELL - Math.floor(thickness / 2)}px`;
-      el.style.top = `${top}px`;
-      el.style.width = `${thickness}px`;
-      el.style.height = `${CELL}px`;
-    }
-    return el;
+    const built = buildWallEdgeElement(w, { withDataset: true });
+    return built ? built.el : null;
   }
 
   function applyLocalEdges(mode, edges) {
@@ -2696,7 +2677,7 @@ function animateSingleRoll(sides, finalValue) {
 // ===== other players dice feed =====
 let diceOthersWrap = null;
 
-function ensureDiceOthersUI() {
+function ensureOthersDiceUI() {
   if (diceOthersWrap) return diceOthersWrap;
 
   diceOthersWrap = document.createElement('div');
@@ -2708,51 +2689,12 @@ function ensureDiceOthersUI() {
 }
 
 function pushOtherDice(ev) {
-  // не показываем свои же броски
-  if (ev?.fromId && typeof myId !== 'undefined' && ev.fromId === myId) return;
-
-  ensureDiceOthersUI();
-
-  const item = document.createElement('div');
-  item.className = 'dice-others__item';
-
-  if (ev.crit === 'crit-fail') item.classList.add('crit-fail');
-  if (ev.crit === 'crit-success') item.classList.add('crit-success');
-
-  const head = `${ev.fromName || 'Игрок'}: ${ev.kindText || `d${ev.sides} × ${ev.count}`}`;
-  const rollsText = (ev.rolls && ev.rolls.length) ? ev.rolls.join(' + ') : '-';
-
-  // Для одиночного броска с бонусом показываем компактно: "12+4=16"
-  let body = `${rollsText} = ${ev.total}`;
-  const bonusNum = Number(ev.bonus) || 0;
-  if (Number(ev.count) === 1 && bonusNum !== 0 && Array.isArray(ev.rolls) && ev.rolls.length === 1) {
-    const r = Number(ev.rolls[0]) || 0;
-    const sign = bonusNum >= 0 ? '+' : '-';
-    body = `${r}${sign}${Math.abs(bonusNum)}=${ev.total}`;
-  }
-
-  item.innerHTML = `
-    <div class="dice-others__head">${escapeHtmlLocal(head)}</div>
-    <div class="dice-others__body">${escapeHtmlLocal(body)}</div>
-  `;
-
-  diceOthersWrap.appendChild(item);
-
-  // затухание и удаление
-  setTimeout(() => item.classList.add('fade'), 4200);
-  setTimeout(() => item.remove(), 5200);
+  pushOtherDiceEvent(ev);
 }
 
-// маленький экранировщик (чтобы имена не ломали HTML)
-function escapeHtmlLocal(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function ensureDiceOthersUI() {
+  return ensureOthersDiceUI();
 }
-
 
 // ===== API: programmatic dice rolls (used by InfoModal weapons) =====
 window.DicePanel = window.DicePanel || {};
