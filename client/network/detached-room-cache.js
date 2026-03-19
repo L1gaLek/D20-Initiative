@@ -204,8 +204,22 @@ function applyDetachedPayloadToState(state) {
 }
 window.applyDetachedPayloadToState = applyDetachedPayloadToState;
 
-function _refreshDetachedRoomView() {
+let __detachedRoomRefreshScheduled = false;
+
+function _runDetachedRoomRefresh() {
+  __detachedRoomRefreshScheduled = false;
   try { window.refreshDetachedStateView?.(); } catch {}
+}
+
+function _refreshDetachedRoomView() {
+  if (__detachedRoomRefreshScheduled) return;
+  __detachedRoomRefreshScheduled = true;
+  try {
+    const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 16));
+    raf(_runDetachedRoomRefresh);
+  } catch {
+    _runDetachedRoomRefresh();
+  }
 }
 
 
