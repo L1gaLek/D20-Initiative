@@ -16,6 +16,23 @@ async function replaceRealtimeChannelSlot(getCurrent, setCurrent, buildNext) {
   return next;
 }
 
+
+async function unsubscribeRealtimeChannelSlots(slots = []) {
+  const seen = new Set();
+  for (const slot of (Array.isArray(slots) ? slots : [])) {
+    const getCurrent = (slot && typeof slot.getCurrent === 'function') ? slot.getCurrent : null;
+    const setCurrent = (slot && typeof slot.setCurrent === 'function') ? slot.setCurrent : null;
+    const current = getCurrent ? getCurrent() : null;
+    if (current && !seen.has(current)) {
+      seen.add(current);
+      try { await current.unsubscribe(); } catch {}
+    }
+    if (setCurrent) {
+      try { setCurrent(null); } catch {}
+    }
+  }
+}
+
 async function subscribeRoomScopedTableChannel(options = {}) {
   const {
     roomId,
@@ -55,4 +72,5 @@ async function subscribeRoomScopedTableChannel(options = {}) {
 }
 
 window.replaceRealtimeChannelSlot = replaceRealtimeChannelSlot;
+window.unsubscribeRealtimeChannelSlots = unsubscribeRealtimeChannelSlots;
 window.subscribeRoomScopedTableChannel = subscribeRoomScopedTableChannel;
