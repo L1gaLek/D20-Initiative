@@ -120,6 +120,24 @@ if (msg.type === 'joinedRoom' && msg.room) {
   startHeartbeat();
   startMembersPolling();
 }
+if (msg.type === 'roomUpdated' && msg.room) {
+  const roomId = String(msg.room.id || msg.room.roomId || '');
+  if (roomId && String(currentRoomId || '') === roomId) {
+    if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
+    if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
+  }
+}
+if (msg.type === 'roomDeleted') {
+  const roomId = String(msg.roomId || msg.room?.id || '');
+  const currentRid = String(currentRoomId || '');
+  if (roomId && currentRid && roomId === currentRid) {
+    const roomName = String(msg.roomName || myRoomSpan?.textContent || 'комната');
+    const popupText = `Создатель удалил комнату «${roomName}», поэтому вы были возвращены в таверну.`;
+    Promise.resolve(window.returnToTavernFromRoom?.({ skipMemberCleanup: true })).finally(() => {
+      try { window.showRoomAccessPopup?.(popupText, 'Комната удалена'); } catch {}
+    });
+  }
+}
 
 if (msg.type === "registered") {
       myId = msg.id;
@@ -188,6 +206,8 @@ loginDiv.style.display = 'none';
           window.showRoomAccessPopup?.(text, 'Доступ запрещён');
         } else if (lower.includes('парол')) {
           window.showRoomAccessPopup?.(text, 'Неверный пароль');
+        } else if (lower.includes('лимит') || lower.includes('одной комнат') || lower.includes('1 комнат')) {
+          window.showRoomAccessPopup?.(text, 'Лимит комнат');
         } else if (lower.includes('gm') || lower.includes('гм')) {
           window.showRoomAccessPopup?.(text, 'GM уже в комнате');
         } else {

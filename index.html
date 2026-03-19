@@ -123,8 +123,6 @@
     <div class="modal-body">
       <div class="tavern-menu-grid">
         <button class="tavern-menu-btn" type="button" data-tavern-topic="Новости / Обновления">Новости / Обновления</button>
-        <button class="tavern-menu-btn" type="button" data-tavern-topic="Как играть">Как играть</button>
-        <button class="tavern-menu-btn" type="button" data-tavern-topic="Последние изменения">Последние изменения</button>
         <button class="tavern-menu-btn" type="button" data-tavern-topic="Помощь новичкам">Помощь новичкам</button>
       </div>
       <div id="tavern-bartender-note" class="tavern-bartender-note">Выберите раздел. Оформление и навигация уже готовы, содержание добавим следующим шагом.</div>
@@ -184,8 +182,8 @@
   <div class="modal tavern-modal room-entry-modal" style="max-width:520px;">
     <div class="modal-header">
       <div>
-        <div class="modal-title">Создать комнату</div>
-        <div class="modal-subtitle">Пароль необязателен</div>
+        <div id="createRoomModalTitle" class="modal-title">Создать комнату</div>
+        <div id="createRoomModalSubtitle" class="modal-subtitle">Пароль необязателен</div>
       </div>
       <button id="createRoomClose" class="modal-close">✕</button>
     </div>
@@ -679,12 +677,14 @@
 
  <!-- Client scripts (split from former client.js) -->
   <script src="client/dom-and-setup.js"></script>
+  <script src="client/rooms/lobby-room-ui.js"></script>
   <script src="client/chat-ui.js"></script>
   <script src="client/board-fog.js"></script>
   <script src="client/board-marks.js"></script>
   <script src="client/message-ui.js"></script>
   <script src="client/board-players.js"></script>
   <script src="client/gameplay-ui.js"></script>
+  <script src="client/network/room-ownership.js"></script>
   <script src="client/core-helpers-network.js"></script>
   <script src="client/bg-music.js"></script>
   <script src="client/rooms-controlbox.js"></script>
