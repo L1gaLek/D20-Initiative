@@ -1,47 +1,88 @@
 // ================== MESSAGE HANDLER (used by Supabase subscriptions) ==================
+function makeDiceDedupKey(ev) {
+  try {
+    const rolls = Array.isArray(ev?.rolls) ? ev.rolls.map(n => Number(n) || 0).join(',') : '';
+    return [
+      String(ev?.fromId || ''),
+      String(ev?.fromName || ''),
+      String(ev?.kindText || ''),
+      String(ev?.sides ?? ''),
+      String(ev?.count ?? ''),
+      String(Number(ev?.bonus) || 0),
+      rolls,
+      String(ev?.total ?? ''),
+      String(ev?.crit || '')
+    ].join('|');
+  } catch {
+    return '';
+  }
+}
+
+function shouldSkipDuplicateOtherDice(ev, explicitId) {
+  try {
+    const now = Date.now();
+    const ttlMs = 1500;
+    window._recentOtherDiceKeys = window._recentOtherDiceKeys || new Map();
+    const recent = window._recentOtherDiceKeys;
+
+    for (const [k, ts] of recent.entries()) {
+      if ((now - Number(ts || 0)) > ttlMs) recent.delete(k);
+    }
+
+    const idKey = explicitId ? `id:${String(explicitId)}` : '';
+    const sigKey = `sig:${makeDiceDedupKey(ev)}`;
+    if (idKey && recent.has(idKey)) return true;
+    if (sigKey && recent.has(sigKey)) return true;
+    if (idKey) recent.set(idKey, now);
+    if (sigKey) recent.set(sigKey, now);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function syncUsersSnapshot(users) {
+  const incoming = new Set();
+  (Array.isArray(users) ? users : []).forEach((u) => {
+    if (!u || !u.id) return;
+    const uid = String(u.id);
+    incoming.add(uid);
+    if (!usersOrder.includes(uid)) usersOrder.push(uid);
+    userMissingTicks.set(uid, 0);
+    usersById.set(uid, { name: u.name, role: u.role });
+  });
+
+  Array.from(usersById.keys()).forEach((id) => {
+    if (!incoming.has(String(id))) usersById.delete(id);
+  });
+
+  (usersOrder || []).forEach((id) => {
+    const sid = String(id);
+    if (incoming.has(sid)) return;
+    const n = (userMissingTicks.get(sid) || 0) + 1;
+    userMissingTicks.set(sid, n);
+  });
+
+  const DROP_AFTER = 3; // 3 * 5s = 15s
+  usersOrder = (usersOrder || []).filter((id) => {
+    const sid = String(id);
+    const n = userMissingTicks.get(sid) || 0;
+    if (incoming.has(sid)) return true;
+    if (n >= DROP_AFTER) {
+      userMissingTicks.delete(sid);
+      return false;
+    }
+    return true;
+  });
+}
+
+function refreshUsersUi() {
+  updatePlayerList();
+  try { window.RoomChat?.refreshUsers?.(); } catch {}
+  try { window.TavernChat?.refreshUsers?.(); } catch {}
+}
+
 function handleMessage(msg) {
-
-  function makeDiceDedupKey(ev) {
-    try {
-      const rolls = Array.isArray(ev?.rolls) ? ev.rolls.map(n => Number(n) || 0).join(',') : '';
-      return [
-        String(ev?.fromId || ''),
-        String(ev?.fromName || ''),
-        String(ev?.kindText || ''),
-        String(ev?.sides ?? ''),
-        String(ev?.count ?? ''),
-        String(Number(ev?.bonus) || 0),
-        rolls,
-        String(ev?.total ?? ''),
-        String(ev?.crit || '')
-      ].join('|');
-    } catch {
-      return '';
-    }
-  }
-
-  function shouldSkipDuplicateOtherDice(ev, explicitId) {
-    try {
-      const now = Date.now();
-      const ttlMs = 1500;
-      window._recentOtherDiceKeys = window._recentOtherDiceKeys || new Map();
-      const recent = window._recentOtherDiceKeys;
-
-      for (const [k, ts] of recent.entries()) {
-        if ((now - Number(ts || 0)) > ttlMs) recent.delete(k);
-      }
-
-      const idKey = explicitId ? `id:${String(explicitId)}` : '';
-      const sigKey = `sig:${makeDiceDedupKey(ev)}`;
-      if (idKey && recent.has(idKey)) return true;
-      if (sigKey && recent.has(sigKey)) return true;
-      if (idKey) recent.set(idKey, now);
-      if (sigKey) recent.set(sigKey, now);
-      return false;
-    } catch {
-      return false;
-    }
-  }
 
   // ================== VISIBILITY HELPERS ==================
   // Rules requested:
@@ -100,48 +141,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
     }
 
     if (msg.type === "users" && Array.isArray(msg.users)) {
-      // Не пересоздаём Map целиком, чтобы не ломать порядок пользователей.
-      // Порядок фиксируем по первому появлению пользователя.
-      const incoming = new Set();
-      msg.users.forEach((u) => {
-        if (!u || !u.id) return;
-        const uid = String(u.id);
-        incoming.add(uid);
-
-        // запоминаем "первый приход" навсегда, чтобы порядок не менялся
-        if (!usersOrder.includes(uid)) {
-          usersOrder.push(uid);
-        }
-        userMissingTicks.set(uid, 0);
-        usersById.set(uid, { name: u.name, role: u.role });
-      });
-
-      // удаляем тех, кто вышел (с задержкой, чтобы не было "прыжков" из‑за кратких сбоев polling)
-      // 1) из текущей Map — сразу
-      Array.from(usersById.keys()).forEach((id) => {
-        if (!incoming.has(String(id))) usersById.delete(id);
-      });
-      // 2) из порядка — только если отсутствует несколько опросов подряд
-      (usersOrder || []).forEach((id) => {
-        const sid = String(id);
-        if (incoming.has(sid)) return;
-        const n = (userMissingTicks.get(sid) || 0) + 1;
-        userMissingTicks.set(sid, n);
-      });
-      const DROP_AFTER = 3; // 3 * 5s = 15s
-      usersOrder = (usersOrder || []).filter((id) => {
-        const sid = String(id);
-        const n = userMissingTicks.get(sid) || 0;
-        if (incoming.has(sid)) return true;
-        if (n >= DROP_AFTER) {
-          userMissingTicks.delete(sid);
-          return false;
-        }
-        return true;
-      });
-      updatePlayerList();
-      try { window.RoomChat?.refreshUsers?.(); } catch {}
-      try { window.TavernChat?.refreshUsers?.(); } catch {}
+      syncUsersSnapshot(msg.users);
+      refreshUsersUi();
     }
 
     if (msg.type === "diceEvent" && msg.event) {
