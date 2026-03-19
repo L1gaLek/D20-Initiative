@@ -1,4 +1,4 @@
-/* sheet-saved-bases.js — вынесено из info-dnd-player.js */
+/* sheet-saved-bases.js — вынесено из info-sheet-player.js */
 
 // ===== Saved bases overlay state =====
 let savedBasesOverlay = null;

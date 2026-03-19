@@ -1,5 +1,5 @@
 {
-  "name": "dnd-l1ga-server",
+  "name": "initiative-l1ga-server",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {

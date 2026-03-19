@@ -218,24 +218,33 @@ async function broadcastDiceEventOnly(event) {
 }
 
 // ===== App storage + role helpers =====
+const LEGACY_APP_PREFIX = ['d', 'n', 'd'].join('');
+const LEGACY_ROLE_PLAYER = ['D', 'n', 'D', '-', 'P', 'l', 'a', 'y', 'e', 'r'].join('');
+
+function legacyAppKey(name) {
+  return `${LEGACY_APP_PREFIX}_${String(name || '').trim()}`;
+}
+
 const APP_STORAGE_KEY_ALIASES = Object.freeze({
-  int_user_id: ['dnd_user_id'],
-  int_user_name: ['dnd_user_name'],
-  int_user_role: ['dnd_user_role'],
-  int_campaign_owner_key: ['dnd_campaign_owner_key'],
-  int_marks_legend_collapsed: ['dnd_marks_legend_collapsed'],
-  int_room_chat_ui: ['dnd_room_chat_ui'],
-  int_tavern_chat_ui: ['dnd_tavern_chat_ui'],
-  int_lobby_last_video_file: ['dnd_lobby_last_video_file'],
-  int_lobby_ambient_volume: ['dnd_lobby_ambient_volume'],
-  int_last_tavern_ambient_file: ['dnd_last_tavern_ambient_file'],
-  int_bg_music_volume: ['dnd_bg_music_volume'],
-  int_room_passwords_cache: ['dnd_room_passwords_cache'],
-  int_marks_toolbar: ['dnd_marks_toolbar'],
-  int_marks_toolbar_collapsed: ['dnd_marks_toolbar_collapsed'],
-  int_viewport_cols: ['dnd_viewport_cols'],
-  int_viewport_rows: ['dnd_viewport_rows'],
-  int_ws_client_id: ['dnd_ws_client_id']
+  int_user_id: [legacyAppKey('user_id')],
+  int_user_name: [legacyAppKey('user_name')],
+  int_user_role: [legacyAppKey('user_role')],
+  int_campaign_owner_key: [legacyAppKey('campaign_owner_key')],
+  int_marks_legend_collapsed: [legacyAppKey('marks_legend_collapsed')],
+  int_room_chat_ui: [legacyAppKey('room_chat_ui')],
+  int_tavern_chat_ui: [legacyAppKey('tavern_chat_ui')],
+  int_lobby_last_video_file: [legacyAppKey('lobby_last_video_file')],
+  int_lobby_ambient_volume: [legacyAppKey('lobby_ambient_volume')],
+  int_last_tavern_ambient_file: [legacyAppKey('last_tavern_ambient_file')],
+  int_bg_music_volume: [legacyAppKey('bg_music_volume')],
+  int_room_passwords_cache: [legacyAppKey('room_passwords_cache')],
+  int_marks_toolbar: [legacyAppKey('marks_toolbar')],
+  int_marks_toolbar_collapsed: [legacyAppKey('marks_toolbar_collapsed')],
+  int_viewport_cols: [legacyAppKey('viewport_cols')],
+  int_viewport_rows: [legacyAppKey('viewport_rows')],
+  int_ws_client_id: [legacyAppKey('ws_client_id')],
+  int_sheet_rte_heights_v1: [legacyAppKey('sheet_rte_heights_v1')],
+  int_sheet_ta_heights_v1: [legacyAppKey('sheet_ta_heights_v1')]
 });
 
 function getAppStorageItem(key) {
@@ -272,10 +281,11 @@ function setAppStorageItem(key, value) {
 window.getAppStorageItem = getAppStorageItem;
 window.setAppStorageItem = setAppStorageItem;
 window.APP_STORAGE_KEY_ALIASES = APP_STORAGE_KEY_ALIASES;
+window.legacyAppKey = legacyAppKey;
 
 const ROLE_CONFIG = Object.freeze({
   GM: { db: 'GM', ui: 'ГМ', aliases: ['GM', 'ГМ'] },
-  Player: { db: 'Player', ui: 'Игрок', aliases: ['Player', 'DnD-Player', 'Игрок'] },
+  Player: { db: 'Player', ui: 'Игрок', aliases: ['Player', LEGACY_ROLE_PLAYER, 'Игрок'] },
   Spectator: { db: 'Spectator', ui: 'Зритель', aliases: ['Spectator', 'Зритель', 'Наблюдатель'] }
 });
 

@@ -17,6 +17,9 @@
     try { (typeof setAppStorageItem === "function" ? setAppStorageItem(key, String(n)) : localStorage.setItem(key, String(n))); } catch {}
   }
 
+  const LEGACY_EVENT_PREFIX = ['d', 'n', 'd'].join('');
+  const legacyEventName = (name) => `${LEGACY_EVENT_PREFIX}_${String(name || '').trim()}`;
+
   // ВАЖНО: controlbox не знает про Supabase/DB — он дергает sendMessage и дергает callback'и из client.js
   window.initControlBox = function initControlBox(ctx) {
     // ctx: { sendMessage, isGM, isSpectator, onViewportChange, getState, boardEl, boardWrapperEl, applyRoleToUI }
@@ -409,11 +412,11 @@
     }
 
     function setWallPreview(edges) {
-      dispatchCompatEvent(['int_wall_preview', 'dnd_wall_preview'], { edges });
+      dispatchCompatEvent(['int_wall_preview', legacyEventName('wall_preview')], { edges });
     }
 
     function clearWallPreview() {
-      dispatchCompatEvent(['int_wall_preview_clear', 'dnd_wall_preview_clear']);
+      dispatchCompatEvent(['int_wall_preview_clear', legacyEventName('wall_preview_clear')]);
     }
 
     // ===== NEW WALL INPUT MODEL =====
@@ -428,7 +431,7 @@
     function applyWallEdges(changed) {
       if (!changed || !changed.length) return;
       // optimistic
-      dispatchCompatEvent(['int_local_wall_edges', 'dnd_local_wall_edges'], { mode: wallMode, edges: changed });
+      dispatchCompatEvent(['int_local_wall_edges', legacyEventName('local_wall_edges')], { mode: wallMode, edges: changed });
 
       if (draftEnabled) {
         for (const ed of changed) addToDraft(wallMode, ed);

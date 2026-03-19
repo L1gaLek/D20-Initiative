@@ -1,4 +1,4 @@
-/* info-dnd-player.js
+/* info-sheet-player.js
    UI/логика модалки "Инфа" вынесены сюда.
    Экспортирует window.InfoModal:
    - init(context)

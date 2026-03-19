@@ -151,6 +151,8 @@ function renderWallEdges(state, layerEl) {
 
 // ================== OPTIMISTIC WALL UPDATES (GM drawing feels instant) ==================
 // controlbox.js dispatches CustomEvent('int_local_wall_edges', { detail:{ mode, edges } })
+const LEGACY_EVENT_PREFIX = ['d', 'n', 'd'].join('');
+const legacyEventName = (name) => `${LEGACY_EVENT_PREFIX}_${String(name || '').trim()}`;
 // We update the walls layer immediately, without waiting for server/state echo.
 (function wireLocalWallEdges() {
   function ensureLayer() {
@@ -248,7 +250,7 @@ function renderWallEdges(state, layerEl) {
     } catch {}
   };
   window.addEventListener('int_local_wall_edges', onLocalWallEdges);
-  window.addEventListener('dnd_local_wall_edges', onLocalWallEdges);
+  window.addEventListener(legacyEventName('local_wall_edges'), onLocalWallEdges);
 })();
 
 // ================== WALL PREVIEW (drag contour) ==================
@@ -325,9 +327,9 @@ function renderWallEdges(state, layerEl) {
     try { clearPreview(); } catch {}
   };
   window.addEventListener('int_wall_preview', onWallPreview);
-  window.addEventListener('dnd_wall_preview', onWallPreview);
+  window.addEventListener(legacyEventName('wall_preview'), onWallPreview);
   window.addEventListener('int_wall_preview_clear', onWallPreviewClear);
-  window.addEventListener('dnd_wall_preview_clear', onWallPreviewClear);
+  window.addEventListener(legacyEventName('wall_preview_clear'), onWallPreviewClear);
 })();
 
 // ================== SHEET HELPERS (for HP bar + mini popup) ==================

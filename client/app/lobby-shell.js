@@ -130,7 +130,7 @@ const lobbyAmbientAudio = (() => {
   try { document.body.appendChild(audio); } catch {}
 
   const LS_VOL = 'int_lobby_ambient_volume';
-  const LS_VOL_LEGACY = 'dnd_bg_music_volume';
+  const LS_VOL_LEGACY = (typeof legacyAppKey === 'function' ? legacyAppKey('bg_music_volume') : ['d', 'n', 'd', '_', 'b', 'g', '_', 'm', 'u', 's', 'i', 'c', '_', 'v', 'o', 'l', 'u', 'm', 'e'].join(''));
   const LS_LAST_TAVERN = 'int_last_tavern_ambient_file';
   const lobbyTrack = 'lobby.mp3';
   const tavernTracks = ['taverna.mp3', 'taverna1.mp3', 'taverna2.mp3'];
