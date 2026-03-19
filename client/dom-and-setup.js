@@ -62,6 +62,8 @@ const createRoomModal = document.getElementById('createRoomModal');
 const createRoomClose = document.getElementById('createRoomClose');
 const createRoomCancel = document.getElementById('createRoomCancel');
 const createRoomSubmit = document.getElementById('createRoomSubmit');
+const createRoomModalTitle = document.getElementById('createRoomModalTitle');
+const createRoomModalSubtitle = document.getElementById('createRoomModalSubtitle');
 
 const roomNameInput = document.getElementById('roomNameInput');
 const roomPasswordInput = document.getElementById('roomPasswordInput');

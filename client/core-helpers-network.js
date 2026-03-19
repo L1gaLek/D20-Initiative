@@ -1,736 +1,5 @@
 // ================== HELPER ==================
 
-function deepClone(obj) {
-  try { return structuredClone(obj); } catch {}
-  return JSON.parse(JSON.stringify(obj || null));
-}
-
-function normalizeRoomPassword(raw) {
-  return String(raw || '').trim();
-}
-
-async function sha256Hex(input) {
-  const raw = String(input || '');
-  try {
-    if (globalThis.crypto?.subtle) {
-      const bytes = new TextEncoder().encode(raw);
-      const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    }
-  } catch {}
-
-  // Fallback non-crypto hash only if subtle API is unavailable.
-  let h1 = 0x811c9dc5;
-  let h2 = 0x811c9dc5;
-  for (let i = 0; i < raw.length; i += 1) {
-    const ch = raw.charCodeAt(i);
-    h1 ^= ch; h1 = Math.imul(h1, 0x01000193);
-    h2 ^= (ch + i + 17); h2 = Math.imul(h2, 0x01000193);
-  }
-  return `fallback-${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
-}
-
-function getRoomAccessState(state) {
-  try {
-    if (state?.roomAccess && typeof state.roomAccess === 'object') return state.roomAccess;
-  } catch {}
-  return {};
-}
-
-function getRoomPasswordHashFromState(state) {
-  try {
-    // Пароль комнаты больше не читается из room_state.
-    // Единственный источник истины — таблица rooms.
-    return '';
-  } catch {
-    return '';
-  }
-}
-
-function getRoomLegacyPasswordFromState(state) {
-  try {
-    // Legacy-пароль из room_state больше не используем.
-    return '';
-  } catch {
-    return '';
-  }
-}
-
-function hasRoomPasswordInState(state) {
-  try {
-    const access = getRoomAccessState(state);
-    // В room_state оставляем только UI-флаг, без секретов и без валидации.
-    return !!access.hasPassword;
-  } catch {
-    return false;
-  }
-}
-
-
-async function cleanupExpiredRoomBansTable(roomId = '', userId = '') {
-  try {
-    let query = sbClient.from('room_bans').delete().lte('banned_until', new Date().toISOString());
-    const rid = String(roomId || '').trim();
-    const uid = String(userId || '').trim();
-    if (rid) query = query.eq('room_id', rid);
-    if (uid) query = query.eq('user_id', uid);
-    const { error } = await query;
-    if (error) throw error;
-  } catch (e) {
-    console.warn('cleanupExpiredRoomBansTable failed', e);
-  }
-}
-
-async function getActiveRoomBanRow(roomId, userId) {
-  try {
-    const rid = String(roomId || '').trim();
-    const uid = String(userId || '').trim();
-    if (!rid || !uid) return null;
-    const nowIso = new Date().toISOString();
-    const { data, error } = await sbClient
-      .from('room_bans')
-      .select('id, room_id, user_id, reason, banned_until, banned_by_user_id, banned_by_name, created_at')
-      .eq('room_id', rid)
-      .eq('user_id', uid)
-      .gt('banned_until', nowIso)
-      .order('banned_until', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return null;
-    const untilMs = Date.parse(String(data?.banned_until || ''));
-    if (!Number.isFinite(untilMs) || untilMs <= Date.now()) return null;
-    return {
-      ...data,
-      bannedUntil: String(data?.banned_until || ''),
-      bannedUntilMs: untilMs,
-      reason: String(data?.reason || '').trim() || 'Не указана'
-    };
-  } catch (e) {
-    console.warn('getActiveRoomBanRow failed', e);
-    return null;
-  }
-}
-
-function getAuthorizedUsersMapFromState(state) {
-  try {
-    const access = getRoomAccessState(state);
-    return (access.authorizedUsers && typeof access.authorizedUsers === 'object') ? access.authorizedUsers : {};
-  } catch {
-    return {};
-  }
-}
-
-function getRoomBansMapFromState(state) {
-  try {
-    const access = getRoomAccessState(state);
-    return (access.bannedUsers && typeof access.bannedUsers === 'object') ? access.bannedUsers : {};
-  } catch {
-    return {};
-  }
-}
-
-function getRoomModerationEvent(state) {
-  try {
-    const access = getRoomAccessState(state);
-    return (access.moderationEvent && typeof access.moderationEvent === 'object') ? access.moderationEvent : null;
-  } catch {
-    return null;
-  }
-}
-
-function getActiveRoomBanForUser(state, userId) {
-  try {
-    const uid = String(userId || '').trim();
-    if (!uid) return null;
-    const bans = getRoomBansMapFromState(state);
-    const entry = (bans && typeof bans === 'object') ? bans[uid] : null;
-    if (!entry || typeof entry !== 'object') return null;
-    const untilMs = Date.parse(String(entry.bannedUntil || ''));
-    if (!Number.isFinite(untilMs)) return null;
-    if (untilMs <= Date.now()) return null;
-    return { ...entry, bannedUntilMs: untilMs };
-  } catch {
-    return null;
-  }
-}
-
-function formatBanRemainingMs(ms) {
-  const total = Math.max(0, Math.floor(Number(ms) || 0));
-  const totalMinutes = Math.max(1, Math.ceil(total / 60000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0 && minutes > 0) return `${hours} ч. ${minutes} мин.`;
-  if (hours > 0) return `${hours} ч.`;
-  return `${minutes} мин.`;
-}
-
-function cleanupExpiredRoomBans(state) {
-  const next = deepClone(state || {});
-  let changed = false;
-  try {
-    if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
-    const bans = (next.roomAccess.bannedUsers && typeof next.roomAccess.bannedUsers === 'object')
-      ? next.roomAccess.bannedUsers
-      : {};
-    const clean = {};
-    Object.entries(bans).forEach(([uid, entry]) => {
-      const untilMs = Date.parse(String(entry?.bannedUntil || ''));
-      if (Number.isFinite(untilMs) && untilMs > Date.now()) clean[String(uid)] = entry;
-      else changed = true;
-    });
-    next.roomAccess.bannedUsers = clean;
-  } catch {}
-  return { state: next, changed };
-}
-
-function withRoomModerationEvent(state, event) {
-  const next = deepClone(state || {});
-  try {
-    if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
-    next.roomAccess.moderationEvent = deepClone(event || null);
-  } catch {}
-  return next;
-}
-
-function withRoomBanUser(state, userId, payload) {
-  const next = deepClone(state || {});
-  try {
-    if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
-    if (!next.roomAccess.bannedUsers || typeof next.roomAccess.bannedUsers !== 'object') next.roomAccess.bannedUsers = {};
-    const uid = String(userId || '').trim();
-    if (uid) next.roomAccess.bannedUsers[uid] = deepClone(payload || {});
-  } catch {}
-  return next;
-}
-
-
-function removeRoomUserOwnedPlayers(state, userId) {
-  const next = deepClone(state || {});
-  const removedIds = [];
-  try {
-    const uid = String(userId || '').trim();
-    if (!uid) return { state: next, removedPlayerIds: removedIds };
-    const prevPlayers = Array.isArray(next.players) ? next.players : [];
-    next.players = prevPlayers.filter((p) => {
-      const owned = String(p?.ownerId || '').trim() === uid;
-      if (owned && p?.id) removedIds.push(String(p.id));
-      return !owned;
-    });
-    if (Array.isArray(next.turnOrder) && removedIds.length) {
-      const removed = new Set(removedIds);
-      next.turnOrder = next.turnOrder.filter((id) => !removed.has(String(id)));
-      const curId = String(next.current_actor_id || '');
-      if (curId && removed.has(curId)) next.current_actor_id = null;
-      const currentTurnTokenId = String(next.turnOrder?.[Number(next.currentTurnIndex) || 0] || '');
-      if (currentTurnTokenId && removed.has(currentTurnTokenId)) {
-        next.currentTurnIndex = 0;
-      } else if (Array.isArray(next.turnOrder) && next.turnOrder.length) {
-        const idx = Math.max(0, Math.min(Number(next.currentTurnIndex) || 0, next.turnOrder.length - 1));
-        next.currentTurnIndex = idx;
-      } else {
-        next.currentTurnIndex = 0;
-      }
-    }
-  } catch {}
-  return { state: next, removedPlayerIds: removedIds };
-}
-
-function isUserAuthorizedForRoom(state, userId) {
-  try {
-    const uid = String(userId || '').trim();
-    if (!uid) return false;
-    const auth = getAuthorizedUsersMapFromState(state);
-    return !!auth[uid];
-  } catch {
-    return false;
-  }
-}
-
-async function buildRoomAccessState(password, previousState) {
-  const normalized = normalizeRoomPassword(password);
-  const prevAccess = getRoomAccessState(previousState);
-  const next = {
-    hasPassword: !!normalized,
-    bannedUsers: {},
-    moderationEvent: (prevAccess.moderationEvent && typeof prevAccess.moderationEvent === 'object') ? deepClone(prevAccess.moderationEvent) : null
-  };
-
-  try {
-    if (prevAccess.bannedUsers && typeof prevAccess.bannedUsers === 'object') {
-      next.bannedUsers = deepClone(prevAccess.bannedUsers);
-    }
-  } catch {}
-
-  return next;
-}
-
-function withAuthorizedRoomUser(state, userId, role) {
-  const next = deepClone(state || {});
-  try {
-    if (!next.roomAccess || typeof next.roomAccess !== 'object') next.roomAccess = {};
-    next.roomAccess.hasPassword = hasRoomPasswordInState(next);
-  } catch {}
-  return next;
-}
-
-function stripRoomSecretsFromState(state) {
-  const next = deepClone(state || {});
-  try {
-    if (next?.roomAccess && typeof next.roomAccess === 'object') {
-      delete next.roomAccess.password;
-      delete next.roomAccess.passwordHash;
-      delete next.roomAccess.authorizedUsers;
-      delete next.roomAccess.bannedUsers;
-      next.roomAccess.hasPassword = !!next.roomAccess.hasPassword;
-    }
-  } catch {}
-  return next;
-}
-
-function createInitialGameState() {
-  const sectionId = (crypto?.randomUUID ? crypto.randomUUID() : ("sec-" + Math.random().toString(16).slice(2)));
-  const mapId = (crypto?.randomUUID ? crypto.randomUUID() : ("map-" + Math.random().toString(16).slice(2)));
-  const base = {
-    id: mapId,
-    name: "Карта 1",
-    sectionId,
-    boardWidth: 10,
-    boardHeight: 10,
-    boardBgDataUrl: null,
-    boardBgUrl: null,
-    boardBgStoragePath: null,
-    boardBgStorageBucket: null,
-    gridAlpha: 1,
-    wallAlpha: 1,
-    walls: [],
-    // Marks/areas (per map): translucent rectangles/circles/polygons
-    marks: [],
-    // Fog of war (per map)
-    fog: {
-      enabled: false,
-      mode: 'manual', // 'manual' | 'dynamic'
-      manualBase: 'hide', // 'hide' | 'reveal'
-      // Manual stamps are stored as {x,y,r,mode} in cell coordinates (r in cells)
-      manualStamps: [],
-      // Dynamic settings
-      visionRadius: 8,
-      useWalls: true,
-      exploredEnabled: true,
-      // GM viewing options
-      gmViewMode: 'gm',
-      gmOpen: false,
-      // Player movement restriction (dynamic): only to visible/explored
-      moveOnlyExplored: false,
-      // Shared explored cells for the party ("x,y" strings)
-      explored: []
-    },
-    playersPos: {} // playerId -> {x,y}
-  };
-  return {
-    schemaVersion: 3,
-
-    mapSections: [{ id: sectionId, name: "Раздел 1" }],
-
-    // Active map is mirrored into root-level fields for backward compatibility
-    currentMapId: mapId,
-    maps: [base],
-
-    boardWidth: base.boardWidth,
-    boardHeight: base.boardHeight,
-    boardBgDataUrl: base.boardBgDataUrl,
-    boardBgUrl: base.boardBgUrl,
-    boardBgStoragePath: base.boardBgStoragePath,
-    boardBgStorageBucket: base.boardBgStorageBucket,
-    walls: base.walls,
-    marks: base.marks,
-
-    // Mirror fog from active map for easy access
-    fog: base.fog,
-
-    phase: "lobby",
-    players: [],
-    turnOrder: [],
-    currentTurnIndex: 0,
-    round: 1,
-    log: [],
-
-    roomAccess: {
-      hasPassword: false,
-      passwordHash: '',
-      authorizedUsers: {},
-      bannedUsers: {},
-      moderationEvent: null
-    },
-
-    // Background music (GM-controlled, synced to all)
-    bgMusic: {
-      tracks: [], // [{id,name,desc,url,path,createdAt}]
-      currentTrackId: null,
-      isPlaying: false,
-      volume: 40 // 0..100
-    }
-  };
-}
-
-function ensureStateHasMaps(state) {
-  if (!state || typeof state !== "object") return createInitialGameState();
-
-  // already new schema
-  if (Array.isArray(state.maps) && state.maps.length) {
-    if (!state.currentMapId) state.currentMapId = String(state.maps[0].id || "map-1");
-    // ensure sections exist
-    if (!Array.isArray(state.mapSections) || !state.mapSections.length) {
-      const sid = (crypto?.randomUUID ? crypto.randomUUID() : ("sec-" + Math.random().toString(16).slice(2)));
-      state.mapSections = [{ id: sid, name: "Раздел 1" }];
-      // attach all maps to that section
-      state.maps.forEach(m => { if (m && !m.sectionId) m.sectionId = sid; });
-    } else {
-      const firstSid = String(state.mapSections[0]?.id || "");
-    state.maps.forEach(m => {
-      if (m && !m.sectionId) m.sectionId = firstSid;
-      if (m && !Array.isArray(m.marks)) m.marks = [];
-      if (m && typeof m.boardBgUrl === 'undefined') m.boardBgUrl = m.boardBgDataUrl || null;
-      if (m && typeof m.boardBgStoragePath === 'undefined') m.boardBgStoragePath = null;
-      if (m && typeof m.boardBgStorageBucket === 'undefined') m.boardBgStorageBucket = null;
-      // ensure fog defaults on every map
-      if (m && (!m.fog || typeof m.fog !== 'object')) {
-        m.fog = {
-          enabled: false,
-          mode: 'manual',
-          manualBase: 'hide',
-          manualStamps: [],
-          visionRadius: 8,
-          useWalls: true,
-          exploredEnabled: true,
-          gmViewMode: 'gm',
-          gmOpen: false,
-          moveOnlyExplored: false,
-          explored: []
-        };
-      } else if (m && m.fog) {
-        if (typeof m.fog.enabled !== 'boolean') m.fog.enabled = false;
-        if (m.fog.mode !== 'manual' && m.fog.mode !== 'dynamic') m.fog.mode = 'manual';
-        if (m.fog.manualBase !== 'hide' && m.fog.manualBase !== 'reveal') m.fog.manualBase = 'hide';
-        if (!Array.isArray(m.fog.manualStamps)) m.fog.manualStamps = [];
-        if (!Number.isFinite(Number(m.fog.visionRadius))) m.fog.visionRadius = 8;
-        if (typeof m.fog.useWalls !== 'boolean') m.fog.useWalls = true;
-        if (typeof m.fog.exploredEnabled !== 'boolean') m.fog.exploredEnabled = true;
-        if (m.fog.gmViewMode !== 'gm' && m.fog.gmViewMode !== 'player') m.fog.gmViewMode = 'gm';
-        if (typeof m.fog.gmOpen !== 'boolean') m.fog.gmOpen = false;
-        if (typeof m.fog.moveOnlyExplored !== 'boolean') m.fog.moveOnlyExplored = false;
-        if (!Array.isArray(m.fog.explored)) m.fog.explored = [];
-      }
-    });
-    }
-    state.schemaVersion = Math.max(Number(state.schemaVersion) || 0, 3);
-
-    // root mirror for map background (active map)
-    if (typeof state.boardBgUrl === 'undefined') {
-      const id = String(state.currentMapId || "");
-      const maps = Array.isArray(state.maps) ? state.maps : [];
-      const m = maps.find(mm => String(mm?.id) === id) || maps[0] || null;
-      state.boardBgUrl = (m && (m.boardBgUrl || m.boardBgDataUrl)) ? (m.boardBgUrl || m.boardBgDataUrl) : null;
-    }
-    if (typeof state.boardBgStoragePath === 'undefined') {
-      const id = String(state.currentMapId || "");
-      const maps = Array.isArray(state.maps) ? state.maps : [];
-      const m = maps.find(mm => String(mm?.id) === id) || maps[0] || null;
-      state.boardBgStoragePath = m?.boardBgStoragePath || null;
-    }
-    if (typeof state.boardBgStorageBucket === 'undefined') {
-      const id = String(state.currentMapId || "");
-      const maps = Array.isArray(state.maps) ? state.maps : [];
-      const m = maps.find(mm => String(mm?.id) === id) || maps[0] || null;
-      state.boardBgStorageBucket = m?.boardBgStorageBucket || null;
-    }
-
-    // root mirror for marks (active map)
-    if (!Array.isArray(state.marks)) {
-      const id = String(state.currentMapId || "");
-      const maps = Array.isArray(state.maps) ? state.maps : [];
-      const m = maps.find(mm => String(mm?.id) === id) || maps[0] || null;
-      state.marks = (m && Array.isArray(m.marks)) ? deepClone(m.marks) : [];
-    }
-    return state;
-  }
-
-  // migrate old schema -> single map + single section
-  const sectionId = (crypto?.randomUUID ? crypto.randomUUID() : ("sec-" + Math.random().toString(16).slice(2)));
-  const mapId = (crypto?.randomUUID ? crypto.randomUUID() : ("map-" + Math.random().toString(16).slice(2)));
-  const migratedMap = {
-    id: mapId,
-    name: "Карта 1",
-    sectionId,
-    boardWidth: Number(state.boardWidth) || 10,
-    boardHeight: Number(state.boardHeight) || 10,
-    boardBgDataUrl: state.boardBgDataUrl || null,
-    boardBgUrl: state.boardBgUrl || state.boardBgDataUrl || null,
-    boardBgStoragePath: state.boardBgStoragePath || null,
-    boardBgStorageBucket: state.boardBgStorageBucket || null,
-    gridAlpha: (typeof state.gridAlpha !== 'undefined') ? state.gridAlpha : 1,
-    wallAlpha: (typeof state.wallAlpha !== 'undefined') ? state.wallAlpha : 1,
-    walls: Array.isArray(state.walls) ? state.walls : [],
-    marks: Array.isArray(state.marks) ? state.marks : [],
-    fog: (state.fog && typeof state.fog === 'object') ? state.fog : {
-      enabled: false,
-      mode: 'manual',
-      manualBase: 'hide',
-      manualStamps: [],
-      visionRadius: 8,
-      useWalls: true,
-      exploredEnabled: true,
-      explored: []
-    },
-    playersPos: {}
-  };
-
-  (state.players || []).forEach((p) => {
-    if (!p || !p.id) return;
-    if (p.x === null || p.y === null || typeof p.x === "undefined" || typeof p.y === "undefined") return;
-    migratedMap.playersPos[p.id] = { x: p.x, y: p.y };
-  });
-
-  state.schemaVersion = 3;
-  state.mapSections = [{ id: sectionId, name: "Раздел 1" }];
-  state.currentMapId = mapId;
-  state.maps = [migratedMap];
-
-  // keep root mirror
-  state.boardWidth = migratedMap.boardWidth;
-  state.boardHeight = migratedMap.boardHeight;
-  state.boardBgDataUrl = migratedMap.boardBgDataUrl;
-  state.boardBgUrl = migratedMap.boardBgUrl;
-  state.boardBgStoragePath = migratedMap.boardBgStoragePath;
-  state.boardBgStorageBucket = migratedMap.boardBgStorageBucket;
-  state.gridAlpha = migratedMap.gridAlpha ?? 1;
-  state.wallAlpha = migratedMap.wallAlpha ?? 1;
-  state.walls = migratedMap.walls;
-  state.marks = migratedMap.marks;
-
-  // keep root mirror
-  state.fog = migratedMap.fog;
-
-  // Ensure background music defaults
-  if (!state.bgMusic || typeof state.bgMusic !== 'object') {
-    state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
-  } else {
-    if (!Array.isArray(state.bgMusic.tracks)) state.bgMusic.tracks = [];
-    if (typeof state.bgMusic.currentTrackId === 'undefined') state.bgMusic.currentTrackId = null;
-    if (typeof state.bgMusic.isPlaying !== 'boolean') state.bgMusic.isPlaying = false;
-    const v = Number(state.bgMusic.volume);
-    state.bgMusic.volume = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 40;
-  }
-
-  return state;
-}
-
-function getActiveMap(state) {
-  const st = ensureStateHasMaps(state);
-  const id = String(st.currentMapId || "");
-  const maps = Array.isArray(st.maps) ? st.maps : [];
-  return maps.find(m => String(m.id) === id) || maps[0] || null;
-}
-
-function syncActiveToMap(state) {
-  const st = ensureStateHasMaps(state);
-  const m = getActiveMap(st);
-  if (!m) return st;
-
-  m.boardWidth = Number(st.boardWidth) || 10;
-  m.boardHeight = Number(st.boardHeight) || 10;
-  m.boardBgDataUrl = st.boardBgDataUrl || null;
-  m.boardBgUrl = st.boardBgUrl || st.boardBgDataUrl || null;
-  m.boardBgStoragePath = st.boardBgStoragePath || null;
-  m.boardBgStorageBucket = st.boardBgStorageBucket || null;
-  m.gridAlpha = (typeof st.gridAlpha !== 'undefined') ? st.gridAlpha : 1;
-  m.wallAlpha = (typeof st.wallAlpha !== 'undefined') ? st.wallAlpha : 1;
-
-  m.walls = Array.isArray(st.walls) ? st.walls : [];
-
-  // sync marks (root mirror -> map)
-  m.marks = Array.isArray(st.marks) ? st.marks : [];
-
-  // sync fog (root mirror -> map)
-  if (!m.fog || typeof m.fog !== 'object') m.fog = {};
-  if (st.fog && typeof st.fog === 'object') m.fog = deepClone(st.fog);
-
-  // IMPORTANT (architecture v4): token positions are NOT stored in room_state anymore.
-  // They live in a dedicated table (room_tokens). Keeping them in room_state creates
-  // race conditions ("last write wins") and causes visual rollbacks when multiple
-  // users move simultaneously.
-
-  return st;
-}
-
-// ===== Fog explored packing (to reduce room_state payload size) =====
-// We store a compact RLE-packed string in fog.exploredPacked and keep fog.explored
-// decoded in-memory for the UI. This keeps compatibility with existing logic
-// while drastically reducing DB egress when explored grows large.
-function packFogExplored(cells, w, h) {
-  try {
-    const W = Math.max(1, Number(w) || 1);
-    const H = Math.max(1, Number(h) || 1);
-    const set = new Set();
-    (Array.isArray(cells) ? cells : []).forEach((c) => {
-      const s = String(c || '');
-      const parts = s.split(',');
-      if (parts.length !== 2) return;
-      const x = Number(parts[0]);
-      const y = Number(parts[1]);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      if (x < 0 || y < 0 || x >= W || y >= H) return;
-      set.add((y * W + x) | 0);
-    });
-    const idx = Array.from(set).sort((a, b) => a - b);
-    if (!idx.length) return `${W}x${H}:`;
-    const ranges = [];
-    let start = idx[0];
-    let prev = idx[0];
-    for (let i = 1; i < idx.length; i++) {
-      const v = idx[i];
-      if (v === prev + 1) {
-        prev = v;
-        continue;
-      }
-      const len = prev - start + 1;
-      ranges.push(`${start.toString(36)}.${len.toString(36)}`);
-      start = prev = v;
-    }
-    ranges.push(`${start.toString(36)}.${(prev - start + 1).toString(36)}`);
-    return `${W}x${H}:${ranges.join(',')}`;
-  } catch {
-    return null;
-  }
-}
-
-function unpackFogExplored(packed) {
-  try {
-    const s = String(packed || '');
-    const [wh, rest = ''] = s.split(':');
-    const [wStr, hStr] = wh.split('x');
-    const W = Math.max(1, parseInt(wStr, 10) || 1);
-    const H = Math.max(1, parseInt(hStr, 10) || 1);
-    if (!rest) return [];
-    const out = [];
-    const parts = rest.split(',').filter(Boolean);
-    for (const p of parts) {
-      const [a, b] = p.split('.');
-      const start = parseInt(a, 36);
-      const len = parseInt(b, 36);
-      if (!Number.isFinite(start) || !Number.isFinite(len) || len <= 0) continue;
-      for (let i = 0; i < len; i++) {
-        const idx = start + i;
-        const x = idx % W;
-        const y = Math.floor(idx / W);
-        if (x < 0 || y < 0 || x >= W || y >= H) continue;
-        out.push(`${x},${y}`);
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
-
-function loadMapToRoot(state, mapId) {
-  const st = ensureStateHasMaps(state);
-  const targetId = String(mapId || "");
-  const maps = Array.isArray(st.maps) ? st.maps : [];
-  const m = maps.find(mm => String(mm.id) === targetId) || maps[0];
-  if (!m) return st;
-
-  st.currentMapId = String(m.id);
-
-  st.boardWidth = Number(m.boardWidth) || 10;
-  st.boardHeight = Number(m.boardHeight) || 10;
-  st.boardBgDataUrl = m.boardBgDataUrl || null;
-  st.boardBgUrl = m.boardBgUrl || m.boardBgDataUrl || null;
-  st.boardBgStoragePath = m.boardBgStoragePath || null;
-  st.boardBgStorageBucket = m.boardBgStorageBucket || null;
-  st.gridAlpha = (typeof m.gridAlpha !== 'undefined') ? m.gridAlpha : 1;
-  st.wallAlpha = (typeof m.wallAlpha !== 'undefined') ? m.wallAlpha : 1;
-
-  st.walls = Array.isArray(m.walls) ? m.walls : [];
-  st.marks = Array.isArray(m.marks) ? deepClone(m.marks) : [];
-  st.fog = (m.fog && typeof m.fog === 'object') ? deepClone(m.fog) : {
-    enabled: false,
-    mode: 'manual',
-    manualBase: 'hide',
-    manualStamps: [],
-    visionRadius: 8,
-    useWalls: true,
-    exploredEnabled: true,
-    gmViewMode: 'gm',
-    gmOpen: false,
-    moveOnlyExplored: false,
-    explored: []
-  };
-
-  // Decode packed explored cells if present
-  try {
-    if (st.fog && typeof st.fog === 'object') {
-      const packed = st.fog.exploredPacked;
-      const hasArr = Array.isArray(st.fog.explored) && st.fog.explored.length;
-      if (packed && !hasArr) {
-        st.fog.explored = unpackFogExplored(packed);
-      }
-    }
-  } catch {}
-
-  // IMPORTANT (architecture v4): do NOT apply token positions from map snapshot.
-  // Positions are authoritative in room_tokens and arrive via realtime.
-
-  return st;
-}
-
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function getPlayerSheetTs(player) {
-  const n = Number(player?.sheetUpdatedAt);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function mergeNewestPlayerSheets(targetState, sourceState) {
-  try {
-    const targetPlayers = Array.isArray(targetState?.players) ? targetState.players : [];
-    const sourcePlayers = Array.isArray(sourceState?.players) ? sourceState.players : [];
-    if (!targetPlayers.length || !sourcePlayers.length) return targetState;
-
-    const srcById = new Map();
-    sourcePlayers.forEach((p) => {
-      if (!p?.id) return;
-      srcById.set(String(p.id), p);
-    });
-
-    targetPlayers.forEach((p) => {
-      if (!p?.id) return;
-      const src = srcById.get(String(p.id));
-      if (!src) return;
-      const srcTs = getPlayerSheetTs(src);
-      const dstTs = getPlayerSheetTs(p);
-      if (srcTs <= dstTs) return;
-      p.sheet = deepClone(src.sheet);
-      p.sheetUpdatedAt = srcTs;
-      if (typeof src.name === 'string' && src.name.trim()) p.name = src.name;
-    });
-  } catch {}
-  return targetState;
-}
-
-// ===== Detached room payload caches (walls / marks / fog / music / map meta) =====
-const __roomDetachedCache = {
-  roomId: null,
-  mapMetaById: new Map(),
-  wallsByMap: new Map(),
-  marksByMap: new Map(),
-  fogByMap: new Map(),
-  music: null
-};
-window.__roomDetachedCache = __roomDetachedCache;
-
 function resetDetachedRoomCache(roomId) {
   __roomDetachedCache.roomId = String(roomId || '');
   __roomDetachedCache.mapMetaById = new Map();
@@ -3026,6 +2295,7 @@ async function sendMessage(msg) {
           .select("id,name,scenario,created_at,has_password,password_hash")
           .order("created_at", { ascending: false });
         if (error) throw error;
+        const myUserId = getCurrentStableUserId();
 
         const passwordByRoomId = new Map();
         try {
@@ -3036,6 +2306,13 @@ async function sendMessage(msg) {
           });
         } catch (e) {
           console.warn('listRooms password lookup failed', e);
+        }
+
+        let ownership = new Map();
+        try {
+          ownership = await loadRoomOwnershipMap();
+        } catch (e) {
+          console.warn('listRooms ownership lookup failed', e);
         }
 
         // Unique users per room + total unique users on server (across all rooms)
@@ -3064,7 +2341,10 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            hasPassword: !!passwordByRoomId.get(rid)
+            hasPassword: !!passwordByRoomId.get(rid),
+            ownerId: String(ownership.get(rid)?.ownerId || ''),
+            ownerName: String(ownership.get(rid)?.ownerName || ''),
+            isMine: !!myUserId && String(ownership.get(rid)?.ownerId || '') === myUserId
           };
         });
 
@@ -3073,6 +2353,17 @@ async function sendMessage(msg) {
       }
 
       case "createRoom": {
+        const userId = getCurrentStableUserId();
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
+          return;
+        }
+        const existingOwnedRoom = await findOwnedRoomByUserId(userId);
+        if (existingOwnedRoom) {
+          handleMessage({ type: 'roomsError', message: 'Вы уже создали комнату. Можно управлять только одной комнатой на пользователя.' });
+          return;
+        }
+
         const roomId = (crypto?.randomUUID ? crypto.randomUUID() : ("r-" + Math.random().toString(16).slice(2)));
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
@@ -3089,6 +2380,12 @@ async function sendMessage(msg) {
 
         const initState = createInitialGameState();
         initState.roomAccess = await buildRoomAccessState(password, initState);
+        initState.roomMeta = {
+          ownerId: userId,
+          ownerName: safeGetUserName(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
           phase: initState.phase,
@@ -3100,6 +2397,130 @@ async function sendMessage(msg) {
 
         // refresh list
         await sendMessage({ type: "listRooms" });
+        break;
+      }
+
+      case "updateRoom": {
+        const roomId = String(msg.roomId || '').trim();
+        const userId = getCurrentStableUserId();
+        if (!roomId) return;
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
+          return;
+        }
+
+        const ownership = await requireOwnedRoom(roomId, userId);
+        if (!ownership.ok) {
+          handleMessage({ type: 'roomsError', message: ownership.message });
+          return;
+        }
+
+        const name = String(msg.name || 'Комната').trim() || 'Комната';
+        const scenario = String(msg.scenario || '').trim();
+        const password = normalizeRoomPassword(msg.password || '');
+        const roomPasswordHash = password ? await sha256Hex(password) : '';
+
+        const { error: updRoomErr } = await sbClient
+          .from('rooms')
+          .update({
+            name,
+            scenario,
+            has_password: !!password,
+            password_hash: roomPasswordHash || null
+          })
+          .eq('id', roomId);
+        if (updRoomErr) throw updRoomErr;
+
+        const nextState = deepClone(ownership.stateRow?.state || createInitialGameState());
+        if (!nextState.roomAccess || typeof nextState.roomAccess !== 'object') nextState.roomAccess = {};
+        nextState.roomAccess.hasPassword = !!password;
+        nextState.roomAccess.passwordHash = roomPasswordHash || '';
+        if (!nextState.roomMeta || typeof nextState.roomMeta !== 'object') nextState.roomMeta = {};
+        nextState.roomMeta.ownerId = String(ownership.meta?.ownerId || userId);
+        nextState.roomMeta.ownerName = String(ownership.meta?.ownerName || safeGetUserName());
+        nextState.roomMeta.createdAt = String(ownership.meta?.createdAt || nextState.roomMeta.createdAt || new Date().toISOString());
+        nextState.roomMeta.updatedAt = new Date().toISOString();
+
+        const { error: updStateErr } = await sbClient
+          .from('room_state')
+          .update({
+            phase: String(ownership.stateRow?.phase || nextState?.phase || 'lobby'),
+            current_actor_id: (typeof ownership.stateRow?.current_actor_id !== 'undefined')
+              ? ownership.stateRow.current_actor_id
+              : null,
+            state: nextState
+          })
+          .eq('room_id', roomId);
+        if (updStateErr) throw updStateErr;
+
+        if (String(currentRoomId || '') === roomId) {
+          try {
+            if (myRoomSpan) myRoomSpan.textContent = name;
+            if (myScenarioSpan) myScenarioSpan.textContent = scenario || '-';
+          } catch {}
+        }
+        try {
+          const roomPayload = {
+            id: roomId,
+            name,
+            scenario,
+            hasPassword: !!password,
+            ownerId: String(nextState?.roomMeta?.ownerId || userId),
+            ownerName: String(nextState?.roomMeta?.ownerName || safeGetUserName())
+          };
+          handleMessage({ type: 'roomUpdated', room: roomPayload });
+          sendWsEnvelope({ type: 'roomUpdated', roomId, room: roomPayload }, { optimisticApplied: true });
+        } catch (e) {
+          console.warn('roomUpdated relay failed', e);
+        }
+
+        await sendMessage({ type: 'listRooms' });
+        break;
+      }
+
+      case "deleteRoom": {
+        const roomId = String(msg.roomId || '').trim();
+        const userId = getCurrentStableUserId();
+        if (!roomId) return;
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
+          return;
+        }
+
+        const ownership = await requireOwnedRoom(roomId, userId);
+        if (!ownership.ok) {
+          handleMessage({ type: 'roomsError', message: ownership.message });
+          return;
+        }
+        const { data: roomRow, error: roomErr } = await sbClient
+          .from('rooms')
+          .select('name')
+          .eq('id', roomId)
+          .maybeSingle();
+        if (roomErr) throw roomErr;
+
+        try {
+          const roomName = String(roomRow?.name || msg.roomName || '');
+          sendWsEnvelope({
+            type: 'roomDeleted',
+            roomId,
+            roomName: roomName || String(msg.roomName || 'Комната')
+          }, { optimisticApplied: true });
+        } catch (e) {
+          console.warn('roomDeleted relay failed', e);
+        }
+
+        if (String(currentRoomId || '') === roomId) {
+          try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('deleteRoom cleanup failed', e); }
+          try { stopHeartbeat(); } catch {}
+          try { stopMembersPolling(); } catch {}
+          try { await stopSupabaseRealtimeChannels(); } catch {}
+          try { window.stopRoomChatSync?.(); } catch {}
+          currentRoomId = null;
+        }
+
+        await deleteRoomCascade(roomId);
+        await sendMessage({ type: 'listRooms' });
         break;
       }
 
