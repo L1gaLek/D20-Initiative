@@ -1044,12 +1044,29 @@ function renderRoomChatTabs() {
   }).join('');
   updateRoomChatBadges();
 }
+function getRoomUsersSnapshot() {
+  const orderedIds = Array.isArray(usersOrder) ? usersOrder.map((uid) => String(uid || '').trim()).filter(Boolean) : [];
+  const liveIds = Array.from(usersById?.keys?.() || []).map((uid) => String(uid || '').trim()).filter(Boolean);
+  const ids = [];
+  const seen = new Set();
+  [...orderedIds, ...liveIds].forEach((uid) => {
+    if (!uid || seen.has(uid)) return;
+    seen.add(uid);
+    ids.push(uid);
+  });
+  return ids
+    .map((uid) => ({
+      id: uid,
+      name: String(usersById.get(uid)?.name || ''),
+      role: String(usersById.get(uid)?.role || '')
+    }))
+    .filter((u) => u.id && u.name);
+}
 function renderRoomChatUsersList() {
   if (!roomChatUsersList) return;
   const myIdLocal = String(myId || localStorage.getItem('dnd_user_id') || 'guest');
-  const allUsers = (usersOrder || [])
-    .map((uid) => ({ id: String(uid), name: String(usersById.get(String(uid))?.name || ''), role: String(usersById.get(String(uid))?.role || '') }))
-    .filter((u) => u.id && u.id !== myIdLocal && u.name)
+  const allUsers = getRoomUsersSnapshot()
+    .filter((u) => u.id !== myIdLocal)
     .sort((a,b) => String(a.name).localeCompare(String(b.name), 'ru'));
   const roomUsers = allUsers.map((user) => ({ ...user, hint: user.role || 'Игрок' }));
   if (!roomUsers.length) {
@@ -1344,6 +1361,7 @@ if (tavernChatTabs) {
 }
 if (tavernChatUsersList) {
   tavernChatUsersList.addEventListener('click', (e) => {
+    e.stopPropagation();
     const target = e.target instanceof Element ? e.target : null;
     if (!target) return;
     const viewBtn = target.closest('[data-tavern-users-view]');
@@ -1440,6 +1458,7 @@ if (roomChatTabs) {
 }
 if (roomChatUsersList) {
   roomChatUsersList.addEventListener('click', (e) => {
+    e.stopPropagation();
     const btn = e.target?.closest?.('[data-room-direct-user]');
     if (!btn) return;
     const userId = String(btn.getAttribute('data-room-direct-user') || '');
