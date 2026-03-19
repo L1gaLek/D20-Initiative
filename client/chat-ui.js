@@ -24,7 +24,8 @@ const tavernChatState = {
   quoteDraft: null,
   messageIds: new Set(),
   wsConnected: false,
-  hiddenChatKeys: new Set()
+  hiddenChatKeys: new Set(),
+  usersView: 'tavern'
 };
 
 function getChatTtlCutoffMs(now = Date.now()) {
@@ -68,7 +69,8 @@ function saveTavernChatUiState() {
   writeChatUiPrefs('tavern', '', {
     activeChatKey: String(tavernChatState.activeChatKey || 'global'),
     visibleChatKeys: listVisibleDirectChatKeys(new Map((tavernChatState.tabs || []).map((tab) => [String(tab?.key || ''), true]))),
-    hiddenChatKeys: Array.from(tavernChatState.hiddenChatKeys || []).map((key) => String(key || '')).filter(Boolean)
+    hiddenChatKeys: Array.from(tavernChatState.hiddenChatKeys || []).map((key) => String(key || '')).filter(Boolean),
+    usersView: String(tavernChatState.usersView || 'tavern') === 'recent' ? 'recent' : 'tavern'
   });
 }
 
@@ -85,6 +87,7 @@ function applyTavernChatUiPrefs() {
   });
   const active = String(prefs.activeChatKey || 'global');
   tavernChatState.activeChatKey = (active === 'global' || visible.has(active)) ? active : 'global';
+  tavernChatState.usersView = String(prefs.usersView || 'tavern') === 'recent' ? 'recent' : 'tavern';
 }
 
 function saveRoomChatUiState() {
@@ -417,24 +420,23 @@ function renderTavernChatTabs() {
   updateTavernHotspotBadges();
 }
 
-function renderUserListSectionHtml(title, users, emptyText, dataAttr) {
+function renderUsersListItemsHtml(users, emptyText, dataAttr) {
   const list = Array.isArray(users) ? users : [];
-  return `
-    <section class="tavern-chat-users-section">
-      <div class="tavern-chat-users-section__title">${escapeHtmlLite(title)}</div>
-      <div class="tavern-chat-users-section__list">
-        ${list.length ? list.map((user) => `
-          <div class="tavern-chat-user-item">
-            <div class="tavern-chat-user-item__meta">
-              <div class="tavern-chat-user-item__name">${escapeHtmlLite(user.name)}</div>
-              <div class="tavern-chat-user-item__hint">${escapeHtmlLite(user.hint || '')}</div>
-            </div>
-            <button type="button" class="tavern-chat-user-item__btn" ${dataAttr}="${escapeHtmlLite(user.id)}">Написать</button>
-          </div>
-        `).join('') : `<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">${escapeHtmlLite(emptyText)}</div></div>`}
+  return list.length ? list.map((user) => `
+    <div class="tavern-chat-user-item">
+      <div class="tavern-chat-user-item__meta">
+        <div class="tavern-chat-user-item__name">${escapeHtmlLite(user.name)}</div>
+        <div class="tavern-chat-user-item__hint">${escapeHtmlLite(user.hint || '')}</div>
       </div>
-    </section>
-  `;
+      <button type="button" class="tavern-chat-user-item__btn" ${dataAttr}="${escapeHtmlLite(user.id)}">Написать</button>
+    </div>
+  `).join('') : `<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">${escapeHtmlLite(emptyText)}</div></div>`;
+}
+
+function setActiveTavernUsersView(view) {
+  tavernChatState.usersView = String(view || 'tavern') === 'recent' ? 'recent' : 'tavern';
+  renderTavernUsersList();
+  saveTavernChatUiState();
 }
 
 function renderTavernUsersList() {
@@ -455,9 +457,23 @@ function renderTavernUsersList() {
     return;
   }
 
+  const activeView = String(tavernChatState.usersView || 'tavern') === 'recent' ? 'recent' : 'tavern';
+  const activeUsers = activeView === 'recent' ? recentUsers : onlineUsers;
+  const emptyText = activeView === 'recent'
+    ? 'Личных диалогов пока нет.'
+    : 'Сейчас в таверне больше никого нет.';
+
   tavernChatUsersList.innerHTML = `
-    ${renderUserListSectionHtml('Таверна', onlineUsers, 'Сейчас в таверне больше никого нет.', 'data-direct-user')}
-    ${renderUserListSectionHtml('С кем общался', recentUsers, 'Личных диалогов пока нет.', 'data-direct-user')}
+    <div class="tavern-chat-users-switch" role="tablist" aria-label="Разделы пользователей таверны">
+      <button type="button" class="tavern-chat-users-switch__btn ${activeView === 'tavern' ? 'is-active' : ''}" data-tavern-users-view="tavern" aria-selected="${activeView === 'tavern' ? 'true' : 'false'}">Таверна</button>
+      <button type="button" class="tavern-chat-users-switch__btn ${activeView === 'recent' ? 'is-active' : ''}" data-tavern-users-view="recent" aria-selected="${activeView === 'recent' ? 'true' : 'false'}">С кем общался</button>
+    </div>
+    <section class="tavern-chat-users-section">
+      <div class="tavern-chat-users-section__title">${activeView === 'recent' ? 'С кем общался' : 'Таверна'}</div>
+      <div class="tavern-chat-users-section__list">
+        ${renderUsersListItemsHtml(activeUsers, emptyText, 'data-direct-user')}
+      </div>
+    </section>
   `;
 }
 
@@ -1036,18 +1052,20 @@ function renderRoomChatUsersList() {
     .filter((u) => u.id && u.id !== myIdLocal && u.name)
     .sort((a,b) => String(a.name).localeCompare(String(b.name), 'ru'));
   const roomUsers = allUsers.map((user) => ({ ...user, hint: user.role || 'Игрок' }));
-  const recentUsers = allUsers
-    .filter((user) => roomChatState.chats.has(getRoomDirectChatKey(user.id)))
-    .map((user) => ({ ...user, hint: `Есть личный диалог${user.role ? ` • ${user.role}` : ''}` }));
-  if (!roomUsers.length && !recentUsers.length) {
+  if (!roomUsers.length) {
     roomChatUsersList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Сейчас в комнате больше никого нет.</div></div>';
     return;
   }
   roomChatUsersList.innerHTML = `
-    ${renderUserListSectionHtml('В комнате', roomUsers, 'Сейчас в комнате больше никого нет.', 'data-room-direct-user')}
-    ${renderUserListSectionHtml('С кем общался', recentUsers, 'Личных диалогов в этой комнате пока нет.', 'data-room-direct-user')}
+    <section class="tavern-chat-users-section">
+      <div class="tavern-chat-users-section__title">В комнате</div>
+      <div class="tavern-chat-users-section__list">
+        ${renderUsersListItemsHtml(roomUsers, 'Сейчас в комнате больше никого нет.', 'data-room-direct-user')}
+      </div>
+    </section>
   `;
 }
+
 function closeRoomChatUsersPopover() {
   if (!roomChatUsersPopover) return;
   roomChatUsersPopover.classList.add('hidden');
@@ -1326,7 +1344,15 @@ if (tavernChatTabs) {
 }
 if (tavernChatUsersList) {
   tavernChatUsersList.addEventListener('click', (e) => {
-    const btn = e.target?.closest?.('[data-direct-user]');
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target) return;
+    const viewBtn = target.closest('[data-tavern-users-view]');
+    if (viewBtn) {
+      const nextView = String(viewBtn.getAttribute('data-tavern-users-view') || 'tavern');
+      setActiveTavernUsersView(nextView);
+      return;
+    }
+    const btn = target.closest('[data-direct-user]');
     if (!btn) return;
     const userId = String(btn.getAttribute('data-direct-user') || '');
     const userName = String(tavernChatState.knownUsers.get(userId)?.name || 'Собеседник');
