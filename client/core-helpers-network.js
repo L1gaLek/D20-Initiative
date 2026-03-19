@@ -308,6 +308,34 @@ try { window.connectRoomWs = connectRoomWs; } catch {}
 try { window.disconnectRoomWs = disconnectRoomWs; } catch {}
 try { window.getWsRoomId = () => String(wsRoomId || ''); } catch {}
 
+function _isMissingColumnError(error, columnName = '') {
+  try {
+    const needle = String(columnName || '').trim().toLowerCase();
+    const code = String(error?.code || '').trim();
+    const haystack = [
+      error?.message,
+      error?.details,
+      error?.hint,
+      error?.description,
+      error?.error_description
+    ].map((part) => String(part || '').toLowerCase()).join(' ');
+    if (!haystack) return false;
+    if (code === '42703') return !needle || haystack.includes(needle);
+    if (haystack.includes('does not exist') && haystack.includes('column')) {
+      return !needle || haystack.includes(needle);
+    }
+    if (haystack.includes('schema cache') && haystack.includes('column')) {
+      return !needle || haystack.includes(needle);
+    }
+    if (haystack.includes('could not find') && haystack.includes('column')) {
+      return !needle || haystack.includes(needle);
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function handleDetachedWsMessage(msg) {
   try {
     if (!msg || typeof msg !== 'object') return false;
