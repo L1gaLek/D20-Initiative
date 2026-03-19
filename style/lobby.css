@@ -840,6 +840,27 @@ body.lobby-active #lobby-scene {
   flex-direction:column;
   gap:10px;
 }
+.tavern-chat-users-switch{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.tavern-chat-users-switch__btn{
+  min-width:0;
+  width:100%;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04);
+  color:#e7d9bf;
+  font-size:12px;
+  font-weight:800;
+}
+.tavern-chat-users-switch__btn.is-active{
+  border-color:rgba(255, 194, 97, 0.35);
+  background:rgba(255, 179, 88, 0.12);
+  color:#fff1d8;
+}
 .tavern-chat-users-section{
   display:flex;
   flex-direction:column;
