@@ -31,9 +31,9 @@
     <input type="text" id="username" placeholder="Например, Дунэдайн">
     <!-- Роль выбирается при входе в комнату -->
     <select id="role" style="display:none;">
-      <option value="GM">GM</option>
+      <option value="GM">ГМ</option>
       <option value="Player">Игрок</option>
-      <option value="Spectator">Наблюдатель</option>
+      <option value="Spectator">Зритель</option>
     </select>
     <button id="joinBtn">Войти</button>
     <p id="loginError" class="lobby-error"></p>
@@ -164,9 +164,9 @@
     <div class="modal-body">
       <div class="sheet-card room-entry-card" style="display:flex; flex-direction:column; gap:10px;">
         <div class="room-entry-role-grid" style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button id="rolePickGM" class="room-entry-role-btn" type="button" style="flex:1; min-width:140px;">GM</button>
+          <button id="rolePickGM" class="room-entry-role-btn" type="button" style="flex:1; min-width:140px;">ГМ</button>
           <button id="rolePickPlayer" class="room-entry-role-btn" type="button" style="flex:1; min-width:140px;">Игрок</button>
-          <button id="rolePickSpectator" class="room-entry-role-btn" type="button" style="flex:1; min-width:140px;">Наблюдатель</button>
+          <button id="rolePickSpectator" class="room-entry-role-btn" type="button" style="flex:1; min-width:140px;">Зритель</button>
         </div>
         <div class="room-entry-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:6px;">
           <button id="roleModalCancel" type="button">Отмена</button>

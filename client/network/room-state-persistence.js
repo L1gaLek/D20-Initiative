@@ -478,11 +478,11 @@ const USE_SUPABASE_REALTIME = false; // realtime идет через VPS WS, н�
 let roomMembersPollTimer = null;
 const WS_CLIENT_ID = (() => {
   try {
-    const key = 'dnd_ws_client_id';
-    let id = String(localStorage.getItem(key) || '').trim();
+    const key = 'int_ws_client_id';
+    let id = String((typeof getAppStorageItem === 'function' ? getAppStorageItem(key) : localStorage.getItem(key)) || '').trim();
     if (!id) {
       id = (crypto?.randomUUID ? crypto.randomUUID() : ('ws-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
-      localStorage.setItem(key, id);
+      (typeof setAppStorageItem === 'function' ? setAppStorageItem(key, id) : localStorage.setItem(key, id));
     }
     return id;
   } catch {

@@ -93,11 +93,11 @@ function initLobbyVideoBackground() {
 
   let pickedFile = files[0];
   try {
-    const last = String(localStorage.getItem('dnd_lobby_last_video_file') || '');
+    const last = String(getAppStorageItem('int_lobby_last_video_file') || '');
     const pool = files.filter(file => file !== last);
     const list = pool.length ? pool : files;
     pickedFile = list[Math.floor(Math.random() * list.length)] || files[0];
-    localStorage.setItem('dnd_lobby_last_video_file', pickedFile);
+    setAppStorageItem('int_lobby_last_video_file', pickedFile);
   } catch {}
 
   applyVideoSourceWithFallback(video, buildLobbyVideoCandidates(pickedFile));
@@ -129,9 +129,9 @@ const lobbyAmbientAudio = (() => {
   try { audio.setAttribute('webkit-playsinline', ''); } catch {}
   try { document.body.appendChild(audio); } catch {}
 
-  const LS_VOL = 'dnd_lobby_ambient_volume';
+  const LS_VOL = 'int_lobby_ambient_volume';
   const LS_VOL_LEGACY = 'dnd_bg_music_volume';
-  const LS_LAST_TAVERN = 'dnd_last_tavern_ambient_file';
+  const LS_LAST_TAVERN = 'int_last_tavern_ambient_file';
   const lobbyTrack = 'lobby.mp3';
   const tavernTracks = ['taverna.mp3', 'taverna1.mp3', 'taverna2.mp3'];
   const failedTavernTracks = new Set();
@@ -153,14 +153,14 @@ const lobbyAmbientAudio = (() => {
 
   function loadVolume() {
     try {
-      const own = localStorage.getItem(LS_VOL);
+      const own = (typeof getAppStorageItem === 'function' ? getAppStorageItem(LS_VOL) : localStorage.getItem(LS_VOL));
       if (own !== null && own !== '') return clamp01(own);
     } catch {}
     try {
-      const legacy = localStorage.getItem(LS_VOL_LEGACY);
+      const legacy = (typeof getAppStorageItem === 'function' ? getAppStorageItem(LS_VOL_LEGACY) : localStorage.getItem(LS_VOL_LEGACY));
       if (legacy !== null && legacy !== '') {
         const v = clamp01(legacy);
-        try { localStorage.setItem(LS_VOL, String(v > 0 ? v : 0.4)); } catch {}
+        try { (typeof setAppStorageItem === 'function' ? setAppStorageItem(LS_VOL, String(v > 0 ? v : 0.4)) : localStorage.setItem(LS_VOL, String(v > 0 ? v : 0.4))); } catch {}
         return v > 0 ? v : 0.4;
       }
     } catch {}

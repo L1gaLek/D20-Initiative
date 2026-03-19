@@ -70,12 +70,12 @@
   let strokeW = 2;
   let label = '';
 
-  const LS_KEY = 'dnd_marks_toolbar';
-  const LS_COLLAPSE_KEY = 'dnd_marks_toolbar_collapsed';
+  const LS_KEY = 'int_marks_toolbar';
+  const LS_COLLAPSE_KEY = 'int_marks_toolbar_collapsed';
 
   function isGM() { try { return !!ctx?.isGM?.(); } catch { return false; } }
   function isSpectator() { try { return !!ctx?.isSpectator?.(); } catch { return false; } }
-  function myId() { try { return String(window.myId || localStorage.getItem('dnd_user_id') || ''); } catch { return ''; } }
+  function myId() { try { return String(window.myId || getAppStorageItem('int_user_id') || ''); } catch { return ''; } }
   function getState() { try { return ctx?.getState?.() || window.lastState || null; } catch { return window.lastState || null; } }
   function curMapId() { return String(getState()?.currentMapId || ''); }
 
@@ -609,8 +609,8 @@
     if (!ctx || typeof ctx !== 'object') return;
     ctx.sendMessage = ctx.sendMessage || window.sendMessage;
     ctx.getState = ctx.getState || (() => window.lastState || null);
-    ctx.isGM = ctx.isGM || (() => String(window.myRole || '') === 'GM');
-    ctx.isSpectator = ctx.isSpectator || (() => String(window.myRole || '') === 'Spectator');
+    ctx.isGM = ctx.isGM || (() => normalizeRoleForApp(window.myRole) === 'GM');
+    ctx.isSpectator = ctx.isSpectator || (() => normalizeRoleForApp(window.myRole) === 'Spectator');
 
     board = ctx.boardEl || document.getElementById('game-board');
     ensureToolbar();

@@ -591,7 +591,7 @@ nextTurnBtn?.addEventListener("click", () => {
 
 // ================== ROLE UI ==================
 function setupRoleUI(role) {
-  const r = normalizeRoleForUi(role);
+  const r = normalizeRoleForApp(role);
   const gm = (r === "GM");
   const spectator = (r === "Spectator");
 
@@ -899,17 +899,17 @@ function highlightCurrentTurn(playerId) {
 
 // ================== PLAYER LIST ==================
 function roleToLabel(role) {
-  const r = normalizeRoleForUi(role);
-  if (r === "GM") return "GM";
-  if (r === "DnD-Player") return "DnD-P";
-  if (r === "Spectator") return "Spectator";
+  const r = normalizeRoleForApp(role);
+  if (r === "GM") return "ГМ";
+  if (r === "Player") return "Игрок";
+  if (r === "Spectator") return "Зритель";
   return "-";
 }
 
 function roleToClass(role) {
-  const r = normalizeRoleForUi(role);
+  const r = normalizeRoleForApp(role);
   if (r === "GM") return "role-gm";
-  if (r === "DnD-Player") return "role-player";
+  if (r === "Player") return "role-player";
   if (r === "Spectator") return "role-spectator";
   return "role-unknown";
 }
@@ -1102,8 +1102,8 @@ function updatePlayerList() {
 
   // Стабильный порядок пользователей:
   // 1) GM всегда сверху
-  // 2) затем DnD-P (Player)
-  // 3) затем Spectator
+  // 2) затем Игрок
+  // 3) затем Зритель
   // 4) внутри каждой группы — по времени первого подключения (usersOrder)
   const gmIds = [];
   const playerIds = [];
@@ -1113,9 +1113,9 @@ function updatePlayerList() {
   (usersOrder || []).forEach((ownerId) => {
     const u = usersById.get(String(ownerId));
     if (!u) return; // сейчас не подключён
-    const r = normalizeRoleForUi(u.role);
+    const r = normalizeRoleForApp(u.role);
     if (r === 'GM') gmIds.push(String(ownerId));
-    else if (r === 'DnD-Player') playerIds.push(String(ownerId));
+    else if (r === 'Player') playerIds.push(String(ownerId));
     else if (r === 'Spectator') spectrIds.push(String(ownerId));
     else otherIds.push(String(ownerId));
   });

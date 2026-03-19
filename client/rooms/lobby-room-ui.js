@@ -170,12 +170,12 @@ function renderRooms(rooms) {
 
 // ================== ROLE PICK MODAL ==================
 
-const ROOM_PASSWORDS_LS_KEY = 'dnd_room_passwords_cache';
+const ROOM_PASSWORDS_LS_KEY = 'int_room_passwords_cache';
 let lastJoinAttempt = { roomId: '', role: '', password: '', hadPassword: false, roomName: '' };
 
 function readRoomPasswordsCache() {
   try {
-    const raw = localStorage.getItem(ROOM_PASSWORDS_LS_KEY);
+    const raw = (typeof getAppStorageItem === 'function' ? getAppStorageItem(ROOM_PASSWORDS_LS_KEY) : localStorage.getItem(ROOM_PASSWORDS_LS_KEY));
     const data = raw ? JSON.parse(raw) : {};
     return (data && typeof data === 'object') ? data : {};
   } catch {
@@ -201,7 +201,7 @@ function rememberRoomPassword(roomId, password) {
     if (!rid || !pw) return;
     const cache = readRoomPasswordsCache();
     cache[rid] = pw;
-    localStorage.setItem(ROOM_PASSWORDS_LS_KEY, JSON.stringify(cache));
+    (typeof setAppStorageItem === 'function' ? setAppStorageItem(ROOM_PASSWORDS_LS_KEY, JSON.stringify(cache)) : localStorage.setItem(ROOM_PASSWORDS_LS_KEY, JSON.stringify(cache)));
   } catch {}
 }
 
@@ -306,11 +306,11 @@ function pickRoleAndJoin(roleDb) {
   const needsPw = !!pendingJoinRoomHasPassword;
   try {
     // store role for this session
-    localStorage.setItem('dnd_user_role', String(roleDb));
+    setAppStorageItem('int_user_role', String(normalizeRoleForDb(roleDb)));
     // update globals/UI
-    try { window.myRole = normalizeRoleForUi(roleDb); } catch {}
+    try { window.myRole = normalizeRoleForApp(roleDb); } catch {}
     try {
-      if (typeof myRole !== 'undefined') myRole = normalizeRoleForUi(roleDb);
+      if (typeof myRole !== 'undefined') myRole = normalizeRoleForApp(roleDb);
       if (typeof myRoleSpan !== 'undefined' && myRoleSpan) myRoleSpan.textContent = normalizeRoleForUi(roleDb);
     } catch {}
   } catch {}

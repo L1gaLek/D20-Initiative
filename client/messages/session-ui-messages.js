@@ -4,14 +4,14 @@ function handleRegisteredMessage(msg) {
   if (msg?.type !== 'registered') return false;
 
   myId = msg.id;
-  localStorage.setItem('dnd_user_id', String(msg.id));
-  localStorage.setItem('dnd_user_role', String(msg.role || ''));
-  localStorage.setItem('dnd_user_name', String(msg.name || ''));
+  setAppStorageItem('int_user_id', String(msg.id));
+  setAppStorageItem('int_user_role', String(normalizeRoleForDb(msg.role || '')));
+  setAppStorageItem('int_user_name', String(msg.name || ''));
 
-  myRole = msg.role;
+  myRole = normalizeRoleForApp(msg.role);
   myNameSpan.textContent = msg.name;
-  myRoleSpan.textContent = msg.role ? msg.role : '-';
-  myRole = String(msg.role || '');
+  myRoleSpan.textContent = msg.role ? normalizeRoleForUi(msg.role) : '-';
+  myRole = normalizeRoleForApp(msg.role || '');
 
   try { window.stopRoomChatSync?.(); } catch {}
   currentRoomId = null;

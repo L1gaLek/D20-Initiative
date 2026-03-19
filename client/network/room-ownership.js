@@ -13,7 +13,7 @@ function getRoomMetaFromState(state) {
 }
 
 function getCurrentStableUserId() {
-  return String(localStorage.getItem('dnd_user_id') || myId || '').trim();
+  return String(getAppStorageItem('int_user_id') || myId || '').trim();
 }
 
 async function loadRoomOwnershipMap() {

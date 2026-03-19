@@ -217,20 +217,98 @@ async function broadcastDiceEventOnly(event) {
   } catch {}
 }
 
-// ===== Role helpers (MVP) =====
-function normalizeRoleForDb(role) {
-  const r = String(role || '');
-  if (r === 'DnD-Player') return 'Player'; // DB constraint
-  return r;
-}
-function normalizeRoleForUi(role) {
-  const r = String(role || '');
-  if (r === 'Player') return 'DnD-Player';
-  return r;
+// ===== App storage + role helpers =====
+const APP_STORAGE_KEY_ALIASES = Object.freeze({
+  int_user_id: ['dnd_user_id'],
+  int_user_name: ['dnd_user_name'],
+  int_user_role: ['dnd_user_role'],
+  int_campaign_owner_key: ['dnd_campaign_owner_key'],
+  int_marks_legend_collapsed: ['dnd_marks_legend_collapsed'],
+  int_room_chat_ui: ['dnd_room_chat_ui'],
+  int_tavern_chat_ui: ['dnd_tavern_chat_ui'],
+  int_lobby_last_video_file: ['dnd_lobby_last_video_file'],
+  int_lobby_ambient_volume: ['dnd_lobby_ambient_volume'],
+  int_last_tavern_ambient_file: ['dnd_last_tavern_ambient_file'],
+  int_bg_music_volume: ['dnd_bg_music_volume'],
+  int_room_passwords_cache: ['dnd_room_passwords_cache'],
+  int_marks_toolbar: ['dnd_marks_toolbar'],
+  int_marks_toolbar_collapsed: ['dnd_marks_toolbar_collapsed'],
+  int_viewport_cols: ['dnd_viewport_cols'],
+  int_viewport_rows: ['dnd_viewport_rows'],
+  int_ws_client_id: ['dnd_ws_client_id']
+});
+
+function getAppStorageItem(key) {
+  try {
+    const primary = String(key || '').trim();
+    if (!primary) return null;
+    const value = localStorage.getItem(primary);
+    if (value != null) return value;
+    const aliases = APP_STORAGE_KEY_ALIASES[primary] || [];
+    for (const legacyKey of aliases) {
+      const legacyValue = localStorage.getItem(legacyKey);
+      if (legacyValue != null) {
+        localStorage.setItem(primary, legacyValue);
+        return legacyValue;
+      }
+    }
+  } catch {}
+  return null;
 }
 
+function setAppStorageItem(key, value) {
+  try {
+    const primary = String(key || '').trim();
+    if (!primary) return;
+    const normalized = String(value ?? '');
+    localStorage.setItem(primary, normalized);
+    const aliases = APP_STORAGE_KEY_ALIASES[primary] || [];
+    aliases.forEach((legacyKey) => {
+      try { localStorage.setItem(legacyKey, normalized); } catch {}
+    });
+  } catch {}
+}
+
+window.getAppStorageItem = getAppStorageItem;
+window.setAppStorageItem = setAppStorageItem;
+window.APP_STORAGE_KEY_ALIASES = APP_STORAGE_KEY_ALIASES;
+
+const ROLE_CONFIG = Object.freeze({
+  GM: { db: 'GM', ui: 'ГМ', aliases: ['GM', 'ГМ'] },
+  Player: { db: 'Player', ui: 'Игрок', aliases: ['Player', 'DnD-Player', 'Игрок'] },
+  Spectator: { db: 'Spectator', ui: 'Зритель', aliases: ['Spectator', 'Зритель', 'Наблюдатель'] }
+});
+
+function normalizeRoleKey(role) {
+  const raw = String(role || '').trim();
+  if (!raw) return '';
+  for (const [key, cfg] of Object.entries(ROLE_CONFIG)) {
+    if (cfg.aliases.includes(raw) || cfg.db === raw || cfg.ui === raw) return key;
+  }
+  return raw;
+}
+
+function normalizeRoleForDb(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_CONFIG[key]?.db || String(role || '').trim();
+}
+
+function normalizeRoleForUi(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_CONFIG[key]?.ui || String(role || '').trim();
+}
+
+function normalizeRoleForApp(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_CONFIG[key]?.db || String(role || '').trim();
+}
+
+window.normalizeRoleForDb = normalizeRoleForDb;
+window.normalizeRoleForUi = normalizeRoleForUi;
+window.normalizeRoleForApp = normalizeRoleForApp;
+
 function safeGetUserName() {
-  const raw = localStorage.getItem("dnd_user_name");
+  const raw = getAppStorageItem("int_user_name");
   const fromLs = (typeof raw === "string") ? raw.trim() : "";
   if (fromLs) return fromLs;
 
@@ -240,11 +318,11 @@ function safeGetUserName() {
   if (fromInput) return fromInput;
 
   const fromSpan = String(myNameSpan?.textContent || "").replace(/^\s*Вы:\s*/i, "").trim();
-  return fromSpan || "Player";
+  return fromSpan || "Игрок";
 }
 
 function safeGetUserRoleDb() {
-  const raw = String(localStorage.getItem("dnd_user_role") || myRole || "");
+  const raw = String(getAppStorageItem("int_user_role") || myRole || "");
   return normalizeRoleForDb(raw);
 }
 
@@ -252,8 +330,8 @@ function getCampaignOwnerKey() {
   // Устойчивый ключ владельца кампаний на этом устройстве/браузере.
   // Без Supabase Auth это самый простой способ "привязать" сохранения к ГМу
   // и позволить загружать их в любой комнате.
-  const LS_KEY = "dnd_campaign_owner_key";
-  let key = String(localStorage.getItem(LS_KEY) || "").trim();
+  const LS_KEY = "int_campaign_owner_key";
+  let key = String(getAppStorageItem(LS_KEY) || "").trim();
   if (key) return key;
 
   // crypto.randomUUID есть почти везде, но сделаем fallback
@@ -261,13 +339,13 @@ function getCampaignOwnerKey() {
     ? window.crypto.randomUUID()
     : ("owner_" + Math.random().toString(16).slice(2) + "_" + Date.now());
 
-  localStorage.setItem(LS_KEY, key);
+  setAppStorageItem(LS_KEY, key);
   return key;
 }
 
 
-function isGM() { return String(myRole || '') === 'GM'; }
-function isSpectator() { return String(myRole || '') === 'Spectator'; }
+function isGM() { return normalizeRoleForApp(myRole) === 'GM'; }
+function isSpectator() { return normalizeRoleForApp(myRole) === 'Spectator'; }
 
 function applyRoleToUI() {
   const gm = isGM();
@@ -779,17 +857,17 @@ sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANO
 window.SUPABASE_FETCH_FN = "fetch";
   
   // stable identity (doesn't depend on nickname)
-  const savedUserId = localStorage.getItem("dnd_user_id") || "";
+  const savedUserId = getAppStorageItem("int_user_id") || "";
   const userId = savedUserId || ("xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;
     const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   }));
 
-  localStorage.setItem("dnd_user_id", String(userId));
-  localStorage.setItem("dnd_user_name", String(name));
+  setAppStorageItem("int_user_id", String(userId));
+  setAppStorageItem("int_user_name", String(name));
   // Роль выбирается при входе в комнату
-  localStorage.setItem("dnd_user_role", "");
+  setAppStorageItem("int_user_role", "");
 
   // In Supabase-MVP our "myId" is stable localStorage userId
   try { lobbyAmbientAudio.nudgeFromGesture?.(); } catch {}
@@ -803,7 +881,7 @@ window.SUPABASE_FETCH_FN = "fetch";
 
 // ===== MARKS (ОБОЗНАЧЕНИЯ) COLLAPSE/EXPAND =====
 (function initMarksLegendToggle(){
-  const LS_KEY = 'dnd_marks_legend_collapsed';
+  const LS_KEY = 'int_marks_legend_collapsed';
 
   function applyCollapsed(root){
     const toolbar = (root && root.closest) ? root.closest('.marks-toolbar') : document.querySelector('.marks-toolbar');

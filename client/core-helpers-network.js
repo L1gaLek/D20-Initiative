@@ -1747,7 +1747,7 @@ async function sendMessage(msg) {
         const roomId = String(currentRoomId || msg.roomId || '').trim();
         const targetUserId = String(msg.targetUserId || '').trim();
         if (!roomId || !targetUserId) return;
-        if (String(localStorage.getItem('dnd_user_role') || myRole || '') !== 'GM') return;
+        if (String(getAppStorageItem('int_user_role') || myRole || '') !== 'GM') return;
 
         const { data: room, error: roomErr } = await sbClient.from('rooms').select('id,name').eq('id', roomId).maybeSingle();
         if (roomErr) throw roomErr;
@@ -1767,7 +1767,7 @@ async function sendMessage(msg) {
           reason: '',
           bannedUntil: null,
           createdAt: new Date().toISOString(),
-          actorUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
+          actorUserId: String(getAppStorageItem('int_user_id') || myId || ''),
           actorName: safeGetUserName()
         };
         nextState = withRoomModerationEvent(nextState, moderationEvent);
@@ -1821,7 +1821,7 @@ async function sendMessage(msg) {
         const roomId = String(currentRoomId || msg.roomId || '').trim();
         const targetUserId = String(msg.targetUserId || '').trim();
         if (!roomId || !targetUserId) return;
-        if (String(localStorage.getItem('dnd_user_role') || myRole || '') !== 'GM') return;
+        if (String(getAppStorageItem('int_user_role') || myRole || '') !== 'GM') return;
 
         const hoursRaw = Number(msg.hours);
         const minutesRaw = Number(msg.minutes);
@@ -1845,7 +1845,7 @@ async function sendMessage(msg) {
               user_id: targetUserId,
               reason,
               banned_until: bannedUntilIso,
-              banned_by_user_id: String(localStorage.getItem('dnd_user_id') || myId || ''),
+              banned_by_user_id: String(getAppStorageItem('int_user_id') || myId || ''),
               banned_by_name: safeGetUserName(),
               created_at: new Date().toISOString()
             }, { onConflict: 'room_id,user_id' });
@@ -1864,7 +1864,7 @@ async function sendMessage(msg) {
           totalMinutes,
           bannedAt: new Date().toISOString(),
           bannedUntil: bannedUntilIso,
-          bannedByUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
+          bannedByUserId: String(getAppStorageItem('int_user_id') || myId || ''),
           bannedByName: safeGetUserName()
         });
         const moderationEvent = {
@@ -1876,7 +1876,7 @@ async function sendMessage(msg) {
           reason,
           bannedUntil: bannedUntilIso,
           createdAt: new Date().toISOString(),
-          actorUserId: String(localStorage.getItem('dnd_user_id') || myId || ''),
+          actorUserId: String(getAppStorageItem('int_user_id') || myId || ''),
           actorName: safeGetUserName()
         };
         nextState = withRoomModerationEvent(nextState, moderationEvent);
@@ -1944,8 +1944,8 @@ async function sendMessage(msg) {
         const providedPassword = normalizeRoomPassword(msg.password || '');
 
         // ===== Enforce roles: register membership + prevent multiple GMs =====
-        const userId = String(localStorage.getItem("dnd_user_id") || myId || "");
-        const role = String(localStorage.getItem("dnd_user_role") || myRole || "");
+        const userId = String(getAppStorageItem("int_user_id") || myId || "");
+        const role = normalizeRoleForDb(getAppStorageItem("int_user_role") || myRole || "");
 
         try {
           await cleanupExpiredRoomBansTable(roomId, userId);
@@ -2026,7 +2026,7 @@ async function sendMessage(msg) {
             if (gmId && gmId !== userId) {
               handleMessage({
                 type: "roomsError",
-                message: "В этой комнате уже присутствует GM. Вы не можете зайти как GM."
+                message: "В этой комнате уже присутствует ГМ. Вы не можете зайти как ГМ."
               });
               return;
             }
@@ -2043,7 +2043,7 @@ async function sendMessage(msg) {
           if (mErr) {
             // Unique violation (second GM) => Postgres code 23505
             if (role === "GM" && (mErr.code === "23505" || String(mErr.message || "").includes("uq_one_gm_per_room"))) {
-              handleMessage({ type: "roomsError", message: "GM уже в комнате" });
+              handleMessage({ type: "roomsError", message: "ГМ уже в комнате" });
               return;
             }
             throw mErr;
@@ -2143,7 +2143,7 @@ async function sendMessage(msg) {
 
       // ===== Saved bases (characters) =====
       case "listSavedBases": {
-        const userId = String(localStorage.getItem("dnd_user_id") || "");
+        const userId = String(getAppStorageItem("int_user_id") || "");
         const { data, error } = await sbClient
           .from("characters")
           .select("id,name,updated_at")
@@ -2155,7 +2155,7 @@ async function sendMessage(msg) {
       }
 
       case "saveSavedBase": {
-        const userId = String(localStorage.getItem("dnd_user_id") || "");
+        const userId = String(getAppStorageItem("int_user_id") || "");
         const sheet = msg.sheet;
         const name = String(sheet?.parsed?.name?.value ?? sheet?.parsed?.name ?? sheet?.parsed?.profile?.name ?? "Персонаж").trim() || "Персонаж";
         const { data, error } = await sbClient
@@ -2173,7 +2173,7 @@ async function sendMessage(msg) {
       }
 
       case "deleteSavedBase": {
-        const userId = String(localStorage.getItem("dnd_user_id") || "");
+        const userId = String(getAppStorageItem("int_user_id") || "");
         const savedId = String(msg.savedId || "");
         if (!savedId) return;
         const { error } = await sbClient.from("characters").delete().eq("id", savedId).eq("user_id", userId);
@@ -2183,7 +2183,7 @@ async function sendMessage(msg) {
       }
 
       case "applySavedBase": {
-        const userId = String(localStorage.getItem("dnd_user_id") || "");
+        const userId = String(getAppStorageItem("int_user_id") || "");
         const savedId = String(msg.savedId || "");
         if (!currentRoomId || !lastState) return;
         const { data, error } = await sbClient.from("characters").select("state").eq("id", savedId).eq("user_id", userId).single();
@@ -2220,7 +2220,7 @@ async function sendMessage(msg) {
 
   const next = deepClone(lastState);
   const isGm = (String(myRole || "") === "GM");
-  const myUserId = String(localStorage.getItem("dnd_user_id") || "");
+  const myUserId = String(getAppStorageItem("int_user_id") || "");
 
   const p = (next.players || []).find(pl => String(pl.id) === String(msg.id));
   if (!p) return;
@@ -2256,7 +2256,7 @@ async function sendMessage(msg) {
 
         const next = deepClone(lastState);
         const isGM = (String(myRole || "") === "GM");
-        const myUserId = String(localStorage.getItem("dnd_user_id") || "");
+        const myUserId = String(getAppStorageItem("int_user_id") || "");
 
         const ownsPlayer = (pl) => pl && String(pl.ownerId) === myUserId;
 
