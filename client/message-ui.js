@@ -92,109 +92,8 @@ function handleMessage(msg) {
   }
 
 // ===== Rooms lobby messages =====
-if (msg.type === 'rooms' && Array.isArray(msg.rooms)) {
-  try { window.SERVER_TOTAL_USERS = Number(msg.totalUsers || 0) || 0; } catch {}
-  renderRooms(msg.rooms);
-  if (!currentRoomId && diceViz) diceViz.style.display = 'none';
-}
-if (msg.type === 'joinedRoom' && msg.room) {
-  try {
-    const attempt = (typeof window.getLastJoinAttempt === 'function') ? window.getLastJoinAttempt() : null;
-    if (attempt && String(attempt.roomId || '') === String(msg.room.id || '') && attempt.hadPassword && attempt.password) {
-      window.rememberRoomPassword?.(attempt.roomId, attempt.password);
-    }
-    window.clearLastJoinAttempt?.();
-  } catch {}
-  roomsDiv.style.display = 'none';
-  try { window.closeTavern?.(); } catch {}
-  try { window.stopTavernChannel?.(); } catch {}
-  gameUI.style.display = 'block';
-
-  currentRoomId = msg.room.id || null;
-  try { window.__currentRoomJoinedAtMs = Date.now(); } catch {}
-  try { window.RoomChat?.reset?.(currentRoomId); } catch {}
-  if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
-  if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
-  if (diceViz) diceViz.style.display = 'block';
-  applyRoleToUI();
-  startHeartbeat();
-  startMembersPolling();
-}
-
-if (msg.type === "registered") {
-      myId = msg.id;
-      localStorage.setItem("dnd_user_id", String(msg.id));
-      // Роль выбирается при входе в комнату
-      localStorage.setItem("dnd_user_role", String(msg.role || ""));
-      localStorage.setItem("dnd_user_name", String(msg.name || ""));
-myRole = msg.role;
-      myNameSpan.textContent = msg.name;
-      myRoleSpan.textContent = msg.role ? msg.role : '-';
-      myRole = String(msg.role || "");
-
-      
-
-      try { window.stopRoomChatSync?.(); } catch {}
-      currentRoomId = null;
-      stopHeartbeat();
-      stopMembersPolling();
-      if (diceViz) diceViz.style.display = 'none';
-      if (myRoomSpan) myRoomSpan.textContent = '-';
-      if (myScenarioSpan) myScenarioSpan.textContent = '-';
-loginDiv.style.display = 'none';
-      roomsDiv.style.display = 'none';
-      gameUI.style.display = 'none';
-      roomsError.textContent = '';
-      try { window.openTavern?.(); } catch {}
-      try { window.ensureTavernChannel?.(); } catch {}
-      sendMessage({ type: 'listRooms' });
-
-      applyRoleToUI();
-
-      // ИНИЦИАЛИЗАЦИЯ МОДАЛКИ "ИНФА"
-      if (window.InfoModal?.init) {
-        window.InfoModal.init({
-          sendMessage,
-          getMyId: () => myId,
-          getMyRole: () => myRole
-        });
-      }
-    }
-
-    if (msg.type === "error") {
-      const text = String(msg.message || "Ошибка");
-      // если мы ещё на экране логина
-      if (loginDiv && loginDiv.style.display !== 'none') {
-        loginError.textContent = text;
-      } else if (roomsDiv && roomsDiv.style.display !== 'none') {
-        roomsError.textContent = text;
-      } else if (typeof window.isTavernVisible === 'function' && window.isTavernVisible()) {
-        if (tavernRoomsError) tavernRoomsError.textContent = text;
-      } else {
-        // в игре — показываем как быстрое уведомление
-        alert(text);
-      }
-    }
-
-    // Сообщения лобби (например, неверный пароль или GM уже в комнате)
-    if (msg.type === "roomsError") {
-      const text = String(msg.message || "Ошибка");
-      if (roomsError) roomsError.textContent = text;
-      if (typeof window.isTavernVisible === 'function' && window.isTavernVisible() && tavernRoomsError) tavernRoomsError.textContent = text;
-
-      try {
-        const lower = text.toLowerCase();
-        if (lower.includes('забан')) {
-          window.showRoomAccessPopup?.(text, 'Доступ запрещён');
-        } else if (lower.includes('парол')) {
-          window.showRoomAccessPopup?.(text, 'Неверный пароль');
-        } else if (lower.includes('gm') || lower.includes('гм')) {
-          window.showRoomAccessPopup?.(text, 'GM уже в комнате');
-        } else {
-          window.showRoomAccessPopup?.(text, 'Ошибка входа');
-        }
-      } catch {}
-    }
+try { handleLobbyRoomMessage?.(msg); } catch {}
+try { handleSessionUiMessage?.(msg); } catch {}
 
     if (msg.type === 'moderationEvent') {
       if (handleOwnModerationEvent(msg.event || msg)) return;
@@ -692,7 +591,7 @@ nextTurnBtn?.addEventListener("click", () => {
 
 // ================== ROLE UI ==================
 function setupRoleUI(role) {
-  const r = normalizeRoleForUi(role);
+  const r = normalizeRoleForApp(role);
   const gm = (r === "GM");
   const spectator = (r === "Spectator");
 
@@ -1000,17 +899,17 @@ function highlightCurrentTurn(playerId) {
 
 // ================== PLAYER LIST ==================
 function roleToLabel(role) {
-  const r = normalizeRoleForUi(role);
-  if (r === "GM") return "GM";
-  if (r === "DnD-Player") return "DnD-P";
-  if (r === "Spectator") return "Spectator";
+  const r = normalizeRoleForApp(role);
+  if (r === "GM") return "ГМ";
+  if (r === "Player") return "Игрок";
+  if (r === "Spectator") return "Зритель";
   return "-";
 }
 
 function roleToClass(role) {
-  const r = normalizeRoleForUi(role);
+  const r = normalizeRoleForApp(role);
   if (r === "GM") return "role-gm";
-  if (r === "DnD-Player") return "role-player";
+  if (r === "Player") return "role-player";
   if (r === "Spectator") return "role-spectator";
   return "role-unknown";
 }
@@ -1203,8 +1102,8 @@ function updatePlayerList() {
 
   // Стабильный порядок пользователей:
   // 1) GM всегда сверху
-  // 2) затем DnD-P (Player)
-  // 3) затем Spectator
+  // 2) затем Игрок
+  // 3) затем Зритель
   // 4) внутри каждой группы — по времени первого подключения (usersOrder)
   const gmIds = [];
   const playerIds = [];
@@ -1214,9 +1113,9 @@ function updatePlayerList() {
   (usersOrder || []).forEach((ownerId) => {
     const u = usersById.get(String(ownerId));
     if (!u) return; // сейчас не подключён
-    const r = normalizeRoleForUi(u.role);
+    const r = normalizeRoleForApp(u.role);
     if (r === 'GM') gmIds.push(String(ownerId));
-    else if (r === 'DnD-Player') playerIds.push(String(ownerId));
+    else if (r === 'Player') playerIds.push(String(ownerId));
     else if (r === 'Spectator') spectrIds.push(String(ownerId));
     else otherIds.push(String(ownerId));
   });

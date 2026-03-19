@@ -9,12 +9,12 @@
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
   function readIntLs(key, fallback) {
-    const raw = localStorage.getItem(key);
+    const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(key) : localStorage.getItem(key));
     const n = Number(raw);
     return Number.isFinite(n) ? n : fallback;
   }
   function writeIntLs(key, n) {
-    try { localStorage.setItem(key, String(n)); } catch {}
+    try { (typeof setAppStorageItem === "function" ? setAppStorageItem(key, String(n)) : localStorage.setItem(key, String(n))); } catch {}
   }
 
   // ВАЖНО: controlbox не знает про Supabase/DB — он дергает sendMessage и дергает callback'и из client.js
@@ -49,8 +49,8 @@
     const resetGameBtn = document.getElementById('reset-game');
 
     // ===== Viewport (персональная ширина/высота рамки) =====
-    const LS_VW = "dnd_viewport_cols";
-    const LS_VH = "dnd_viewport_rows";
+    const LS_VW = "int_viewport_cols";
+    const LS_VH = "int_viewport_rows";
     // По умолчанию рамка 10x10 (персональная настройка, хранится в localStorage)
     let viewportCols = clamp(readIntLs(LS_VW, Number(viewportWInput?.value) || 10), 5, 80);
     let viewportRows = clamp(readIntLs(LS_VH, Number(viewportHInput?.value) || 10), 5, 80);
@@ -401,16 +401,19 @@
       return out;
     }
 
+    function dispatchCompatEvent(names, detail) {
+      const list = Array.isArray(names) ? names : [names];
+      list.forEach((name) => {
+        try { window.dispatchEvent(new CustomEvent(String(name), { detail })); } catch {}
+      });
+    }
+
     function setWallPreview(edges) {
-      try {
-        window.dispatchEvent(new CustomEvent('dnd_wall_preview', {
-          detail: { edges }
-        }));
-      } catch {}
+      dispatchCompatEvent(['int_wall_preview', 'dnd_wall_preview'], { edges });
     }
 
     function clearWallPreview() {
-      try { window.dispatchEvent(new CustomEvent('dnd_wall_preview_clear')); } catch {}
+      dispatchCompatEvent(['int_wall_preview_clear', 'dnd_wall_preview_clear']);
     }
 
     // ===== NEW WALL INPUT MODEL =====
@@ -425,11 +428,7 @@
     function applyWallEdges(changed) {
       if (!changed || !changed.length) return;
       // optimistic
-      try {
-        window.dispatchEvent(new CustomEvent('dnd_local_wall_edges', {
-          detail: { mode: wallMode, edges: changed }
-        }));
-      } catch {}
+      dispatchCompatEvent(['int_local_wall_edges', 'dnd_local_wall_edges'], { mode: wallMode, edges: changed });
 
       if (draftEnabled) {
         for (const ed of changed) addToDraft(wallMode, ed);
