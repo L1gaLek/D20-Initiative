@@ -363,6 +363,13 @@ function createInitialGameState() {
       moderationEvent: null
     },
 
+    roomMeta: {
+      ownerId: '',
+      ownerName: '',
+      createdAt: '',
+      updatedAt: ''
+    },
+
     // Background music (GM-controlled, synced to all)
     bgMusic: {
       tracks: [], // [{id,name,desc,url,path,createdAt}]
@@ -371,6 +378,95 @@ function createInitialGameState() {
       volume: 40 // 0..100
     }
   };
+}
+
+function getRoomMetaFromState(state) {
+  const meta = (state && typeof state === 'object' && state.roomMeta && typeof state.roomMeta === 'object')
+    ? state.roomMeta
+    : {};
+  return {
+    ownerId: String(meta?.ownerId || '').trim(),
+    ownerName: String(meta?.ownerName || '').trim(),
+    createdAt: String(meta?.createdAt || '').trim(),
+    updatedAt: String(meta?.updatedAt || '').trim()
+  };
+}
+
+function getCurrentStableUserId() {
+  return String(localStorage.getItem('dnd_user_id') || myId || '').trim();
+}
+
+async function loadRoomOwnershipMap() {
+  const { data, error } = await sbClient
+    .from('room_state')
+    .select('room_id,state');
+  if (error) throw error;
+
+  const result = new Map();
+  for (const row of (data || [])) {
+    const roomId = String(row?.room_id || '').trim();
+    if (!roomId) continue;
+    result.set(roomId, getRoomMetaFromState(row?.state));
+  }
+  return result;
+}
+
+async function findOwnedRoomByUserId(userId, excludeRoomId = '') {
+  const uid = String(userId || '').trim();
+  const excluded = String(excludeRoomId || '').trim();
+  if (!uid) return null;
+  const ownership = await loadRoomOwnershipMap();
+  for (const [roomId, meta] of ownership.entries()) {
+    if (excluded && roomId === excluded) continue;
+    if (String(meta?.ownerId || '') === uid) return { roomId, meta };
+  }
+  return null;
+}
+
+async function requireOwnedRoom(roomId, userId) {
+  const rid = String(roomId || '').trim();
+  const uid = String(userId || '').trim();
+  if (!rid || !uid) return { ok: false, message: 'Комната не найдена.' };
+
+  const { data, error } = await sbClient
+    .from('room_state')
+    .select('room_id,phase,current_actor_id,state')
+    .eq('room_id', rid)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return { ok: false, message: 'Комната не найдена.' };
+
+  const meta = getRoomMetaFromState(data.state);
+  if (!meta.ownerId || meta.ownerId !== uid) {
+    return { ok: false, message: 'Вы можете управлять только своей комнатой.' };
+  }
+
+  return { ok: true, stateRow: data, meta };
+}
+
+async function deleteRoomCascade(roomId) {
+  const rid = String(roomId || '').trim();
+  if (!rid) return;
+  const tables = [
+    'room_members',
+    'room_log',
+    'room_dice_events',
+    'room_tokens',
+    'room_map_meta',
+    'room_walls',
+    'room_marks',
+    'room_fog',
+    'room_music_state',
+    'room_bans'
+  ];
+  for (const table of tables) {
+    const { error } = await sbClient.from(table).delete().eq('room_id', rid);
+    if (error) throw error;
+  }
+  const { error: stateErr } = await sbClient.from('room_state').delete().eq('room_id', rid);
+  if (stateErr) throw stateErr;
+  const { error: roomErr } = await sbClient.from('rooms').delete().eq('id', rid);
+  if (roomErr) throw roomErr;
 }
 
 function ensureStateHasMaps(state) {
@@ -3026,6 +3122,7 @@ async function sendMessage(msg) {
           .select("id,name,scenario,created_at,has_password,password_hash")
           .order("created_at", { ascending: false });
         if (error) throw error;
+        const myUserId = getCurrentStableUserId();
 
         const passwordByRoomId = new Map();
         try {
@@ -3036,6 +3133,13 @@ async function sendMessage(msg) {
           });
         } catch (e) {
           console.warn('listRooms password lookup failed', e);
+        }
+
+        let ownership = new Map();
+        try {
+          ownership = await loadRoomOwnershipMap();
+        } catch (e) {
+          console.warn('listRooms ownership lookup failed', e);
         }
 
         // Unique users per room + total unique users on server (across all rooms)
@@ -3064,7 +3168,10 @@ async function sendMessage(msg) {
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
-            hasPassword: !!passwordByRoomId.get(rid)
+            hasPassword: !!passwordByRoomId.get(rid),
+            ownerId: String(ownership.get(rid)?.ownerId || ''),
+            ownerName: String(ownership.get(rid)?.ownerName || ''),
+            isMine: !!myUserId && String(ownership.get(rid)?.ownerId || '') === myUserId
           };
         });
 
@@ -3073,6 +3180,17 @@ async function sendMessage(msg) {
       }
 
       case "createRoom": {
+        const userId = getCurrentStableUserId();
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
+          return;
+        }
+        const existingOwnedRoom = await findOwnedRoomByUserId(userId);
+        if (existingOwnedRoom) {
+          handleMessage({ type: 'roomsError', message: 'Вы уже создали комнату. Можно управлять только одной комнатой на пользователя.' });
+          return;
+        }
+
         const roomId = (crypto?.randomUUID ? crypto.randomUUID() : ("r-" + Math.random().toString(16).slice(2)));
         const name = String(msg.name || "Комната").trim() || "Комната";
         const scenario = String(msg.scenario || "");
@@ -3089,6 +3207,12 @@ async function sendMessage(msg) {
 
         const initState = createInitialGameState();
         initState.roomAccess = await buildRoomAccessState(password, initState);
+        initState.roomMeta = {
+          ownerId: userId,
+          ownerName: safeGetUserName(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
         const { error: e2 } = await sbClient.from("room_state").insert({
           room_id: roomId,
           phase: initState.phase,
@@ -3100,6 +3224,130 @@ async function sendMessage(msg) {
 
         // refresh list
         await sendMessage({ type: "listRooms" });
+        break;
+      }
+
+      case "updateRoom": {
+        const roomId = String(msg.roomId || '').trim();
+        const userId = getCurrentStableUserId();
+        if (!roomId) return;
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
+          return;
+        }
+
+        const ownership = await requireOwnedRoom(roomId, userId);
+        if (!ownership.ok) {
+          handleMessage({ type: 'roomsError', message: ownership.message });
+          return;
+        }
+
+        const name = String(msg.name || 'Комната').trim() || 'Комната';
+        const scenario = String(msg.scenario || '').trim();
+        const password = normalizeRoomPassword(msg.password || '');
+        const roomPasswordHash = password ? await sha256Hex(password) : '';
+
+        const { error: updRoomErr } = await sbClient
+          .from('rooms')
+          .update({
+            name,
+            scenario,
+            has_password: !!password,
+            password_hash: roomPasswordHash || null
+          })
+          .eq('id', roomId);
+        if (updRoomErr) throw updRoomErr;
+
+        const nextState = deepClone(ownership.stateRow?.state || createInitialGameState());
+        if (!nextState.roomAccess || typeof nextState.roomAccess !== 'object') nextState.roomAccess = {};
+        nextState.roomAccess.hasPassword = !!password;
+        nextState.roomAccess.passwordHash = roomPasswordHash || '';
+        if (!nextState.roomMeta || typeof nextState.roomMeta !== 'object') nextState.roomMeta = {};
+        nextState.roomMeta.ownerId = String(ownership.meta?.ownerId || userId);
+        nextState.roomMeta.ownerName = String(ownership.meta?.ownerName || safeGetUserName());
+        nextState.roomMeta.createdAt = String(ownership.meta?.createdAt || nextState.roomMeta.createdAt || new Date().toISOString());
+        nextState.roomMeta.updatedAt = new Date().toISOString();
+
+        const { error: updStateErr } = await sbClient
+          .from('room_state')
+          .update({
+            phase: String(ownership.stateRow?.phase || nextState?.phase || 'lobby'),
+            current_actor_id: (typeof ownership.stateRow?.current_actor_id !== 'undefined')
+              ? ownership.stateRow.current_actor_id
+              : null,
+            state: nextState
+          })
+          .eq('room_id', roomId);
+        if (updStateErr) throw updStateErr;
+
+        if (String(currentRoomId || '') === roomId) {
+          try {
+            if (myRoomSpan) myRoomSpan.textContent = name;
+            if (myScenarioSpan) myScenarioSpan.textContent = scenario || '-';
+          } catch {}
+        }
+        try {
+          const roomPayload = {
+            id: roomId,
+            name,
+            scenario,
+            hasPassword: !!password,
+            ownerId: String(nextState?.roomMeta?.ownerId || userId),
+            ownerName: String(nextState?.roomMeta?.ownerName || safeGetUserName())
+          };
+          handleMessage({ type: 'roomUpdated', room: roomPayload });
+          sendWsEnvelope({ type: 'roomUpdated', roomId, room: roomPayload }, { optimisticApplied: true });
+        } catch (e) {
+          console.warn('roomUpdated relay failed', e);
+        }
+
+        await sendMessage({ type: 'listRooms' });
+        break;
+      }
+
+      case "deleteRoom": {
+        const roomId = String(msg.roomId || '').trim();
+        const userId = getCurrentStableUserId();
+        if (!roomId) return;
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
+          return;
+        }
+
+        const ownership = await requireOwnedRoom(roomId, userId);
+        if (!ownership.ok) {
+          handleMessage({ type: 'roomsError', message: ownership.message });
+          return;
+        }
+        const { data: roomRow, error: roomErr } = await sbClient
+          .from('rooms')
+          .select('name')
+          .eq('id', roomId)
+          .maybeSingle();
+        if (roomErr) throw roomErr;
+
+        try {
+          const roomName = String(roomRow?.name || msg.roomName || '');
+          sendWsEnvelope({
+            type: 'roomDeleted',
+            roomId,
+            roomName: roomName || String(msg.roomName || 'Комната')
+          }, { optimisticApplied: true });
+        } catch (e) {
+          console.warn('roomDeleted relay failed', e);
+        }
+
+        if (String(currentRoomId || '') === roomId) {
+          try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('deleteRoom cleanup failed', e); }
+          try { stopHeartbeat(); } catch {}
+          try { stopMembersPolling(); } catch {}
+          try { await stopSupabaseRealtimeChannels(); } catch {}
+          try { window.stopRoomChatSync?.(); } catch {}
+          currentRoomId = null;
+        }
+
+        await deleteRoomCascade(roomId);
+        await sendMessage({ type: 'listRooms' });
         break;
       }
 
