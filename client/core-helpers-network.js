@@ -3319,6 +3319,23 @@ async function sendMessage(msg) {
           handleMessage({ type: 'roomsError', message: ownership.message });
           return;
         }
+        const { data: roomRow, error: roomErr } = await sbClient
+          .from('rooms')
+          .select('name')
+          .eq('id', roomId)
+          .maybeSingle();
+        if (roomErr) throw roomErr;
+
+        try {
+          const roomName = String(roomRow?.name || msg.roomName || '');
+          sendWsEnvelope({
+            type: 'roomDeleted',
+            roomId,
+            roomName: roomName || String(msg.roomName || 'Комната')
+          }, { optimisticApplied: true });
+        } catch (e) {
+          console.warn('roomDeleted relay failed', e);
+        }
 
         if (String(currentRoomId || '') === roomId) {
           try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('deleteRoom cleanup failed', e); }

@@ -127,6 +127,17 @@ if (msg.type === 'roomUpdated' && msg.room) {
     if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
   }
 }
+if (msg.type === 'roomDeleted') {
+  const roomId = String(msg.roomId || msg.room?.id || '');
+  const currentRid = String(currentRoomId || '');
+  if (roomId && currentRid && roomId === currentRid) {
+    const roomName = String(msg.roomName || myRoomSpan?.textContent || 'комната');
+    const popupText = `Создатель удалил комнату «${roomName}», поэтому вы были возвращены в таверну.`;
+    Promise.resolve(window.returnToTavernFromRoom?.({ skipMemberCleanup: true })).finally(() => {
+      try { window.showRoomAccessPopup?.(popupText, 'Комната удалена'); } catch {}
+    });
+  }
+}
 
 if (msg.type === "registered") {
       myId = msg.id;
