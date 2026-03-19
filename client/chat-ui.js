@@ -65,52 +65,126 @@ function listVisibleDirectChatKeys(chatsMap) {
     .filter((key) => key && key !== 'global');
 }
 
+function normalizeStoredChatKeys(keys) {
+  return (Array.isArray(keys) ? keys : []).map((key) => String(key || '')).filter(Boolean);
+}
+
+function saveScopedChatUiState(scope, roomId, state, extra = {}) {
+  writeChatUiPrefs(scope, roomId, {
+    activeChatKey: String(state?.activeChatKey || 'global'),
+    visibleChatKeys: listVisibleDirectChatKeys(new Map((state?.tabs || []).map((tab) => [String(tab?.key || ''), true]))),
+    hiddenChatKeys: Array.from(state?.hiddenChatKeys || []).map((key) => String(key || '')).filter(Boolean),
+    ...extra
+  });
+}
+
+function applyScopedChatUiPrefs(state, scope, roomId, options = {}) {
+  const prefs = readChatUiPrefs(scope, roomId);
+  const visible = new Set(normalizeStoredChatKeys(prefs.visibleChatKeys));
+  state.hiddenChatKeys = new Set(normalizeStoredChatKeys(prefs.hiddenChatKeys));
+  state.tabs = [{ key: 'global', label: String(options.globalLabel || 'Общий чат'), closable: false }];
+  visible.forEach((key) => {
+    if (!key || key === 'global') return;
+    const otherId = String(key).replace(/^dm:/, '');
+    const label = typeof options.resolveLabel === 'function'
+      ? options.resolveLabel(otherId, 'Личное')
+      : 'Личное';
+    state.tabs.push({ key, label: String(label || 'Личное'), closable: true });
+    state.hiddenChatKeys.delete(key);
+  });
+  const active = String(prefs.activeChatKey || 'global');
+  state.activeChatKey = (active === 'global' || visible.has(active)) ? active : 'global';
+  return prefs;
+}
+
+function applyUnreadBadge(el, count) {
+  if (!el) return;
+  if (count > 0) {
+    el.classList.remove('hidden');
+    el.textContent = count > 99 ? '99+' : String(count);
+  } else {
+    el.classList.add('hidden');
+    el.textContent = '0';
+  }
+}
+
+function updateUnreadBadges(state, globalEl, directEl) {
+  applyUnreadBadge(globalEl, Math.max(0, Number(state?.unreadGlobal) || 0));
+  applyUnreadBadge(directEl, Math.max(0, Number(state?.unreadDirect) || 0));
+}
+
+function clearQuoteDraftState(state, quoteEl) {
+  state.quoteDraft = null;
+  if (!quoteEl) return;
+  quoteEl.classList.add('hidden');
+  quoteEl.setAttribute('aria-hidden', 'true');
+  quoteEl.innerHTML = '';
+}
+
+function setQuoteDraftState(state, quoteEl, message, clearAttr) {
+  if (!message || message.system) return;
+  state.quoteDraft = {
+    fromId: String(message.fromId || ''),
+    fromName: String(message.fromName || 'Путник'),
+    text: String(message.text || '').trim().slice(0, 280)
+  };
+  if (!quoteEl) return;
+  quoteEl.classList.remove('hidden');
+  quoteEl.setAttribute('aria-hidden', 'false');
+  quoteEl.innerHTML = `
+    <div class="tavern-chat-quote__meta">Ответ для ${escapeHtmlLite(state.quoteDraft.fromName)}</div>
+    <div class="tavern-chat-quote__text">${escapeHtmlLite(state.quoteDraft.text)}</div>
+    <button type="button" class="tavern-chat-quote__clear" ${clearAttr} title="Убрать цитату">✕</button>
+  `;
+}
+
+function markChatReadState(state, chatKey, getUnreadCount, updateBadges) {
+  const key = String(chatKey || state?.activeChatKey || 'global');
+  const prev = Number(typeof getUnreadCount === 'function' ? getUnreadCount(key) : 0) || 0;
+  if (!prev) return;
+  state.unreadByChat.set(key, 0);
+  if (key === 'global') state.unreadGlobal = Math.max(0, (Number(state.unreadGlobal) || 0) - prev);
+  else state.unreadDirect = Math.max(0, (Number(state.unreadDirect) || 0) - prev);
+  if (typeof updateBadges === 'function') updateBadges();
+}
+
+function noteChatUnreadState(state, modalEl, item, getUnreadCount, updateBadges) {
+  if (!state?.loadedHistory) return;
+  if (!item || item.system || item.mine) return;
+  const modalOpen = !!(modalEl && !modalEl.classList.contains('hidden'));
+  const isActive = String(state.activeChatKey || 'global') === String(item.chatKey || 'global');
+  if (modalOpen && isActive) return;
+  const key = String(item.chatKey || 'global');
+  const prev = Number(typeof getUnreadCount === 'function' ? getUnreadCount(key) : 0) || 0;
+  state.unreadByChat.set(key, prev + 1);
+  if (key === 'global') state.unreadGlobal = (Number(state.unreadGlobal) || 0) + 1;
+  else state.unreadDirect = (Number(state.unreadDirect) || 0) + 1;
+  if (typeof updateBadges === 'function') updateBadges();
+}
+
 function saveTavernChatUiState() {
-  writeChatUiPrefs('tavern', '', {
-    activeChatKey: String(tavernChatState.activeChatKey || 'global'),
-    visibleChatKeys: listVisibleDirectChatKeys(new Map((tavernChatState.tabs || []).map((tab) => [String(tab?.key || ''), true]))),
-    hiddenChatKeys: Array.from(tavernChatState.hiddenChatKeys || []).map((key) => String(key || '')).filter(Boolean),
+  saveScopedChatUiState('tavern', '', tavernChatState, {
     usersView: String(tavernChatState.usersView || 'tavern') === 'recent' ? 'recent' : 'tavern'
   });
 }
 
 function applyTavernChatUiPrefs() {
-  const prefs = readChatUiPrefs('tavern', '');
-  tavernChatState.hiddenChatKeys = new Set((Array.isArray(prefs.hiddenChatKeys) ? prefs.hiddenChatKeys : []).map((key) => String(key || '')).filter(Boolean));
-  const visible = new Set((Array.isArray(prefs.visibleChatKeys) ? prefs.visibleChatKeys : []).map((key) => String(key || '')).filter(Boolean));
-  tavernChatState.tabs = [{ key: 'global', label: 'Общий стол', closable: false }];
-  visible.forEach((key) => {
-    if (!key || key === 'global') return;
-    const otherId = String(key).replace(/^dm:/, '');
-    tavernChatState.tabs.push({ key, label: getDirectChatLabel(otherId, 'Личное'), closable: true });
-    tavernChatState.hiddenChatKeys.delete(key);
+  const prefs = applyScopedChatUiPrefs(tavernChatState, 'tavern', '', {
+    globalLabel: 'Общий стол',
+    resolveLabel: (otherId, fallback) => getDirectChatLabel(otherId, fallback)
   });
-  const active = String(prefs.activeChatKey || 'global');
-  tavernChatState.activeChatKey = (active === 'global' || visible.has(active)) ? active : 'global';
   tavernChatState.usersView = String(prefs.usersView || 'tavern') === 'recent' ? 'recent' : 'tavern';
 }
 
 function saveRoomChatUiState() {
-  writeChatUiPrefs('room', roomChatState.roomId || currentRoomId || '', {
-    activeChatKey: String(roomChatState.activeChatKey || 'global'),
-    visibleChatKeys: listVisibleDirectChatKeys(new Map((roomChatState.tabs || []).map((tab) => [String(tab?.key || ''), true]))),
-    hiddenChatKeys: Array.from(roomChatState.hiddenChatKeys || []).map((key) => String(key || '')).filter(Boolean)
-  });
+  saveScopedChatUiState('room', roomChatState.roomId || currentRoomId || '', roomChatState);
 }
 
 function applyRoomChatUiPrefs(roomId = '') {
-  const prefs = readChatUiPrefs('room', roomId);
-  roomChatState.hiddenChatKeys = new Set((Array.isArray(prefs.hiddenChatKeys) ? prefs.hiddenChatKeys : []).map((key) => String(key || '')).filter(Boolean));
-  const visible = new Set((Array.isArray(prefs.visibleChatKeys) ? prefs.visibleChatKeys : []).map((key) => String(key || '')).filter(Boolean));
-  roomChatState.tabs = [{ key: 'global', label: 'Общий чат', closable: false }];
-  visible.forEach((key) => {
-    if (!key || key === 'global') return;
-    const otherId = String(key).replace(/^dm:/, '');
-    roomChatState.tabs.push({ key, label: getRoomChatUserName(otherId, 'Личное'), closable: true });
-    roomChatState.hiddenChatKeys.delete(key);
+  applyScopedChatUiPrefs(roomChatState, 'room', roomId, {
+    globalLabel: 'Общий чат',
+    resolveLabel: (otherId, fallback) => getRoomChatUserName(otherId, fallback)
   });
-  const active = String(prefs.activeChatKey || 'global');
-  roomChatState.activeChatKey = (active === 'global' || visible.has(active)) ? active : 'global';
 }
 
 function hideModalEl(el) {
@@ -210,66 +284,23 @@ function getUnreadCountForChat(chatKey) {
 }
 
 function updateTavernHotspotBadges() {
-  const apply = (el, count) => {
-    if (!el) return;
-    if (count > 0) {
-      el.classList.remove('hidden');
-      el.textContent = count > 99 ? '99+' : String(count);
-    } else {
-      el.classList.add('hidden');
-      el.textContent = '0';
-    }
-  };
-  apply(tavernChatBadgeGlobal, Math.max(0, Number(tavernChatState.unreadGlobal) || 0));
-  apply(tavernChatBadgeDirect, Math.max(0, Number(tavernChatState.unreadDirect) || 0));
+  updateUnreadBadges(tavernChatState, tavernChatBadgeGlobal, tavernChatBadgeDirect);
 }
 
 function clearTavernQuoteDraft() {
-  tavernChatState.quoteDraft = null;
-  if (!tavernChatQuote) return;
-  tavernChatQuote.classList.add('hidden');
-  tavernChatQuote.setAttribute('aria-hidden', 'true');
-  tavernChatQuote.innerHTML = '';
+  clearQuoteDraftState(tavernChatState, tavernChatQuote);
 }
 
 function setTavernQuoteDraft(message) {
-  if (!message || message.system) return;
-  tavernChatState.quoteDraft = {
-    fromId: String(message.fromId || ''),
-    fromName: String(message.fromName || 'Путник'),
-    text: String(message.text || '').trim().slice(0, 280)
-  };
-  if (!tavernChatQuote) return;
-  tavernChatQuote.classList.remove('hidden');
-  tavernChatQuote.setAttribute('aria-hidden', 'false');
-  tavernChatQuote.innerHTML = `
-    <div class="tavern-chat-quote__meta">Ответ для ${escapeHtmlLite(tavernChatState.quoteDraft.fromName)}</div>
-    <div class="tavern-chat-quote__text">${escapeHtmlLite(tavernChatState.quoteDraft.text)}</div>
-    <button type="button" class="tavern-chat-quote__clear" data-clear-tavern-quote title="Убрать цитату">✕</button>
-  `;
+  setQuoteDraftState(tavernChatState, tavernChatQuote, message, 'data-clear-tavern-quote');
 }
 
 function markTavernChatRead(chatKey) {
-  const key = String(chatKey || tavernChatState.activeChatKey || 'global');
-  const prev = getUnreadCountForChat(key);
-  if (!prev) return;
-  tavernChatState.unreadByChat.set(key, 0);
-  if (key === 'global') tavernChatState.unreadGlobal = Math.max(0, (Number(tavernChatState.unreadGlobal) || 0) - prev);
-  else tavernChatState.unreadDirect = Math.max(0, (Number(tavernChatState.unreadDirect) || 0) - prev);
-  updateTavernHotspotBadges();
+  markChatReadState(tavernChatState, chatKey, getUnreadCountForChat, updateTavernHotspotBadges);
 }
 
 function noteTavernUnread(item) {
-  if (!tavernChatState.loadedHistory) return;
-  if (!item || item.system || item.mine) return;
-  const modalOpen = !!(tavernChatModal && !tavernChatModal.classList.contains('hidden'));
-  const isActive = String(tavernChatState.activeChatKey || 'global') === String(item.chatKey || 'global');
-  if (modalOpen && isActive) return;
-  const key = String(item.chatKey || 'global');
-  tavernChatState.unreadByChat.set(key, getUnreadCountForChat(key) + 1);
-  if (key === 'global') tavernChatState.unreadGlobal = (Number(tavernChatState.unreadGlobal) || 0) + 1;
-  else tavernChatState.unreadDirect = (Number(tavernChatState.unreadDirect) || 0) + 1;
-  updateTavernHotspotBadges();
+  noteChatUnreadState(tavernChatState, tavernChatModal, item, getUnreadCountForChat, updateTavernHotspotBadges);
 }
 
 function normalizeTavernMessage(entry) {
@@ -896,62 +927,19 @@ function getRoomChatUserName(userId, fallback = 'Собеседник') {
 function getRoomDirectChatKey(otherUserId) { return `dm:${String(otherUserId || '').trim()}`; }
 function getRoomUnreadCountForChat(chatKey) { return Number(roomChatState.unreadByChat.get(String(chatKey || 'global')) || 0) || 0; }
 function updateRoomChatBadges() {
-  const apply = (el, count) => {
-    if (!el) return;
-    if (count > 0) {
-      el.classList.remove('hidden');
-      el.textContent = count > 99 ? '99+' : String(count);
-    } else {
-      el.classList.add('hidden');
-      el.textContent = '0';
-    }
-  };
-  apply(roomChatBadgeGlobal, Math.max(0, Number(roomChatState.unreadGlobal) || 0));
-  apply(roomChatBadgeDirect, Math.max(0, Number(roomChatState.unreadDirect) || 0));
+  updateUnreadBadges(roomChatState, roomChatBadgeGlobal, roomChatBadgeDirect);
 }
 function clearRoomChatQuoteDraft() {
-  roomChatState.quoteDraft = null;
-  if (!roomChatQuote) return;
-  roomChatQuote.classList.add('hidden');
-  roomChatQuote.setAttribute('aria-hidden', 'true');
-  roomChatQuote.innerHTML = '';
+  clearQuoteDraftState(roomChatState, roomChatQuote);
 }
 function setRoomChatQuoteDraft(message) {
-  if (!message || message.system) return;
-  roomChatState.quoteDraft = {
-    fromId: String(message.fromId || ''),
-    fromName: String(message.fromName || 'Путник'),
-    text: String(message.text || '').trim().slice(0, 280)
-  };
-  if (!roomChatQuote) return;
-  roomChatQuote.classList.remove('hidden');
-  roomChatQuote.setAttribute('aria-hidden', 'false');
-  roomChatQuote.innerHTML = `
-    <div class="tavern-chat-quote__meta">Ответ для ${escapeHtmlLite(roomChatState.quoteDraft.fromName)}</div>
-    <div class="tavern-chat-quote__text">${escapeHtmlLite(roomChatState.quoteDraft.text)}</div>
-    <button type="button" class="tavern-chat-quote__clear" data-clear-room-quote title="Убрать цитату">✕</button>
-  `;
+  setQuoteDraftState(roomChatState, roomChatQuote, message, 'data-clear-room-quote');
 }
 function markRoomChatRead(chatKey) {
-  const key = String(chatKey || roomChatState.activeChatKey || 'global');
-  const prev = getRoomUnreadCountForChat(key);
-  if (!prev) return;
-  roomChatState.unreadByChat.set(key, 0);
-  if (key === 'global') roomChatState.unreadGlobal = Math.max(0, (Number(roomChatState.unreadGlobal) || 0) - prev);
-  else roomChatState.unreadDirect = Math.max(0, (Number(roomChatState.unreadDirect) || 0) - prev);
-  updateRoomChatBadges();
+  markChatReadState(roomChatState, chatKey, getRoomUnreadCountForChat, updateRoomChatBadges);
 }
 function noteRoomChatUnread(item) {
-  if (!roomChatState.loadedHistory) return;
-  if (!item || item.system || item.mine) return;
-  const modalOpen = !!(roomChatModal && !roomChatModal.classList.contains('hidden'));
-  const isActive = String(roomChatState.activeChatKey || 'global') === String(item.chatKey || 'global');
-  if (modalOpen && isActive) return;
-  const key = String(item.chatKey || 'global');
-  roomChatState.unreadByChat.set(key, getRoomUnreadCountForChat(key) + 1);
-  if (key === 'global') roomChatState.unreadGlobal = (Number(roomChatState.unreadGlobal) || 0) + 1;
-  else roomChatState.unreadDirect = (Number(roomChatState.unreadDirect) || 0) + 1;
-  updateRoomChatBadges();
+  noteChatUnreadState(roomChatState, roomChatModal, item, getRoomUnreadCountForChat, updateRoomChatBadges);
 }
 function normalizeRoomChatMessage(entry) {
   if (!entry || typeof entry !== 'object') return null;
