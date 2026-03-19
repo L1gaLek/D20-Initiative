@@ -92,52 +92,7 @@ function handleMessage(msg) {
   }
 
 // ===== Rooms lobby messages =====
-if (msg.type === 'rooms' && Array.isArray(msg.rooms)) {
-  try { window.SERVER_TOTAL_USERS = Number(msg.totalUsers || 0) || 0; } catch {}
-  renderRooms(msg.rooms);
-  if (!currentRoomId && diceViz) diceViz.style.display = 'none';
-}
-if (msg.type === 'joinedRoom' && msg.room) {
-  try {
-    const attempt = (typeof window.getLastJoinAttempt === 'function') ? window.getLastJoinAttempt() : null;
-    if (attempt && String(attempt.roomId || '') === String(msg.room.id || '') && attempt.hadPassword && attempt.password) {
-      window.rememberRoomPassword?.(attempt.roomId, attempt.password);
-    }
-    window.clearLastJoinAttempt?.();
-  } catch {}
-  roomsDiv.style.display = 'none';
-  try { window.closeTavern?.(); } catch {}
-  try { window.stopTavernChannel?.(); } catch {}
-  gameUI.style.display = 'block';
-
-  currentRoomId = msg.room.id || null;
-  try { window.__currentRoomJoinedAtMs = Date.now(); } catch {}
-  try { window.RoomChat?.reset?.(currentRoomId); } catch {}
-  if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
-  if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
-  if (diceViz) diceViz.style.display = 'block';
-  applyRoleToUI();
-  startHeartbeat();
-  startMembersPolling();
-}
-if (msg.type === 'roomUpdated' && msg.room) {
-  const roomId = String(msg.room.id || msg.room.roomId || '');
-  if (roomId && String(currentRoomId || '') === roomId) {
-    if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
-    if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
-  }
-}
-if (msg.type === 'roomDeleted') {
-  const roomId = String(msg.roomId || msg.room?.id || '');
-  const currentRid = String(currentRoomId || '');
-  if (roomId && currentRid && roomId === currentRid) {
-    const roomName = String(msg.roomName || myRoomSpan?.textContent || 'комната');
-    const popupText = `Создатель удалил комнату «${roomName}», поэтому вы были возвращены в таверну.`;
-    Promise.resolve(window.returnToTavernFromRoom?.({ skipMemberCleanup: true })).finally(() => {
-      try { window.showRoomAccessPopup?.(popupText, 'Комната удалена'); } catch {}
-    });
-  }
-}
+try { handleLobbyRoomMessage?.(msg); } catch {}
 
 if (msg.type === "registered") {
       myId = msg.id;
@@ -192,28 +147,6 @@ loginDiv.style.display = 'none';
         // в игре — показываем как быстрое уведомление
         alert(text);
       }
-    }
-
-    // Сообщения лобби (например, неверный пароль или GM уже в комнате)
-    if (msg.type === "roomsError") {
-      const text = String(msg.message || "Ошибка");
-      if (roomsError) roomsError.textContent = text;
-      if (typeof window.isTavernVisible === 'function' && window.isTavernVisible() && tavernRoomsError) tavernRoomsError.textContent = text;
-
-      try {
-        const lower = text.toLowerCase();
-        if (lower.includes('забан')) {
-          window.showRoomAccessPopup?.(text, 'Доступ запрещён');
-        } else if (lower.includes('парол')) {
-          window.showRoomAccessPopup?.(text, 'Неверный пароль');
-        } else if (lower.includes('лимит') || lower.includes('одной комнат') || lower.includes('1 комнат')) {
-          window.showRoomAccessPopup?.(text, 'Лимит комнат');
-        } else if (lower.includes('gm') || lower.includes('гм')) {
-          window.showRoomAccessPopup?.(text, 'GM уже в комнате');
-        } else {
-          window.showRoomAccessPopup?.(text, 'Ошибка входа');
-        }
-      } catch {}
     }
 
     if (msg.type === 'moderationEvent') {
