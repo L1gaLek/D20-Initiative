@@ -82,55 +82,40 @@ function refreshUsersUi() {
   try { window.TavernChat?.refreshUsers?.(); } catch {}
 }
 
-function handleMessage(msg) {
+function getOwnerRoleForPlayer(p) {
+  const direct = String(p?.ownerRole || '').trim();
+  if (direct) return direct;
+  const u = p?.ownerId ? usersById.get(String(p.ownerId)) : null;
+  return String(u?.role || '').trim();
+}
 
-  // ================== VISIBILITY HELPERS ==================
-  // Rules requested:
-  // 1) "Союзник" is GM-only.
-  // 2) GM-created characters are hidden from other players unless isAlly.
-  // 3) HP-bar / double-click mini / sheet are only available for visible tokens.
-  // 4) GM-created non-base non-ally characters are scoped to the active map (mapId).
-  function getOwnerRoleForPlayer(p) {
-    const direct = String(p?.ownerRole || '').trim();
-    if (direct) return direct;
-    const u = p?.ownerId ? usersById.get(String(p.ownerId)) : null;
-    return String(u?.role || '').trim();
-  }
+function isPlayerVisibleToMe(p, state) {
+  if (!p) return false;
+  const ownerRole = getOwnerRoleForPlayer(p);
+  const curMapId = String(state?.currentMapId || '').trim();
 
-  function isPlayerVisibleToMe(p, state) {
-    if (!p) return false;
-    const ownerRole = getOwnerRoleForPlayer(p);
-    const curMapId = String(state?.currentMapId || '').trim();
-
-    if (myRole === 'GM') {
-      // GM view mode:
-      // - 'gm'     : show everything (with map-local scoping)
-      // - 'player' : treat visibility like a regular player
-      const gmView = String(state?.fog?.gmViewMode || 'gm');
-      if (gmView !== 'player') {
-        // Map-local GM NPCs/monsters: show only on their map.
-        if (ownerRole === 'GM' && !p.isBase && !p.isAlly) {
-          const pidMap = String(p?.mapId || '').trim();
-          if (pidMap && curMapId && pidMap !== curMapId) return false;
-        }
-        return true;
+  if (myRole === 'GM') {
+    const gmView = String(state?.fog?.gmViewMode || 'gm');
+    if (gmView !== 'player') {
+      if (ownerRole === 'GM' && !p.isBase && !p.isAlly) {
+        const pidMap = String(p?.mapId || '').trim();
+        if (pidMap && curMapId && pidMap !== curMapId) return false;
       }
-      // else: fall through to non-GM rules
+      return true;
     }
-
-    // Non-GM:
-    // GM-created non-allies are hidden unless GM explicitly made them public (eye).
-    // This must work consistently in ALL phases (including exploration).
-    if (ownerRole === 'GM' && !p.isAlly) {
-      const pub = !!p.isPublic;
-      if (!pub) return false;
-    }
-
-    // Safety: if a GM-created map-local somehow leaked as visible, still gate by map.
-    const pidMap = String(p?.mapId || '').trim();
-    if (ownerRole === 'GM' && pidMap && curMapId && pidMap !== curMapId && !p.isAlly) return false;
-    return true;
   }
+
+  if (ownerRole === 'GM' && !p.isAlly) {
+    const pub = !!p.isPublic;
+    if (!pub) return false;
+  }
+
+  const pidMap = String(p?.mapId || '').trim();
+  if (ownerRole === 'GM' && pidMap && curMapId && pidMap !== curMapId && !p.isAlly) return false;
+  return true;
+}
+
+function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
 try { handleLobbyRoomMessage?.(msg); } catch {}
@@ -1442,10 +1427,7 @@ function updatePlayerList() {
 
 // ================== UI PERMISSIONS HELPERS ==================
 function getOwnerRoleForPlayerUI(p) {
-  const direct = String(p?.ownerRole || '').trim();
-  if (direct) return direct;
-  const u = p?.ownerId ? usersById.get(String(p.ownerId)) : null;
-  return String(u?.role || '').trim();
+  return getOwnerRoleForPlayer(p);
 }
 
 // "Sensitive" = sheet modal, HP, dblclick mini.
