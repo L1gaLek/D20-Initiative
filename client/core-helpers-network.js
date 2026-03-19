@@ -3286,6 +3286,20 @@ async function sendMessage(msg) {
             if (myScenarioSpan) myScenarioSpan.textContent = scenario || '-';
           } catch {}
         }
+        try {
+          const roomPayload = {
+            id: roomId,
+            name,
+            scenario,
+            hasPassword: !!password,
+            ownerId: String(nextState?.roomMeta?.ownerId || userId),
+            ownerName: String(nextState?.roomMeta?.ownerName || safeGetUserName())
+          };
+          handleMessage({ type: 'roomUpdated', room: roomPayload });
+          sendWsEnvelope({ type: 'roomUpdated', roomId, room: roomPayload }, { optimisticApplied: true });
+        } catch (e) {
+          console.warn('roomUpdated relay failed', e);
+        }
 
         await sendMessage({ type: 'listRooms' });
         break;

@@ -9,24 +9,36 @@ function getRoomPasswordBadge(hasPassword) {
 
 let roomEditorMode = 'create';
 let editingRoomId = '';
+let ownedRoomRecord = null;
 
-function setCreateRoomButtonsDisabled(disabled, message = '') {
+function setCreateRoomButtonsHint(message = '') {
   [createRoomBtn, tavernCreateRoomBtn].filter(Boolean).forEach((btn) => {
-    btn.disabled = !!disabled;
-    btn.title = disabled ? String(message || 'У вас уже есть комната.') : '';
+    btn.title = message ? String(message) : '';
   });
 }
 
 function updateRoomCreationAvailability(rooms = []) {
-  const mine = Array.isArray(rooms) ? rooms.find((room) => room?.isMine) : null;
-  const message = mine
+  ownedRoomRecord = Array.isArray(rooms) ? (rooms.find((room) => room?.isMine) || null) : null;
+  const message = ownedRoomRecord
     ? 'У вас уже есть своя комната. Её можно редактировать или удалить.'
     : '';
-  setCreateRoomButtonsDisabled(!!mine, message);
+  setCreateRoomButtonsHint(message);
+}
+
+function showSingleRoomLimitPopup() {
+  const roomName = String(ownedRoomRecord?.name || 'ваша комната');
+  const message = `Лимит на пользователя — только 1 комната. У вас уже есть «${roomName}». Вы можете отредактировать её или удалить.`;
+  if (roomsError) roomsError.textContent = message;
+  if (tavernRoomsError) tavernRoomsError.textContent = message;
+  window.showRoomAccessPopup?.(message, 'Лимит комнат');
 }
 
 function openCreateRoomModal(room = null) {
   const editing = !!room;
+  if (!editing && ownedRoomRecord) {
+    showSingleRoomLimitPopup();
+    return;
+  }
   roomEditorMode = editing ? 'edit' : 'create';
   editingRoomId = editing ? String(room.id || '') : '';
   roomNameInput.value = editing ? String(room.name || '') : '';
@@ -128,12 +140,18 @@ function renderRooms(rooms) {
       if (r.isMine) {
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
-        editBtn.textContent = 'Редактировать';
+        editBtn.className = 'lobby-room-card__icon-btn';
+        editBtn.innerHTML = '<span aria-hidden="true">✏️</span>';
+        editBtn.setAttribute('aria-label', 'Редактировать комнату');
+        editBtn.title = 'Редактировать комнату';
         editBtn.onclick = () => openCreateRoomModal(r);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
-        deleteBtn.textContent = 'Удалить';
+        deleteBtn.className = 'lobby-room-card__icon-btn lobby-room-card__icon-btn--danger';
+        deleteBtn.innerHTML = '<span aria-hidden="true">🗑️</span>';
+        deleteBtn.setAttribute('aria-label', 'Удалить комнату');
+        deleteBtn.title = 'Удалить комнату';
         deleteBtn.onclick = () => confirmDeleteRoom(r);
 
         right.appendChild(editBtn);
