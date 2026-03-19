@@ -93,61 +93,7 @@ function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
 try { handleLobbyRoomMessage?.(msg); } catch {}
-
-if (msg.type === "registered") {
-      myId = msg.id;
-      localStorage.setItem("dnd_user_id", String(msg.id));
-      // Роль выбирается при входе в комнату
-      localStorage.setItem("dnd_user_role", String(msg.role || ""));
-      localStorage.setItem("dnd_user_name", String(msg.name || ""));
-myRole = msg.role;
-      myNameSpan.textContent = msg.name;
-      myRoleSpan.textContent = msg.role ? msg.role : '-';
-      myRole = String(msg.role || "");
-
-      
-
-      try { window.stopRoomChatSync?.(); } catch {}
-      currentRoomId = null;
-      stopHeartbeat();
-      stopMembersPolling();
-      if (diceViz) diceViz.style.display = 'none';
-      if (myRoomSpan) myRoomSpan.textContent = '-';
-      if (myScenarioSpan) myScenarioSpan.textContent = '-';
-loginDiv.style.display = 'none';
-      roomsDiv.style.display = 'none';
-      gameUI.style.display = 'none';
-      roomsError.textContent = '';
-      try { window.openTavern?.(); } catch {}
-      try { window.ensureTavernChannel?.(); } catch {}
-      sendMessage({ type: 'listRooms' });
-
-      applyRoleToUI();
-
-      // ИНИЦИАЛИЗАЦИЯ МОДАЛКИ "ИНФА"
-      if (window.InfoModal?.init) {
-        window.InfoModal.init({
-          sendMessage,
-          getMyId: () => myId,
-          getMyRole: () => myRole
-        });
-      }
-    }
-
-    if (msg.type === "error") {
-      const text = String(msg.message || "Ошибка");
-      // если мы ещё на экране логина
-      if (loginDiv && loginDiv.style.display !== 'none') {
-        loginError.textContent = text;
-      } else if (roomsDiv && roomsDiv.style.display !== 'none') {
-        roomsError.textContent = text;
-      } else if (typeof window.isTavernVisible === 'function' && window.isTavernVisible()) {
-        if (tavernRoomsError) tavernRoomsError.textContent = text;
-      } else {
-        // в игре — показываем как быстрое уведомление
-        alert(text);
-      }
-    }
+try { handleSessionUiMessage?.(msg); } catch {}
 
     if (msg.type === 'moderationEvent') {
       if (handleOwnModerationEvent(msg.event || msg)) return;
