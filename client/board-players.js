@@ -2674,20 +2674,7 @@ function animateSingleRoll(sides, finalValue) {
   });
 }
 
-// ===== other players dice feed =====
-let diceOthersWrap = null;
-
-function ensureOthersDiceUI() {
-  if (diceOthersWrap) return diceOthersWrap;
-
-  diceOthersWrap = document.createElement('div');
-  diceOthersWrap.className = 'dice-others';
-  diceOthersWrap.innerHTML = `<div class="dice-others__title">Броски других</div>`;
-  document.body.appendChild(diceOthersWrap);
-
-  return diceOthersWrap;
-}
-
+// ===== other players dice feed (compat wrappers) =====
 function pushOtherDice(ev) {
   pushOtherDiceEvent(ev);
 }
@@ -2774,4 +2761,3 @@ if (S === 20 && C === 1 && B === 0) {
 
   return { sides: S, count: C, bonus: B, rolls: finals, sum, total };
 };
-
