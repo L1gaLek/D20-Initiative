@@ -2152,6 +2152,15 @@ async function sendMessage(msg) {
 
         if (handled) {
           try {
+            const optimisticCampaignState = syncActiveToMap(deepClone(next));
+            try { syncOptimisticPlayersToLocalState(optimisticCampaignState); } catch {}
+            handleMessage({ type: 'state', state: optimisticCampaignState });
+            try { applyOptimisticPlayerVisuals(lastState || optimisticCampaignState); } catch {}
+          } catch (e) {
+            console.warn('campaign optimistic state apply failed', e);
+          }
+
+          try {
             const existingIds = new Set((next.maps || []).map(m => String(m?.id || '')).filter(Boolean));
             for (const m of (next.maps || [])) {
               if (m && m.id) await upsertRoomMapMetaRow(currentRoomId, m);

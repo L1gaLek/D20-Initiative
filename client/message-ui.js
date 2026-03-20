@@ -115,6 +115,8 @@ function isPlayerVisibleToMe(p, state) {
   return true;
 }
 
+let __mapTokensReloadSeq = 0;
+
 function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
@@ -205,6 +207,18 @@ try { handleSessionUiMessage?.(msg); } catch {}
     // ================== v4: TOKENS (positions) ==================
     if (msg.type === 'tokensInit' && Array.isArray(msg.rows)) {
       try {
+        const targetMapId = String(msg.mapId || lastState?.currentMapId || '').trim();
+        const activeMapId = String(lastState?.currentMapId || '').trim();
+        if (targetMapId && activeMapId && targetMapId !== activeMapId) return;
+
+        const tokenIds = new Set((msg.rows || []).map((row) => String(row?.token_id || '').trim()).filter(Boolean));
+        (lastState?.players || []).forEach((p) => {
+          const pid = String(p?.id || '').trim();
+          if (!pid || tokenIds.has(pid)) return;
+          p.x = null;
+          p.y = null;
+        });
+
         msg.rows.forEach(r => applyTokenRowToLocalState(r));
       } catch {}
       // Repaint positions (safe)
@@ -352,6 +366,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       // - temporarily reset token positions to null until room_tokens catches up
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
       const prevPhase = String(lastState?.phase || '');
+      const prevMapId = String(lastState?.currentMapId || '').trim();
       const prevPos = new Map();
       const prevSheets = new Map();
       const prevInitiatives = new Map();
@@ -393,6 +408,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       lastState = normalized;
       try { window.rememberRoomStateShadow?.(currentRoomId, normalized); } catch {}
+      const nextMapId = String(lastState?.currentMapId || '').trim();
+      const mapChanged = !!prevMapId && !!nextMapId && prevMapId !== nextMapId;
 
       // Preserve newer local character sheets if an incoming room_state snapshot is older.
       try {
@@ -461,12 +478,15 @@ try { handleSessionUiMessage?.(msg); } catch {}
           if (!p || !p.id) return;
           const snap = prevPos.get(String(p.id));
           if (!snap) return;
-          // overwrite x/y even if the snapshot has numbers (they can be stale)
-          if (snap.x === null || Number.isFinite(snap.x)) p.x = snap.x;
-          if (snap.y === null || Number.isFinite(snap.y)) p.y = snap.y;
+          // On same-map updates we preserve local token coordinates until room_tokens catches up.
+          // On map switch we must NOT carry coordinates from the previous map into the new one.
+          if (!mapChanged) {
+            if (snap.x === null || Number.isFinite(snap.x)) p.x = snap.x;
+            if (snap.y === null || Number.isFinite(snap.y)) p.y = snap.y;
+            if (snap.mapId && typeof snap.mapId === 'string') p.mapId = snap.mapId;
+          }
           if (Number.isFinite(snap.size) && snap.size > 0) p.size = snap.size;
           if (snap.color && typeof snap.color === 'string') p.color = snap.color;
-          if (snap.mapId && typeof snap.mapId === 'string') p.mapId = snap.mapId;
         });
       } catch {}
       boardWidth = normalized.boardWidth;
@@ -474,6 +494,19 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // UI карт кампании (селект + подписи)
       try { updateCampaignMapsUI(normalized); } catch {}
+
+      if (mapChanged && currentRoomId && typeof loadRoomTokens === 'function') {
+        const seq = ++__mapTokensReloadSeq;
+        Promise.resolve(loadRoomTokens(currentRoomId, nextMapId))
+          .then((rows) => {
+            if (seq !== __mapTokensReloadSeq) return;
+            if (String(lastState?.currentMapId || '').trim() !== nextMapId) return;
+            handleMessage({ type: 'tokensInit', rows: Array.isArray(rows) ? rows : [], mapId: nextMapId });
+          })
+          .catch((e) => {
+            console.warn('map switch tokens load failed', e);
+          });
+      }
 
       // обновим GM-инпуты (если controlbox подключен)
       try { window.ControlBox?.refreshGmInputsFromState?.(); } catch {}
