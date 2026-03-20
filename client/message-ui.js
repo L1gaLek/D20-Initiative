@@ -117,6 +117,55 @@ function isPlayerVisibleToMe(p, state) {
 
 let __mapTokensReloadSeq = 0;
 
+function syncVisiblePlayersState(state) {
+  const normalized = state || lastState || null;
+  const allPlayers = Array.isArray(normalized?.players) ? normalized.players : [];
+  const visiblePlayers = allPlayers.filter(p => isPlayerVisibleToMe(p, normalized));
+  const existingIds = new Set(visiblePlayers.map(p => String(p?.id || '')));
+
+  playerElements.forEach((el, id) => {
+    if (!existingIds.has(String(id))) {
+      try { el.remove(); } catch {}
+      playerElements.delete(id);
+      try {
+        const pid = String(id);
+        const m = window._fogLastKnown;
+        if (m && typeof m.forEach === 'function') {
+          const toDel = [];
+          m.forEach((_, k) => {
+            if (String(k).endsWith(`:${pid}`)) toDel.push(k);
+          });
+          toDel.forEach(k => { try { m.delete(k); } catch {} });
+        } else {
+          window._fogLastKnown?.delete?.(pid);
+        }
+      } catch {}
+    }
+  });
+
+  hpBarElements.forEach((bars, id) => {
+    if (!existingIds.has(String(id))) {
+      try { bars?.main?.remove?.(); } catch {}
+      try { bars?.temp?.remove?.(); } catch {}
+      hpBarElements.delete(id);
+    }
+  });
+
+  players = visiblePlayers;
+
+  if (isBaseCheckbox) {
+    const baseExistsForMe = players.some(p => p.isBase && p.ownerId === myId);
+    isBaseCheckbox.disabled = baseExistsForMe;
+    if (baseExistsForMe) isBaseCheckbox.checked = false;
+  }
+
+  if (selectedPlayer && !existingIds.has(String(selectedPlayer.id || ''))) {
+    selectedPlayer = null;
+  }
+
+  return { visiblePlayers, existingIds };
+}
+
 function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
@@ -221,6 +270,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
         msg.rows.forEach(r => applyTokenRowToLocalState(r));
       } catch {}
+      try { syncVisiblePlayersState(lastState); } catch {}
       // Repaint positions (safe)
       try {
         if (lastState) renderBoard(lastState);
@@ -241,6 +291,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
           p.x = null;
           p.y = null;
         }
+        try { syncVisiblePlayersState(lastState); } catch {}
         renderBoard(lastState);
       } catch {}
 
@@ -250,38 +301,12 @@ try { handleSessionUiMessage?.(msg); } catch {}
     }
     if (msg.type === 'tokenRow' && msg.row) {
       try { applyTokenRowToLocalState(msg.row); } catch {}
-
-      // If visibility changed (GM "eye" mirrored into room_tokens),
-      // we must recompute the visible players set immediately.
-      if (typeof msg.row.is_public !== 'undefined') {
-        try {
-          if (lastState && Array.isArray(lastState.players)) {
-            const allPlayers = lastState.players;
-            const visiblePlayers = allPlayers.filter(p => isPlayerVisibleToMe(p, lastState));
-            const existingIds = new Set(visiblePlayers.map(p => String(p?.id)));
-
-            // remove DOM for players that are no longer visible
-            playerElements.forEach((el, id) => {
-              if (!existingIds.has(String(id))) {
-                try { el.remove(); } catch {}
-                playerElements.delete(id);
-              }
-            });
-            hpBarElements.forEach((bars, id) => {
-              if (!existingIds.has(String(id))) {
-                try { bars?.main?.remove?.(); } catch {}
-                try { bars?.temp?.remove?.(); } catch {}
-                hpBarElements.delete(id);
-              }
-            });
-
-            players = visiblePlayers;
-            renderBoard(lastState);
-            updatePlayerList();
-            window.InfoModal?.refresh?.(players);
-          }
-        } catch {}
-      }
+      try {
+        syncVisiblePlayersState(lastState);
+        renderBoard(lastState);
+        updatePlayerList();
+        window.InfoModal?.refresh?.(players);
+      } catch {}
 
       // Lightweight DOM update (no full state overwrite)
       try {
@@ -515,52 +540,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { window.MusicManager?.applyState?.(normalized); } catch {}
 
       // Apply visibility rules (GM-only ally, GM NPC visibility, per-map list scoping)
-      const allPlayers = Array.isArray(normalized.players) ? normalized.players : [];
-      const visiblePlayers = allPlayers.filter(p => isPlayerVisibleToMe(p, normalized));
-
-      // Удаляем DOM-элементы игроков, которых больше нет (или скрыты правилами видимости)
-      const existingIds = new Set(visiblePlayers.map(p => p.id));
-      playerElements.forEach((el, id) => {
-        if (!existingIds.has(id)) {
-          el.remove();
-          playerElements.delete(id);
-          // очищаем last-known кэш для всех карт (ключи вида "<mapId>:<playerId>")
-          try {
-            const pid = String(id);
-            const m = window._fogLastKnown;
-            if (m && typeof m.forEach === 'function') {
-              const toDel = [];
-              m.forEach((_, k) => {
-                if (String(k).endsWith(`:${pid}`)) toDel.push(k);
-              });
-              toDel.forEach(k => { try { m.delete(k); } catch {} });
-            } else {
-              window._fogLastKnown?.delete?.(String(id));
-            }
-          } catch {}
-        }
-      });
-
-      hpBarElements.forEach((bars, id) => {
-        if (!existingIds.has(id)) {
-          try { bars?.main?.remove?.(); } catch {}
-          try { bars?.temp?.remove?.(); } catch {}
-          hpBarElements.delete(id);
-        }
-      });
-
-      players = visiblePlayers;
-
-      // Основа одна на пользователя — блокируем чекбокс
-      if (isBaseCheckbox) {
-        const baseExistsForMe = players.some(p => p.isBase && p.ownerId === myId);
-        isBaseCheckbox.disabled = baseExistsForMe;
-        if (baseExistsForMe) isBaseCheckbox.checked = false;
-      }
-
-      if (selectedPlayer && !existingIds.has(selectedPlayer.id)) {
-        selectedPlayer = null;
-      }
+      syncVisiblePlayersState(normalized);
 
       renderBoard(normalized);
       updatePhaseUI(normalized);
