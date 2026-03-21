@@ -1084,6 +1084,13 @@ function renderShopTab(vm, canEdit) {
   function renderPersonalityTab(vm) {
     const genderVal = String(vm?.gender || "male");
     const bodySizeVal = String(vm?.bodySize || "Средние");
+    const personality = (vm && typeof vm.personality === "object" && vm.personality) ? vm.personality : {};
+    const backstory = escapeHtml(String(personality.backstory || ""));
+    const allies = escapeHtml(String(personality.allies || ""));
+    const traits = escapeHtml(String(personality.traits || ""));
+    const ideals = escapeHtml(String(personality.ideals || ""));
+    const bonds = escapeHtml(String(personality.bonds || ""));
+    const flaws = escapeHtml(String(personality.flaws || ""));
     return `
       <div class="sheet-section">
         <h3>Личность</h3>
@@ -1119,32 +1126,32 @@ function renderShopTab(vm, canEdit) {
 
           <div class="sheet-card">
             <h4>Предыстория персонажа</h4>
-            <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.backstory.value" placeholder="Кратко опиши предысторию..."></textarea>
+            <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.backstory.value" placeholder="Кратко опиши предысторию...">${backstory}</textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Адаптация</h4>
-            <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.allies.value" placeholder="Союзники, контакты, гильдии..."></textarea>
+            <textarea class="sheet-textarea" rows="6" data-sheet-path="personality.allies.value" placeholder="Союзники, контакты, гильдии...">${allies}</textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Черты характера</h4>
-            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.traits.value"></textarea>
+            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.traits.value">${traits}</textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Идеалы</h4>
-            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.ideals.value"></textarea>
+            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.ideals.value">${ideals}</textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Привязанности</h4>
-            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.bonds.value"></textarea>
+            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.bonds.value">${bonds}</textarea>
           </div>
 
           <div class="sheet-card">
             <h4>Слабости</h4>
-            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.flaws.value"></textarea>
+            <textarea class="sheet-textarea" rows="5" data-sheet-path="personality.flaws.value">${flaws}</textarea>
           </div>
         </div>
       </div>
