@@ -329,6 +329,7 @@ function createInitialGameState() {
   };
   return {
     schemaVersion: 3,
+    cellFeet: 10,
 
     mapSections: [{ id: sectionId, name: "Раздел 1" }],
 
@@ -379,4 +380,3 @@ function createInitialGameState() {
     }
   };
 }
-

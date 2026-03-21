@@ -847,6 +847,24 @@ function upgradeSheetTextareasToRte(root, player, canEdit) {
       editor.addEventListener('touchstart', markLast, { passive: true, capture: true });
     } catch {}
 
+    const syncEditorToTextarea = (emitChange = false) => {
+      try { ta.value = sanitizeHtml(editor.innerHTML || '', { mode: 'store' }); } catch {}
+      try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch {}
+      if (emitChange) {
+        try { ta.dispatchEvent(new Event('change', { bubbles: true })); } catch {}
+      }
+    };
+
+    editor.addEventListener('input', () => {
+      if (!canEdit) return;
+      syncEditorToTextarea(false);
+    });
+
+    editor.addEventListener('blur', () => {
+      if (!canEdit) return;
+      syncEditorToTextarea(true);
+    });
+
     editor.addEventListener('paste', (e) => {
       if (!canEdit) return;
       try {
@@ -859,11 +877,7 @@ function upgradeSheetTextareasToRte(root, player, canEdit) {
           : linkifyPlain(String(text || ''));
         document.execCommand('insertHTML', false, incoming);
         // mirror into hidden textarea so existing save/bindings see it
-        try { ta.value = sanitizeHtml(editor.innerHTML || '', { mode: 'store' }); } catch {}
-        try {
-          ta.dispatchEvent(new Event('input', { bubbles: true }));
-          ta.dispatchEvent(new Event('change', { bubbles: true }));
-        } catch {}
+        syncEditorToTextarea(true);
       } catch {}
     });
 
