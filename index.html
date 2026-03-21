@@ -347,6 +347,10 @@
 
             <!-- Текущий игрок — по центру поля, над рамками размеров -->
             <div id="current-turn">
+              <label id="cell-feet-gm-wrap" class="cell-feet-inline cell-feet-inline--gm" style="display:none;">
+                <span>1 Клетка =</span>
+                <input type="number" id="cell-feet-gm" value="10" min="1" max="100" step="1" title="Сколько футов в одной клетке">
+              </label>
               Текущий игрок: <span id="current-player">-</span>
               <button id="next-turn" class="next-turn-btn" type="button" title="Конец хода (по инициативе)">
                 Конец хода
