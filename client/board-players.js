@@ -576,14 +576,32 @@ function formatVal(v, fallback = '—') {
   return (v === null || v === undefined || v === '' || (typeof v === 'number' && !Number.isFinite(v))) ? fallback : String(v);
 }
 
+function getBoardVisualScale() {
+  try {
+    const bRect = board?.getBoundingClientRect?.();
+    const ow = Number(board?.offsetWidth) || 0;
+    const scale = (bRect?.width && ow) ? (bRect.width / ow) : (window.ControlBox?.getZoom?.() || 1);
+    return Math.max(0.0001, Number(scale) || 1);
+  } catch {
+    return Math.max(0.0001, Number(window.ControlBox?.getZoom?.()) || 1);
+  }
+}
+
+function getTokenMiniScale() {
+  const visualScale = getBoardVisualScale();
+  return Math.max(0.6, Math.min(1, 1 / visualScale));
+}
+
 function positionTokenMini(tokenEl) {
   if (!tokenMiniEl || !tokenEl) return;
   // ставим примерно над токеном, по центру
   const left = tokenEl.offsetLeft + (tokenEl.offsetWidth / 2);
   const top = tokenEl.offsetTop - 8;
+  const miniScale = getTokenMiniScale();
   tokenMiniEl.style.left = `${left}px`;
   tokenMiniEl.style.top = `${top}px`;
-  tokenMiniEl.style.transform = 'translate(-50%, -100%)';
+  tokenMiniEl.style.transformOrigin = '50% 100%';
+  tokenMiniEl.style.transform = `translate(-50%, -100%) scale(${miniScale})`;
 
   // держим в пределах поля (по возможности)
   const b = board.getBoundingClientRect();
@@ -600,6 +618,19 @@ function positionTokenMini(tokenEl) {
     tokenMiniEl.style.top = `${curTop + dy}px`;
   }
 }
+
+
+function refreshOpenTokenMini() {
+  if (!tokenMiniEl || !tokenMiniPlayerId) return;
+  const tokenEl = playerElements.get(String(tokenMiniPlayerId || ''));
+  if (!tokenEl || tokenEl.style.display === 'none') {
+    closeTokenMini();
+    return;
+  }
+  positionTokenMini(tokenEl);
+}
+
+try { window.refreshOpenTokenMini = refreshOpenTokenMini; } catch {}
 
 function openTokenMini(playerId) {
   const p = players.find(pp => String(pp?.id) === String(playerId));
@@ -1042,12 +1073,8 @@ function setPlayerPosition(player) {
           } catch {}
         }
 
-        if (selectedPlayer) {
-          const prev = playerElements.get(selectedPlayer.id);
-          if (prev) prev.classList.remove('selected');
-        }
         selectedPlayer = cur;
-        el.classList.add('selected');
+        try { window.syncSelectedPlayerUi?.(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
         try { window.renderCombatMoveOverlay?.(); } catch {}
       }
@@ -1062,9 +1089,8 @@ function setPlayerPosition(player) {
       // If token is selected, unselect it to prevent accidental move on board click.
       try {
         if (selectedPlayer && String(selectedPlayer.id) === pid) {
-          const prev = playerElements.get(selectedPlayer.id);
-          if (prev) prev.classList.remove('selected');
           selectedPlayer = null;
+          try { window.syncSelectedPlayerUi?.(); } catch {}
           try { window.hideMovePreview?.(); } catch {}
           try { window.hideCombatMoveOverlay?.(); } catch {}
         }
@@ -1109,8 +1135,8 @@ function setPlayerPosition(player) {
     // If token is selected locally (shouldn't happen for players), clear selection.
     try {
       if (selectedPlayer && String(selectedPlayer.id) === String(player.id)) {
-        el.classList.remove('selected');
         selectedPlayer = null;
+        try { window.syncSelectedPlayerUi?.(); } catch {}
         try { window.hideCombatMoveOverlay?.(); } catch {}
       }
     } catch {}
@@ -1278,7 +1304,6 @@ addPlayerBtn.addEventListener('click', () => {
 // ================== COMBAT MOVE BUDGET ==================
 (function wireCombatMoveBudget() {
   const CELL = 50;
-  const FEET_PER_CELL = 10;
   const DEFAULT_SPEED = 30;
   const DIRS = [
     [1, 0], [-1, 0], [0, 1], [0, -1],
@@ -1333,6 +1358,14 @@ addPlayerBtn.addEventListener('click', () => {
     return DEFAULT_SPEED;
   }
 
+  function getFeetPerCell() {
+    try {
+      return Math.max(1, Math.min(100, Number(lastState?.cellFeet) || 10));
+    } catch {
+      return 10;
+    }
+  }
+
   function ensureStore() {
     if (!window.__combatMoveBudgetStore || typeof window.__combatMoveBudgetStore !== 'object') {
       window.__combatMoveBudgetStore = new Map();
@@ -1344,6 +1377,7 @@ addPlayerBtn.addEventListener('click', () => {
     try {
       const el = playerElements?.get?.(String(pid || ''));
       if (el) el.classList.remove('selected');
+      try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
   }
 
@@ -1431,8 +1465,9 @@ addPlayerBtn.addEventListener('click', () => {
       const hasTeleport = !!getTeleportInfo(cur);
       if (hasTeleport) return;
       if (!isRestrictedForPlayer(cur)) {
-        clearPlayerSelectionVisual(cur?.id);
         selectedPlayer = null;
+        clearPlayerSelectionVisual(cur?.id);
+        try { window.syncSelectedPlayerUi?.(); } catch {}
       }
     } catch {}
   }
@@ -1659,7 +1694,8 @@ addPlayerBtn.addEventListener('click', () => {
     const live = getLivePlayer(player) || player;
     if (!live || !rec) return new Map();
     const size = Math.max(1, Number(live?.size) || 1);
-    const stepsLeft = Math.max(0, Math.floor(getRemainingFeet(live) / FEET_PER_CELL));
+    const feetPerCell = getFeetPerCell();
+    const stepsLeft = Math.max(0, Math.floor(getRemainingFeet(live) / feetPerCell));
     const out = new Map();
     const wallsSet = getWallsSet();
     const q = [{ x: Number(rec.currentX) || 0, y: Number(rec.currentY) || 0, d: 0 }];
@@ -1694,7 +1730,7 @@ addPlayerBtn.addEventListener('click', () => {
     if (rangeFeet <= 0) return null;
     return {
       rangeFeet,
-      rangeCells: Math.max(0, Math.floor(rangeFeet / FEET_PER_CELL)),
+      rangeCells: Math.max(0, Math.floor(rangeFeet / getFeetPerCell())),
       sourceKind: String(rec.teleportSourceKind || ''),
       sourceId: String(rec.teleportSourceId || ''),
       sourceName: String(rec.teleportSourceName || '')
@@ -1770,13 +1806,8 @@ addPlayerBtn.addEventListener('click', () => {
     rec.teleportSourceName = String(opts?.sourceName || '');
 
     try {
-      if (selectedPlayer) {
-        const prev = playerElements.get(selectedPlayer.id);
-        if (prev) prev.classList.remove('selected');
-      }
       selectedPlayer = live;
-      const el = playerElements.get(live.id);
-      if (el) el.classList.add('selected');
+      try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
     try { window.renderCombatMoveOverlay?.(); } catch {}
@@ -1814,7 +1845,7 @@ addPlayerBtn.addEventListener('click', () => {
     }
     const map = buildWalkReachableMap(player, rec);
     const steps = Number(map.get(`${nx},${ny}`)) || 0;
-    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * FEET_PER_CELL);
+    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * getFeetPerCell());
     rec.currentX = nx;
     rec.currentY = ny;
   }
@@ -2089,8 +2120,7 @@ board.addEventListener('click', e => {
     try { window.consumeCombatTeleportTo?.(selectedPlayer, x, y); } catch {}
     try {
       selectedPlayer = null;
-      const el = playerElements.get(movedId);
-      if (el) el.classList.remove('selected');
+      try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
     try { window.hideCombatMoveOverlay?.(); } catch {}
@@ -2116,17 +2146,15 @@ board.addEventListener('click', e => {
     try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
     try {
       selectedPlayer = null;
-      const el = playerElements.get(movedId);
-      if (el) el.classList.remove('selected');
+      try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
     try { window.hideCombatMoveOverlay?.(); } catch {}
     return;
   }
 
-  const el = playerElements.get(selectedPlayer.id);
-  if (el) el.classList.remove('selected');
   selectedPlayer = null;
+  try { window.syncSelectedPlayerUi?.(); } catch {}
   try { window.hideMovePreview?.(); } catch {}
   try { window.hideCombatMoveOverlay?.(); } catch {}
 });
@@ -2674,20 +2702,7 @@ function animateSingleRoll(sides, finalValue) {
   });
 }
 
-// ===== other players dice feed =====
-let diceOthersWrap = null;
-
-function ensureOthersDiceUI() {
-  if (diceOthersWrap) return diceOthersWrap;
-
-  diceOthersWrap = document.createElement('div');
-  diceOthersWrap.className = 'dice-others';
-  diceOthersWrap.innerHTML = `<div class="dice-others__title">Броски других</div>`;
-  document.body.appendChild(diceOthersWrap);
-
-  return diceOthersWrap;
-}
-
+// ===== other players dice feed (compat wrappers) =====
 function pushOtherDice(ev) {
   pushOtherDiceEvent(ev);
 }
@@ -2774,4 +2789,3 @@ if (S === 20 && C === 1 && B === 0) {
 
   return { sides: S, count: C, bonus: B, rolls: finals, sum, total };
 };
-

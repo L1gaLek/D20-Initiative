@@ -24,12 +24,20 @@
 
   function cellFromClientXY(boardEl, clientX, clientY) {
     const r = boardEl.getBoundingClientRect();
-    const xPx = clientX - r.left;
-    const yPx = clientY - r.top;
+    const localW = Math.max(1, Number(boardEl?.offsetWidth) || Number(boardEl?.clientWidth) || Number(r.width) || 1);
+    const localH = Math.max(1, Number(boardEl?.offsetHeight) || Number(boardEl?.clientHeight) || Number(r.height) || 1);
+    const scaleX = (Number(r.width) > 0 && localW > 0)
+      ? (Number(r.width) / localW)
+      : Math.max(0.0001, Number(window.ControlBox?.getZoom?.()) || 1);
+    const scaleY = (Number(r.height) > 0 && localH > 0)
+      ? (Number(r.height) / localH)
+      : Math.max(0.0001, Number(window.ControlBox?.getZoom?.()) || 1);
+    const xPx = (clientX - r.left) / scaleX;
+    const yPx = (clientY - r.top) / scaleY;
     return {
       x: xPx / CELL,
       y: yPx / CELL,
-      inBounds: xPx >= 0 && yPx >= 0 && xPx <= r.width && yPx <= r.height,
+      inBounds: xPx >= 0 && yPx >= 0 && xPx <= localW && yPx <= localH,
     };
   }
 
