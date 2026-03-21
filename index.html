@@ -345,17 +345,29 @@
 
           <div id="board-topbar">
 
-            <!-- Текущий игрок — по центру поля, над рамками размеров -->
-            <div id="current-turn">
-              Текущий игрок: <span id="current-player">-</span>
-              <button id="next-turn" class="next-turn-btn" type="button" title="Конец хода (по инициативе)">
-                Конец хода
-              </button>
-            </div>
+            <div id="board-topbar-primary">
+              <div id="cell-feet-gm-box" class="board-settings-box cell-feet-box" style="display:none;">
+                <label id="cell-feet-gm-wrap" class="cell-feet-inline cell-feet-inline--gm-box">
+                  <span>1 клетка =</span>
+                  <input type="number" id="cell-feet-gm" value="10" min="1" max="100" step="1" title="Сколько футов в одной клетке">
+                  <span>футов</span>
+                </label>
+              </div>
 
+              <!-- Текущий игрок — по центру поля, над рамками размеров -->
+              <div id="current-turn">
+                Текущий игрок: <span id="current-player">-</span>
+                <button id="next-turn" class="next-turn-btn" type="button" title="Конец хода (по инициативе)">
+                  Конец хода
+                </button>
+              </div>
+            </div>
 
             <div id="board-settings" class="board-settings-row">
             <div id="board-settings-viewport" class="board-settings-box">
+              <div id="cell-feet-player-wrap" class="cell-feet-inline cell-feet-inline--player" style="display:none;">
+                1 клетка = <span id="cell-feet-player-value">10</span> футов
+              </div>
               <label>Ширина поля:
                 <input type="number" id="board-width" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
               </label>
@@ -692,6 +704,7 @@
   <script src="client/network/detached-room-cache.js"></script>
   <script src="client/network/room-state-persistence.js"></script>
   <script src="client/network/room-ownership.js"></script>
+  <script src="client/network/realtime-channel-helpers.js"></script>
   <script src="client/network/room-detached-sync.js"></script>
   <script src="client/core-helpers-network.js"></script>
   <script src="client/bg-music.js"></script>
