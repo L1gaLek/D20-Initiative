@@ -142,7 +142,7 @@ function ensureStateHasMaps(state) {
 
   // Ensure background music defaults
   if (!state.bgMusic || typeof state.bgMusic !== 'object') {
-    state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+    state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 };
   } else {
     if (!Array.isArray(state.bgMusic.tracks)) state.bgMusic.tracks = [];
     if (typeof state.bgMusic.currentTrackId === 'undefined') state.bgMusic.currentTrackId = null;
