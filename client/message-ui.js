@@ -115,6 +115,69 @@ function isPlayerVisibleToMe(p, state) {
   return true;
 }
 
+let __mapTokensReloadSeq = 0;
+
+function syncVisiblePlayersState(state) {
+  const normalized = state || lastState || null;
+  const allPlayers = Array.isArray(normalized?.players) ? normalized.players : [];
+  const visiblePlayers = allPlayers.filter(p => isPlayerVisibleToMe(p, normalized));
+  const existingIds = new Set(visiblePlayers.map(p => String(p?.id || '')));
+
+  playerElements.forEach((el, id) => {
+    if (!existingIds.has(String(id))) {
+      try { el.remove(); } catch {}
+      playerElements.delete(id);
+      try {
+        const pid = String(id);
+        const m = window._fogLastKnown;
+        if (m && typeof m.forEach === 'function') {
+          const toDel = [];
+          m.forEach((_, k) => {
+            if (String(k).endsWith(`:${pid}`)) toDel.push(k);
+          });
+          toDel.forEach(k => { try { m.delete(k); } catch {} });
+        } else {
+          window._fogLastKnown?.delete?.(pid);
+        }
+      } catch {}
+    }
+  });
+
+  hpBarElements.forEach((bars, id) => {
+    if (!existingIds.has(String(id))) {
+      try { bars?.main?.remove?.(); } catch {}
+      try { bars?.temp?.remove?.(); } catch {}
+      hpBarElements.delete(id);
+    }
+  });
+
+  players = visiblePlayers;
+
+  if (isBaseCheckbox) {
+    const baseExistsForMe = players.some(p => p.isBase && p.ownerId === myId);
+    isBaseCheckbox.disabled = baseExistsForMe;
+    if (baseExistsForMe) isBaseCheckbox.checked = false;
+  }
+
+  if (selectedPlayer && !existingIds.has(String(selectedPlayer.id || ''))) {
+    selectedPlayer = null;
+  }
+
+  return { visiblePlayers, existingIds };
+}
+
+function getCellFeetValue(state) {
+  return Math.max(1, Math.min(100, Number(state?.cellFeet) || 10));
+}
+
+function updateCellFeetUi(state) {
+  const value = getCellFeetValue(state);
+  const gmInput = document.getElementById('cell-feet-gm');
+  if (gmInput && document.activeElement !== gmInput) gmInput.value = String(value);
+  const playerValue = document.getElementById('cell-feet-player-value');
+  if (playerValue) playerValue.textContent = String(value);
+}
+
 function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
@@ -205,8 +268,21 @@ try { handleSessionUiMessage?.(msg); } catch {}
     // ================== v4: TOKENS (positions) ==================
     if (msg.type === 'tokensInit' && Array.isArray(msg.rows)) {
       try {
+        const targetMapId = String(msg.mapId || lastState?.currentMapId || '').trim();
+        const activeMapId = String(lastState?.currentMapId || '').trim();
+        if (targetMapId && activeMapId && targetMapId !== activeMapId) return;
+
+        const tokenIds = new Set((msg.rows || []).map((row) => String(row?.token_id || '').trim()).filter(Boolean));
+        (lastState?.players || []).forEach((p) => {
+          const pid = String(p?.id || '').trim();
+          if (!pid || tokenIds.has(pid)) return;
+          p.x = null;
+          p.y = null;
+        });
+
         msg.rows.forEach(r => applyTokenRowToLocalState(r));
       } catch {}
+      try { syncVisiblePlayersState(lastState); } catch {}
       // Repaint positions (safe)
       try {
         if (lastState) renderBoard(lastState);
@@ -227,6 +303,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
           p.x = null;
           p.y = null;
         }
+        try { syncVisiblePlayersState(lastState); } catch {}
         renderBoard(lastState);
       } catch {}
 
@@ -236,38 +313,12 @@ try { handleSessionUiMessage?.(msg); } catch {}
     }
     if (msg.type === 'tokenRow' && msg.row) {
       try { applyTokenRowToLocalState(msg.row); } catch {}
-
-      // If visibility changed (GM "eye" mirrored into room_tokens),
-      // we must recompute the visible players set immediately.
-      if (typeof msg.row.is_public !== 'undefined') {
-        try {
-          if (lastState && Array.isArray(lastState.players)) {
-            const allPlayers = lastState.players;
-            const visiblePlayers = allPlayers.filter(p => isPlayerVisibleToMe(p, lastState));
-            const existingIds = new Set(visiblePlayers.map(p => String(p?.id)));
-
-            // remove DOM for players that are no longer visible
-            playerElements.forEach((el, id) => {
-              if (!existingIds.has(String(id))) {
-                try { el.remove(); } catch {}
-                playerElements.delete(id);
-              }
-            });
-            hpBarElements.forEach((bars, id) => {
-              if (!existingIds.has(String(id))) {
-                try { bars?.main?.remove?.(); } catch {}
-                try { bars?.temp?.remove?.(); } catch {}
-                hpBarElements.delete(id);
-              }
-            });
-
-            players = visiblePlayers;
-            renderBoard(lastState);
-            updatePlayerList();
-            window.InfoModal?.refresh?.(players);
-          }
-        } catch {}
-      }
+      try {
+        syncVisiblePlayersState(lastState);
+        renderBoard(lastState);
+        updatePlayerList();
+        window.InfoModal?.refresh?.(players);
+      } catch {}
 
       // Lightweight DOM update (no full state overwrite)
       try {
@@ -352,6 +403,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       // - temporarily reset token positions to null until room_tokens catches up
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
       const prevPhase = String(lastState?.phase || '');
+      const prevMapId = String(lastState?.currentMapId || '').trim();
       const prevPos = new Map();
       const prevSheets = new Map();
       const prevInitiatives = new Map();
@@ -393,6 +445,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       lastState = normalized;
       try { window.rememberRoomStateShadow?.(currentRoomId, normalized); } catch {}
+      const nextMapId = String(lastState?.currentMapId || '').trim();
+      const mapChanged = !!prevMapId && !!nextMapId && prevMapId !== nextMapId;
 
       // Preserve newer local character sheets if an incoming room_state snapshot is older.
       try {
@@ -461,12 +515,15 @@ try { handleSessionUiMessage?.(msg); } catch {}
           if (!p || !p.id) return;
           const snap = prevPos.get(String(p.id));
           if (!snap) return;
-          // overwrite x/y even if the snapshot has numbers (they can be stale)
-          if (snap.x === null || Number.isFinite(snap.x)) p.x = snap.x;
-          if (snap.y === null || Number.isFinite(snap.y)) p.y = snap.y;
+          // On same-map updates we preserve local token coordinates until room_tokens catches up.
+          // On map switch we must NOT carry coordinates from the previous map into the new one.
+          if (!mapChanged) {
+            if (snap.x === null || Number.isFinite(snap.x)) p.x = snap.x;
+            if (snap.y === null || Number.isFinite(snap.y)) p.y = snap.y;
+            if (snap.mapId && typeof snap.mapId === 'string') p.mapId = snap.mapId;
+          }
           if (Number.isFinite(snap.size) && snap.size > 0) p.size = snap.size;
           if (snap.color && typeof snap.color === 'string') p.color = snap.color;
-          if (snap.mapId && typeof snap.mapId === 'string') p.mapId = snap.mapId;
         });
       } catch {}
       boardWidth = normalized.boardWidth;
@@ -474,6 +531,20 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // UI карт кампании (селект + подписи)
       try { updateCampaignMapsUI(normalized); } catch {}
+      try { updateCellFeetUi(normalized); } catch {}
+
+      if (mapChanged && currentRoomId && typeof loadRoomTokens === 'function') {
+        const seq = ++__mapTokensReloadSeq;
+        Promise.resolve(loadRoomTokens(currentRoomId, nextMapId))
+          .then((rows) => {
+            if (seq !== __mapTokensReloadSeq) return;
+            if (String(lastState?.currentMapId || '').trim() !== nextMapId) return;
+            handleMessage({ type: 'tokensInit', rows: Array.isArray(rows) ? rows : [], mapId: nextMapId });
+          })
+          .catch((e) => {
+            console.warn('map switch tokens load failed', e);
+          });
+      }
 
       // обновим GM-инпуты (если controlbox подключен)
       try { window.ControlBox?.refreshGmInputsFromState?.(); } catch {}
@@ -482,52 +553,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { window.MusicManager?.applyState?.(normalized); } catch {}
 
       // Apply visibility rules (GM-only ally, GM NPC visibility, per-map list scoping)
-      const allPlayers = Array.isArray(normalized.players) ? normalized.players : [];
-      const visiblePlayers = allPlayers.filter(p => isPlayerVisibleToMe(p, normalized));
-
-      // Удаляем DOM-элементы игроков, которых больше нет (или скрыты правилами видимости)
-      const existingIds = new Set(visiblePlayers.map(p => p.id));
-      playerElements.forEach((el, id) => {
-        if (!existingIds.has(id)) {
-          el.remove();
-          playerElements.delete(id);
-          // очищаем last-known кэш для всех карт (ключи вида "<mapId>:<playerId>")
-          try {
-            const pid = String(id);
-            const m = window._fogLastKnown;
-            if (m && typeof m.forEach === 'function') {
-              const toDel = [];
-              m.forEach((_, k) => {
-                if (String(k).endsWith(`:${pid}`)) toDel.push(k);
-              });
-              toDel.forEach(k => { try { m.delete(k); } catch {} });
-            } else {
-              window._fogLastKnown?.delete?.(String(id));
-            }
-          } catch {}
-        }
-      });
-
-      hpBarElements.forEach((bars, id) => {
-        if (!existingIds.has(id)) {
-          try { bars?.main?.remove?.(); } catch {}
-          try { bars?.temp?.remove?.(); } catch {}
-          hpBarElements.delete(id);
-        }
-      });
-
-      players = visiblePlayers;
-
-      // Основа одна на пользователя — блокируем чекбокс
-      if (isBaseCheckbox) {
-        const baseExistsForMe = players.some(p => p.isBase && p.ownerId === myId);
-        isBaseCheckbox.disabled = baseExistsForMe;
-        if (baseExistsForMe) isBaseCheckbox.checked = false;
-      }
-
-      if (selectedPlayer && !existingIds.has(selectedPlayer.id)) {
-        selectedPlayer = null;
-      }
+      syncVisiblePlayersState(normalized);
 
       renderBoard(normalized);
       updatePhaseUI(normalized);
@@ -883,6 +909,28 @@ function highlightCurrentTurn(playerId) {
   if (el) el.classList.add('current-turn');
 }
 
+function syncSelectedPlayerUi() {
+  const selectedId = String(selectedPlayer?.id || '').trim();
+
+  try {
+    playerElements.forEach((el, id) => {
+      if (!el) return;
+      el.classList.toggle('selected', !!selectedId && String(id) === selectedId);
+    });
+  } catch {}
+
+  try {
+    if (!playerList) return;
+    playerList.querySelectorAll('.player-list-item.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    if (!selectedId) return;
+    playerList.querySelectorAll('.player-list-item[data-player-id]').forEach((el) => {
+      if (String(el.getAttribute('data-player-id') || '') === selectedId) el.classList.add('is-selected');
+    });
+  } catch {}
+}
+
+try { window.syncSelectedPlayerUi = syncSelectedPlayerUi; } catch {}
+
 // ================== PLAYER LIST ==================
 function roleToLabel(role) {
   const r = normalizeRoleForApp(role);
@@ -1215,6 +1263,7 @@ function updatePlayerList() {
     listPlayers.forEach(p => {
       const li = document.createElement('li');
       li.className = 'player-list-item';
+      li.setAttribute('data-player-id', String(p?.id || ''));
 
       if (currentTurnId && p.id === currentTurnId) {
         li.classList.add('is-current-turn');
@@ -1398,17 +1447,8 @@ function updatePlayerList() {
 
       li.addEventListener('click', () => {
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
-
-        if (selectedPlayer) {
-          const prev = playerElements.get(String(selectedPlayer.id || ''));
-          if (prev) prev.classList.remove('selected');
-        }
-
         selectedPlayer = cur;
-
-        const curEl = playerElements.get(String(cur?.id || ''));
-        if (curEl) curEl.classList.add('selected');
-
+        try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
         try { window.renderCombatMoveOverlay?.(); } catch {}
       });
@@ -1423,6 +1463,8 @@ function updatePlayerList() {
     ownerLi.appendChild(ul);
     playerList.appendChild(ownerLi);
   });
+
+  try { syncSelectedPlayerUi(); } catch {}
 }
 
 // ================== UI PERMISSIONS HELPERS ==================

@@ -610,6 +610,21 @@
   background: rgba(255,255,255,0.055);
 }
 
+.player-list-item.is-selected{
+  border-color: rgba(255, 235, 120, 0.72);
+  box-shadow: 0 0 0 2px rgba(255, 225, 92, 0.18), 0 0 16px rgba(255, 225, 92, 0.18);
+  background: rgba(255, 236, 158, 0.09);
+}
+
+.player-list-item.is-selected .player-name-text{
+  color: #fff7cf;
+}
+
+.player-list-item.is-selected.is-current-turn{
+  border-color: rgba(255, 210, 92, 0.9);
+  box-shadow: 0 0 0 2px rgba(255, 196, 79, 0.2), 0 0 18px rgba(255, 196, 79, 0.2);
+}
+
 .player-list-item.is-current-turn{
   outline: none;
   border-color: rgba(255, 194, 97, 0.48);
