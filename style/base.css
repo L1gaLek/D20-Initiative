@@ -1,3 +1,26 @@
+:root{
+  --cursor-rpg-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 2L4 24L10 18L14 28L18 26L14 17L23 17Z' fill='%23f7d26a' stroke='%233c2415' stroke-width='2' stroke-linejoin='round'/%3E%3Ccircle cx='23' cy='8' r='3' fill='%23b64c2f' stroke='%233c2415' stroke-width='1.5'/%3E%3C/svg%3E") 4 2, auto;
+  --cursor-rpg-pointer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M5 3L5 23L10 18L15 29L20 26L15 16L26 16Z' fill='%23ffd978' stroke='%23331f14' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M20 6L24 10' stroke='%23fff2b2' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='24' cy='7' r='2.5' fill='%23d46a3a' stroke='%23331f14' stroke-width='1.5'/%3E%3C/svg%3E") 5 3, pointer;
+}
+
+html,
+body{
+  cursor: var(--cursor-rpg-default);
+}
+
+button:not(:disabled),
+a[href],
+[role="button"],
+summary,
+label[for],
+input[type="checkbox"],
+input[type="radio"],
+select,
+.player-list-item,
+.player-tab{
+  cursor: var(--cursor-rpg-pointer);
+}
+
 
 /* ===== Appearance (Облик) ===== */
 .appearance-layout{
