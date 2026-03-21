@@ -3007,9 +3007,9 @@ async function applyDiceEventToMain(ev) {
     }
   }
 
-  // крит-подсветку оставляем только для чистого d20 (без бонуса)
-  if (sides === 20 && count === 1 && bonus === 0 && rolls.length === 1) {
-    applyPureD20CritUI(rolls[0]);
+  const critType = getSingleD20CritType({ sides, count, rolls, kindText: ev.kindText });
+  if (critType) {
+    applySingleD20CritUI(rolls[0], critType);
   } else {
     clearCritUI();
   }
@@ -3078,18 +3078,31 @@ function clearCritUI() {
   }
 }
 
-function applyPureD20CritUI(finalValue) {
-  // крит только для "чистого" d20 (без бонуса), поэтому сюда передаём значение когда условия уже проверены
+function isInitiativeDiceKind(kindText) {
+  return /инициатив/i.test(String(kindText || ''));
+}
+
+function getSingleD20CritType({ sides, count, rolls, kindText } = {}) {
+  const vals = Array.isArray(rolls) ? rolls : [];
+  if (Number(sides) !== 20 || Number(count) !== 1 || vals.length !== 1) return '';
+  if (isInitiativeDiceKind(kindText)) return '';
+  const finalValue = Number(vals[0]) || 0;
+  if (finalValue === 1) return 'crit-fail';
+  if (finalValue === 20) return 'crit-success';
+  return '';
+}
+
+function applySingleD20CritUI(finalValue, critType) {
   clearCritUI();
 
-  if (finalValue === 1) {
+  if (critType === 'crit-fail') {
     if (diceVizValue) diceVizValue.classList.add("crit-fail");
     const chip = diceRolls?.querySelector(".dice-chip");
     if (chip) chip.classList.add("crit-fail");
     return " — КРИТИЧЕСКИЙ ПРОВАЛ (1)";
   }
 
-  if (finalValue === 20) {
+  if (critType === 'crit-success') {
     if (diceVizValue) diceVizValue.classList.add("crit-success");
     const chip = diceRolls?.querySelector(".dice-chip");
     if (chip) chip.classList.add("crit-success");
@@ -3271,10 +3284,15 @@ window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = nu
 if (diceVizValue) diceVizValue.textContent = String(total);
 renderRollChips(shown, -1, S);
 
-// ✅ крит-подсветка ТОЛЬКО для чистого d20 (без бонуса)
+const critType = getSingleD20CritType({
+  sides: S,
+  count: C,
+  rolls: finals,
+  kindText
+});
 let critNote = "";
-if (S === 20 && C === 1 && B === 0) {
-  critNote = applyPureD20CritUI(finals[0]);
+if (critType) {
+  critNote = applySingleD20CritUI(finals[0], critType);
 } else {
   clearCritUI();
 }
@@ -3295,9 +3313,7 @@ if (S === 20 && C === 1 && B === 0) {
             bonus: B,
             rolls: finals,
             total: total,
-            crit: (S === 20 && C === 1 && B === 0)
-              ? (finals[0] === 1 ? "crit-fail" : finals[0] === 20 ? "crit-success" : "")
-              : ""
+            crit: critType
           }
         });
       }

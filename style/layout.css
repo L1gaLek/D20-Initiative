@@ -1693,8 +1693,17 @@
 .board-settings-box input[type="number"]{
   width: 62px;
   min-height: 38px;
-  padding: 6px 8px;
+  padding: 6px 10px 6px 6px;
   text-align: center;
+}
+
+.board-settings-box input[type="number"]::-webkit-inner-spin-button,
+.board-settings-box input[type="number"]::-webkit-outer-spin-button,
+.cell-feet-inline input[type="number"]::-webkit-inner-spin-button,
+.cell-feet-inline input[type="number"]::-webkit-outer-spin-button{
+  opacity: 1;
+  min-height: 28px;
+  margin-left: 6px;
 }
 
 .board-settings-box button{
@@ -1715,6 +1724,7 @@
 
 .cell-feet-inline input[type="number"]{
   width: 72px;
+  padding-right: 10px;
   text-align: center;
 }
 
@@ -1867,7 +1877,7 @@
 .board-settings-box input[type="number"]{
   width: 54px;
   min-height: 32px;
-  padding: 4px 6px;
+  padding: 4px 8px 4px 6px;
   font-size: 13px;
 }
 
