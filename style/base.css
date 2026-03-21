@@ -1373,6 +1373,8 @@ button:hover {
   color: #ddd;
   padding: 8px 10px;
   outline: none;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .lss-prof-text:focus{
@@ -1411,8 +1413,8 @@ button:hover {
   padding: 6px 8px;
   box-sizing: border-box;
   resize: vertical;
-  font-size: 13px;
-  line-height: 16px;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 /* ===== Rich Text Editor (sheet) ===== */
@@ -1475,8 +1477,8 @@ button:hover {
   padding: 6px 8px;
   min-height: 90px;
   color: #eee;
-  font-size: 13px;
-  line-height: 16px;
+  font-size: 16px;
+  line-height: 1.5;
   outline: none;
   white-space: normal;
   overflow: auto;
@@ -1905,8 +1907,8 @@ textarea[data-sheet-path="text.profPlain.value"]{
   border: 1px solid rgba(255,255,255,0.16);
   background: rgba(32,32,32,0.9);
   color: inherit;
-  font-size: 13px;
-  line-height: 1.25;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .weapon-add-btn{
