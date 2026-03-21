@@ -1650,7 +1650,6 @@
   backdrop-filter: blur(8px);
   color: #fff0d1;
   font-weight: 800;
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1710,9 +1709,12 @@
   text-align: center;
 }
 
-.cell-feet-inline--gm{
-  position: absolute;
-  left: 16px;
+.cell-feet-box{
+  align-self: flex-start;
+}
+
+.cell-feet-inline--gm-box{
+  color: var(--room-text-soft);
 }
 
 .cell-feet-inline--player{
