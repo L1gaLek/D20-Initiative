@@ -1,3 +1,7 @@
+body{
+  cursor: url("cursor/cursor.png") 6 5, auto;
+}
+
 /* ===== Appearance (Облик) ===== */
 .appearance-layout{
   display:flex;
