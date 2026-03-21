@@ -407,8 +407,8 @@ button:hover {
   position: absolute;
   top: 0;
   bottom: 0;
-  right: -58px;
-  width: 52px;
+  right: -48px;
+  width: 42px;
   display: flex;
   flex-direction: column;
   border: 1px solid rgba(255,255,255,0.12);
@@ -430,7 +430,7 @@ button:hover {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 6px;
+  padding: 8px 4px;
   cursor: pointer;
   transition: background .18s ease, transform .18s ease, border-color .18s ease;
 }
@@ -538,6 +538,71 @@ button:hover {
 .token-mini .token-mini-side-divider{
   height: 1px;
   background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.15), rgba(255,255,255,0));
+}
+
+.token-mini .token-mini-dots{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.token-mini .token-mini-dots--spell .slot-dot{
+  cursor: default;
+}
+
+.token-mini .token-mini-dots-empty{
+  opacity: .55;
+  font-size: 11px;
+}
+
+.token-mini .token-mini-weapon-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.token-mini .token-mini-weapon-cell{
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 9px;
+  padding: 7px 8px;
+  background: rgba(0,0,0,0.14);
+}
+
+.token-mini .token-mini-side-line--tight{
+  margin-top: 0;
+  font-size: 10px;
+  color: rgba(255,255,255,0.72);
+}
+
+.token-mini .token-mini-side-item__head--center{
+  align-items: center;
+}
+
+.token-mini .token-mini-subitem__head--action{
+  align-items: center;
+}
+
+.token-mini .token-mini-subitem__name{
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.token-mini .token-mini-subitem__controls{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.token-mini .token-mini-subitem .cpw-dice,
+.token-mini .token-mini-subitem .cpw-action{
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
 }
 
 .token-mini .token-mini-side-item,
