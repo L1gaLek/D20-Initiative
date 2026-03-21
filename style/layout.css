@@ -1650,6 +1650,12 @@
   backdrop-filter: blur(8px);
   color: #fff0d1;
   font-weight: 800;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 58px;
 }
 
 #current-player{
@@ -1689,6 +1695,30 @@
   border-radius: 12px;
   font-size: 12px;
   font-weight: 800;
+}
+
+.cell-feet-inline{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff0d1;
+  font-weight: 800;
+}
+
+.cell-feet-inline input[type="number"]{
+  width: 72px;
+  text-align: center;
+}
+
+.cell-feet-inline--gm{
+  position: absolute;
+  left: 16px;
+}
+
+.cell-feet-inline--player{
+  align-self: center;
+  white-space: nowrap;
+  margin-right: 6px;
 }
 
 #right-panel{

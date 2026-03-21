@@ -2,6 +2,7 @@
 
 function ensureStateHasMaps(state) {
   if (!state || typeof state !== "object") return createInitialGameState();
+  state.cellFeet = Math.max(1, Math.min(100, Number(state.cellFeet) || 10));
 
   // already new schema
   if (Array.isArray(state.maps) && state.maps.length) {
@@ -119,6 +120,7 @@ function ensureStateHasMaps(state) {
   });
 
   state.schemaVersion = 3;
+  state.cellFeet = Math.max(1, Math.min(100, Number(state.cellFeet) || 10));
   state.mapSections = [{ id: sectionId, name: "Раздел 1" }];
   state.currentMapId = mapId;
   state.maps = [migratedMap];
@@ -357,4 +359,3 @@ const __roomDetachedCache = {
   music: null
 };
 window.__roomDetachedCache = __roomDetachedCache;
-

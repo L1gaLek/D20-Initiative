@@ -2149,6 +2149,14 @@ async function sendMessage(msg) {
           logEventToState(next, `Переключение карты: ${m?.name || "Карта"}`);
         }
 
+        else if (type === "setCellFeet") {
+          if (!isGM) return;
+          handled = true;
+          const value = clamp(Number(msg.value) || 10, 1, 100);
+          next.cellFeet = value;
+          logEventToState(next, `Масштаб клетки изменён: 1 клетка = ${value} фут.`);
+        }
+
 
         if (handled) {
           try {

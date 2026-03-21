@@ -166,6 +166,18 @@ function syncVisiblePlayersState(state) {
   return { visiblePlayers, existingIds };
 }
 
+function getCellFeetValue(state) {
+  return Math.max(1, Math.min(100, Number(state?.cellFeet) || 10));
+}
+
+function updateCellFeetUi(state) {
+  const value = getCellFeetValue(state);
+  const gmInput = document.getElementById('cell-feet-gm');
+  if (gmInput && document.activeElement !== gmInput) gmInput.value = String(value);
+  const playerValue = document.getElementById('cell-feet-player-value');
+  if (playerValue) playerValue.textContent = String(value);
+}
+
 function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
@@ -519,6 +531,20 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // UI карт кампании (селект + подписи)
       try { updateCampaignMapsUI(normalized); } catch {}
+      try { updateCellFeetUi(normalized); } catch {}
+
+      if (mapChanged && currentRoomId && typeof loadRoomTokens === 'function') {
+        const seq = ++__mapTokensReloadSeq;
+        Promise.resolve(loadRoomTokens(currentRoomId, nextMapId))
+          .then((rows) => {
+            if (seq !== __mapTokensReloadSeq) return;
+            if (String(lastState?.currentMapId || '').trim() !== nextMapId) return;
+            handleMessage({ type: 'tokensInit', rows: Array.isArray(rows) ? rows : [], mapId: nextMapId });
+          })
+          .catch((e) => {
+            console.warn('map switch tokens load failed', e);
+          });
+      }
 
       if (mapChanged && currentRoomId && typeof loadRoomTokens === 'function') {
         const seq = ++__mapTokensReloadSeq;

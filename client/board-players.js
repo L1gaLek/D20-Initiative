@@ -1278,7 +1278,6 @@ addPlayerBtn.addEventListener('click', () => {
 // ================== COMBAT MOVE BUDGET ==================
 (function wireCombatMoveBudget() {
   const CELL = 50;
-  const FEET_PER_CELL = 10;
   const DEFAULT_SPEED = 30;
   const DIRS = [
     [1, 0], [-1, 0], [0, 1], [0, -1],
@@ -1331,6 +1330,14 @@ addPlayerBtn.addEventListener('click', () => {
       if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.trunc(raw));
     } catch {}
     return DEFAULT_SPEED;
+  }
+
+  function getFeetPerCell() {
+    try {
+      return Math.max(1, Math.min(100, Number(lastState?.cellFeet) || 10));
+    } catch {
+      return 10;
+    }
   }
 
   function ensureStore() {
@@ -1659,7 +1666,8 @@ addPlayerBtn.addEventListener('click', () => {
     const live = getLivePlayer(player) || player;
     if (!live || !rec) return new Map();
     const size = Math.max(1, Number(live?.size) || 1);
-    const stepsLeft = Math.max(0, Math.floor(getRemainingFeet(live) / FEET_PER_CELL));
+    const feetPerCell = getFeetPerCell();
+    const stepsLeft = Math.max(0, Math.floor(getRemainingFeet(live) / feetPerCell));
     const out = new Map();
     const wallsSet = getWallsSet();
     const q = [{ x: Number(rec.currentX) || 0, y: Number(rec.currentY) || 0, d: 0 }];
@@ -1694,7 +1702,7 @@ addPlayerBtn.addEventListener('click', () => {
     if (rangeFeet <= 0) return null;
     return {
       rangeFeet,
-      rangeCells: Math.max(0, Math.floor(rangeFeet / FEET_PER_CELL)),
+      rangeCells: Math.max(0, Math.floor(rangeFeet / getFeetPerCell())),
       sourceKind: String(rec.teleportSourceKind || ''),
       sourceId: String(rec.teleportSourceId || ''),
       sourceName: String(rec.teleportSourceName || '')
@@ -1814,7 +1822,7 @@ addPlayerBtn.addEventListener('click', () => {
     }
     const map = buildWalkReachableMap(player, rec);
     const steps = Number(map.get(`${nx},${ny}`)) || 0;
-    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * FEET_PER_CELL);
+    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * getFeetPerCell());
     rec.currentX = nx;
     rec.currentY = ny;
   }
