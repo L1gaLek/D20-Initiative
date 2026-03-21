@@ -439,6 +439,27 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
 
       try {
+        const prevBg = (lastState && typeof lastState.bgMusic === 'object') ? lastState.bgMusic : null;
+        const nextBg = (normalized && typeof normalized.bgMusic === 'object') ? normalized.bgMusic : null;
+        const nextLooksDetachedPlaceholder = !!nextBg
+          && Array.isArray(nextBg.tracks)
+          && nextBg.tracks.length === 0
+          && !String(nextBg.currentTrackId || '').trim()
+          && !nextBg.isPlaying
+          && !(Number(nextBg.startedAt) > 0)
+          && !(Number(nextBg.pausedAt) > 0);
+        const prevLooksMeaningful = !!prevBg
+          && ((Array.isArray(prevBg.tracks) && prevBg.tracks.length > 0)
+            || !!String(prevBg.currentTrackId || '').trim()
+            || !!prevBg.isPlaying
+            || Number(prevBg.startedAt) > 0
+            || Number(prevBg.pausedAt) > 0);
+        if (nextLooksDetachedPlaceholder && prevLooksMeaningful) {
+          normalized.bgMusic = deepClone(prevBg);
+        }
+      } catch {}
+
+      try {
         const modEvent = getRoomModerationEventForUi(normalized);
         if (handleOwnModerationEvent(modEvent)) return;
       } catch {}

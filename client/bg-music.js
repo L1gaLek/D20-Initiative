@@ -86,6 +86,7 @@
   const audio = new Audio();
   audio.loop = true;
   audio.preload = 'auto';
+  const SILENT_UNLOCK_SRC = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
   try { audio.crossOrigin = 'anonymous'; } catch {}
   try { audio.playsInline = true; } catch {}
   try { audio.setAttribute('playsinline', ''); } catch {}
@@ -172,9 +173,6 @@
 
     const onGesture = async () => {
       normalizeAudioOutput();
-      const bg = ensureBgMusic(currentState || {});
-      const cur = getCurTrackFromState(currentState || {});
-      if (!bg?.isPlaying || !cur) return;
       await tryUnlock({ resumeAfter: true });
     };
 
@@ -205,6 +203,37 @@
     const bg = ensureBgMusic(state || {});
     const tracks = safeArr(bg?.tracks);
     return tracks.find(t => String(t?.id || "") === String(bg?.currentTrackId || "")) || null;
+  }
+
+  async function performUnlockProbe() {
+    const prevSrcAttr = String(audio.getAttribute?.('src') || '');
+    const prevSrc = String(audio.src || '');
+    const prevCurrentTime = safeNum(audio.currentTime, 0);
+    const hadSrc = !!String(audio.currentSrc || audio.src || prevSrcAttr || '').trim();
+    try {
+      if (!hadSrc) {
+        audio.src = SILENT_UNLOCK_SRC;
+        try { audio.load(); } catch {}
+      }
+      await audio.play();
+      audio.pause();
+      return true;
+    } finally {
+      if (!hadSrc) {
+        try {
+          audio.pause();
+          audio.removeAttribute('src');
+          audio.src = '';
+          audio.load();
+        } catch {}
+      } else {
+        try { audio.currentTime = prevCurrentTime; } catch {}
+        try {
+          if (prevSrcAttr && audio.getAttribute?.('src') !== prevSrcAttr) audio.setAttribute('src', prevSrcAttr);
+          else if (!prevSrcAttr && prevSrc && audio.src !== prevSrc) audio.src = prevSrc;
+        } catch {}
+      }
+    }
   }
 
   async function tryUnlock({ resumeAfter = false } = {}) {
@@ -274,8 +303,7 @@
         return true;
       }
 
-      await audio.play();
-      audio.pause();
+      await performUnlockProbe();
       unlocked = true;
       hideUnlockBtn();
       if (resumeAfter) applyState(state);
