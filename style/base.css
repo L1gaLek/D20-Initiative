@@ -557,18 +557,18 @@ button:hover {
   font-size: 11px;
 }
 
-.token-mini .token-mini-weapon-rows{
-  display: flex;
-  flex-direction: column;
+.token-mini .token-mini-weapon-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin-top: 7px;
 }
 
-.token-mini .token-mini-weapon-row{
+.token-mini .token-mini-weapon-box{
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 9px;
@@ -576,12 +576,12 @@ button:hover {
   background: rgba(0,0,0,0.14);
 }
 
-.token-mini .token-mini-weapon-row__label{
+.token-mini .token-mini-weapon-box__label{
   font-size: 10px;
   color: rgba(255,255,255,0.72);
 }
 
-.token-mini .token-mini-weapon-row__value{
+.token-mini .token-mini-weapon-box__value{
   min-width: 0;
   font-size: 12px;
   color: #fff;

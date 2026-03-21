@@ -753,15 +753,15 @@ function renderTokenMiniCombatPanel(summary, canUse) {
           <div class="token-mini-side-item__head">
             <span class="token-mini-side-item__name">${escapeHtml(w.name)}</span>
           </div>
-          <div class="token-mini-weapon-rows">
-            <div class="token-mini-weapon-row">
-              <span class="token-mini-weapon-row__label">Атака</span>
-              <strong class="token-mini-weapon-row__value">${escapeHtml(w.attackText)}</strong>
+          <div class="token-mini-weapon-grid">
+            <div class="token-mini-weapon-box">
+              <span class="token-mini-weapon-box__label">Атака</span>
+              <strong class="token-mini-weapon-box__value">${escapeHtml(w.attackText)}</strong>
               <button class="weapon-dice-btn" type="button" data-mini-weapon-roll-atk="${w.idx}" title="Бросок атаки">${TOKEN_MINI_D20_SVG}</button>
             </div>
-            <div class="token-mini-weapon-row">
-              <span class="token-mini-weapon-row__label">Урон</span>
-              <strong class="token-mini-weapon-row__value">${escapeHtml(w.damage)}</strong>
+            <div class="token-mini-weapon-box">
+              <span class="token-mini-weapon-box__label">Урон</span>
+              <strong class="token-mini-weapon-box__value">${escapeHtml(w.damage)}</strong>
               <button class="weapon-dice-btn" type="button" data-mini-weapon-roll-dmg="${w.idx}" title="Бросок урона">${TOKEN_MINI_D20_SVG}</button>
             </div>
           </div>
