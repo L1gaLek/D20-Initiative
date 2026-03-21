@@ -546,6 +546,19 @@ try { handleSessionUiMessage?.(msg); } catch {}
           });
       }
 
+      if (mapChanged && currentRoomId && typeof loadRoomTokens === 'function') {
+        const seq = ++__mapTokensReloadSeq;
+        Promise.resolve(loadRoomTokens(currentRoomId, nextMapId))
+          .then((rows) => {
+            if (seq !== __mapTokensReloadSeq) return;
+            if (String(lastState?.currentMapId || '').trim() !== nextMapId) return;
+            handleMessage({ type: 'tokensInit', rows: Array.isArray(rows) ? rows : [], mapId: nextMapId });
+          })
+          .catch((e) => {
+            console.warn('map switch tokens load failed', e);
+          });
+      }
+
       // обновим GM-инпуты (если controlbox подключен)
       try { window.ControlBox?.refreshGmInputsFromState?.(); } catch {}
 
