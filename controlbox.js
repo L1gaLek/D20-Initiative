@@ -145,6 +145,7 @@
       if (!board) return;
       board.style.transformOrigin = '0 0';
       board.style.transform = `scale(${zoom})`;
+      try { window.refreshOpenTokenMini?.(); } catch {}
     }
     applyZoom();
 

@@ -1,35 +1,3 @@
-:root{
-  --cursor-rpg-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 2L4 24L10 18L14 28L18 26L14 17L23 17Z' fill='%23f7d26a' stroke='%233c2415' stroke-width='2' stroke-linejoin='round'/%3E%3Ccircle cx='23' cy='8' r='3' fill='%23b64c2f' stroke='%233c2415' stroke-width='1.5'/%3E%3C/svg%3E") 4 2, auto;
-  --cursor-rpg-pointer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M5 3L5 23L10 18L15 29L20 26L15 16L26 16Z' fill='%23ffd978' stroke='%23331f14' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M20 6L24 10' stroke='%23fff2b2' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='24' cy='7' r='2.5' fill='%23d46a3a' stroke='%23331f14' stroke-width='1.5'/%3E%3C/svg%3E") 5 3, pointer;
-  --cursor-rpg-grab: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M10 6c1.2 0 2 .9 2 2v6h1V5.5A1.8 1.8 0 0 1 14.8 4c1 0 1.9.8 1.9 1.9V14h1V6.8A1.8 1.8 0 0 1 19.5 5c1 0 1.9.8 1.9 1.9V15h1V9.2A1.8 1.8 0 0 1 24.2 7.5c1 0 1.8.8 1.8 1.8v8.8c0 4.8-3.3 8.9-8 9.9l-3.8.8c-2.5.5-5-1-5.6-3.5L6.2 15c-.2-1 .4-1.9 1.4-2.1.8-.2 1.6.2 2 .9l1.2 2.5V8c0-1.1.8-2 2-2Z' fill='%23d9c7a1' stroke='%23331f14' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M10.8 18.5h11.8' stroke='%23fff1cc' stroke-width='1.6' stroke-linecap='round' opacity='.8'/%3E%3C/svg%3E") 10 6, grab;
-  --cursor-rpg-grabbing: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M9.5 7.5c1.1 0 1.9.9 1.9 1.9v3.8l1.4-1.4a1.8 1.8 0 0 1 2.5 0c.7.7.7 1.8 0 2.5l-1.2 1.2h1.3l2-2a1.8 1.8 0 0 1 2.5 0c.7.7.7 1.8 0 2.5l-.6.6h1.1l1.5-1.5a1.8 1.8 0 0 1 2.5 0c.7.7.7 1.8 0 2.5l-7.1 7.1c-1.8 1.8-4.3 2.8-6.9 2.8h-2c-2.4 0-4.4-2-4.4-4.4v-6.8c0-1 .8-1.9 1.9-1.9s1.9.9 1.9 1.9v-6c0-1 .8-1.8 1.8-1.8Z' fill='%23cfb78f' stroke='%23331f14' stroke-width='1.8' stroke-linejoin='round'/%3E%3Cpath d='M11 21h8.8' stroke='%23fff1cc' stroke-width='1.6' stroke-linecap='round' opacity='.75'/%3E%3C/svg%3E") 10 6, grabbing;
-  --cursor-rpg-disabled: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M5 4L5 24L10 19L14 28L18 26L14 18L24 18Z' fill='%23b9a58a' stroke='%2342362b' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M7 7L25 25' stroke='%23a4362d' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E") 5 4, not-allowed;
-}
-
-html,
-body{
-  cursor: var(--cursor-rpg-default);
-}
-
-button:not(:disabled),
-a[href],
-[role="button"],
-summary,
-label[for],
-input[type="checkbox"],
-input[type="radio"],
-select,
-.player-list-item,
-.player-tab{
-  cursor: var(--cursor-rpg-pointer);
-}
-
-:disabled,
-[aria-disabled="true"]{
-  cursor: var(--cursor-rpg-disabled);
-}
-
-
 /* ===== Appearance (Облик) ===== */
 .appearance-layout{
   display:flex;

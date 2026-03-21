@@ -576,14 +576,32 @@ function formatVal(v, fallback = '—') {
   return (v === null || v === undefined || v === '' || (typeof v === 'number' && !Number.isFinite(v))) ? fallback : String(v);
 }
 
+function getBoardVisualScale() {
+  try {
+    const bRect = board?.getBoundingClientRect?.();
+    const ow = Number(board?.offsetWidth) || 0;
+    const scale = (bRect?.width && ow) ? (bRect.width / ow) : (window.ControlBox?.getZoom?.() || 1);
+    return Math.max(0.0001, Number(scale) || 1);
+  } catch {
+    return Math.max(0.0001, Number(window.ControlBox?.getZoom?.()) || 1);
+  }
+}
+
+function getTokenMiniScale() {
+  const visualScale = getBoardVisualScale();
+  return Math.max(0.6, Math.min(1, 1 / visualScale));
+}
+
 function positionTokenMini(tokenEl) {
   if (!tokenMiniEl || !tokenEl) return;
   // ставим примерно над токеном, по центру
   const left = tokenEl.offsetLeft + (tokenEl.offsetWidth / 2);
   const top = tokenEl.offsetTop - 8;
+  const miniScale = getTokenMiniScale();
   tokenMiniEl.style.left = `${left}px`;
   tokenMiniEl.style.top = `${top}px`;
-  tokenMiniEl.style.transform = 'translate(-50%, -100%)';
+  tokenMiniEl.style.transformOrigin = '50% 100%';
+  tokenMiniEl.style.transform = `translate(-50%, -100%) scale(${miniScale})`;
 
   // держим в пределах поля (по возможности)
   const b = board.getBoundingClientRect();
@@ -600,6 +618,19 @@ function positionTokenMini(tokenEl) {
     tokenMiniEl.style.top = `${curTop + dy}px`;
   }
 }
+
+
+function refreshOpenTokenMini() {
+  if (!tokenMiniEl || !tokenMiniPlayerId) return;
+  const tokenEl = playerElements.get(String(tokenMiniPlayerId || ''));
+  if (!tokenEl || tokenEl.style.display === 'none') {
+    closeTokenMini();
+    return;
+  }
+  positionTokenMini(tokenEl);
+}
+
+try { window.refreshOpenTokenMini = refreshOpenTokenMini; } catch {}
 
 function openTokenMini(playerId) {
   const p = players.find(pp => String(pp?.id) === String(playerId));
