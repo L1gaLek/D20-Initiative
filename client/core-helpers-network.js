@@ -229,35 +229,52 @@ function connectRoomWs(roomId) {
 
 
 async function stopSupabaseRealtimeChannels() {
-  const channels = [
-    typeof roomDbChannel !== 'undefined' ? roomDbChannel : null,
-    typeof roomChannel !== 'undefined' ? roomChannel : null,
-    window.roomTokensDbChannel || null,
-    window.roomLogDbChannel || null,
-    window.roomDiceDbChannel || null,
-    window.roomMapMetaDbChannel || null,
-    window.roomWallsDbChannel || null,
-    window.roomMarksDbChannel || null,
-    window.roomFogDbChannel || null,
-    window.roomMusicDbChannel || null,
-    roomMembersDbChannel || null
-  ].filter(Boolean);
-
-  for (const ch of channels) {
-    try { await ch.unsubscribe(); } catch {}
-  }
-
-  try { roomDbChannel = null; } catch {}
-  try { roomChannel = null; } catch {}
-  try { window.roomTokensDbChannel = null; } catch {}
-  try { window.roomLogDbChannel = null; } catch {}
-  try { window.roomDiceDbChannel = null; } catch {}
-  try { window.roomMapMetaDbChannel = null; } catch {}
-  try { window.roomWallsDbChannel = null; } catch {}
-  try { window.roomMarksDbChannel = null; } catch {}
-  try { window.roomFogDbChannel = null; } catch {}
-  try { window.roomMusicDbChannel = null; } catch {}
-  try { roomMembersDbChannel = null; } catch {}
+  await unsubscribeRealtimeChannelSlots([
+    {
+      getCurrent: () => (typeof roomDbChannel !== 'undefined' ? roomDbChannel : null),
+      setCurrent: (channel) => { roomDbChannel = channel; }
+    },
+    {
+      getCurrent: () => (typeof roomChannel !== 'undefined' ? roomChannel : null),
+      setCurrent: (channel) => { roomChannel = channel; }
+    },
+    {
+      getCurrent: () => window.roomTokensDbChannel || null,
+      setCurrent: (channel) => { window.roomTokensDbChannel = channel; }
+    },
+    {
+      getCurrent: () => window.roomLogDbChannel || null,
+      setCurrent: (channel) => { window.roomLogDbChannel = channel; }
+    },
+    {
+      getCurrent: () => window.roomDiceDbChannel || null,
+      setCurrent: (channel) => { window.roomDiceDbChannel = channel; }
+    },
+    {
+      getCurrent: () => window.roomMapMetaDbChannel || null,
+      setCurrent: (channel) => { window.roomMapMetaDbChannel = channel; }
+    },
+    {
+      getCurrent: () => window.roomWallsDbChannel || null,
+      setCurrent: (channel) => { window.roomWallsDbChannel = channel; }
+    },
+    {
+      getCurrent: () => window.roomMarksDbChannel || null,
+      setCurrent: (channel) => { window.roomMarksDbChannel = channel; }
+    },
+    {
+      getCurrent: () => window.roomFogDbChannel || null,
+      setCurrent: (channel) => { window.roomFogDbChannel = channel; }
+    },
+    {
+      getCurrent: () => window.roomMusicDbChannel || null,
+      setCurrent: (channel) => { window.roomMusicDbChannel = channel; }
+    },
+    {
+      getCurrent: () => (typeof roomMembersDbChannel !== 'undefined' ? roomMembersDbChannel : null),
+      setCurrent: (channel) => { roomMembersDbChannel = channel; }
+    }
+  ]);
 }
 
 function stopRoomMembersPolling() {
@@ -435,35 +452,34 @@ async function subscribeRoomDb(roomId) {
     return null;
   }
   await ensureSupabaseReady();
-  if (roomDbChannel) {
-    try { await roomDbChannel.unsubscribe(); } catch {}
-    roomDbChannel = null;
-  }
-  roomDbChannel = sbClient
-    .channel(`db-room_state-${roomId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "room_state", filter: `room_id=eq.${roomId}` },
-      (payload) => {
-        const row = payload.new;
-        if (row && row.state) {
-          handleMessage({ type: "state", state: row.state });
+
+  await replaceRealtimeChannelSlot(
+    () => roomDbChannel,
+    (channel) => { roomDbChannel = channel; },
+    () => sbClient
+      .channel(`db-room_state-${roomId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "room_state", filter: `room_id=eq.${roomId}` },
+        (payload) => {
+          const row = payload.new;
+          if (row && row.state) {
+            handleMessage({ type: "state", state: row.state });
+          }
         }
-      }
-    );
-  await roomDbChannel.subscribe();
+      )
+  );
 
   // Optional: broadcast channel (dice events)
-  if (roomChannel) {
-    try { await roomChannel.unsubscribe(); } catch {}
-    roomChannel = null;
-  }
-  roomChannel = sbClient
-    .channel(`room:${roomId}`)
-    .on("broadcast", { event: "diceEvent" }, ({ payload }) => {
-      if (payload && payload.event) handleMessage({ type: "diceEvent", event: payload.event });
-    });
-  await roomChannel.subscribe();
+  await replaceRealtimeChannelSlot(
+    () => roomChannel,
+    (channel) => { roomChannel = channel; },
+    () => sbClient
+      .channel(`room:${roomId}`)
+      .on("broadcast", { event: "diceEvent" }, ({ payload }) => {
+        if (payload && payload.event) handleMessage({ type: "diceEvent", event: payload.event });
+      })
+  );
 }
 
 
@@ -1156,48 +1172,38 @@ async function refreshRoomMembers(roomId, opts = {}) {
 }
 
 async function subscribeRoomMembersDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (roomMembersDbChannel) {
-    try { await roomMembersDbChannel.unsubscribe(); } catch {}
-    roomMembersDbChannel = null;
-  }
-  roomMembersDbChannel = sbClient
-    .channel(`db-room_members-${roomId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "room_members", filter: `room_id=eq.${roomId}` },
-      (payload) => {
-        try {
-          const ev = String(payload?.eventType || payload?.event_type || '').toUpperCase();
-          const rowNew = payload?.new;
-          const rowOld = payload?.old;
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_members',
+    channelName: `db-room_members-${roomId}`,
+    getCurrent: () => roomMembersDbChannel,
+    setCurrent: (channel) => { roomMembersDbChannel = channel; },
+    onPayload: (payload) => {
+      try {
+        const ev = String(payload?.eventType || payload?.event_type || '').toUpperCase();
+        const rowNew = payload?.new;
+        const rowOld = payload?.old;
 
-          if (ev === 'DELETE') {
-            const uid = String(rowOld?.user_id || '');
-            if (uid) usersById.delete(uid);
-          } else {
-            const uid = String(rowNew?.user_id || '');
-            if (uid) {
-              usersById.set(uid, {
-                name: rowNew?.name || 'Unknown',
-                role: normalizeRoleForUi(rowNew?.role)
-              });
-            }
+        if (ev === 'DELETE') {
+          const uid = String(rowOld?.user_id || '');
+          if (uid) usersById.delete(uid);
+        } else {
+          const uid = String(rowNew?.user_id || '');
+          if (uid) {
+            usersById.set(uid, {
+              name: rowNew?.name || 'Unknown',
+              role: normalizeRoleForUi(rowNew?.role)
+            });
           }
-          updatePlayerList();
-          try { window.RoomChat?.refreshUsers?.(); } catch {}
-        } catch {
-          // Fallback to full refresh if realtime payload shape changes
-          refreshRoomMembers(roomId);
         }
+        updatePlayerList();
+        try { window.RoomChat?.refreshUsers?.(); } catch {}
+      } catch {
+        // Fallback to full refresh if realtime payload shape changes
+        refreshRoomMembers(roomId);
       }
-    );
-
-  await roomMembersDbChannel.subscribe();
+    }
+  });
 }
 
 async function sendMessage(msg) {
@@ -2143,8 +2149,25 @@ async function sendMessage(msg) {
           logEventToState(next, `Переключение карты: ${m?.name || "Карта"}`);
         }
 
+        else if (type === "setCellFeet") {
+          if (!isGM) return;
+          handled = true;
+          const value = clamp(Number(msg.value) || 10, 1, 100);
+          next.cellFeet = value;
+          logEventToState(next, `Масштаб клетки изменён: 1 клетка = ${value} фут.`);
+        }
+
 
         if (handled) {
+          try {
+            const optimisticCampaignState = syncActiveToMap(deepClone(next));
+            try { syncOptimisticPlayersToLocalState(optimisticCampaignState); } catch {}
+            handleMessage({ type: 'state', state: optimisticCampaignState });
+            try { applyOptimisticPlayerVisuals(lastState || optimisticCampaignState); } catch {}
+          } catch (e) {
+            console.warn('campaign optimistic state apply failed', e);
+          }
+
           try {
             const existingIds = new Set((next.maps || []).map(m => String(m?.id || '')).filter(Boolean));
             for (const m of (next.maps || [])) {

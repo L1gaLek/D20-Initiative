@@ -368,6 +368,10 @@ function applyRoleToUI() {
   // GM-настройки размера карты (реальный размер поля)
   const gmBoardSettings = document.getElementById('board-settings-gm');
   if (gmBoardSettings) gmBoardSettings.style.display = gm ? '' : 'none';
+  const cellFeetGmWrap = document.getElementById('cell-feet-gm-wrap');
+  if (cellFeetGmWrap) cellFeetGmWrap.style.display = gm ? 'inline-flex' : 'none';
+  const cellFeetPlayerWrap = document.getElementById('cell-feet-player-wrap');
+  if (cellFeetPlayerWrap) cellFeetPlayerWrap.style.display = gm ? 'none' : '';
 
   // На случай если блоки вынесены из right-panel — тоже прячем/показываем отдельно
   if (typeof worldPhasesBox !== "undefined" && worldPhasesBox) {

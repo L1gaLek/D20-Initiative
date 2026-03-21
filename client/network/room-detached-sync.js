@@ -34,36 +34,42 @@ async function loadRoomScopedRows(table, roomId, opts = {}) {
   return data ?? (maybeSingle ? null : []);
 }
 
+function refreshDetachedViewAfter(update) {
+  try {
+    if (typeof update === 'function') update();
+    _refreshDetachedRoomView();
+  } catch (e) {
+    throw e;
+  }
+}
+
+function handleDetachedCacheRealtime(tableLabel, update) {
+  try {
+    refreshDetachedViewAfter(update);
+  } catch (e) {
+    console.warn(`${tableLabel} realtime failed`, e);
+  }
+}
+
 // ================== v4: TOKENS / LOG / DICE (dedicated tables) ==================
 async function subscribeRoomTokensDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (window.roomTokensDbChannel) {
-    try { await window.roomTokensDbChannel.unsubscribe(); } catch {}
-    window.roomTokensDbChannel = null;
-  }
-  window.roomTokensDbChannel = sbClient
-    .channel(`db-room_tokens-${roomId}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'room_tokens', filter: `room_id=eq.${roomId}` },
-      (payload) => {
-        try {
-          const ev = String(payload?.eventType || '').toUpperCase();
-          if (ev === 'DELETE') {
-            const row = payload?.old;
-            if (row) handleMessage({ type: 'tokenRowDeleted', row });
-            return;
-          }
-          const row = payload?.new;
-          if (row) handleMessage({ type: 'tokenRow', row });
-        } catch {}
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_tokens',
+    channelName: `db-room_tokens-${roomId}`,
+    getCurrent: () => window.roomTokensDbChannel,
+    setCurrent: (channel) => { window.roomTokensDbChannel = channel; },
+    onPayload: (payload) => {
+      const ev = String(payload?.eventType || '').toUpperCase();
+      if (ev === 'DELETE') {
+        const row = payload?.old;
+        if (row) handleMessage({ type: 'tokenRowDeleted', row });
+        return;
       }
-    );
-  await window.roomTokensDbChannel.subscribe();
+      const row = payload?.new;
+      if (row) handleMessage({ type: 'tokenRow', row });
+    }
+  });
 }
 
 async function loadRoomTokens(roomId, mapId) {
@@ -71,26 +77,18 @@ async function loadRoomTokens(roomId, mapId) {
 }
 
 async function subscribeRoomLogDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (window.roomLogDbChannel) {
-    try { await window.roomLogDbChannel.unsubscribe(); } catch {}
-    window.roomLogDbChannel = null;
-  }
-  window.roomLogDbChannel = sbClient
-    .channel(`db-room_log-${roomId}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'room_log', filter: `room_id=eq.${roomId}` },
-      (payload) => {
-        const row = payload.new;
-        if (row) handleMessage({ type: 'logRow', row });
-      }
-    );
-  await window.roomLogDbChannel.subscribe();
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_log',
+    channelName: `db-room_log-${roomId}`,
+    event: 'INSERT',
+    getCurrent: () => window.roomLogDbChannel,
+    setCurrent: (channel) => { window.roomLogDbChannel = channel; },
+    onPayload: (payload) => {
+      const row = payload?.new;
+      if (row) handleMessage({ type: 'logRow', row });
+    }
+  });
 }
 
 async function loadRoomLog(roomId, limit = 200) {
@@ -103,26 +101,18 @@ async function loadRoomLog(roomId, limit = 200) {
 }
 
 async function subscribeRoomDiceDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (window.roomDiceDbChannel) {
-    try { await window.roomDiceDbChannel.unsubscribe(); } catch {}
-    window.roomDiceDbChannel = null;
-  }
-  window.roomDiceDbChannel = sbClient
-    .channel(`db-room_dice-${roomId}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'room_dice_events', filter: `room_id=eq.${roomId}` },
-      (payload) => {
-        const row = payload.new;
-        if (row) handleMessage({ type: 'diceRow', row });
-      }
-    );
-  await window.roomDiceDbChannel.subscribe();
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_dice_events',
+    channelName: `db-room_dice-${roomId}`,
+    event: 'INSERT',
+    getCurrent: () => window.roomDiceDbChannel,
+    setCurrent: (channel) => { window.roomDiceDbChannel = channel; },
+    onPayload: (payload) => {
+      const row = payload?.new;
+      if (row) handleMessage({ type: 'diceRow', row });
+    }
+  });
 }
 
 async function loadRoomDice(roomId, limit = 50) {
@@ -155,127 +145,90 @@ async function loadRoomMusic(roomId) {
 }
 
 async function subscribeRoomMapMetaDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (window.roomMapMetaDbChannel) {
-    try { await window.roomMapMetaDbChannel.unsubscribe(); } catch {}
-    window.roomMapMetaDbChannel = null;
-  }
-  window.roomMapMetaDbChannel = sbClient
-    .channel(`db-room_map_meta-${roomId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_map_meta', filter: `room_id=eq.${roomId}` }, (payload) => {
-      try {
-        if (payload.eventType === 'DELETE') {
-          const old = payload.old || {};
-          const mapId = String(old.map_id || '').trim();
-          if (mapId) {
-            __roomDetachedCache.mapMetaById.delete(mapId);
-            __roomDetachedCache.wallsByMap.delete(mapId);
-            __roomDetachedCache.marksByMap.delete(mapId);
-            __roomDetachedCache.fogByMap.delete(mapId);
-          }
-        } else {
-          _cacheMapMeta(payload.new || {});
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_map_meta',
+    channelName: `db-room_map_meta-${roomId}`,
+    getCurrent: () => window.roomMapMetaDbChannel,
+    setCurrent: (channel) => { window.roomMapMetaDbChannel = channel; },
+    onPayload: (payload) => handleDetachedCacheRealtime('room_map_meta', () => {
+      if (payload.eventType === 'DELETE') {
+        const old = payload.old || {};
+        const mapId = String(old.map_id || '').trim();
+        if (mapId) {
+          __roomDetachedCache.mapMetaById.delete(mapId);
+          __roomDetachedCache.wallsByMap.delete(mapId);
+          __roomDetachedCache.marksByMap.delete(mapId);
+          __roomDetachedCache.fogByMap.delete(mapId);
         }
-        _refreshDetachedRoomView();
-      } catch (e) { console.warn('room_map_meta realtime failed', e); }
-    });
-  await window.roomMapMetaDbChannel.subscribe();
+        return;
+      }
+      _cacheMapMeta(payload.new || {});
+    })
+  });
 }
 
 async function subscribeRoomWallsDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (window.roomWallsDbChannel) {
-    try { await window.roomWallsDbChannel.unsubscribe(); } catch {}
-    window.roomWallsDbChannel = null;
-  }
-  window.roomWallsDbChannel = sbClient
-    .channel(`db-room_walls-${roomId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_walls', filter: `room_id=eq.${roomId}` }, (payload) => {
-      try {
-        if (payload.eventType === 'DELETE') _cacheDeleteWallRow(payload.old || {});
-        else _cacheUpsertWallRow(payload.new || {});
-        _refreshDetachedRoomView();
-      } catch (e) { console.warn('room_walls realtime failed', e); }
-    });
-  await window.roomWallsDbChannel.subscribe();
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_walls',
+    channelName: `db-room_walls-${roomId}`,
+    getCurrent: () => window.roomWallsDbChannel,
+    setCurrent: (channel) => { window.roomWallsDbChannel = channel; },
+    onPayload: (payload) => handleDetachedCacheRealtime('room_walls', () => {
+      if (payload.eventType === 'DELETE') _cacheDeleteWallRow(payload.old || {});
+      else _cacheUpsertWallRow(payload.new || {});
+    })
+  });
 }
 
 async function subscribeRoomMarksDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (window.roomMarksDbChannel) {
-    try { await window.roomMarksDbChannel.unsubscribe(); } catch {}
-    window.roomMarksDbChannel = null;
-  }
-  window.roomMarksDbChannel = sbClient
-    .channel(`db-room_marks-${roomId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_marks', filter: `room_id=eq.${roomId}` }, (payload) => {
-      try {
-        if (payload.eventType === 'DELETE') _cacheDeleteMarkRow(payload.old || {});
-        else _cacheUpsertMarkRow(payload.new || {});
-        _refreshDetachedRoomView();
-      } catch (e) { console.warn('room_marks realtime failed', e); }
-    });
-  await window.roomMarksDbChannel.subscribe();
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_marks',
+    channelName: `db-room_marks-${roomId}`,
+    getCurrent: () => window.roomMarksDbChannel,
+    setCurrent: (channel) => { window.roomMarksDbChannel = channel; },
+    onPayload: (payload) => handleDetachedCacheRealtime('room_marks', () => {
+      if (payload.eventType === 'DELETE') _cacheDeleteMarkRow(payload.old || {});
+      else _cacheUpsertMarkRow(payload.new || {});
+    })
+  });
 }
 
 async function subscribeRoomFogDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (window.roomFogDbChannel) {
-    try { await window.roomFogDbChannel.unsubscribe(); } catch {}
-    window.roomFogDbChannel = null;
-  }
-  window.roomFogDbChannel = sbClient
-    .channel(`db-room_fog-${roomId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_fog', filter: `room_id=eq.${roomId}` }, (payload) => {
-      try {
-        if (payload.eventType === 'DELETE') {
-          const mapId = String(payload.old?.map_id || '').trim();
-          if (mapId) __roomDetachedCache.fogByMap.delete(mapId);
-        } else {
-          _cacheUpsertFogRow(payload.new || {});
-        }
-        _refreshDetachedRoomView();
-      } catch (e) { console.warn('room_fog realtime failed', e); }
-    });
-  await window.roomFogDbChannel.subscribe();
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_fog',
+    channelName: `db-room_fog-${roomId}`,
+    getCurrent: () => window.roomFogDbChannel,
+    setCurrent: (channel) => { window.roomFogDbChannel = channel; },
+    onPayload: (payload) => handleDetachedCacheRealtime('room_fog', () => {
+      if (payload.eventType === 'DELETE') {
+        const mapId = String(payload.old?.map_id || '').trim();
+        if (mapId) __roomDetachedCache.fogByMap.delete(mapId);
+        return;
+      }
+      _cacheUpsertFogRow(payload.new || {});
+    })
+  });
 }
 
 async function subscribeRoomMusicDb(roomId) {
-  if (!USE_SUPABASE_REALTIME) {
-    await stopSupabaseRealtimeChannels();
-    return null;
-  }
-  await ensureSupabaseReady();
-  if (window.roomMusicDbChannel) {
-    try { await window.roomMusicDbChannel.unsubscribe(); } catch {}
-    window.roomMusicDbChannel = null;
-  }
-  window.roomMusicDbChannel = sbClient
-    .channel(`db-room_music_state-${roomId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'room_music_state', filter: `room_id=eq.${roomId}` }, (payload) => {
-      try {
-        if (payload.eventType === 'DELETE') __roomDetachedCache.music = null;
-        else _cacheMusicRow(payload.new || {});
-        _refreshDetachedRoomView();
-      } catch (e) { console.warn('room_music realtime failed', e); }
-    });
-  await window.roomMusicDbChannel.subscribe();
+  return subscribeRoomScopedTableChannel({
+    roomId,
+    table: 'room_music_state',
+    channelName: `db-room_music_state-${roomId}`,
+    getCurrent: () => window.roomMusicDbChannel,
+    setCurrent: (channel) => { window.roomMusicDbChannel = channel; },
+    onPayload: (payload) => handleDetachedCacheRealtime('room_music_state', () => {
+      if (payload.eventType === 'DELETE') {
+        __roomDetachedCache.music = null;
+        return;
+      }
+      _cacheMusicRow(payload.new || {});
+    })
+  });
 }
 
 async function hydrateDetachedRoomData(roomId) {
@@ -305,4 +258,3 @@ async function subscribeDetachedRoomTables(roomId) {
     subscribeRoomMusicDb(roomId)
   ]);
 }
-
