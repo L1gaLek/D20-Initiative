@@ -557,24 +557,38 @@ button:hover {
   font-size: 11px;
 }
 
-.token-mini .token-mini-weapon-grid{
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.token-mini .token-mini-weapon-rows{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin-top: 7px;
 }
 
-.token-mini .token-mini-weapon-cell{
+.token-mini .token-mini-weapon-row{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 9px;
-  padding: 7px 8px;
+  padding: 5px 7px;
   background: rgba(0,0,0,0.14);
 }
 
-.token-mini .token-mini-side-line--tight{
-  margin-top: 0;
+.token-mini .token-mini-weapon-row__label{
   font-size: 10px;
   color: rgba(255,255,255,0.72);
+}
+
+.token-mini .token-mini-weapon-row__value{
+  min-width: 0;
+  font-size: 12px;
+  color: #fff;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .token-mini .token-mini-side-item__head--center{
@@ -685,15 +699,15 @@ button:hover {
 }
 
 .token-mini .token-mini-spell-cast{
-  flex: 0 0 auto;
-  border: 1px solid rgba(94, 203, 255, 0.45);
-  border-radius: 8px;
-  background: rgba(42, 115, 170, 0.28);
-  color: #dff6ff;
-  font-size: 11px;
-  font-weight: 800;
-  padding: 5px 8px;
-  cursor: pointer;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.token-mini .token-mini-spell-cast svg{
+  width: 14px;
+  height: 14px;
 }
 
 .token-mini .token-mini-spell-cast:disabled{

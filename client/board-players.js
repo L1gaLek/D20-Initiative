@@ -749,24 +749,20 @@ function renderTokenMiniCombatPanel(summary, canUse) {
   const abilities = Array.isArray(summary?.abilities) ? summary.abilities : [];
   const weaponsHtml = weapons.length
     ? weapons.map(w => `
-        <div class="token-mini-side-item">
+        <div class="token-mini-side-item token-mini-side-item--weapon">
           <div class="token-mini-side-item__head">
             <span class="token-mini-side-item__name">${escapeHtml(w.name)}</span>
           </div>
-          <div class="token-mini-weapon-grid">
-            <div class="token-mini-weapon-cell">
-              <div class="token-mini-side-line token-mini-side-line--tight">
-                <span>Атака</span>
-                <button class="weapon-dice-btn" type="button" data-mini-weapon-roll-atk="${w.idx}" title="Бросок атаки">${TOKEN_MINI_D20_SVG}</button>
-              </div>
-              <strong>${escapeHtml(w.attackText)}</strong>
+          <div class="token-mini-weapon-rows">
+            <div class="token-mini-weapon-row">
+              <span class="token-mini-weapon-row__label">Атака</span>
+              <strong class="token-mini-weapon-row__value">${escapeHtml(w.attackText)}</strong>
+              <button class="weapon-dice-btn" type="button" data-mini-weapon-roll-atk="${w.idx}" title="Бросок атаки">${TOKEN_MINI_D20_SVG}</button>
             </div>
-            <div class="token-mini-weapon-cell">
-              <div class="token-mini-side-line token-mini-side-line--tight">
-                <span>Урон</span>
-                <button class="weapon-dice-btn" type="button" data-mini-weapon-roll-dmg="${w.idx}" title="Бросок урона">${TOKEN_MINI_D20_SVG}</button>
-              </div>
-              <strong>${escapeHtml(w.damage)}</strong>
+            <div class="token-mini-weapon-row">
+              <span class="token-mini-weapon-row__label">Урон</span>
+              <strong class="token-mini-weapon-row__value">${escapeHtml(w.damage)}</strong>
+              <button class="weapon-dice-btn" type="button" data-mini-weapon-roll-dmg="${w.idx}" title="Бросок урона">${TOKEN_MINI_D20_SVG}</button>
             </div>
           </div>
         </div>
@@ -830,7 +826,7 @@ function renderTokenMiniSpellsPanel(blocks, canEditSpells) {
             ${block.items.map(spell => `
               <div class="token-mini-spell-row" data-mini-spell-row data-spell-level="${block.level}" data-spell-href="${escapeHtml(spell.href || '')}" data-spell-name="${escapeHtml(spell.name)}">
                 <span class="token-mini-spell-name">${escapeHtml(spell.name)}</span>
-                <button type="button" class="token-mini-spell-cast" data-mini-spell-cast ${(!canEditSpells && block.level > 0) ? 'disabled' : ''}>Применить</button>
+                <button type="button" class="spell-cast-btn token-mini-spell-cast" data-mini-spell-cast ${(!canEditSpells && block.level > 0) ? 'disabled' : ''} title="Применить">${TOKEN_MINI_ACTION_SVG}</button>
               </div>
             `).join('')}
           </div>
