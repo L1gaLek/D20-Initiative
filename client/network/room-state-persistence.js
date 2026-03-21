@@ -309,7 +309,7 @@ async function upsertRoomState(roomId, nextState) {
   try {
     stSafe.walls = [];
     stSafe.marks = [];
-    stSafe.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+    stSafe.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 };
     stSafe.boardBgDataUrl = null;
     stSafe.boardBgUrl = null;
     stSafe.boardBgStoragePath = null;
