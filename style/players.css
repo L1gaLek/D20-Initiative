@@ -142,7 +142,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  cursor: grab;
+  cursor: var(--cursor-rpg-grab);
   /* тонкая рамка в цвет игрока (цвет ставится инлайном из JS) */
   border: 2px solid #888;
   box-sizing: border-box;
@@ -279,7 +279,7 @@
 
 .player.selected {
   outline: 3px solid yellow;
-  cursor: grabbing;
+  cursor: var(--cursor-rpg-grabbing);
 }
 
 /* Подсветка игрока, который сейчас ходит */
