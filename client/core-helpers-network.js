@@ -3137,18 +3137,31 @@ async function sendMessage(msg) {
           return;
         }
 
+        let optimisticState = null;
         try {
           // Supabase Realtime is disabled, so the local client must see state changes
           // immediately without waiting for a WS echo from the VPS.
           // Keep local volatile token/player fields in sync BEFORE message-ui snapshots
           // them, otherwise color/size/position can appear to rollback until the next
           // tokenRow or full refresh arrives.
-          const optimisticState = syncActiveToMap(deepClone(next));
+          optimisticState = syncActiveToMap(deepClone(next));
           try { syncOptimisticPlayersToLocalState(optimisticState); } catch {}
           handleMessage({ type: 'state', state: optimisticState });
           try { applyOptimisticPlayerVisuals(lastState || optimisticState); } catch {}
         } catch (e) {
           console.warn('optimistic state apply failed', e);
+        }
+
+        if (type === 'endTurn' && optimisticState) {
+          try {
+            sendWsEnvelope({
+              type: 'state',
+              roomId: currentRoomId,
+              state: stripRoomSecretsFromState(optimisticState)
+            }, { optimisticApplied: true });
+          } catch (e) {
+            console.warn('endTurn immediate relay failed', e);
+          }
         }
 
         await upsertRoomState(currentRoomId, next);
