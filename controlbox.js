@@ -110,11 +110,33 @@
       ctx.sendMessage?.({ type: 'resizeBoard', width: w, height: h });
     });
 
-    cellFeetGmInput?.addEventListener('change', () => {
+    let lastSentCellFeet = null;
+
+    function syncCellFeetPreview(value) {
+      const playerValue = document.getElementById('cell-feet-player-value');
+      if (playerValue) playerValue.textContent = String(value);
+    }
+
+    function submitCellFeet(rawValue) {
       if (!ctx.isGM?.()) return;
-      const value = clamp(Number(cellFeetGmInput?.value) || 10, 1, 100);
+      const value = clamp(Number(rawValue) || 10, 1, 100);
       if (cellFeetGmInput) cellFeetGmInput.value = String(value);
+      syncCellFeetPreview(value);
+      if (lastSentCellFeet === value) return;
+      lastSentCellFeet = value;
       ctx.sendMessage?.({ type: 'setCellFeet', value });
+    }
+
+    cellFeetGmInput?.addEventListener('input', () => {
+      submitCellFeet(cellFeetGmInput?.value);
+    });
+
+    cellFeetGmInput?.addEventListener('change', () => {
+      submitCellFeet(cellFeetGmInput?.value);
+    });
+
+    cellFeetGmInput?.addEventListener('blur', () => {
+      submitCellFeet(cellFeetGmInput?.value);
     });
 
     // ===== Zoom (Ctrl + Wheel) =====
