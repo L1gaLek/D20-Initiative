@@ -576,6 +576,425 @@ function formatVal(v, fallback = '—') {
   return (v === null || v === undefined || v === '' || (typeof v === 'number' && !Number.isFinite(v))) ? fallback : String(v);
 }
 
+function formatSignedValue(v, fallback = '—') {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return n >= 0 ? `+${n}` : `${n}`;
+}
+
+const TOKEN_MINI_D20_SVG = `
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+    <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor" opacity="0.95"></path>
+    <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="1.2"></path>
+  </svg>
+`;
+
+const TOKEN_MINI_ACTION_SVG = `
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+    <path d="M12 2.5c3.6 2.2 6 5.1 6 8.4 0 4.5-3.6 8.6-6 10.6-2.4-2-6-6.1-6-10.6 0-3.3 2.4-6.2 6-8.4z" fill="currentColor" opacity="0.95"></path>
+    <path d="M12 7.2v6.3" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="1.6" stroke-linecap="round"></path>
+    <path d="M9.2 10.4h5.6" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="1.6" stroke-linecap="round"></path>
+  </svg>
+`;
+
+function formatTokenMiniUses(current, total) {
+  const cur = Math.max(0, Number(current) || 0);
+  const max = Math.max(0, Number(total) || 0);
+  if (!max) return 'Без лимита';
+  return `${cur}/${max}`;
+}
+
+function tokenMiniActionMeta(exec) {
+  const kind = String(exec || '').trim().toLowerCase();
+  if (kind === 'attack') return 'Атака';
+  if (kind === 'action') return 'Действие';
+  return 'Эффект';
+}
+
+function canUseTokenMiniQuickPanels(player) {
+  return !!canEditTokenMiniSheet(player);
+}
+
+function getTokenMiniSheet(player) {
+  const sheet = getTokenSheetSafe(player);
+  return (sheet && typeof sheet === 'object') ? sheet : null;
+}
+
+function tokenMiniStatMod(sheet, statKey) {
+  const k = String(statKey || '-').trim();
+  if (!['str', 'dex', 'con', 'int', 'wis', 'cha'].includes(k)) return 0;
+  const direct = sheet?.stats?.[k]?.modifier;
+  if (direct !== undefined && direct !== null && direct !== '') return safeNum(direct, 0) ?? 0;
+  const score = safeNum(sheet?.stats?.[k]?.value, 10) ?? 10;
+  return Math.floor((score - 10) / 2);
+}
+
+function getTokenMiniCombatSummary(sheet) {
+  const combat = [];
+  const list = Array.isArray(sheet?.weaponsList) ? sheet.weaponsList : [];
+  list.forEach((weapon, idx) => {
+    if (!weapon || typeof weapon !== 'object') return;
+    const name = String(weapon?.name?.value ?? weapon?.name ?? '').trim();
+    if (!name || name === '-') return;
+    const attackBonus = (typeof calcWeaponAttackBonus === 'function')
+      ? calcWeaponAttackBonus(sheet, weapon)
+      : (safeNum(weapon?.extraAtk, 0) ?? 0);
+    const damageBonus = (typeof calcWeaponDamageBonus === 'function')
+      ? calcWeaponDamageBonus(sheet, weapon)
+      : tokenMiniStatMod(sheet, weapon?.ability);
+    const damageText = (typeof weaponDamageText === 'function')
+      ? weaponDamageText(weapon)
+      : `${Math.max(1, safeNum(weapon?.dmgNum, 1) ?? 1)}${String(weapon?.dmgDice || 'к6')}${String(weapon?.dmgType || '').trim() ? ` ${String(weapon.dmgType).trim()}` : ''}`.trim();
+    combat.push({
+      id: `weapon-${idx}`,
+      idx,
+      name,
+      attackBonus,
+      attackText: formatSignedValue(attackBonus),
+      damageBonus,
+      damage: damageText,
+      dmgNum: Math.max(1, safeNum(weapon?.dmgNum, 1) ?? 1),
+      dmgDice: String(weapon?.dmgDice || 'к6').trim().toLowerCase()
+    });
+  });
+
+  const powers = Array.isArray(sheet?.combat?.powersDefs) ? sheet.combat.powersDefs : [];
+  const abilities = powers
+    .map((def, idx) => {
+      if (!def || typeof def !== 'object') return null;
+      const slotsMax = Math.max(0, safeNum(def?.slotsMax, 0) ?? 0);
+      const slotsState = Array.isArray(def?.slotsState) ? def.slotsState.slice(0, slotsMax) : [];
+      const slotsCurrent = slotsMax > 0 ? slotsState.filter(Boolean).length : 0;
+      const subs = Array.isArray(def?.subs) ? def.subs : [];
+      return {
+        id: String(def?.id || `power-${idx}`),
+        name: String(def?.name || `Способность-${idx + 1}`).trim() || `Способность-${idx + 1}`,
+        slotsMax,
+        slotsCurrent,
+        slotsState,
+        actions: subs
+          .map((sub, subIdx) => {
+            if (!sub || typeof sub !== 'object') return null;
+            const title = String(sub?.name || `Действие-${subIdx + 1}`).trim();
+            if (!title) return null;
+            const exec = (String(sub?.exec || sub?.mode || 'attack').trim().toLowerCase() === 'action') ? 'action' : 'attack';
+            const bonus = exec === 'attack' ? tokenMiniStatMod(sheet, sub?.stat) : 0;
+            return {
+              id: String(sub?.id || `${idx}-${subIdx}`),
+              name: title,
+              exec,
+              kind: tokenMiniActionMeta(exec),
+              bonus,
+              bonusText: formatSignedValue(bonus, '+0')
+            };
+          })
+          .filter(Boolean)
+      };
+    })
+    .filter(Boolean);
+
+  return { weapons: combat, abilities };
+}
+
+function getTokenMiniSpellsSummary(sheet) {
+  const vm = (typeof toViewModel === 'function') ? toViewModel(sheet || {}, '') : null;
+  const sourceBlocks = Array.isArray(vm?.spellsByLevel) ? vm.spellsByLevel : [];
+  const blocks = sourceBlocks
+    .filter(block => Array.isArray(block?.items) && block.items.length)
+    .map((block) => {
+      const lvl = Math.max(0, safeNum(block?.level, 0) ?? 0);
+      const slotKey = `slots-${lvl}`;
+      const total = Math.max(0, safeNum(sheet?.spells?.[slotKey]?.value, 0) ?? 0);
+      const filled = Math.max(0, safeNum(sheet?.spells?.[slotKey]?.filled, 0) ?? 0);
+      const available = Math.max(0, total - filled);
+      return {
+        level: lvl,
+        title: lvl === 0 ? 'Заговоры' : `Уровень ${lvl}`,
+        slots: lvl === 0 ? null : { total, available },
+        items: block.items
+          .map((item, idx) => {
+            const name = String(item?.text || '').trim();
+            if (!name) return null;
+            return {
+              id: `${lvl}-${idx}-${name}`,
+              name,
+              href: String(item?.href || '').trim()
+            };
+          })
+          .filter(Boolean)
+      };
+    })
+    .filter(block => block.items.length);
+  return blocks;
+}
+
+function renderTokenMiniDots(total, current, kind, interactive = false, dataAttrs = '') {
+  const max = Math.max(0, Number(total) || 0);
+  const cur = Math.max(0, Number(current) || 0);
+  if (!max) return `<span class="token-mini-dots-empty">—</span>`;
+  return Array.from({ length: max }).map((_, idx) => {
+    const isOn = idx < cur;
+    if (kind === 'spell') {
+      return `<span class="slot-dot${isOn ? ' is-available' : ''}" ${dataAttrs}></span>`;
+    }
+    if (interactive) {
+      return `<button class="cpw-dotbtn ${isOn ? 'on' : 'off'}" type="button" ${dataAttrs} data-mini-power-dot="${idx}" title="Использование"></button>`;
+    }
+    return `<span class="cpw-dot ${isOn ? 'on' : 'off'}"></span>`;
+  }).join('');
+}
+
+function renderTokenMiniCombatPanel(summary, canUse) {
+  const weapons = Array.isArray(summary?.weapons) ? summary.weapons : [];
+  const abilities = Array.isArray(summary?.abilities) ? summary.abilities : [];
+  const weaponsHtml = weapons.length
+    ? weapons.map(w => `
+        <div class="token-mini-side-item">
+          <div class="token-mini-side-item__head">
+            <span class="token-mini-side-item__name">${escapeHtml(w.name)}</span>
+          </div>
+          <div class="token-mini-weapon-grid">
+            <div class="token-mini-weapon-cell">
+              <div class="token-mini-side-line token-mini-side-line--tight">
+                <span>Атака</span>
+                <button class="weapon-dice-btn" type="button" data-mini-weapon-roll-atk="${w.idx}" title="Бросок атаки">${TOKEN_MINI_D20_SVG}</button>
+              </div>
+              <strong>${escapeHtml(w.attackText)}</strong>
+            </div>
+            <div class="token-mini-weapon-cell">
+              <div class="token-mini-side-line token-mini-side-line--tight">
+                <span>Урон</span>
+                <button class="weapon-dice-btn" type="button" data-mini-weapon-roll-dmg="${w.idx}" title="Бросок урона">${TOKEN_MINI_D20_SVG}</button>
+              </div>
+              <strong>${escapeHtml(w.damage)}</strong>
+            </div>
+          </div>
+        </div>
+      `).join('')
+    : `<div class="token-mini-side-empty">Оружие в разделе «Бой» пока не заполнено.</div>`;
+
+  const abilitiesHtml = abilities.length
+    ? abilities.map(def => `
+        <div class="token-mini-side-item token-mini-side-item--ability">
+          <div class="token-mini-side-item__head token-mini-side-item__head--center">
+            <span class="token-mini-side-item__name">${escapeHtml(def.name)}</span>
+            <div class="token-mini-dots token-mini-dots--power">${renderTokenMiniDots(def.slotsMax, def.slotsCurrent, 'power')}</div>
+          </div>
+          ${def.actions.length ? `
+            <div class="token-mini-sublist">
+              ${def.actions.map(action => `
+                <div class="token-mini-subitem">
+                  <div class="token-mini-subitem__head token-mini-subitem__head--action">
+                    <span class="token-mini-subitem__name">${escapeHtml(action.name)}</span>
+                    <div class="token-mini-subitem__controls">
+                      <span class="token-mini-subitem__kind">${escapeHtml(action.kind)}</span>
+                      ${action.exec === 'attack'
+                        ? `<button class="cpw-dice" type="button" data-mini-power-roll="${escapeHtml(def.id)}::${escapeHtml(action.id)}" title="Бросок: d20 ${escapeHtml(action.bonusText)}">${TOKEN_MINI_D20_SVG}</button>`
+                        : `<button class="cpw-action" type="button" data-mini-power-action="${escapeHtml(def.id)}::${escapeHtml(action.id)}" title="Применить действие" ${canUse ? '' : 'disabled'}>${TOKEN_MINI_ACTION_SVG}</button>`}
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : `<div class="token-mini-side-empty token-mini-side-empty--inline">Подспособности не указаны.</div>`}
+        </div>
+      `).join('')
+    : `<div class="token-mini-side-empty">Способности в разделе «Бой» пока не заполнены.</div>`;
+
+  return `
+    <div class="token-mini-side-scroll">
+      <div class="token-mini-side-section">
+        <div class="token-mini-side-section__title">Оружие</div>
+        ${weaponsHtml}
+      </div>
+      <div class="token-mini-side-divider"></div>
+      <div class="token-mini-side-section">
+        <div class="token-mini-side-section__title">Способности</div>
+        ${abilitiesHtml}
+      </div>
+    </div>
+  `;
+}
+
+function renderTokenMiniSpellsPanel(blocks, canEditSpells) {
+  const body = Array.isArray(blocks) && blocks.length
+    ? blocks.map(block => `
+        <div class="token-mini-side-item token-mini-side-item--spell-block">
+          <div class="token-mini-side-item__head token-mini-side-item__head--center">
+            <span class="token-mini-side-item__name">${escapeHtml(block.title)}</span>
+            ${block.slots
+              ? `<div class="token-mini-dots token-mini-dots--spell">${renderTokenMiniDots(block.slots.total, block.slots.available, 'spell')}</div>`
+              : `<span class="token-mini-side-pill token-mini-side-pill--slots">Без ячеек</span>`}
+          </div>
+          <div class="token-mini-spell-list">
+            ${block.items.map(spell => `
+              <div class="token-mini-spell-row" data-mini-spell-row data-spell-level="${block.level}" data-spell-href="${escapeHtml(spell.href || '')}" data-spell-name="${escapeHtml(spell.name)}">
+                <span class="token-mini-spell-name">${escapeHtml(spell.name)}</span>
+                <button type="button" class="token-mini-spell-cast" data-mini-spell-cast ${(!canEditSpells && block.level > 0) ? 'disabled' : ''}>Применить</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')
+    : `<div class="token-mini-side-empty">Заговоры и заклинания ещё не заполнены.</div>`;
+
+  return `<div class="token-mini-side-scroll">${body}</div>`;
+}
+
+function updateTokenMiniSpellButtonsState(card, player) {
+  if (!card || !player) return;
+  const sheet = getTokenMiniSheet(player);
+  const canEdit = canUseTokenMiniQuickPanels(player);
+  card.querySelectorAll('[data-mini-spell-row]').forEach((row) => {
+    const lvl = Math.max(0, safeNum(row.getAttribute('data-spell-level'), 0) ?? 0);
+    const btn = row.querySelector('[data-mini-spell-cast]');
+    if (!(btn instanceof HTMLButtonElement)) return;
+    if (lvl <= 0) {
+      btn.disabled = false;
+      return;
+    }
+    if (!canEdit) {
+      btn.disabled = true;
+      return;
+    }
+    const key = `slots-${lvl}`;
+    const total = Math.max(0, safeNum(sheet?.spells?.[key]?.value, 0) ?? 0);
+    const filled = Math.max(0, safeNum(sheet?.spells?.[key]?.filled, 0) ?? 0);
+    const available = Math.max(0, total - filled);
+    btn.disabled = available <= 0;
+  });
+}
+
+function updateTokenMiniPowerButtonsState(card, player) {
+  if (!card || !player) return;
+  const sheet = getTokenMiniSheet(player);
+  const defs = Array.isArray(sheet?.combat?.powersDefs) ? sheet.combat.powersDefs : [];
+  const canUse = canUseTokenMiniQuickPanels(player);
+  const getAvailable = (defId) => {
+    const def = defs.find(item => String(item?.id || '') === String(defId || ''));
+    const max = Math.max(0, safeNum(def?.slotsMax, 0) ?? 0);
+    const states = Array.isArray(def?.slotsState) ? def.slotsState : [];
+    return max <= 0 ? Infinity : states.filter(Boolean).length;
+  };
+  card.querySelectorAll('[data-mini-power-roll], [data-mini-power-action]').forEach((btn) => {
+    const key = String(btn.getAttribute('data-mini-power-roll') || btn.getAttribute('data-mini-power-action') || '');
+    const defId = key.split('::')[0] || '';
+    const available = getAvailable(defId);
+    btn.disabled = !canUse || available <= 0;
+  });
+}
+
+function toggleTokenMiniSidePanel(card, panelName) {
+  if (!card) return;
+  const next = (card.dataset.sidePanel === panelName) ? '' : panelName;
+  card.dataset.sidePanel = next;
+  card.querySelectorAll('[data-mini-side-button]').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.getAttribute('data-mini-side-button') === next);
+  });
+}
+
+function rollTokenMiniWeapon(player, weaponIdx, kind) {
+  const current = players.find(pp => String(pp?.id) === String(player?.id || '')) || player;
+  const sheet = current?.sheet?.parsed;
+  const weapon = Array.isArray(sheet?.weaponsList) ? sheet.weaponsList[weaponIdx] : null;
+  if (!sheet || !weapon || !window.DicePanel?.roll) return;
+  if (kind === 'dmg') {
+    const count = Math.max(1, safeNum(weapon?.dmgNum, 1) ?? 1);
+    const dice = String(weapon?.dmgDice || 'к6').trim().toLowerCase();
+    const sides = Math.max(1, safeNum(dice.replace('к', ''), 6) ?? 6);
+    const bonus = (typeof calcWeaponDamageBonus === 'function') ? calcWeaponDamageBonus(sheet, weapon) : tokenMiniStatMod(sheet, weapon?.ability);
+    window.DicePanel.roll({ sides, count, bonus, kindText: `Урон: ${count}d${sides} ${formatSignedValue(bonus, '+0')}` });
+    return;
+  }
+  const bonus = (typeof calcWeaponAttackBonus === 'function') ? calcWeaponAttackBonus(sheet, weapon) : (safeNum(weapon?.extraAtk, 0) ?? 0);
+  window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `Атака: d20 ${formatSignedValue(bonus, '+0')}` });
+}
+
+function useTokenMiniPower(player, defId, subId, mode) {
+  const current = players.find(pp => String(pp?.id) === String(player?.id || '')) || player;
+  const sheet = current?.sheet?.parsed;
+  if (!sheet || !canUseTokenMiniQuickPanels(current)) return false;
+  if (!sheet.combat || typeof sheet.combat !== 'object') sheet.combat = {};
+  if (!Array.isArray(sheet.combat.powersDefs)) sheet.combat.powersDefs = [];
+  const def = sheet.combat.powersDefs.find(item => String(item?.id || '') === String(defId || ''));
+  if (!def) return false;
+  if (!Array.isArray(def.subs)) def.subs = [];
+  const sub = def.subs.find(item => String(item?.id || '') === String(subId || ''));
+  if (!sub) return false;
+  const max = Math.max(0, safeNum(def?.slotsMax, 0) ?? 0);
+  if (!Array.isArray(def.slotsState)) def.slotsState = [];
+  for (let i = 0; i < max; i += 1) {
+    if (typeof def.slotsState[i] !== 'boolean') def.slotsState[i] = true;
+  }
+  if (max > 0) {
+    const idx = def.slotsState.findIndex(Boolean);
+    if (idx < 0) return false;
+    def.slotsState[idx] = false;
+  }
+
+  const title = String(sub?.name || def?.name || 'Способность').trim() || 'Способность';
+  if (mode === 'roll') {
+    const bonus = tokenMiniStatMod(sheet, sub?.stat);
+    window.DicePanel?.roll?.({ sides: 20, count: 1, bonus, kindText: `${title}: d20${formatSignedValue(bonus, '+0')}` });
+  } else {
+    try {
+      if (typeof sendMessage === 'function') {
+        const fromName = String(current?.name || '').trim() || 'Игрок';
+        sendMessage({ type: 'log', text: `${fromName} применил «${title}»` });
+      }
+    } catch {}
+  }
+
+  try {
+    current.sheet = deepClone(current.sheet || { parsed: {} });
+    current.sheet.parsed = sheet;
+    sendMessage({ type: 'setPlayerSheet', id: String(current.id || ''), sheet: current.sheet });
+  } catch {}
+  return true;
+}
+
+function useTokenMiniSpell(player, lvl, href, name) {
+  const current = players.find(pp => String(pp?.id) === String(player?.id || '')) || player;
+  const sheet = current?.sheet?.parsed;
+  if (!sheet) return false;
+  const canEdit = canUseTokenMiniQuickPanels(current);
+  if (lvl > 0) {
+    if (!canEdit) return false;
+    if (!sheet.spells || typeof sheet.spells !== 'object') sheet.spells = {};
+    const key = `slots-${lvl}`;
+    if (!sheet.spells[key] || typeof sheet.spells[key] !== 'object') sheet.spells[key] = { value: 0, filled: 0 };
+    const total = Math.max(0, safeNum(sheet.spells[key].value, 0) ?? 0);
+    const filled = Math.max(0, safeNum(sheet.spells[key].filled, 0) ?? 0);
+    const available = Math.max(0, total - filled);
+    if (available <= 0) return false;
+    sheet.spells[key].filled = Math.min(total, filled + 1);
+    try {
+      current.sheet = deepClone(current.sheet || { parsed: {} });
+      current.sheet.parsed = sheet;
+      sendMessage({ type: 'setPlayerSheet', id: String(current.id || ''), sheet: current.sheet });
+    } catch {}
+  }
+  try {
+    if (typeof sendMessage === 'function') {
+      const kind = lvl <= 0 ? 'Заговор' : 'Заклинание';
+      const who = String(current?.name || '').trim() || 'Игрок';
+      sendMessage({ type: 'log', text: `${who} применил ${kind}: ${String(name || 'Без названия').trim()}`, noOptimistic: true });
+    }
+  } catch {}
+  try {
+    const actionCfg = (typeof getSpellActionConfig === 'function') ? getSpellActionConfig(sheet, href) : null;
+    if (actionCfg?.type === 'teleport') {
+      window.activateCombatTeleportForPlayer?.(current, {
+        rangeFeet: Math.max(0, safeNum(actionCfg.rangeFeet, 0) ?? 0),
+        sourceKind: 'spell',
+        sourceId: href || '',
+        sourceName: String(name || 'Заклинание')
+      });
+    }
+  } catch {}
+  return true;
+}
+
 function getBoardVisualScale() {
   try {
     const bRect = board?.getBoundingClientRect?.();
@@ -653,49 +1072,79 @@ function openTokenMini(playerId) {
   const q = getQuickSheetStats(p);
   const maxHp = (q.hpMax !== null ? q.hpMax : 0);
   const curHp = (q.hpCur !== null ? q.hpCur : maxHp);
+  const sheetForMini = getTokenMiniSheet(p);
+  const combatSummary = getTokenMiniCombatSummary(sheetForMini);
+  const spellsSummary = getTokenMiniSpellsSummary(sheetForMini);
+  const canUseQuickPanels = canUseTokenMiniQuickPanels(p);
 
   const card = document.createElement('div');
   card.className = 'token-mini';
+  card.dataset.sidePanel = '';
   card.innerHTML = `
-    <div class="title">${String(p.name || 'Персонаж')}</div>
-    <div class="section">
-      <div class="section-title">Здоровье</div>
-      <div class="hp-fields">
-        <label class="hp-field">
-          <span>Тек.</span>
-          <input type="number" class="hp-cur" min="0" max="999" value="${formatVal(curHp, 0)}" />
-        </label>
-        <label class="hp-field">
-          <span>Макс.</span>
-          <input type="number" class="hp-max" min="0" max="999" value="${formatVal(maxHp, 0)}" />
-        </label>
+    <div class="token-mini-main">
+      <div class="title">${String(p.name || 'Персонаж')}</div>
+      <div class="section">
+        <div class="section-title">Здоровье</div>
+        <div class="hp-fields">
+          <label class="hp-field">
+            <span>Тек.</span>
+            <input type="number" class="hp-cur" min="0" max="999" value="${formatVal(curHp, 0)}" />
+          </label>
+          <label class="hp-field">
+            <span>Макс.</span>
+            <input type="number" class="hp-max" min="0" max="999" value="${formatVal(maxHp, 0)}" />
+          </label>
+        </div>
+        <div class="hp-delta">
+          <button type="button" class="hp-delta-btn hp-delta-minus">−</button>
+          <input type="number" class="hp-delta-val" min="0" max="999" value="0" />
+          <button type="button" class="hp-delta-btn hp-delta-plus">+</button>
+        </div>
       </div>
-      <div class="hp-delta">
-        <button type="button" class="hp-delta-btn hp-delta-minus">−</button>
-        <input type="number" class="hp-delta-val" min="0" max="999" value="0" />
-        <button type="button" class="hp-delta-btn hp-delta-plus">+</button>
+
+      <div class="triple">
+        <div class="mini-box"><span class="k">КД</span><span class="v">${formatVal(q.ac)}</span></div>
+        <div class="mini-box"><span class="k">Скорость</span><span class="v">${formatVal(q.speed)}</span></div>
+        <div class="mini-box"><span class="k">Уровень</span><span class="v">${formatVal(q.lvl)}</span></div>
       </div>
+
+      <div class="section">
+        <div class="section-title">Характеристики</div>
+        <div class="stats-grid">
+          <div class="stat-box"><span class="k">СИЛ</span><span class="v">${formatVal(q.stats.str)}</span></div>
+          <div class="stat-box"><span class="k">ИНТ</span><span class="v">${formatVal(q.stats.int)}</span></div>
+          <div class="stat-box"><span class="k">ЛОВ</span><span class="v">${formatVal(q.stats.dex)}</span></div>
+          <div class="stat-box"><span class="k">МУД</span><span class="v">${formatVal(q.stats.wis)}</span></div>
+          <div class="stat-box"><span class="k">ТЕЛ</span><span class="v">${formatVal(q.stats.con)}</span></div>
+          <div class="stat-box"><span class="k">ХАР</span><span class="v">${formatVal(q.stats.cha)}</span></div>
+        </div>
+      </div>
+
+      <button class="btn" type="button">Лист персонажа</button>
     </div>
 
-    <div class="triple">
-      <div class="mini-box"><span class="k">КД</span><span class="v">${formatVal(q.ac)}</span></div>
-      <div class="mini-box"><span class="k">Скорость</span><span class="v">${formatVal(q.speed)}</span></div>
-      <div class="mini-box"><span class="k">Уровень</span><span class="v">${formatVal(q.lvl)}</span></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Характеристики</div>
-      <div class="stats-grid">
-        <div class="stat-box"><span class="k">СИЛ</span><span class="v">${formatVal(q.stats.str)}</span></div>
-        <div class="stat-box"><span class="k">ИНТ</span><span class="v">${formatVal(q.stats.int)}</span></div>
-        <div class="stat-box"><span class="k">ЛОВ</span><span class="v">${formatVal(q.stats.dex)}</span></div>
-        <div class="stat-box"><span class="k">МУД</span><span class="v">${formatVal(q.stats.wis)}</span></div>
-        <div class="stat-box"><span class="k">ТЕЛ</span><span class="v">${formatVal(q.stats.con)}</span></div>
-        <div class="stat-box"><span class="k">ХАР</span><span class="v">${formatVal(q.stats.cha)}</span></div>
+    ${canUseQuickPanels ? `
+      <div class="token-mini-side-buttons" aria-label="Быстрые разделы">
+        <button type="button" class="token-mini-side-button token-mini-side-button--combat" data-mini-side-button="combat">
+          <span class="token-mini-side-button__label">Оружие и способности</span>
+          <span class="token-mini-side-button__icon" aria-hidden="true">⚔</span>
+        </button>
+        <button type="button" class="token-mini-side-button token-mini-side-button--spells" data-mini-side-button="spells">
+          <span class="token-mini-side-button__label">Заклинания</span>
+          <span class="token-mini-side-button__icon" aria-hidden="true">✦</span>
+        </button>
       </div>
-    </div>
 
-    <button class="btn" type="button">Лист персонажа</button>
+      <div class="token-mini-side-panel token-mini-side-panel--combat" data-mini-side-panel="combat">
+        <div class="token-mini-side-header">Оружие и способности</div>
+        ${renderTokenMiniCombatPanel(combatSummary, canUseQuickPanels)}
+      </div>
+
+      <div class="token-mini-side-panel token-mini-side-panel--spells" data-mini-side-panel="spells">
+        <div class="token-mini-side-header">Заклинания</div>
+        ${renderTokenMiniSpellsPanel(spellsSummary, canUseQuickPanels)}
+      </div>
+    ` : ''}
   `;
 
   // prevent board clicks
@@ -708,10 +1157,74 @@ function openTokenMini(playerId) {
   const hpDeltaMinus = card.querySelector('.hp-delta-minus');
   const hpDeltaPlus = card.querySelector('.hp-delta-plus');
   const sheetBtn = card.querySelector('.btn');
+  const sideButtons = Array.from(card.querySelectorAll('[data-mini-side-button]'));
   const canEditHp = canEditTokenMiniSheet(p);
   const currentSheetForMini = () => {
     const curPlayer = players.find(pp => String(pp?.id) === String(p?.id)) || p;
     return curPlayer?.sheet?.parsed || null;
+  };
+  const bindMiniCombatButtons = () => {
+    card.querySelectorAll('[data-mini-weapon-roll-atk]').forEach((btn) => {
+      btn.onclick = () => rollTokenMiniWeapon(p, Math.max(0, safeNum(btn.getAttribute('data-mini-weapon-roll-atk'), 0) ?? 0), 'atk');
+    });
+    card.querySelectorAll('[data-mini-weapon-roll-dmg]').forEach((btn) => {
+      btn.onclick = () => rollTokenMiniWeapon(p, Math.max(0, safeNum(btn.getAttribute('data-mini-weapon-roll-dmg'), 0) ?? 0), 'dmg');
+    });
+    card.querySelectorAll('[data-mini-power-roll]').forEach((btn) => {
+      btn.onclick = () => {
+        const [defId = '', subId = ''] = String(btn.getAttribute('data-mini-power-roll') || '').split('::');
+        const used = useTokenMiniPower(p, defId, subId, 'roll');
+        if (!used) return;
+        renderMiniCombatPanel();
+        positionTokenMini(tokenEl);
+      };
+    });
+    card.querySelectorAll('[data-mini-power-action]').forEach((btn) => {
+      btn.onclick = () => {
+        const [defId = '', subId = ''] = String(btn.getAttribute('data-mini-power-action') || '').split('::');
+        const used = useTokenMiniPower(p, defId, subId, 'action');
+        if (!used) return;
+        renderMiniCombatPanel();
+        positionTokenMini(tokenEl);
+      };
+    });
+    updateTokenMiniPowerButtonsState(card, players.find(pp => String(pp?.id) === String(p?.id)) || p);
+  };
+  const renderMiniCombatPanel = () => {
+    const current = players.find(pp => String(pp?.id) === String(p?.id)) || p;
+    const panel = card.querySelector('[data-mini-side-panel="combat"]');
+    if (!panel) return;
+    panel.innerHTML = `
+      <div class="token-mini-side-header">Оружие и способности</div>
+      ${renderTokenMiniCombatPanel(getTokenMiniCombatSummary(getTokenMiniSheet(current)), canUseTokenMiniQuickPanels(current))}
+    `;
+    bindMiniCombatButtons();
+  };
+  const bindMiniSpellButtons = () => {
+    card.querySelectorAll('[data-mini-spell-cast]').forEach((btn) => {
+      btn.onclick = () => {
+        const row = btn.closest('[data-mini-spell-row]');
+        if (!row) return;
+        const lvl = Math.max(0, safeNum(row.getAttribute('data-spell-level'), 0) ?? 0);
+        const href = String(row.getAttribute('data-spell-href') || '').trim();
+        const spellName = String(row.getAttribute('data-spell-name') || '').trim();
+        const used = useTokenMiniSpell(p, lvl, href, spellName);
+        if (!used) return;
+        renderMiniSpellsPanel();
+        positionTokenMini(tokenEl);
+      };
+    });
+    updateTokenMiniSpellButtonsState(card, players.find(pp => String(pp?.id) === String(p?.id)) || p);
+  };
+  const renderMiniSpellsPanel = () => {
+    const current = players.find(pp => String(pp?.id) === String(p?.id)) || p;
+    const panel = card.querySelector('[data-mini-side-panel="spells"]');
+    if (!panel) return;
+    panel.innerHTML = `
+      <div class="token-mini-side-header">Заклинания</div>
+      ${renderTokenMiniSpellsPanel(getTokenMiniSpellsSummary(getTokenMiniSheet(current)), canUseTokenMiniQuickPanels(current))}
+    `;
+    bindMiniSpellButtons();
   };
 
   [hpCurInput, hpMaxInput, hpDeltaInput, hpDeltaMinus, hpDeltaPlus].forEach((el) => {
@@ -792,6 +1305,16 @@ function openTokenMini(playerId) {
 
   hpDeltaMinus?.addEventListener('click', () => applyDelta(-1));
   hpDeltaPlus?.addEventListener('click', () => applyDelta(1));
+
+  sideButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      toggleTokenMiniSidePanel(card, btn.getAttribute('data-mini-side-button') || '');
+      positionTokenMini(tokenEl);
+    });
+  });
+
+  bindMiniCombatButtons();
+  bindMiniSpellButtons();
 
   sheetBtn?.addEventListener('click', () => {
     // extra safety
