@@ -1042,12 +1042,8 @@ function setPlayerPosition(player) {
           } catch {}
         }
 
-        if (selectedPlayer) {
-          const prev = playerElements.get(selectedPlayer.id);
-          if (prev) prev.classList.remove('selected');
-        }
         selectedPlayer = cur;
-        el.classList.add('selected');
+        try { window.syncSelectedPlayerUi?.(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
         try { window.renderCombatMoveOverlay?.(); } catch {}
       }
@@ -1062,9 +1058,8 @@ function setPlayerPosition(player) {
       // If token is selected, unselect it to prevent accidental move on board click.
       try {
         if (selectedPlayer && String(selectedPlayer.id) === pid) {
-          const prev = playerElements.get(selectedPlayer.id);
-          if (prev) prev.classList.remove('selected');
           selectedPlayer = null;
+          try { window.syncSelectedPlayerUi?.(); } catch {}
           try { window.hideMovePreview?.(); } catch {}
           try { window.hideCombatMoveOverlay?.(); } catch {}
         }
@@ -1109,8 +1104,8 @@ function setPlayerPosition(player) {
     // If token is selected locally (shouldn't happen for players), clear selection.
     try {
       if (selectedPlayer && String(selectedPlayer.id) === String(player.id)) {
-        el.classList.remove('selected');
         selectedPlayer = null;
+        try { window.syncSelectedPlayerUi?.(); } catch {}
         try { window.hideCombatMoveOverlay?.(); } catch {}
       }
     } catch {}
@@ -1351,6 +1346,7 @@ addPlayerBtn.addEventListener('click', () => {
     try {
       const el = playerElements?.get?.(String(pid || ''));
       if (el) el.classList.remove('selected');
+      try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
   }
 
@@ -1438,8 +1434,9 @@ addPlayerBtn.addEventListener('click', () => {
       const hasTeleport = !!getTeleportInfo(cur);
       if (hasTeleport) return;
       if (!isRestrictedForPlayer(cur)) {
-        clearPlayerSelectionVisual(cur?.id);
         selectedPlayer = null;
+        clearPlayerSelectionVisual(cur?.id);
+        try { window.syncSelectedPlayerUi?.(); } catch {}
       }
     } catch {}
   }
@@ -1778,13 +1775,8 @@ addPlayerBtn.addEventListener('click', () => {
     rec.teleportSourceName = String(opts?.sourceName || '');
 
     try {
-      if (selectedPlayer) {
-        const prev = playerElements.get(selectedPlayer.id);
-        if (prev) prev.classList.remove('selected');
-      }
       selectedPlayer = live;
-      const el = playerElements.get(live.id);
-      if (el) el.classList.add('selected');
+      try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
     try { window.renderCombatMoveOverlay?.(); } catch {}
@@ -2097,8 +2089,7 @@ board.addEventListener('click', e => {
     try { window.consumeCombatTeleportTo?.(selectedPlayer, x, y); } catch {}
     try {
       selectedPlayer = null;
-      const el = playerElements.get(movedId);
-      if (el) el.classList.remove('selected');
+      try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
     try { window.hideCombatMoveOverlay?.(); } catch {}
@@ -2124,17 +2115,15 @@ board.addEventListener('click', e => {
     try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
     try {
       selectedPlayer = null;
-      const el = playerElements.get(movedId);
-      if (el) el.classList.remove('selected');
+      try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
     try { window.hideCombatMoveOverlay?.(); } catch {}
     return;
   }
 
-  const el = playerElements.get(selectedPlayer.id);
-  if (el) el.classList.remove('selected');
   selectedPlayer = null;
+  try { window.syncSelectedPlayerUi?.(); } catch {}
   try { window.hideMovePreview?.(); } catch {}
   try { window.hideCombatMoveOverlay?.(); } catch {}
 });

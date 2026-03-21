@@ -909,6 +909,28 @@ function highlightCurrentTurn(playerId) {
   if (el) el.classList.add('current-turn');
 }
 
+function syncSelectedPlayerUi() {
+  const selectedId = String(selectedPlayer?.id || '').trim();
+
+  try {
+    playerElements.forEach((el, id) => {
+      if (!el) return;
+      el.classList.toggle('selected', !!selectedId && String(id) === selectedId);
+    });
+  } catch {}
+
+  try {
+    if (!playerList) return;
+    playerList.querySelectorAll('.player-list-item.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    if (!selectedId) return;
+    playerList.querySelectorAll('.player-list-item[data-player-id]').forEach((el) => {
+      if (String(el.getAttribute('data-player-id') || '') === selectedId) el.classList.add('is-selected');
+    });
+  } catch {}
+}
+
+try { window.syncSelectedPlayerUi = syncSelectedPlayerUi; } catch {}
+
 // ================== PLAYER LIST ==================
 function roleToLabel(role) {
   const r = normalizeRoleForApp(role);
@@ -1241,6 +1263,7 @@ function updatePlayerList() {
     listPlayers.forEach(p => {
       const li = document.createElement('li');
       li.className = 'player-list-item';
+      li.setAttribute('data-player-id', String(p?.id || ''));
 
       if (currentTurnId && p.id === currentTurnId) {
         li.classList.add('is-current-turn');
@@ -1424,17 +1447,8 @@ function updatePlayerList() {
 
       li.addEventListener('click', () => {
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
-
-        if (selectedPlayer) {
-          const prev = playerElements.get(String(selectedPlayer.id || ''));
-          if (prev) prev.classList.remove('selected');
-        }
-
         selectedPlayer = cur;
-
-        const curEl = playerElements.get(String(cur?.id || ''));
-        if (curEl) curEl.classList.add('selected');
-
+        try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
         try { window.renderCombatMoveOverlay?.(); } catch {}
       });
@@ -1449,6 +1463,8 @@ function updatePlayerList() {
     ownerLi.appendChild(ul);
     playerList.appendChild(ownerLi);
   });
+
+  try { syncSelectedPlayerUi(); } catch {}
 }
 
 // ================== UI PERMISSIONS HELPERS ==================
