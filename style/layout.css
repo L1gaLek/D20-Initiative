@@ -1701,9 +1701,24 @@
 .board-settings-box input[type="number"]::-webkit-outer-spin-button,
 .cell-feet-inline input[type="number"]::-webkit-inner-spin-button,
 .cell-feet-inline input[type="number"]::-webkit-outer-spin-button{
-  opacity: 1;
+  opacity: 0;
+  pointer-events: none;
   min-height: 28px;
   margin-left: 6px;
+  filter: sepia(0.7) saturate(1.35) hue-rotate(-10deg) brightness(0.92);
+  transition: opacity 140ms ease;
+}
+
+.board-settings-box input[type="number"]:focus::-webkit-inner-spin-button,
+.board-settings-box input[type="number"]:focus::-webkit-outer-spin-button,
+.board-settings-box input[type="number"]:focus-visible::-webkit-inner-spin-button,
+.board-settings-box input[type="number"]:focus-visible::-webkit-outer-spin-button,
+.cell-feet-inline input[type="number"]:focus::-webkit-inner-spin-button,
+.cell-feet-inline input[type="number"]:focus::-webkit-outer-spin-button,
+.cell-feet-inline input[type="number"]:focus-visible::-webkit-inner-spin-button,
+.cell-feet-inline input[type="number"]:focus-visible::-webkit-outer-spin-button{
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .board-settings-box button{

@@ -974,7 +974,7 @@ function useTokenMiniSpell(player, lvl, href, name) {
     if (typeof sendMessage === 'function') {
       const kind = lvl <= 0 ? 'Заговор' : 'Заклинание';
       const who = String(current?.name || '').trim() || 'Игрок';
-      sendMessage({ type: 'log', text: `${who} применил ${kind}: ${String(name || 'Без названия').trim()}`, noOptimistic: true });
+      sendMessage({ type: 'log', text: `${who} применил ${kind}: ${String(name || 'Без названия').trim()}` });
     }
   } catch {}
   try {
