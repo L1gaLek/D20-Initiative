@@ -206,8 +206,16 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 0px;
+  align-items: stretch;
+  gap: 8px;
+}
+
+#board-topbar-primary {
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 #board-settings {
@@ -1650,6 +1658,12 @@
   backdrop-filter: blur(8px);
   color: #fff0d1;
   font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 58px;
+  flex: 1 1 auto;
 }
 
 #current-player{
@@ -1691,6 +1705,36 @@
   font-weight: 800;
 }
 
+.cell-feet-inline{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff0d1;
+  font-weight: 800;
+}
+
+.cell-feet-inline input[type="number"]{
+  width: 72px;
+  text-align: center;
+}
+
+.cell-feet-box{
+  align-self: stretch;
+  justify-content: flex-start;
+  flex: 0 0 auto;
+}
+
+.cell-feet-inline--gm-box{
+  color: var(--room-text-soft);
+  min-height: 100%;
+}
+
+.cell-feet-inline--player{
+  align-self: center;
+  white-space: nowrap;
+  margin-right: 6px;
+}
+
 #right-panel{
   width: 300px;
   gap: 14px;
@@ -1714,6 +1758,9 @@
 @media (max-width: 1320px){
   #content-row{
     flex-direction: column;
+  }
+  #board-topbar-primary{
+    flex-wrap: wrap;
   }
   #action-log-container,
   #game-container,
