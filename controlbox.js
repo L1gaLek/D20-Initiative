@@ -30,6 +30,7 @@
 
     const viewportWInput = document.getElementById('board-width');
     const viewportHInput = document.getElementById('board-height');
+    const cellFeetGmInput = document.getElementById('cell-feet-gm');
     const applyViewportBtn = document.getElementById('create-board');
 
     const gmWInput = document.getElementById('board-width-gm');
@@ -96,6 +97,7 @@
       if (!st) return;
       if (gmWInput) gmWInput.value = String(st.boardWidth ?? 10);
       if (gmHInput) gmHInput.value = String(st.boardHeight ?? 10);
+      if (cellFeetGmInput) cellFeetGmInput.value = String(Math.max(1, Math.min(100, Number(st.cellFeet) || 10)));
     }
 
     // эти инпуты видны только GM (в client.js applyRoleToUI), но логика тут
@@ -106,6 +108,13 @@
       if (gmWInput) gmWInput.value = String(w);
       if (gmHInput) gmHInput.value = String(h);
       ctx.sendMessage?.({ type: 'resizeBoard', width: w, height: h });
+    });
+
+    cellFeetGmInput?.addEventListener('change', () => {
+      if (!ctx.isGM?.()) return;
+      const value = clamp(Number(cellFeetGmInput?.value) || 10, 1, 100);
+      if (cellFeetGmInput) cellFeetGmInput.value = String(value);
+      ctx.sendMessage?.({ type: 'setCellFeet', value });
     });
 
     // ===== Zoom (Ctrl + Wheel) =====
