@@ -388,13 +388,346 @@ button:hover {
 .token-mini{
   position: absolute;
   z-index: 10000;
-  width: 232px;
+  width: 248px;
   padding: 8px 10px;
   border: 1px solid #555;
   border-radius: 10px;
   background: rgba(20,20,20,0.95);
   color: #ddd;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  overflow: visible;
+}
+
+.token-mini .token-mini-main{
+  position: relative;
+  z-index: 2;
+}
+
+.token-mini .token-mini-side-buttons{
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -48px;
+  width: 42px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(10,10,10,0.9);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.32);
+}
+
+.token-mini .token-mini-side-button{
+  flex: 1 1 0;
+  min-height: 0;
+  border: 0;
+  border-right: 3px solid transparent;
+  background: rgba(255,255,255,0.05);
+  color: #f2f2f2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 4px;
+  cursor: pointer;
+  transition: background .18s ease, transform .18s ease, border-color .18s ease;
+}
+
+.token-mini .token-mini-side-button + .token-mini-side-button{
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.token-mini .token-mini-side-button:hover{
+  background: rgba(255,255,255,0.1);
+}
+
+.token-mini .token-mini-side-button.is-active{
+  transform: translateX(2px);
+  background: rgba(255,255,255,0.14);
+}
+
+.token-mini .token-mini-side-button__label{
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.token-mini .token-mini-side-button__icon{
+  font-size: 18px;
+  line-height: 1;
+}
+
+.token-mini .token-mini-side-button--combat{
+  border-color: rgba(255, 92, 92, 0.85);
+  color: #ffd4d4;
+}
+
+.token-mini .token-mini-side-button--combat.is-active{
+  background: rgba(120, 22, 22, 0.35);
+}
+
+.token-mini .token-mini-side-button--spells{
+  border-color: rgba(94, 203, 255, 0.85);
+  color: #d7f4ff;
+}
+
+.token-mini .token-mini-side-button--spells.is-active{
+  background: rgba(25, 73, 108, 0.38);
+}
+
+.token-mini .token-mini-side-panel{
+  position: absolute;
+  top: 0;
+  left: calc(100% + 66px);
+  width: 304px;
+  height: 100%;
+  display: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  background: rgba(14,14,18,0.97);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.42);
+  overflow: hidden;
+}
+
+.token-mini[data-side-panel="combat"] .token-mini-side-panel--combat,
+.token-mini[data-side-panel="spells"] .token-mini-side-panel--spells{
+  display: flex;
+  flex-direction: column;
+}
+
+.token-mini .token-mini-side-header{
+  padding: 10px 12px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+}
+
+.token-mini .token-mini-side-scroll{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.token-mini .token-mini-side-section,
+.token-mini .token-mini-spell-list{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.token-mini .token-mini-side-section__title{
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: rgba(255,255,255,0.72);
+}
+
+.token-mini .token-mini-side-divider{
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.15), rgba(255,255,255,0));
+}
+
+.token-mini .token-mini-dots{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.token-mini .token-mini-dots--spell .slot-dot{
+  cursor: default;
+}
+
+.token-mini .token-mini-dots-empty{
+  opacity: .55;
+  font-size: 11px;
+}
+
+.token-mini .token-mini-weapon-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.token-mini .token-mini-weapon-box{
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 9px;
+  padding: 5px 7px;
+  background: rgba(0,0,0,0.14);
+}
+
+.token-mini .token-mini-weapon-box__label{
+  font-size: 10px;
+  color: rgba(255,255,255,0.72);
+}
+
+.token-mini .token-mini-weapon-box__value{
+  min-width: 0;
+  font-size: 12px;
+  color: #fff;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.token-mini .token-mini-side-item__head--center{
+  align-items: center;
+}
+
+.token-mini .token-mini-subitem__head--action{
+  align-items: center;
+}
+
+.token-mini .token-mini-subitem__name{
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.token-mini .token-mini-subitem__controls{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.token-mini .token-mini-subitem .cpw-dice,
+.token-mini .token-mini-subitem .cpw-action{
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.token-mini .token-mini-side-item,
+.token-mini .token-mini-spell-row,
+.token-mini .token-mini-subitem{
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+}
+
+.token-mini .token-mini-side-item{
+  padding: 8px 9px;
+}
+
+.token-mini .token-mini-side-item__head,
+.token-mini .token-mini-subitem__head,
+.token-mini .token-mini-spell-row{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.token-mini .token-mini-side-item__name,
+.token-mini .token-mini-spell-name{
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.token-mini .token-mini-side-line,
+.token-mini .token-mini-side-text{
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.8);
+}
+
+.token-mini .token-mini-side-line{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.token-mini .token-mini-side-text--sub{
+  margin-top: 4px;
+}
+
+.token-mini .token-mini-side-pill,
+.token-mini .token-mini-subitem__kind{
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.08);
+}
+
+.token-mini .token-mini-side-pill--slots{
+  color: #d9f7ff;
+  background: rgba(76, 179, 240, 0.2);
+}
+
+.token-mini .token-mini-sublist{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.token-mini .token-mini-subitem{
+  padding: 7px 8px;
+}
+
+.token-mini .token-mini-spell-row{
+  padding: 7px 8px;
+  align-items: center;
+}
+
+.token-mini .token-mini-spell-cast{
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.token-mini .token-mini-spell-cast svg{
+  width: 14px;
+  height: 14px;
+}
+
+.token-mini .token-mini-spell-cast:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.token-mini .token-mini-side-empty{
+  border: 1px dashed rgba(255,255,255,0.14);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.68);
+  background: rgba(255,255,255,0.03);
+}
+
+.token-mini .token-mini-side-empty--inline{
+  margin-top: 8px;
+  padding: 8px;
 }
 
 .token-mini .section{
