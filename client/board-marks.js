@@ -72,6 +72,7 @@
   let startPt = null;
   let hoverId = null;
   let selectedId = null;
+  let dragState = null;
   let color = '#ffa500';
   let fillPct = 30;
   let strokePct = 60;
@@ -91,6 +92,39 @@
     if (!m) return false;
     if (isGM()) return true;
     return String(m.ownerId || '') === myId();
+  }
+
+  function getCurrentMapMarks(state = null) {
+    const st = state || getState();
+    const all = Array.isArray(st?.marks) ? st.marks : [];
+    const mid = curMapId();
+    return all.filter(m => String(m?.mapId || '') === mid);
+  }
+
+  function findMarkById(id, state = null) {
+    const markId = String(id || '').trim();
+    if (!markId) return null;
+    return getCurrentMapMarks(state).find(m => String(m?.id || '') === markId) || null;
+  }
+
+  function translateMark(mark, dx, dy) {
+    if (!mark) return null;
+    const moved = JSON.parse(JSON.stringify(mark));
+    const kind = String(mark.kind || '');
+    if (kind === 'rect') {
+      moved.x = +(Number(mark.x) + dx).toFixed(4);
+      moved.y = +(Number(mark.y) + dy).toFixed(4);
+    } else if (kind === 'circle') {
+      moved.cx = +(Number(mark.cx) + dx).toFixed(4);
+      moved.cy = +(Number(mark.cy) + dy).toFixed(4);
+    } else if (kind === 'poly') {
+      const pts = Array.isArray(mark.pts) ? mark.pts : [];
+      moved.pts = pts.map((p) => ({
+        x: +(Number(p?.x) + dx).toFixed(4),
+        y: +(Number(p?.y) + dy).toFixed(4)
+      }));
+    }
+    return moved;
   }
 
   function ensureToolbar() {
@@ -188,7 +222,9 @@
         tool = String(tBtn.getAttribute('data-tool') || 'select');
         toolbar.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('is-active', b === tBtn));
         selectedId = null;
+        dragState = null;
         clearPreview();
+        syncPointerEvents();
         persist();
       }
     });
@@ -200,6 +236,7 @@
         enabled.checked = false;
       }
       selectedId = null;
+      dragState = null;
       clearPreview();
       syncPointerEvents();
       persist();
@@ -268,7 +305,7 @@
 
   function syncPointerEvents() {
     if (!marksLayer) return;
-    const active = !!drawMode;
+    const active = !!drawMode || !!dragState;
     marksLayer.style.pointerEvents = active ? 'auto' : 'none';
     if (svg) svg.style.pointerEvents = active ? 'auto' : 'none';
   }
@@ -301,30 +338,31 @@
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     const st = state || getState();
-    const all = Array.isArray(st?.marks) ? st.marks : [];
-    const mid = curMapId();
-    const marks = all.filter(m => String(m?.mapId || '') === mid);
+    const marks = getCurrentMapMarks(st);
 
     marks.forEach(m => {
       const id = String(m?.id || '');
-      const kind = String(m?.kind || '');
+      const activeMark = (dragState && String(dragState.markId || '') === id && dragState.preview)
+        ? dragState.preview
+        : m;
+      const kind = String(activeMark?.kind || '');
       let shape = null;
 
       if (kind === 'rect') {
         shape = svgEl('rect');
-        shape.setAttribute('x', String((Number(m.x) || 0) * CELL));
-        shape.setAttribute('y', String((Number(m.y) || 0) * CELL));
-        shape.setAttribute('width', String((Number(m.w) || 0) * CELL));
-        shape.setAttribute('height', String((Number(m.h) || 0) * CELL));
+        shape.setAttribute('x', String((Number(activeMark.x) || 0) * CELL));
+        shape.setAttribute('y', String((Number(activeMark.y) || 0) * CELL));
+        shape.setAttribute('width', String((Number(activeMark.w) || 0) * CELL));
+        shape.setAttribute('height', String((Number(activeMark.h) || 0) * CELL));
         shape.setAttribute('rx', '6');
         shape.setAttribute('ry', '6');
       } else if (kind === 'circle') {
         shape = svgEl('circle');
-        shape.setAttribute('cx', String((Number(m.cx) || 0) * CELL));
-        shape.setAttribute('cy', String((Number(m.cy) || 0) * CELL));
-        shape.setAttribute('r', String((Number(m.r) || 0) * CELL));
+        shape.setAttribute('cx', String((Number(activeMark.cx) || 0) * CELL));
+        shape.setAttribute('cy', String((Number(activeMark.cy) || 0) * CELL));
+        shape.setAttribute('r', String((Number(activeMark.r) || 0) * CELL));
       } else if (kind === 'poly') {
-        const pts = Array.isArray(m?.pts) ? m.pts : [];
+        const pts = Array.isArray(activeMark?.pts) ? activeMark.pts : [];
         if (pts.length >= 3) {
           shape = svgEl('polygon');
           shape.setAttribute('points', pts.map(p => `${(Number(p.x) || 0) * CELL},${(Number(p.y) || 0) * CELL}`).join(' '));
@@ -332,7 +370,7 @@
       }
       if (!shape) return;
 
-      const stl = styleForMark(m, false);
+      const stl = styleForMark(activeMark, false);
       shape.setAttribute('fill', stl.fill);
       shape.setAttribute('stroke', stl.stroke);
       shape.setAttribute('stroke-width', String(stl.strokeWidth));
@@ -344,7 +382,7 @@
       shape.style.cursor = 'pointer';
       svg.appendChild(shape);
 
-      const lab = String(m?.label || '').trim();
+      const lab = String(activeMark?.label || '').trim();
       if (lab) {
         const t = svgEl('text');
         t.textContent = lab;
@@ -358,10 +396,10 @@
         t.setAttribute('vector-effect', 'non-scaling-stroke');
 
         let ax = 0, ay = 0;
-        if (kind === 'rect') { ax = (Number(m.x) || 0) + (Number(m.w) || 0) / 2; ay = (Number(m.y) || 0) + (Number(m.h) || 0) / 2; }
-        if (kind === 'circle') { ax = Number(m.cx) || 0; ay = Number(m.cy) || 0; }
+        if (kind === 'rect') { ax = (Number(activeMark.x) || 0) + (Number(activeMark.w) || 0) / 2; ay = (Number(activeMark.y) || 0) + (Number(activeMark.h) || 0) / 2; }
+        if (kind === 'circle') { ax = Number(activeMark.cx) || 0; ay = Number(activeMark.cy) || 0; }
         if (kind === 'poly') {
-          const pts = Array.isArray(m?.pts) ? m.pts : [];
+          const pts = Array.isArray(activeMark?.pts) ? activeMark.pts : [];
           if (pts.length) {
             ax = pts.reduce((s, p) => s + (Number(p.x) || 0), 0) / pts.length;
             ay = pts.reduce((s, p) => s + (Number(p.y) || 0), 0) / pts.length;
@@ -382,7 +420,7 @@
     marksLayer.__marksBound = true;
 
     svg.addEventListener('mousemove', (e) => {
-      if (!drawMode) return;
+      if (!drawMode || dragState) return;
       const target = e.target?.closest?.('.mark-shape, .mark-label');
       const id = target?.dataset?.id || '';
       hoverId = id ? String(id) : null;
@@ -394,7 +432,7 @@
     });
 
     svg.addEventListener('mousedown', (e) => {
-      if (!drawMode || isSpectator()) return;
+      if ((!drawMode && tool !== 'select') || isSpectator()) return;
       e.preventDefault();
       e.stopPropagation();
       onDown(e);
@@ -406,11 +444,11 @@
       finishPoly();
     });
     window.addEventListener('mousemove', (e) => {
-      if (!drawMode || !drawing) return;
+      if ((!drawMode || !drawing) && !dragState) return;
       onMove(e);
     });
     window.addEventListener('mouseup', (e) => {
-      if (!drawMode || !drawing) return;
+      if ((!drawMode || !drawing) && !dragState) return;
       onUp(e);
     });
   }
@@ -420,6 +458,23 @@
     const hitId = hit?.dataset?.id ? String(hit.dataset.id) : '';
     if (tool === 'select') {
       selectedId = hitId || null;
+      const mark = hitId ? findMarkById(hitId) : null;
+      dragState = null;
+      if (mark && canEditMark(mark)) {
+        const p = cellFromClientXY(board, e.clientX, e.clientY);
+        if (p.inBounds) {
+          dragState = {
+            markId: hitId,
+            start: { x: p.x, y: p.y },
+            origin: mark,
+            preview: mark,
+            moved: false,
+            dx: 0,
+            dy: 0
+          };
+          syncPointerEvents();
+        }
+      }
       renderFromState(getState());
       return;
     }
@@ -445,6 +500,16 @@
   }
 
   function onMove(e) {
+    if (dragState) {
+      const p = cellFromClientXY(board, e.clientX, e.clientY);
+      if (!p.inBounds) return;
+      dragState.dx = p.x - dragState.start.x;
+      dragState.dy = p.y - dragState.start.y;
+      dragState.moved = dragState.moved || Math.abs(dragState.dx) > 0.02 || Math.abs(dragState.dy) > 0.02;
+      dragState.preview = translateMark(dragState.origin, dragState.dx, dragState.dy);
+      renderFromState(getState());
+      return;
+    }
     const p = cellFromClientXY(board, e.clientX, e.clientY);
     if (!p.inBounds) return;
     if (tool === 'poly') updatePolyPreview({ x: p.x, y: p.y });
@@ -452,10 +517,31 @@
   }
 
   function onUp(e) {
+    if (dragState) {
+      finalizeDrag();
+      return;
+    }
     const p = cellFromClientXY(board, e.clientX, e.clientY);
     if (!p.inBounds) { if (tool !== 'poly') clearPreview(); return; }
     if (tool === 'poly') return; // continues until dblclick
     finalizeShape(p);
+  }
+
+  function finalizeDrag() {
+    const state = dragState;
+    dragState = null;
+    syncPointerEvents();
+    if (!state?.origin) {
+      renderFromState(getState());
+      return;
+    }
+    if (!state.moved) {
+      renderFromState(getState());
+      return;
+    }
+    const moved = translateMark(state.origin, state.dx, state.dy);
+    if (moved) ctx?.sendMessage?.({ type: 'moveMark', mark: moved });
+    renderFromState(getState());
   }
 
   function updatePreview(p) {
