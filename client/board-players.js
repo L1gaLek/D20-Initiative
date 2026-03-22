@@ -997,41 +997,27 @@ function useTokenMiniSpell(player, lvl, href, name) {
   return true;
 }
 
-function getBoardVisualScale() {
-  try {
-    const bRect = board?.getBoundingClientRect?.();
-    const ow = Number(board?.offsetWidth) || 0;
-    const scale = (bRect?.width && ow) ? (bRect.width / ow) : (window.ControlBox?.getZoom?.() || 1);
-    return Math.max(0.0001, Number(scale) || 1);
-  } catch {
-    return Math.max(0.0001, Number(window.ControlBox?.getZoom?.()) || 1);
-  }
-}
-
-function getTokenMiniScale() {
-  const visualScale = getBoardVisualScale();
-  return Math.max(0.6, Math.min(1, 1 / visualScale));
-}
-
 function positionTokenMini(tokenEl) {
   if (!tokenMiniEl || !tokenEl) return;
-  // ставим примерно над токеном, по центру
-  const left = tokenEl.offsetLeft + (tokenEl.offsetWidth / 2);
-  const top = tokenEl.offsetTop - 8;
-  const miniScale = getTokenMiniScale();
+  const rect = tokenEl.getBoundingClientRect();
+  const left = rect.left + (rect.width / 2);
+  const top = rect.top - 8;
   tokenMiniEl.style.left = `${left}px`;
   tokenMiniEl.style.top = `${top}px`;
   tokenMiniEl.style.transformOrigin = '50% 100%';
-  tokenMiniEl.style.transform = `translate(-50%, -100%) scale(${miniScale})`;
+  tokenMiniEl.style.transform = 'translate(-50%, -100%)';
 
-  // держим в пределах поля (по возможности)
-  const b = board.getBoundingClientRect();
+  const viewportLeft = 0;
+  const viewportTop = 0;
+  const viewportRight = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportBottom = window.innerHeight || document.documentElement.clientHeight || 0;
   const r = tokenMiniEl.getBoundingClientRect();
   let dx = 0;
   let dy = 0;
-  if (r.left < b.left) dx = b.left - r.left + 6;
-  if (r.right > b.right) dx = -(r.right - b.right + 6);
-  if (r.top < b.top) dy = b.top - r.top + 6;
+  if (r.left < viewportLeft) dx = viewportLeft - r.left + 12;
+  if (r.right > viewportRight) dx = -(r.right - viewportRight + 12);
+  if (r.top < viewportTop) dy = viewportTop - r.top + 12;
+  if (r.bottom > viewportBottom) dy = -(r.bottom - viewportBottom + 12);
   if (dx || dy) {
     const curLeft = Number(tokenMiniEl.style.left.replace('px','')) || left;
     const curTop = Number(tokenMiniEl.style.top.replace('px','')) || top;
@@ -1326,7 +1312,7 @@ function openTokenMini(playerId) {
     window.InfoModal?.open?.(p);
   });
 
-  board.appendChild(card);
+  document.body.appendChild(card);
   tokenMiniEl = card;
   tokenMiniPlayerId = p.id;
   // position after append (so size is known)
@@ -1938,8 +1924,11 @@ addPlayerBtn.addEventListener('click', () => {
 
   function getPlayerSpeedFeet(player) {
     try {
-      const raw = Number(player?.sheet?.parsed?.vitality?.speed?.value);
-      if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.trunc(raw));
+      const rawValue = player?.sheet?.parsed?.vitality?.speed?.value;
+      if (rawValue !== null && typeof rawValue !== 'undefined' && String(rawValue).trim() !== '') {
+        const raw = Number(rawValue);
+        if (Number.isFinite(raw)) return Math.max(0, Math.trunc(raw));
+      }
     } catch {}
     return DEFAULT_SPEED;
   }
@@ -2278,6 +2267,43 @@ addPlayerBtn.addEventListener('click', () => {
     return viaBOk;
   }
 
+  function getPathDistanceSteps(player, fromX, fromY, toX, toY, maxSteps = Infinity) {
+    const live = getLivePlayer(player) || player;
+    if (!live) return null;
+    const size = Math.max(1, Number(live?.size) || 1);
+    const sx = Number(fromX) || 0;
+    const sy = Number(fromY) || 0;
+    const tx = Number(toX) || 0;
+    const ty = Number(toY) || 0;
+    if (sx === tx && sy === ty) return 0;
+    if (!withinBoard(tx, ty, size)) return null;
+
+    const wallsSet = getWallsSet();
+    const limit = Number.isFinite(Number(maxSteps)) ? Math.max(0, Number(maxSteps) || 0) : Infinity;
+    const q = [{ x: sx, y: sy, d: 0 }];
+    const seen = new Map([[`${sx},${sy}`, 0]]);
+
+    while (q.length) {
+      const cur = q.shift();
+      if (!cur) continue;
+      if (cur.d >= limit) continue;
+      for (const [dx, dy] of DIRS) {
+        const nx = cur.x + dx;
+        const ny = cur.y + dy;
+        const nd = cur.d + 1;
+        const key = `${nx},${ny}`;
+        const prev = seen.get(key);
+        if (prev != null && prev <= nd) continue;
+        if (!canStepBetween(live, cur.x, cur.y, nx, ny, size, wallsSet)) continue;
+        if (nx === tx && ny === ty) return nd;
+        seen.set(key, nd);
+        q.push({ x: nx, y: ny, d: nd });
+      }
+    }
+
+    return null;
+  }
+
   function buildWalkReachableMap(player, rec) {
     const live = getLivePlayer(player) || player;
     if (!live || !rec) return new Map();
@@ -2485,9 +2511,11 @@ addPlayerBtn.addEventListener('click', () => {
       rec.spentFeet = 0;
       return;
     }
-    const map = buildWalkReachableMap(player, rec);
-    const steps = Number(map.get(`${nx},${ny}`)) || 0;
-    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * getFeetPerCell());
+    const feetPerCell = getFeetPerCell();
+    const stepBudget = Math.max(0, Math.floor(getRemainingFeet(player) / feetPerCell));
+    const steps = getPathDistanceSteps(player, rec.currentX, rec.currentY, nx, ny, stepBudget);
+    if (!Number.isFinite(steps) || steps <= 0) return;
+    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * feetPerCell);
     rec.currentX = nx;
     rec.currentY = ny;
   }
@@ -2812,10 +2840,9 @@ board.addEventListener('click', e => {
       return;
     }
 
+    try { window.consumeCombatTeleportTo?.(selectedPlayer, x, y); } catch {}
     sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
 
-    const movedId = selectedPlayer?.id;
-    try { window.consumeCombatTeleportTo?.(selectedPlayer, x, y); } catch {}
     try {
       selectedPlayer = null;
       try { window.syncSelectedPlayerUi?.(); } catch {}
@@ -2841,11 +2868,10 @@ board.addEventListener('click', e => {
     }
   }
 
-  sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: !!dashActive });
-
   if (combatRestricted) {
     if (moveInfo?.dash?.active) {
       try { window.commitCombatDashMove?.(selectedPlayer, x, y); } catch {}
+      sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: true });
       try {
         selectedPlayer = null;
         try { window.syncSelectedPlayerUi?.(); } catch {}
@@ -2856,6 +2882,7 @@ board.addEventListener('click', e => {
     }
 
     try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
     try {
       selectedPlayer = null;
       try { window.syncSelectedPlayerUi?.(); } catch {}
@@ -2865,10 +2892,23 @@ board.addEventListener('click', e => {
     return;
   }
 
+  sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: !!dashActive });
+
   selectedPlayer = null;
   try { window.syncSelectedPlayerUi?.(); } catch {}
   try { window.hideMovePreview?.(); } catch {}
   try { window.hideCombatMoveOverlay?.(); } catch {}
+});
+
+document.addEventListener('keydown', (e) => {
+  try {
+    if (e.key !== 'Escape') return;
+    if (!selectedPlayer) return;
+    selectedPlayer = null;
+    try { window.syncSelectedPlayerUi?.(); } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
+  } catch {}
 });
 
 // ===== Dice Viz (panel + canvas animation) =====
