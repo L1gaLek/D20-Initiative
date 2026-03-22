@@ -386,7 +386,7 @@ button:hover {
 
 /* ===== Мини-окно по двойному клику ===== */
 .token-mini{
-  position: absolute;
+  position: fixed;
   z-index: 10000;
   width: 248px;
   padding: 8px 10px;

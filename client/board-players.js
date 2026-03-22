@@ -997,41 +997,27 @@ function useTokenMiniSpell(player, lvl, href, name) {
   return true;
 }
 
-function getBoardVisualScale() {
-  try {
-    const bRect = board?.getBoundingClientRect?.();
-    const ow = Number(board?.offsetWidth) || 0;
-    const scale = (bRect?.width && ow) ? (bRect.width / ow) : (window.ControlBox?.getZoom?.() || 1);
-    return Math.max(0.0001, Number(scale) || 1);
-  } catch {
-    return Math.max(0.0001, Number(window.ControlBox?.getZoom?.()) || 1);
-  }
-}
-
-function getTokenMiniScale() {
-  const visualScale = getBoardVisualScale();
-  return Math.max(0.6, Math.min(1, 1 / visualScale));
-}
-
 function positionTokenMini(tokenEl) {
   if (!tokenMiniEl || !tokenEl) return;
-  // ставим примерно над токеном, по центру
-  const left = tokenEl.offsetLeft + (tokenEl.offsetWidth / 2);
-  const top = tokenEl.offsetTop - 8;
-  const miniScale = getTokenMiniScale();
+  const rect = tokenEl.getBoundingClientRect();
+  const left = rect.left + (rect.width / 2);
+  const top = rect.top - 8;
   tokenMiniEl.style.left = `${left}px`;
   tokenMiniEl.style.top = `${top}px`;
   tokenMiniEl.style.transformOrigin = '50% 100%';
-  tokenMiniEl.style.transform = `translate(-50%, -100%) scale(${miniScale})`;
+  tokenMiniEl.style.transform = 'translate(-50%, -100%)';
 
-  // держим в пределах поля (по возможности)
-  const b = board.getBoundingClientRect();
+  const viewportLeft = 0;
+  const viewportTop = 0;
+  const viewportRight = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportBottom = window.innerHeight || document.documentElement.clientHeight || 0;
   const r = tokenMiniEl.getBoundingClientRect();
   let dx = 0;
   let dy = 0;
-  if (r.left < b.left) dx = b.left - r.left + 6;
-  if (r.right > b.right) dx = -(r.right - b.right + 6);
-  if (r.top < b.top) dy = b.top - r.top + 6;
+  if (r.left < viewportLeft) dx = viewportLeft - r.left + 12;
+  if (r.right > viewportRight) dx = -(r.right - viewportRight + 12);
+  if (r.top < viewportTop) dy = viewportTop - r.top + 12;
+  if (r.bottom > viewportBottom) dy = -(r.bottom - viewportBottom + 12);
   if (dx || dy) {
     const curLeft = Number(tokenMiniEl.style.left.replace('px','')) || left;
     const curTop = Number(tokenMiniEl.style.top.replace('px','')) || top;
@@ -1326,7 +1312,7 @@ function openTokenMini(playerId) {
     window.InfoModal?.open?.(p);
   });
 
-  board.appendChild(card);
+  document.body.appendChild(card);
   tokenMiniEl = card;
   tokenMiniPlayerId = p.id;
   // position after append (so size is known)
