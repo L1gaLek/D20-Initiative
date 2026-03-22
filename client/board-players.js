@@ -2264,6 +2264,43 @@ addPlayerBtn.addEventListener('click', () => {
     return viaBOk;
   }
 
+  function getPathDistanceSteps(player, fromX, fromY, toX, toY, maxSteps = Infinity) {
+    const live = getLivePlayer(player) || player;
+    if (!live) return null;
+    const size = Math.max(1, Number(live?.size) || 1);
+    const sx = Number(fromX) || 0;
+    const sy = Number(fromY) || 0;
+    const tx = Number(toX) || 0;
+    const ty = Number(toY) || 0;
+    if (sx === tx && sy === ty) return 0;
+    if (!withinBoard(tx, ty, size)) return null;
+
+    const wallsSet = getWallsSet();
+    const limit = Number.isFinite(Number(maxSteps)) ? Math.max(0, Number(maxSteps) || 0) : Infinity;
+    const q = [{ x: sx, y: sy, d: 0 }];
+    const seen = new Map([[`${sx},${sy}`, 0]]);
+
+    while (q.length) {
+      const cur = q.shift();
+      if (!cur) continue;
+      if (cur.d >= limit) continue;
+      for (const [dx, dy] of DIRS) {
+        const nx = cur.x + dx;
+        const ny = cur.y + dy;
+        const nd = cur.d + 1;
+        const key = `${nx},${ny}`;
+        const prev = seen.get(key);
+        if (prev != null && prev <= nd) continue;
+        if (!canStepBetween(live, cur.x, cur.y, nx, ny, size, wallsSet)) continue;
+        if (nx === tx && ny === ty) return nd;
+        seen.set(key, nd);
+        q.push({ x: nx, y: ny, d: nd });
+      }
+    }
+
+    return null;
+  }
+
   function buildWalkReachableMap(player, rec) {
     const live = getLivePlayer(player) || player;
     if (!live || !rec) return new Map();
@@ -2471,9 +2508,11 @@ addPlayerBtn.addEventListener('click', () => {
       rec.spentFeet = 0;
       return;
     }
-    const map = buildWalkReachableMap(player, rec);
-    const steps = Number(map.get(`${nx},${ny}`)) || 0;
-    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * getFeetPerCell());
+    const feetPerCell = getFeetPerCell();
+    const stepBudget = Math.max(0, Math.floor(getRemainingFeet(player) / feetPerCell));
+    const steps = getPathDistanceSteps(player, rec.currentX, rec.currentY, nx, ny, stepBudget);
+    if (!Number.isFinite(steps) || steps <= 0) return;
+    rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * feetPerCell);
     rec.currentX = nx;
     rec.currentY = ny;
   }
