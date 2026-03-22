@@ -2677,6 +2677,16 @@ addPlayerBtn.addEventListener('click', () => {
       teleport: getTeleportInfo(player)
     };
   };
+  window.getCombatPathDistanceSteps = function(player, fromX, fromY, toX, toY, maxSteps) {
+    return getPathDistanceSteps(player, fromX, fromY, toX, toY, maxSteps);
+  };
+  window.forceCombatMoveTracker = function(player, payload = {}) {
+    const rec = getTracker(player, { create: true });
+    if (!rec) return;
+    if (typeof payload.spentFeet !== 'undefined') rec.spentFeet = Math.max(0, Number(payload.spentFeet) || 0);
+    if (typeof payload.currentX !== 'undefined') rec.currentX = Number(payload.currentX) || 0;
+    if (typeof payload.currentY !== 'undefined') rec.currentY = Number(payload.currentY) || 0;
+  };
   window.canSpendCombatMoveTo = canSpendMoveTo;
   window.commitCombatMove = commitMove;
   window.renderCombatMoveOverlay = renderOverlayForSelected;
@@ -2882,6 +2892,23 @@ board.addEventListener('click', e => {
     }
 
     try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
+    try {
+      const beforeSpent = Number(moveInfo?.spentFeet) || 0;
+      const afterInfo = window.getCombatMoveBudgetInfo?.(selectedPlayer);
+      if ((Number(afterInfo?.spentFeet) || 0) <= beforeSpent) {
+        const feetPerCell = Math.max(1, Math.min(100, Number(lastState?.cellFeet) || 10));
+        const maxSteps = Math.max(0, Math.floor((Number(moveInfo?.remainingFeet) || 0) / feetPerCell));
+        const steps = window.getCombatPathDistanceSteps?.(selectedPlayer, moveInfo?.currentX, moveInfo?.currentY, x, y, maxSteps);
+        if (Number.isFinite(steps) && steps > 0) {
+          window.forceCombatMoveTracker?.(selectedPlayer, {
+            spentFeet: beforeSpent + (steps * feetPerCell),
+            currentX: x,
+            currentY: y
+          });
+        }
+      }
+    } catch {}
     sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
     try {
       selectedPlayer = null;
