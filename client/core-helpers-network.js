@@ -2527,6 +2527,20 @@ async function sendMessage(msg) {
           // Keep optimistic local update for instant UX, then wait for tokenRow from WS.
           try {
             if (p) { p.x = nx; p.y = ny; }
+            try {
+              const pid = String(p?.id || '');
+              const syncCoords = (entry) => {
+                if (!entry || String(entry?.id || '') !== pid) return;
+                entry.x = nx;
+                entry.y = ny;
+              };
+              (Array.isArray(lastState?.players) ? lastState.players : []).forEach(syncCoords);
+              (Array.isArray(players) ? players : []).forEach(syncCoords);
+              if (selectedPlayer && String(selectedPlayer?.id || '') === pid) {
+                selectedPlayer.x = nx;
+                selectedPlayer.y = ny;
+              }
+            } catch {}
             try { setPlayerPosition?.(p); } catch {}
             try {
               const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;

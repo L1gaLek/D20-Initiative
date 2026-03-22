@@ -2858,6 +2858,17 @@ board.addEventListener('click', e => {
   try { window.hideCombatMoveOverlay?.(); } catch {}
 });
 
+document.addEventListener('keydown', (e) => {
+  try {
+    if (e.key !== 'Escape') return;
+    if (!selectedPlayer) return;
+    selectedPlayer = null;
+    try { window.syncSelectedPlayerUi?.(); } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
+  } catch {}
+});
+
 // ===== Dice Viz (panel + canvas animation) =====
 const diceVizKind = document.getElementById("dice-viz-kind");
 
