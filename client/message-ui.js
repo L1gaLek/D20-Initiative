@@ -93,14 +93,13 @@ function isPlayerVisibleToMe(p, state) {
   if (!p) return false;
   const ownerRole = getOwnerRoleForPlayer(p);
   const curMapId = String(state?.currentMapId || '').trim();
+  const pidMap = String(p?.mapId || '').trim();
+  const isEnemy = !!p.isEnemy;
 
   if (myRole === 'GM') {
     const gmView = String(state?.fog?.gmViewMode || 'gm');
     if (gmView !== 'player') {
-      if (ownerRole === 'GM' && !p.isBase && !p.isAlly) {
-        const pidMap = String(p?.mapId || '').trim();
-        if (pidMap && curMapId && pidMap !== curMapId) return false;
-      }
+      if (isEnemy && pidMap && curMapId && pidMap !== curMapId) return false;
       return true;
     }
   }
@@ -110,8 +109,7 @@ function isPlayerVisibleToMe(p, state) {
     if (!pub) return false;
   }
 
-  const pidMap = String(p?.mapId || '').trim();
-  if (ownerRole === 'GM' && pidMap && curMapId && pidMap !== curMapId && !p.isAlly) return false;
+  if (isEnemy && pidMap && curMapId && pidMap !== curMapId) return false;
   return true;
 }
 
@@ -439,6 +437,27 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
 
       try {
+        const prevBg = (lastState && typeof lastState.bgMusic === 'object') ? lastState.bgMusic : null;
+        const nextBg = (normalized && typeof normalized.bgMusic === 'object') ? normalized.bgMusic : null;
+        const nextLooksDetachedPlaceholder = !!nextBg
+          && Array.isArray(nextBg.tracks)
+          && nextBg.tracks.length === 0
+          && !String(nextBg.currentTrackId || '').trim()
+          && !nextBg.isPlaying
+          && !(Number(nextBg.startedAt) > 0)
+          && !(Number(nextBg.pausedAt) > 0);
+        const prevLooksMeaningful = !!prevBg
+          && ((Array.isArray(prevBg.tracks) && prevBg.tracks.length > 0)
+            || !!String(prevBg.currentTrackId || '').trim()
+            || !!prevBg.isPlaying
+            || Number(prevBg.startedAt) > 0
+            || Number(prevBg.pausedAt) > 0);
+        if (nextLooksDetachedPlaceholder && prevLooksMeaningful) {
+          normalized.bgMusic = deepClone(prevBg);
+        }
+      } catch {}
+
+      try {
         const modEvent = getRoomModerationEventForUi(normalized);
         if (handleOwnModerationEvent(modEvent)) return;
       } catch {}
@@ -450,8 +469,10 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // Preserve newer local character sheets if an incoming room_state snapshot is older.
       try {
+        const ownUserId = String(getAppStorageItem?.('int_user_id') || window.myId || '').trim();
         (lastState.players || []).forEach(p => {
           if (!p || !p.id) return;
+          if (!ownUserId || String(p.ownerId || '') !== ownUserId) return;
           const prev = prevSheets.get(String(p.id));
           if (!prev) return;
           const incomingTs = Number(p.sheetUpdatedAt) || 0;
@@ -916,6 +937,10 @@ function syncSelectedPlayerUi() {
     playerElements.forEach((el, id) => {
       if (!el) return;
       el.classList.toggle('selected', !!selectedId && String(id) === selectedId);
+      try {
+        const player = (Array.isArray(players) ? players : []).find((p) => String(p?.id || '') === String(id));
+        window.updateTokenCombatActions?.(player, el);
+      } catch {}
     });
   } catch {}
 
@@ -1297,6 +1322,13 @@ function updatePlayerList() {
         allyBadge.className = 'ally-badge';
         allyBadge.textContent = 'союзник';
         nameWrap.appendChild(allyBadge);
+      }
+
+      if (p.isEnemy) {
+        const enemyBadge = document.createElement('span');
+        enemyBadge.className = 'enemy-badge';
+        enemyBadge.textContent = 'враг';
+        nameWrap.appendChild(enemyBadge);
       }
 
       // GM visibility "eye" for GM-created non-allies (default hidden for others)

@@ -2158,8 +2158,7 @@ function bindSlotEditors(root, player, canEdit) {
 
         try {
           if (typeof sendMessage === 'function') {
-            // Без оптимистичного локального дубля (realtime вставка придёт сама)
-            sendMessage({ type: 'log', text: `${who} применил ${kind}: ${nm}`, noOptimistic: true });
+            sendMessage({ type: 'log', text: `${who} применил ${kind}: ${nm}` });
           }
         } catch {}
 
