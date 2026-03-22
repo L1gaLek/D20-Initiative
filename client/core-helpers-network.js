@@ -884,7 +884,7 @@ async function upsertRoomMusicState(roomId, bgMusic) {
   await ensureSupabaseReady();
   const row = {
     room_id: String(roomId || ''),
-    payload: deepClone(bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 }),
+    payload: deepClone(bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 }),
     updated_at: new Date().toISOString()
   };
   if (!row.room_id) return;
@@ -970,7 +970,7 @@ async function ensureDetachedBootstrap(roomId, fullState) {
     }
   }
   if (!musicRow) {
-    await upsertRoomMusicState(roomId, st.bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 });
+    await upsertRoomMusicState(roomId, st.bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 });
   }
 }
 
@@ -2751,7 +2751,7 @@ async function sendMessage(msg) {
         // ===== Background Music (GM) =====
         else if (type === "bgMusicSet") {
           if (!isGM) return;
-          const incoming = (msg.bgMusic && typeof msg.bgMusic === 'object') ? deepClone(msg.bgMusic) : { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+          const incoming = (msg.bgMusic && typeof msg.bgMusic === 'object') ? deepClone(msg.bgMusic) : { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 };
           if (!Array.isArray(incoming.tracks)) incoming.tracks = [];
           incoming.tracks = incoming.tracks.slice(0, 10).map(t => ({
             id: String(t?.id || ''),
@@ -2761,9 +2761,11 @@ async function sendMessage(msg) {
             url: String(t?.url || ''),
             path: String(t?.path || ''),
             createdAt: String(t?.createdAt || '')
-          })).filter(t => t.id && t.url);
+          })).filter(t => t.id && (t.url || t.path));
           incoming.currentTrackId = incoming.currentTrackId ? String(incoming.currentTrackId) : null;
           incoming.isPlaying = !!incoming.isPlaying;
+          incoming.startedAt = Number.isFinite(Number(incoming.startedAt)) ? Math.max(0, Number(incoming.startedAt)) : 0;
+          incoming.pausedAt = Number.isFinite(Number(incoming.pausedAt)) ? Math.max(0, Number(incoming.pausedAt)) : 0;
           incoming.volume = Number.isFinite(Number(incoming.volume)) ? clamp(Number(incoming.volume), 0, 100) : 40;
           await upsertRoomMusicState(currentRoomId, incoming);
           try { await insertRoomLog(currentRoomId, 'Фоновая музыка обновлена'); } catch {}
@@ -2800,6 +2802,36 @@ async function sendMessage(msg) {
           if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
           await deleteRoomMarkRow(currentRoomId, mapId, id);
           try { await insertRoomLog(currentRoomId, 'Обозначение удалено'); } catch {}
+          _refreshDetachedRoomView();
+          return;
+        }
+
+        else if (type === 'moveMark') {
+          const raw = msg.mark;
+          if (!raw || typeof raw !== 'object') return;
+          const id = String(raw.id || '').trim();
+          if (!id) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          const mapId = String(next.currentMapId || m.id || '');
+          const cached = Array.isArray(__roomDetachedCache.marksByMap.get(mapId)) ? __roomDetachedCache.marksByMap.get(mapId) : [];
+          const mark = cached.find(mm => String(mm?.id || '') === id);
+          if (!mark) return;
+          if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
+          const safe = deepClone(mark);
+          if (String(mark.kind || '') === 'rect') {
+            safe.x = Number(raw.x) || 0;
+            safe.y = Number(raw.y) || 0;
+          } else if (String(mark.kind || '') === 'circle') {
+            safe.cx = Number(raw.cx) || 0;
+            safe.cy = Number(raw.cy) || 0;
+          } else if (String(mark.kind || '') === 'poly' && Array.isArray(raw.pts) && raw.pts.length >= 3) {
+            safe.pts = raw.pts.map((p) => ({
+              x: Number(p?.x) || 0,
+              y: Number(p?.y) || 0
+            }));
+          }
+          await upsertRoomMarkRow(currentRoomId, safe);
           _refreshDetachedRoomView();
           return;
         }
