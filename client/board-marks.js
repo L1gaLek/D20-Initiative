@@ -127,6 +127,32 @@
     return moved;
   }
 
+  function applyOptimisticMarkMove(mark) {
+    if (!mark || !mark.id) return;
+    const markId = String(mark.id);
+    const state = getState();
+    if (state && Array.isArray(state.marks)) {
+      const idx = state.marks.findIndex((m) => String(m?.id || '') === markId);
+      if (idx >= 0) state.marks[idx] = JSON.parse(JSON.stringify(mark));
+    }
+    if (state && Array.isArray(state.maps)) {
+      const mapId = String(mark.mapId || curMapId());
+      const map = state.maps.find((m) => String(m?.id || '') === mapId);
+      if (map && Array.isArray(map.marks)) {
+        const idx = map.marks.findIndex((m) => String(m?.id || '') === markId);
+        if (idx >= 0) map.marks[idx] = JSON.parse(JSON.stringify(mark));
+      }
+    }
+    try {
+      const cache = window.__roomDetachedCache?.marksByMap;
+      const mapId = String(mark.mapId || curMapId());
+      if (cache instanceof Map && cache.has(mapId)) {
+        const list = Array.isArray(cache.get(mapId)) ? cache.get(mapId) : [];
+        cache.set(mapId, list.map((m) => (String(m?.id || '') === markId ? JSON.parse(JSON.stringify(mark)) : m)));
+      }
+    } catch {}
+  }
+
   function ensureToolbar() {
     if (toolbar) return toolbar;
     const host = document.getElementById('board-topbar') || document.getElementById('board-col') || document.body;
@@ -540,7 +566,10 @@
       return;
     }
     const moved = translateMark(state.origin, state.dx, state.dy);
-    if (moved) ctx?.sendMessage?.({ type: 'moveMark', mark: moved });
+    if (moved) {
+      applyOptimisticMarkMove(moved);
+      ctx?.sendMessage?.({ type: 'moveMark', mark: moved });
+    }
     renderFromState(getState());
   }
 
