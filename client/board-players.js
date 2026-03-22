@@ -1684,6 +1684,12 @@ function setPlayerPosition(player) {
   try { applyTokenVisual(el, player); } catch {}
   try { updateTokenConditionIndicators(player, el); } catch {}
   try { updateTokenCombatActions(player, el); } catch {}
+  try {
+    const ownerRole = getOwnerRoleForToken(player);
+    const gmCanSeeHidden = String(myRole || '') === 'GM' && String(lastState?.fog?.gmViewMode || 'gm') !== 'player';
+    const dimHiddenEnemy = gmCanSeeHidden && ownerRole === 'GM' && !!player?.isEnemy && !player?.isPublic;
+    el.classList.toggle('player--gm-hidden', !!dimHiddenEnemy);
+  } catch {}
   el.style.width = `${player.size * 50}px`;
   el.style.height = `${player.size * 50}px`;
 
@@ -1695,6 +1701,14 @@ function setPlayerPosition(player) {
   const asPlayerView = (String(myRole || '') !== 'GM') || (String(myRole || '') === 'GM' && String(fog.gmViewMode || 'gm') === 'player');
   const ownerRole = getOwnerRoleForToken(player);
   const isGmHidden = (ownerRole === 'GM' && !player.isAlly);
+  const curMapId = String(st?.currentMapId || '').trim();
+  const pidMap = String(player?.mapId || '').trim();
+
+  if (player?.isEnemy && pidMap && curMapId && pidMap !== curMapId) {
+    el.style.display = 'none';
+    updateHpBar(player, el);
+    return;
+  }
 
   // ================== GM "eye" visibility ==================
   // If GM has hidden a GM-owned non-ally token (eye OFF), non-GM users must NEVER see it.
@@ -1854,22 +1868,23 @@ function findFirstFreeSpotClient(size) {
 addPlayerBtn.addEventListener('click', () => {
   const name = playerNameInput.value.trim();
   if (!name) return alert("Введите имя");
+  const gmCreating = String(myRole || '') === 'GM';
+  const isAlly = !!isAllyCheckbox?.checked;
+  const isEnemy = gmCreating ? (!isAllyCheckbox?.checked || !!isEnemyCheckbox?.checked) : !!isEnemyCheckbox?.checked;
 
   const player = {
     name,
     color: playerColorInput.value,
     size: parseInt(playerSizeInput.value, 10),
     isBase: !!isBaseCheckbox?.checked,
-    isAlly: !!isAllyCheckbox?.checked,
-    isEnemy: !!isEnemyCheckbox?.checked
+    isAlly,
+    isEnemy
   };
 
   sendMessage({ type: 'addPlayer', player });
 
   playerNameInput.value = '';
   if (isBaseCheckbox && !isBaseCheckbox.disabled) isBaseCheckbox.checked = false;
-  if (isAllyCheckbox) isAllyCheckbox.checked = false;
-  if (isEnemyCheckbox) isEnemyCheckbox.checked = false;
 });
 
 // ================== COMBAT MOVE BUDGET ==================
@@ -2826,7 +2841,7 @@ board.addEventListener('click', e => {
     }
   }
 
-  sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
+  sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: !!dashActive });
 
   if (combatRestricted) {
     const moveInfo = window.getCombatMoveBudgetInfo?.(selectedPlayer);

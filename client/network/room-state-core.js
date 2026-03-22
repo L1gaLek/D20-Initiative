@@ -325,6 +325,11 @@ function createInitialGameState() {
       // Shared explored cells for the party ("x,y" strings)
       explored: []
     },
+    phase: "exploration",
+    turnOrder: [],
+    currentTurnIndex: 0,
+    round: 1,
+    playerStates: {},
     playersPos: {} // playerId -> {x,y}
   };
   return {

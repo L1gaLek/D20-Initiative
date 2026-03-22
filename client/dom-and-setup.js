@@ -110,20 +110,40 @@ const isBaseCheckbox = document.getElementById('is-base');
 const isAllyCheckbox = document.getElementById('is-ally');
 const isEnemyCheckbox = document.getElementById('is-enemy');
 
+function refreshPlayerTypeCheckboxUi() {
+  const allyChecked = !!isAllyCheckbox?.checked;
+  const enemyChecked = !!isEnemyCheckbox?.checked;
+
+  if (isAllyCheckbox instanceof HTMLInputElement) {
+    isAllyCheckbox.disabled = enemyChecked;
+    if (!enemyChecked) isAllyCheckbox.removeAttribute('aria-disabled');
+    else isAllyCheckbox.setAttribute('aria-disabled', 'true');
+  }
+
+  if (isEnemyCheckbox instanceof HTMLInputElement) {
+    isEnemyCheckbox.disabled = allyChecked;
+    if (!allyChecked) isEnemyCheckbox.removeAttribute('aria-disabled');
+    else isEnemyCheckbox.setAttribute('aria-disabled', 'true');
+  }
+}
+
 function wirePlayerTypeCheckboxes() {
-  const bindExclusive = (src, others = []) => {
+  const bindToggle = (src, onChange) => {
     if (!(src instanceof HTMLInputElement)) return;
     src.addEventListener('change', () => {
-      if (!src.checked) return;
-      others.forEach((other) => {
-        if (other instanceof HTMLInputElement) other.checked = false;
-      });
+      onChange?.(src);
+      refreshPlayerTypeCheckboxUi();
     });
   };
 
-  bindExclusive(isEnemyCheckbox, [isBaseCheckbox, isAllyCheckbox]);
-  bindExclusive(isBaseCheckbox, [isEnemyCheckbox]);
-  bindExclusive(isAllyCheckbox, [isEnemyCheckbox]);
+  bindToggle(isEnemyCheckbox, (src) => {
+    if (src.checked && isAllyCheckbox instanceof HTMLInputElement) isAllyCheckbox.checked = false;
+  });
+  bindToggle(isAllyCheckbox, (src) => {
+    if (src.checked && isEnemyCheckbox instanceof HTMLInputElement) isEnemyCheckbox.checked = false;
+  });
+  bindToggle(isBaseCheckbox, () => {});
+  refreshPlayerTypeCheckboxUi();
 }
 
 wirePlayerTypeCheckboxes();

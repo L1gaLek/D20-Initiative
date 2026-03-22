@@ -294,6 +294,10 @@
   box-shadow: 0 0 12px rgba(255, 255, 0, 0.75);
 }
 
+.player.player--gm-hidden{
+  opacity: 0.48;
+}
+
 .player .token-combat-actions{
   position:absolute;
   left:50%;

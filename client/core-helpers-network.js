@@ -2171,6 +2171,11 @@ async function sendMessage(msg) {
             gridAlpha: 1,
             wallAlpha: 1,
             walls: [],
+            phase: 'exploration',
+            turnOrder: [],
+            currentTurnIndex: 0,
+            round: 1,
+            playerStates: {},
             playersPos: {}
           });
 
@@ -2342,9 +2347,10 @@ async function sendMessage(msg) {
         else if (type === "addPlayer") {
           const player = msg.player || {};
           const ownerRole = String(myRole || "").trim() || "";
-          const isEnemy = (ownerRole === "GM") ? !!player.isEnemy : false;
-          const isBase = !!player.isBase && !isEnemy;
-          const isAlly = !!player.isAlly && !isEnemy;
+          const wantsEnemy = !!player.isEnemy;
+          const isAlly = (ownerRole === "GM") ? (!!player.isAlly && !wantsEnemy) : !!player.isAlly;
+          const isEnemy = (ownerRole === "GM") ? (!isAlly || wantsEnemy) : false;
+          const isBase = !!player.isBase;
           const isMonster = !!player.isMonster;
 
           // Visibility + per-map scoping metadata:
@@ -2586,6 +2592,9 @@ async function sendMessage(msg) {
           }
 
           // IMPORTANT: movement is NOT persisted via room_state.
+          if (msg.usedDash) {
+            logEventToState(next, `${p.name} совершил Рывок`);
+          }
           return;
         }
 
