@@ -2358,7 +2358,7 @@ async function sendMessage(msg) {
           // - mapId allows GM to keep "map-local" NPCs/monsters per active map.
           //   Bases and Allies are global across maps.
           const activeMapId = String(next?.currentMapId || "").trim() || null;
-          const mapId = isEnemy
+          const mapId = (isEnemy && !isBase)
             ? (activeMapId || null)
             : null;
 
@@ -2417,7 +2417,6 @@ async function sendMessage(msg) {
           if (p.isAlly) return;
 
           p.isPublic = !!msg.isPublic;
-          logEventToState(next, `${p.name}: видимость ${p.isPublic ? 'включена' : 'выключена'}`);
         }
 
         else if (type === "combatInitChoice") {
