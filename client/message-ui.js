@@ -115,6 +115,10 @@ function isPlayerVisibleToMe(p, state) {
 
 let __mapTokensReloadSeq = 0;
 
+function isMapScopedPlayerForUi(player) {
+  return !!(player && player.isEnemy && !player.isBase);
+}
+
 function syncVisiblePlayersState(state) {
   const normalized = state || lastState || null;
   const allPlayers = Array.isArray(normalized?.players) ? normalized.players : [];
@@ -276,6 +280,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
           if (!pid || tokenIds.has(pid)) return;
           p.x = null;
           p.y = null;
+          if (!isMapScopedPlayerForUi(p)) p.mapId = null;
         });
 
         msg.rows.forEach(r => applyTokenRowToLocalState(r));

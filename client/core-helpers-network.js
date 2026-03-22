@@ -505,7 +505,7 @@ function applyTokenRowToLocalState(row) {
         if (Number.isFinite(size) && size > 0) p.size = size;
         if (color) p.color = color;
         // map-local safety
-        if (mapId) p.mapId = mapId;
+        if (mapId && isMapScopedPlayer(p)) p.mapId = mapId;
 
         // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates.
         // But for GM-created non-allies the default is hidden, and the first placement on the board
@@ -1010,45 +1010,8 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
   }
 }
 
-async function mirrorGlobalPlayersToMap(roomId, state, targetMapId) {
-  try {
-    await ensureSupabaseReady();
-    const rid = String(roomId || '').trim();
-    const mapId = String(targetMapId || '').trim();
-    if (!rid || !mapId) return;
-
-    const roster = Array.isArray(state?.players) ? state.players : [];
-    const globals = roster.filter((p) => p && !p.isEnemy && p.id);
-    const globalIds = globals.map((p) => String(p.id)).filter(Boolean);
-    if (!globalIds.length) return;
-
-    const { error: delErr } = await sbClient
-      .from('room_tokens')
-      .delete()
-      .eq('room_id', rid)
-      .eq('map_id', mapId)
-      .in('token_id', globalIds);
-    if (delErr) throw delErr;
-
-    const payload = globals
-      .filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)))
-      .map((p) => ({
-        room_id: rid,
-        map_id: mapId,
-        token_id: String(p.id),
-        x: Number(p.x),
-        y: Number(p.y),
-        size: Number(p?.size) || 1,
-        color: (typeof p?.color === 'string') ? p.color : null,
-        is_public: !!p?.isPublic
-      }));
-    if (!payload.length) return;
-
-    const { error: upErr } = await sbClient.from('room_tokens').upsert(payload);
-    if (upErr) throw upErr;
-  } catch (e) {
-    console.warn('mirrorGlobalPlayersToMap failed', e);
-  }
+function isMapScopedPlayer(player) {
+  return !!(player && player.isEnemy && !player.isBase);
 }
 
 async function insertRoomLog(roomId, text) {
@@ -1059,6 +1022,24 @@ async function insertRoomLog(roomId, text) {
     await sbClient.from('room_log').insert({ room_id: roomId, text: t });
   } catch (e) {
     console.warn('room_log insert failed', e);
+  }
+}
+
+async function appendRoomLogEntry(roomId, text, options = {}) {
+  const rid = String(roomId || '').trim();
+  const line = String(text || '').trim();
+  if (!rid || !line) return;
+
+  const noOptimistic = !!options?.noOptimistic;
+  const row = { text: line, created_at: new Date().toISOString() };
+
+  await insertRoomLog(rid, line);
+  try {
+    sendWsEnvelope({ type: 'logRow', roomId: rid, row }, { optimisticApplied: !noOptimistic });
+  } catch {}
+
+  if (!noOptimistic) {
+    try { handleMessage({ type: 'logRow', row }); } catch {}
   }
 }
 
@@ -1868,21 +1849,7 @@ async function sendMessage(msg) {
       // ===== v4: append-only log entry =====
       case 'log': {
         if (!currentRoomId) return;
-        const logRow = { text: String(msg.text || ''), created_at: new Date().toISOString() };
-        await insertRoomLog(currentRoomId, msg.text);
-        try {
-          sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: !msg.noOptimistic });
-        } catch {}
-        // Optimistic local append (realtime INSERT will also arrive if enabled).
-        // Если msg.noOptimistic = true — НЕ добавляем локально, чтобы не было дублей.
-        if (!msg.noOptimistic) {
-          try {
-            handleMessage({
-              type: 'logRow',
-              row: logRow
-            });
-          } catch {}
-        }
+        await appendRoomLogEntry(currentRoomId, msg.text, { noOptimistic: !!msg.noOptimistic });
         break;
       }
 
@@ -2179,7 +2146,6 @@ async function sendMessage(msg) {
             playersPos: {}
           });
 
-          await mirrorGlobalPlayersToMap(currentRoomId, next, newId);
           loadMapToRoot(next, newId);
           logEventToState(next, `Создана новая карта: ${name}`);
         }
@@ -2191,7 +2157,6 @@ async function sendMessage(msg) {
           if (!targetId) return;
 
           syncActiveToMap(next);
-          await mirrorGlobalPlayersToMap(currentRoomId, next, targetId);
           loadMapToRoot(next, targetId);
 
           const m = getActiveMap(next);
@@ -2553,6 +2518,8 @@ async function sendMessage(msg) {
           const size = Number(p.size) || 1;
           const maxX = next.boardWidth - size;
           const maxY = next.boardHeight - size;
+          const prevX = (p.x === null || typeof p.x === 'undefined') ? null : Number(p.x);
+          const prevY = (p.y === null || typeof p.y === 'undefined') ? null : Number(p.y);
           const nx = clamp(Number(msg.x) || 0, 0, maxX);
           const ny = clamp(Number(msg.y) || 0, 0, maxY);
 
@@ -2560,6 +2527,20 @@ async function sendMessage(msg) {
           // Keep optimistic local update for instant UX, then wait for tokenRow from WS.
           try {
             if (p) { p.x = nx; p.y = ny; }
+            try {
+              const pid = String(p?.id || '');
+              const syncCoords = (entry) => {
+                if (!entry || String(entry?.id || '') !== pid) return;
+                entry.x = nx;
+                entry.y = ny;
+              };
+              (Array.isArray(lastState?.players) ? lastState.players : []).forEach(syncCoords);
+              (Array.isArray(players) ? players : []).forEach(syncCoords);
+              if (selectedPlayer && String(selectedPlayer?.id || '') === pid) {
+                selectedPlayer.x = nx;
+                selectedPlayer.y = ny;
+              }
+            } catch {}
             try { setPlayerPosition?.(p); } catch {}
             try {
               const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;
@@ -2591,8 +2572,12 @@ async function sendMessage(msg) {
           }
 
           // IMPORTANT: movement is NOT persisted via room_state.
+          const moved = (prevX !== nx) || (prevY !== ny);
+          if (moved) {
+            try { await appendRoomLogEntry(currentRoomId, `${p.name} переместил токен`); } catch {}
+          }
           if (msg.usedDash) {
-            logEventToState(next, `${p.name} совершил Рывок`);
+            try { await appendRoomLogEntry(currentRoomId, `${p.name} использовал Рывок`); } catch {}
           }
           return;
         }
