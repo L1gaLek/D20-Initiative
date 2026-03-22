@@ -2009,14 +2009,8 @@ addPlayerBtn.addEventListener('click', () => {
     if (Number.isFinite(px) && Number.isFinite(py)) {
       const posChangedExternally = (px !== rec.currentX || py !== rec.currentY);
       if (posChangedExternally) {
-        if (px === rec.originX && py === rec.originY) {
-          rec.currentX = px;
-          rec.currentY = py;
-          rec.spentFeet = 0;
-        } else {
-          rec.currentX = px;
-          rec.currentY = py;
-        }
+        rec.currentX = px;
+        rec.currentY = py;
       }
     }
 
@@ -2909,7 +2903,6 @@ board.addEventListener('click', e => {
         }
       }
     } catch {}
-    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
     try {
       selectedPlayer = null;
       try { window.syncSelectedPlayerUi?.(); } catch {}
