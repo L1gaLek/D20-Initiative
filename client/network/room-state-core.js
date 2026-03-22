@@ -325,6 +325,11 @@ function createInitialGameState() {
       // Shared explored cells for the party ("x,y" strings)
       explored: []
     },
+    phase: "exploration",
+    turnOrder: [],
+    currentTurnIndex: 0,
+    round: 1,
+    playerStates: {},
     playersPos: {} // playerId -> {x,y}
   };
   return {
@@ -376,6 +381,8 @@ function createInitialGameState() {
       tracks: [], // [{id,name,desc,url,path,createdAt}]
       currentTrackId: null,
       isPlaying: false,
+      startedAt: 0,
+      pausedAt: 0,
       volume: 40 // 0..100
     }
   };

@@ -1,11 +1,55 @@
 // Map/state normalization helpers extracted from client/core-helpers-network.js.
 
+function getDefaultMapPhaseState() {
+  return {
+    phase: 'exploration',
+    turnOrder: [],
+    currentTurnIndex: 0,
+    round: 1,
+    playerStates: {}
+  };
+}
+
+function normalizeMapPhaseState(map) {
+  if (!map || typeof map !== 'object') return getDefaultMapPhaseState();
+  if (typeof map.phase !== 'string' || !map.phase.trim()) map.phase = 'exploration';
+  if (!Array.isArray(map.turnOrder)) map.turnOrder = [];
+  map.currentTurnIndex = Math.max(0, Number(map.currentTurnIndex) || 0);
+  map.round = Math.max(1, Number(map.round) || 1);
+  if (!map.playerStates || typeof map.playerStates !== 'object') map.playerStates = {};
+  return map;
+}
+
+function getPlayerMapCombatState(player) {
+  return {
+    inCombat: !!player?.inCombat,
+    initiative: (player?.initiative === null || typeof player?.initiative === 'undefined')
+      ? null
+      : Number(player.initiative),
+    hasRolledInitiative: !!player?.hasRolledInitiative,
+    pendingInitiativeChoice: !!player?.pendingInitiativeChoice,
+    willJoinNextRound: !!player?.willJoinNextRound
+  };
+}
+
+function applyMapCombatStateToPlayer(player, entry) {
+  const safe = (entry && typeof entry === 'object') ? entry : null;
+  player.inCombat = !!safe?.inCombat;
+  player.initiative = (safe?.initiative === null || typeof safe?.initiative === 'undefined')
+    ? 0
+    : Number(safe.initiative) || 0;
+  player.hasRolledInitiative = !!safe?.hasRolledInitiative;
+  player.pendingInitiativeChoice = !!safe?.pendingInitiativeChoice;
+  player.willJoinNextRound = !!safe?.willJoinNextRound;
+}
+
 function ensureStateHasMaps(state) {
   if (!state || typeof state !== "object") return createInitialGameState();
   state.cellFeet = Math.max(1, Math.min(100, Number(state.cellFeet) || 10));
 
   // already new schema
   if (Array.isArray(state.maps) && state.maps.length) {
+    const playerIds = new Set((Array.isArray(state.players) ? state.players : []).map((p) => String(p?.id || '')).filter(Boolean));
     if (!state.currentMapId) state.currentMapId = String(state.maps[0].id || "map-1");
     // ensure sections exist
     if (!Array.isArray(state.mapSections) || !state.mapSections.length) {
@@ -21,6 +65,17 @@ function ensureStateHasMaps(state) {
       if (m && typeof m.boardBgUrl === 'undefined') m.boardBgUrl = m.boardBgDataUrl || null;
       if (m && typeof m.boardBgStoragePath === 'undefined') m.boardBgStoragePath = null;
       if (m && typeof m.boardBgStorageBucket === 'undefined') m.boardBgStorageBucket = null;
+      normalizeMapPhaseState(m);
+      if (m) {
+        m.turnOrder = (Array.isArray(m.turnOrder) ? m.turnOrder : []).map((id) => String(id || '')).filter((id) => playerIds.has(id));
+        const nextPlayerStates = {};
+        Object.entries(m.playerStates || {}).forEach(([pid, value]) => {
+          const id = String(pid || '');
+          if (!playerIds.has(id)) return;
+          nextPlayerStates[id] = value;
+        });
+        m.playerStates = nextPlayerStates;
+      }
       // ensure fog defaults on every map
       if (m && (!m.fog || typeof m.fog !== 'object')) {
         m.fog = {
@@ -100,6 +155,11 @@ function ensureStateHasMaps(state) {
     wallAlpha: (typeof state.wallAlpha !== 'undefined') ? state.wallAlpha : 1,
     walls: Array.isArray(state.walls) ? state.walls : [],
     marks: Array.isArray(state.marks) ? state.marks : [],
+    phase: String(state.phase || 'exploration'),
+    turnOrder: Array.isArray(state.turnOrder) ? deepClone(state.turnOrder) : [],
+    currentTurnIndex: Math.max(0, Number(state.currentTurnIndex) || 0),
+    round: Math.max(1, Number(state.round) || 1),
+    playerStates: {},
     fog: (state.fog && typeof state.fog === 'object') ? state.fog : {
       enabled: false,
       mode: 'manual',
@@ -117,6 +177,10 @@ function ensureStateHasMaps(state) {
     if (!p || !p.id) return;
     if (p.x === null || p.y === null || typeof p.x === "undefined" || typeof p.y === "undefined") return;
     migratedMap.playersPos[p.id] = { x: p.x, y: p.y };
+  });
+  (state.players || []).forEach((p) => {
+    if (!p || !p.id) return;
+    migratedMap.playerStates[String(p.id)] = getPlayerMapCombatState(p);
   });
 
   state.schemaVersion = 3;
@@ -142,7 +206,7 @@ function ensureStateHasMaps(state) {
 
   // Ensure background music defaults
   if (!state.bgMusic || typeof state.bgMusic !== 'object') {
-    state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+    state.bgMusic = { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 };
   } else {
     if (!Array.isArray(state.bgMusic.tracks)) state.bgMusic.tracks = [];
     if (typeof state.bgMusic.currentTrackId === 'undefined') state.bgMusic.currentTrackId = null;
@@ -165,6 +229,7 @@ function syncActiveToMap(state) {
   const st = ensureStateHasMaps(state);
   const m = getActiveMap(st);
   if (!m) return st;
+  normalizeMapPhaseState(m);
 
   m.boardWidth = Number(st.boardWidth) || 10;
   m.boardHeight = Number(st.boardHeight) || 10;
@@ -183,6 +248,16 @@ function syncActiveToMap(state) {
   // sync fog (root mirror -> map)
   if (!m.fog || typeof m.fog !== 'object') m.fog = {};
   if (st.fog && typeof st.fog === 'object') m.fog = deepClone(st.fog);
+
+  m.phase = String(st.phase || 'exploration');
+  m.turnOrder = Array.isArray(st.turnOrder) ? deepClone(st.turnOrder) : [];
+  m.currentTurnIndex = Math.max(0, Number(st.currentTurnIndex) || 0);
+  m.round = Math.max(1, Number(st.round) || 1);
+  m.playerStates = {};
+  (Array.isArray(st.players) ? st.players : []).forEach((p) => {
+    if (!p?.id) return;
+    m.playerStates[String(p.id)] = getPlayerMapCombatState(p);
+  });
 
   // IMPORTANT (architecture v4): token positions are NOT stored in room_state anymore.
   // They live in a dedicated table (room_tokens). Keeping them in room_state creates
@@ -268,6 +343,7 @@ function loadMapToRoot(state, mapId) {
   const maps = Array.isArray(st.maps) ? st.maps : [];
   const m = maps.find(mm => String(mm.id) === targetId) || maps[0];
   if (!m) return st;
+  normalizeMapPhaseState(m);
 
   st.currentMapId = String(m.id);
 
@@ -282,6 +358,10 @@ function loadMapToRoot(state, mapId) {
 
   st.walls = Array.isArray(m.walls) ? m.walls : [];
   st.marks = Array.isArray(m.marks) ? deepClone(m.marks) : [];
+  st.phase = String(m.phase || 'exploration');
+  st.turnOrder = Array.isArray(m.turnOrder) ? deepClone(m.turnOrder) : [];
+  st.currentTurnIndex = Math.max(0, Number(m.currentTurnIndex) || 0);
+  st.round = Math.max(1, Number(m.round) || 1);
   st.fog = (m.fog && typeof m.fog === 'object') ? deepClone(m.fog) : {
     enabled: false,
     mode: 'manual',
@@ -309,6 +389,11 @@ function loadMapToRoot(state, mapId) {
 
   // IMPORTANT (architecture v4): do NOT apply token positions from map snapshot.
   // Positions are authoritative in room_tokens and arrive via realtime.
+  (Array.isArray(st.players) ? st.players : []).forEach((p) => {
+    if (!p) return;
+    const entry = m.playerStates?.[String(p.id)] || null;
+    applyMapCombatStateToPlayer(p, entry);
+  });
 
   return st;
 }
