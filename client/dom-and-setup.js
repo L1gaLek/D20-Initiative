@@ -108,6 +108,25 @@ const playerSizeInput = document.getElementById('player-size');
 
 const isBaseCheckbox = document.getElementById('is-base');
 const isAllyCheckbox = document.getElementById('is-ally');
+const isEnemyCheckbox = document.getElementById('is-enemy');
+
+function wirePlayerTypeCheckboxes() {
+  const bindExclusive = (src, others = []) => {
+    if (!(src instanceof HTMLInputElement)) return;
+    src.addEventListener('change', () => {
+      if (!src.checked) return;
+      others.forEach((other) => {
+        if (other instanceof HTMLInputElement) other.checked = false;
+      });
+    });
+  };
+
+  bindExclusive(isEnemyCheckbox, [isBaseCheckbox, isAllyCheckbox]);
+  bindExclusive(isBaseCheckbox, [isEnemyCheckbox]);
+  bindExclusive(isAllyCheckbox, [isEnemyCheckbox]);
+}
+
+wirePlayerTypeCheckboxes();
 
 const dice = document.getElementById('dice');
 const diceCountInput = document.getElementById('dice-count');
@@ -427,6 +446,16 @@ function applyRoleToUI() {
       else isAllyCheckbox.style.display = gm ? '' : 'none';
 
       if (!gm) isAllyCheckbox.checked = false;
+    }
+  } catch {}
+
+  try {
+    if (typeof isEnemyCheckbox !== 'undefined' && isEnemyCheckbox) {
+      const label = isEnemyCheckbox.closest('label');
+      if (label) label.style.display = gm ? '' : 'none';
+      else isEnemyCheckbox.style.display = gm ? '' : 'none';
+
+      if (!gm) isEnemyCheckbox.checked = false;
     }
   } catch {}
 

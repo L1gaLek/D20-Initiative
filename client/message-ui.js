@@ -93,14 +93,13 @@ function isPlayerVisibleToMe(p, state) {
   if (!p) return false;
   const ownerRole = getOwnerRoleForPlayer(p);
   const curMapId = String(state?.currentMapId || '').trim();
+  const pidMap = String(p?.mapId || '').trim();
+  const isEnemy = !!p.isEnemy;
 
   if (myRole === 'GM') {
     const gmView = String(state?.fog?.gmViewMode || 'gm');
     if (gmView !== 'player') {
-      if (ownerRole === 'GM' && !p.isBase && !p.isAlly) {
-        const pidMap = String(p?.mapId || '').trim();
-        if (pidMap && curMapId && pidMap !== curMapId) return false;
-      }
+      if (isEnemy && pidMap && curMapId && pidMap !== curMapId) return false;
       return true;
     }
   }
@@ -110,8 +109,7 @@ function isPlayerVisibleToMe(p, state) {
     if (!pub) return false;
   }
 
-  const pidMap = String(p?.mapId || '').trim();
-  if (ownerRole === 'GM' && pidMap && curMapId && pidMap !== curMapId && !p.isAlly) return false;
+  if (isEnemy && pidMap && curMapId && pidMap !== curMapId) return false;
   return true;
 }
 
@@ -1324,6 +1322,13 @@ function updatePlayerList() {
         allyBadge.className = 'ally-badge';
         allyBadge.textContent = 'союзник';
         nameWrap.appendChild(allyBadge);
+      }
+
+      if (p.isEnemy) {
+        const enemyBadge = document.createElement('span');
+        enemyBadge.className = 'enemy-badge';
+        enemyBadge.textContent = 'враг';
+        nameWrap.appendChild(enemyBadge);
       }
 
       // GM visibility "eye" for GM-created non-allies (default hidden for others)

@@ -571,6 +571,7 @@ function syncOptimisticPlayersToLocalState(snapshot) {
       if (typeof src.ownerRole !== 'undefined') dst.ownerRole = src.ownerRole;
       if (typeof src.isBase !== 'undefined') dst.isBase = !!src.isBase;
       if (typeof src.isAlly !== 'undefined') dst.isAlly = !!src.isAlly;
+      if (typeof src.isEnemy !== 'undefined') dst.isEnemy = !!src.isEnemy;
       if (typeof src.inCombat !== 'undefined') dst.inCombat = !!src.inCombat;
       if (typeof src.hasRolledInitiative !== 'undefined') dst.hasRolledInitiative = !!src.hasRolledInitiative;
       if (typeof src.pendingInitiativeChoice !== 'undefined') dst.pendingInitiativeChoice = !!src.pendingInitiativeChoice;
@@ -1006,6 +1007,47 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
     await sbClient.from('room_tokens').upsert(payload);
   } catch (e) {
     console.warn('upsertTokenVisibility failed', e);
+  }
+}
+
+async function mirrorGlobalPlayersToMap(roomId, state, targetMapId) {
+  try {
+    await ensureSupabaseReady();
+    const rid = String(roomId || '').trim();
+    const mapId = String(targetMapId || '').trim();
+    if (!rid || !mapId) return;
+
+    const roster = Array.isArray(state?.players) ? state.players : [];
+    const globals = roster.filter((p) => p && !p.isEnemy && p.id);
+    const globalIds = globals.map((p) => String(p.id)).filter(Boolean);
+    if (!globalIds.length) return;
+
+    const { error: delErr } = await sbClient
+      .from('room_tokens')
+      .delete()
+      .eq('room_id', rid)
+      .eq('map_id', mapId)
+      .in('token_id', globalIds);
+    if (delErr) throw delErr;
+
+    const payload = globals
+      .filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)))
+      .map((p) => ({
+        room_id: rid,
+        map_id: mapId,
+        token_id: String(p.id),
+        x: Number(p.x),
+        y: Number(p.y),
+        size: Number(p?.size) || 1,
+        color: (typeof p?.color === 'string') ? p.color : null,
+        is_public: !!p?.isPublic
+      }));
+    if (!payload.length) return;
+
+    const { error: upErr } = await sbClient.from('room_tokens').upsert(payload);
+    if (upErr) throw upErr;
+  } catch (e) {
+    console.warn('mirrorGlobalPlayersToMap failed', e);
   }
 }
 
@@ -2132,6 +2174,7 @@ async function sendMessage(msg) {
             playersPos: {}
           });
 
+          await mirrorGlobalPlayersToMap(currentRoomId, next, newId);
           loadMapToRoot(next, newId);
           logEventToState(next, `Создана новая карта: ${name}`);
         }
@@ -2143,6 +2186,7 @@ async function sendMessage(msg) {
           if (!targetId) return;
 
           syncActiveToMap(next);
+          await mirrorGlobalPlayersToMap(currentRoomId, next, targetId);
           loadMapToRoot(next, targetId);
 
           const m = getActiveMap(next);
@@ -2297,16 +2341,18 @@ async function sendMessage(msg) {
 
         else if (type === "addPlayer") {
           const player = msg.player || {};
-          const isBase = !!player.isBase;
+          const ownerRole = String(myRole || "").trim() || "";
+          const isEnemy = (ownerRole === "GM") ? !!player.isEnemy : false;
+          const isBase = !!player.isBase && !isEnemy;
+          const isAlly = !!player.isAlly && !isEnemy;
           const isMonster = !!player.isMonster;
 
           // Visibility + per-map scoping metadata:
           // - ownerRole allows clients to hide GM-created non-allies from other players.
           // - mapId allows GM to keep "map-local" NPCs/monsters per active map.
           //   Bases and Allies are global across maps.
-          const ownerRole = String(myRole || "").trim() || "";
           const activeMapId = String(next?.currentMapId || "").trim() || null;
-          const mapId = (ownerRole === "GM" && !isBase && !player.isAlly)
+          const mapId = isEnemy
             ? (activeMapId || null)
             : null;
 
@@ -2314,7 +2360,7 @@ async function sendMessage(msg) {
           // - GM-created non-allies are hidden from other users by default (isPublic=false).
           // - Allies are always visible with full info.
           // - Non-GM owners default to visible.
-          const isPublic = (ownerRole === "GM") ? !!player.isAlly : true;
+          const isPublic = (ownerRole === "GM") ? !!isAlly : true;
           if (isBase) {
             const exists = (next.players || []).some(p => p.isBase && p.ownerId === myUserId);
             if (exists) {
@@ -2338,7 +2384,8 @@ async function sendMessage(msg) {
             willJoinNextRound: false,
             inCombat: false,
             isBase,
-            isAlly: !!player.isAlly,
+            isAlly,
+            isEnemy,
             isPublic,
             isMonster,
             monsterId: player.monsterId || null,

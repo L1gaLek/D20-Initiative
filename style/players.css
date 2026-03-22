@@ -307,9 +307,9 @@
 }
 
 .player .token-combat-action{
-  min-width:46px;
-  min-height:22px;
-  padding:2px 7px;
+  min-width:34px;
+  min-height:18px;
+  padding:1px 5px;
   display:inline-flex;
   align-items:center;
   gap:4px;
@@ -317,7 +317,7 @@
   border:1px solid rgba(255, 226, 157, 0.26);
   background:rgba(33, 24, 9, 0.54);
   color:#f7e2a8;
-  opacity:0.56;
+  opacity:0.82;
   box-shadow:0 6px 16px rgba(0,0,0,0.25);
   backdrop-filter:blur(4px);
 }
@@ -330,15 +330,15 @@
 }
 
 .player .token-combat-action__icon{
-  width:12px;
-  height:12px;
+  width:10px;
+  height:10px;
   display:inline-flex;
   align-items:center;
   justify-content:center;
 }
 
 .player .token-combat-action__label{
-  font-size:10px;
+  font-size:9px;
   font-weight:800;
   letter-spacing:0.02em;
   white-space:nowrap;

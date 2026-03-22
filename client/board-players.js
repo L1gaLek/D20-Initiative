@@ -1860,7 +1860,8 @@ addPlayerBtn.addEventListener('click', () => {
     color: playerColorInput.value,
     size: parseInt(playerSizeInput.value, 10),
     isBase: !!isBaseCheckbox?.checked,
-    isAlly: !!isAllyCheckbox?.checked
+    isAlly: !!isAllyCheckbox?.checked,
+    isEnemy: !!isEnemyCheckbox?.checked
   };
 
   sendMessage({ type: 'addPlayer', player });
@@ -1868,6 +1869,7 @@ addPlayerBtn.addEventListener('click', () => {
   playerNameInput.value = '';
   if (isBaseCheckbox && !isBaseCheckbox.disabled) isBaseCheckbox.checked = false;
   if (isAllyCheckbox) isAllyCheckbox.checked = false;
+  if (isEnemyCheckbox) isEnemyCheckbox.checked = false;
 });
 
 // ================== COMBAT MOVE BUDGET ==================
