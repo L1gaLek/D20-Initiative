@@ -1025,6 +1025,24 @@ async function insertRoomLog(roomId, text) {
   }
 }
 
+async function appendRoomLogEntry(roomId, text, options = {}) {
+  const rid = String(roomId || '').trim();
+  const line = String(text || '').trim();
+  if (!rid || !line) return;
+
+  const noOptimistic = !!options?.noOptimistic;
+  const row = { text: line, created_at: new Date().toISOString() };
+
+  await insertRoomLog(rid, line);
+  try {
+    sendWsEnvelope({ type: 'logRow', roomId: rid, row }, { optimisticApplied: !noOptimistic });
+  } catch {}
+
+  if (!noOptimistic) {
+    try { handleMessage({ type: 'logRow', row }); } catch {}
+  }
+}
+
 
 function buildDiceLogText(ev) {
   try {
@@ -1831,21 +1849,7 @@ async function sendMessage(msg) {
       // ===== v4: append-only log entry =====
       case 'log': {
         if (!currentRoomId) return;
-        const logRow = { text: String(msg.text || ''), created_at: new Date().toISOString() };
-        await insertRoomLog(currentRoomId, msg.text);
-        try {
-          sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: !msg.noOptimistic });
-        } catch {}
-        // Optimistic local append (realtime INSERT will also arrive if enabled).
-        // Если msg.noOptimistic = true — НЕ добавляем локально, чтобы не было дублей.
-        if (!msg.noOptimistic) {
-          try {
-            handleMessage({
-              type: 'logRow',
-              row: logRow
-            });
-          } catch {}
-        }
+        await appendRoomLogEntry(currentRoomId, msg.text, { noOptimistic: !!msg.noOptimistic });
         break;
       }
 
@@ -2514,6 +2518,8 @@ async function sendMessage(msg) {
           const size = Number(p.size) || 1;
           const maxX = next.boardWidth - size;
           const maxY = next.boardHeight - size;
+          const prevX = (p.x === null || typeof p.x === 'undefined') ? null : Number(p.x);
+          const prevY = (p.y === null || typeof p.y === 'undefined') ? null : Number(p.y);
           const nx = clamp(Number(msg.x) || 0, 0, maxX);
           const ny = clamp(Number(msg.y) || 0, 0, maxY);
 
@@ -2552,8 +2558,12 @@ async function sendMessage(msg) {
           }
 
           // IMPORTANT: movement is NOT persisted via room_state.
+          const moved = (prevX !== nx) || (prevY !== ny);
+          if (moved) {
+            try { await appendRoomLogEntry(currentRoomId, `${p.name} переместил токен`); } catch {}
+          }
           if (msg.usedDash) {
-            logEventToState(next, `${p.name} совершил Рывок`);
+            try { await appendRoomLogEntry(currentRoomId, `${p.name} использовал Рывок`); } catch {}
           }
           return;
         }
