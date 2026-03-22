@@ -571,6 +571,7 @@ function syncOptimisticPlayersToLocalState(snapshot) {
       if (typeof src.ownerRole !== 'undefined') dst.ownerRole = src.ownerRole;
       if (typeof src.isBase !== 'undefined') dst.isBase = !!src.isBase;
       if (typeof src.isAlly !== 'undefined') dst.isAlly = !!src.isAlly;
+      if (typeof src.isEnemy !== 'undefined') dst.isEnemy = !!src.isEnemy;
       if (typeof src.inCombat !== 'undefined') dst.inCombat = !!src.inCombat;
       if (typeof src.hasRolledInitiative !== 'undefined') dst.hasRolledInitiative = !!src.hasRolledInitiative;
       if (typeof src.pendingInitiativeChoice !== 'undefined') dst.pendingInitiativeChoice = !!src.pendingInitiativeChoice;
@@ -884,7 +885,7 @@ async function upsertRoomMusicState(roomId, bgMusic) {
   await ensureSupabaseReady();
   const row = {
     room_id: String(roomId || ''),
-    payload: deepClone(bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 }),
+    payload: deepClone(bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 }),
     updated_at: new Date().toISOString()
   };
   if (!row.room_id) return;
@@ -970,7 +971,7 @@ async function ensureDetachedBootstrap(roomId, fullState) {
     }
   }
   if (!musicRow) {
-    await upsertRoomMusicState(roomId, st.bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 });
+    await upsertRoomMusicState(roomId, st.bgMusic || { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 });
   }
 }
 
@@ -2129,6 +2130,11 @@ async function sendMessage(msg) {
             gridAlpha: 1,
             wallAlpha: 1,
             walls: [],
+            phase: 'exploration',
+            turnOrder: [],
+            currentTurnIndex: 0,
+            round: 1,
+            playerStates: {},
             playersPos: {}
           });
 
@@ -2297,6 +2303,10 @@ async function sendMessage(msg) {
 
         else if (type === "addPlayer") {
           const player = msg.player || {};
+          const ownerRole = String(myRole || "").trim() || "";
+          const wantsEnemy = !!player.isEnemy;
+          const isAlly = (ownerRole === "GM") ? (!!player.isAlly && !wantsEnemy) : !!player.isAlly;
+          const isEnemy = (ownerRole === "GM") ? (!isAlly || wantsEnemy) : false;
           const isBase = !!player.isBase;
           const isMonster = !!player.isMonster;
 
@@ -2304,9 +2314,8 @@ async function sendMessage(msg) {
           // - ownerRole allows clients to hide GM-created non-allies from other players.
           // - mapId allows GM to keep "map-local" NPCs/monsters per active map.
           //   Bases and Allies are global across maps.
-          const ownerRole = String(myRole || "").trim() || "";
           const activeMapId = String(next?.currentMapId || "").trim() || null;
-          const mapId = (ownerRole === "GM" && !isBase && !player.isAlly)
+          const mapId = (isEnemy && !isBase)
             ? (activeMapId || null)
             : null;
 
@@ -2314,7 +2323,7 @@ async function sendMessage(msg) {
           // - GM-created non-allies are hidden from other users by default (isPublic=false).
           // - Allies are always visible with full info.
           // - Non-GM owners default to visible.
-          const isPublic = (ownerRole === "GM") ? !!player.isAlly : true;
+          const isPublic = (ownerRole === "GM") ? !!isAlly : true;
           if (isBase) {
             const exists = (next.players || []).some(p => p.isBase && p.ownerId === myUserId);
             if (exists) {
@@ -2338,7 +2347,8 @@ async function sendMessage(msg) {
             willJoinNextRound: false,
             inCombat: false,
             isBase,
-            isAlly: !!player.isAlly,
+            isAlly,
+            isEnemy,
             isPublic,
             isMonster,
             monsterId: player.monsterId || null,
@@ -2364,7 +2374,6 @@ async function sendMessage(msg) {
           if (p.isAlly) return;
 
           p.isPublic = !!msg.isPublic;
-          logEventToState(next, `${p.name}: видимость ${p.isPublic ? 'включена' : 'выключена'}`);
         }
 
         else if (type === "combatInitChoice") {
@@ -2539,6 +2548,9 @@ async function sendMessage(msg) {
           }
 
           // IMPORTANT: movement is NOT persisted via room_state.
+          if (msg.usedDash) {
+            logEventToState(next, `${p.name} совершил Рывок`);
+          }
           return;
         }
 
@@ -2751,7 +2763,7 @@ async function sendMessage(msg) {
         // ===== Background Music (GM) =====
         else if (type === "bgMusicSet") {
           if (!isGM) return;
-          const incoming = (msg.bgMusic && typeof msg.bgMusic === 'object') ? deepClone(msg.bgMusic) : { tracks: [], currentTrackId: null, isPlaying: false, volume: 40 };
+          const incoming = (msg.bgMusic && typeof msg.bgMusic === 'object') ? deepClone(msg.bgMusic) : { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 };
           if (!Array.isArray(incoming.tracks)) incoming.tracks = [];
           incoming.tracks = incoming.tracks.slice(0, 10).map(t => ({
             id: String(t?.id || ''),
@@ -2761,9 +2773,11 @@ async function sendMessage(msg) {
             url: String(t?.url || ''),
             path: String(t?.path || ''),
             createdAt: String(t?.createdAt || '')
-          })).filter(t => t.id && t.url);
+          })).filter(t => t.id && (t.url || t.path));
           incoming.currentTrackId = incoming.currentTrackId ? String(incoming.currentTrackId) : null;
           incoming.isPlaying = !!incoming.isPlaying;
+          incoming.startedAt = Number.isFinite(Number(incoming.startedAt)) ? Math.max(0, Number(incoming.startedAt)) : 0;
+          incoming.pausedAt = Number.isFinite(Number(incoming.pausedAt)) ? Math.max(0, Number(incoming.pausedAt)) : 0;
           incoming.volume = Number.isFinite(Number(incoming.volume)) ? clamp(Number(incoming.volume), 0, 100) : 40;
           await upsertRoomMusicState(currentRoomId, incoming);
           try { await insertRoomLog(currentRoomId, 'Фоновая музыка обновлена'); } catch {}
@@ -2800,6 +2814,36 @@ async function sendMessage(msg) {
           if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
           await deleteRoomMarkRow(currentRoomId, mapId, id);
           try { await insertRoomLog(currentRoomId, 'Обозначение удалено'); } catch {}
+          _refreshDetachedRoomView();
+          return;
+        }
+
+        else if (type === 'moveMark') {
+          const raw = msg.mark;
+          if (!raw || typeof raw !== 'object') return;
+          const id = String(raw.id || '').trim();
+          if (!id) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          const mapId = String(next.currentMapId || m.id || '');
+          const cached = Array.isArray(__roomDetachedCache.marksByMap.get(mapId)) ? __roomDetachedCache.marksByMap.get(mapId) : [];
+          const mark = cached.find(mm => String(mm?.id || '') === id);
+          if (!mark) return;
+          if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
+          const safe = deepClone(mark);
+          if (String(mark.kind || '') === 'rect') {
+            safe.x = Number(raw.x) || 0;
+            safe.y = Number(raw.y) || 0;
+          } else if (String(mark.kind || '') === 'circle') {
+            safe.cx = Number(raw.cx) || 0;
+            safe.cy = Number(raw.cy) || 0;
+          } else if (String(mark.kind || '') === 'poly' && Array.isArray(raw.pts) && raw.pts.length >= 3) {
+            safe.pts = raw.pts.map((p) => ({
+              x: Number(p?.x) || 0,
+              y: Number(p?.y) || 0
+            }));
+          }
+          await upsertRoomMarkRow(currentRoomId, safe);
           _refreshDetachedRoomView();
           return;
         }

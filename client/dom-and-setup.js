@@ -108,6 +108,45 @@ const playerSizeInput = document.getElementById('player-size');
 
 const isBaseCheckbox = document.getElementById('is-base');
 const isAllyCheckbox = document.getElementById('is-ally');
+const isEnemyCheckbox = document.getElementById('is-enemy');
+
+function refreshPlayerTypeCheckboxUi() {
+  const allyChecked = !!isAllyCheckbox?.checked;
+  const enemyChecked = !!isEnemyCheckbox?.checked;
+
+  if (isAllyCheckbox instanceof HTMLInputElement) {
+    isAllyCheckbox.disabled = enemyChecked;
+    if (!enemyChecked) isAllyCheckbox.removeAttribute('aria-disabled');
+    else isAllyCheckbox.setAttribute('aria-disabled', 'true');
+  }
+
+  if (isEnemyCheckbox instanceof HTMLInputElement) {
+    isEnemyCheckbox.disabled = allyChecked;
+    if (!allyChecked) isEnemyCheckbox.removeAttribute('aria-disabled');
+    else isEnemyCheckbox.setAttribute('aria-disabled', 'true');
+  }
+}
+
+function wirePlayerTypeCheckboxes() {
+  const bindToggle = (src, onChange) => {
+    if (!(src instanceof HTMLInputElement)) return;
+    src.addEventListener('change', () => {
+      onChange?.(src);
+      refreshPlayerTypeCheckboxUi();
+    });
+  };
+
+  bindToggle(isEnemyCheckbox, (src) => {
+    if (src.checked && isAllyCheckbox instanceof HTMLInputElement) isAllyCheckbox.checked = false;
+  });
+  bindToggle(isAllyCheckbox, (src) => {
+    if (src.checked && isEnemyCheckbox instanceof HTMLInputElement) isEnemyCheckbox.checked = false;
+  });
+  bindToggle(isBaseCheckbox, () => {});
+  refreshPlayerTypeCheckboxUi();
+}
+
+wirePlayerTypeCheckboxes();
 
 const dice = document.getElementById('dice');
 const diceCountInput = document.getElementById('dice-count');
@@ -118,6 +157,40 @@ const addWallBtn = document.getElementById('add-wall');
 const removeWallBtn = document.getElementById('remove-wall');
 
 const startInitiativeBtn = document.getElementById("start-initiative");
+
+function triggerBoardStepperInput(input) {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function initBoardSteppers() {
+  document.querySelectorAll('.board-stepper__btn[data-step-target]').forEach((btn) => {
+    if (btn.dataset.stepperBound === '1') return;
+    btn.dataset.stepperBound = '1';
+    btn.addEventListener('click', () => {
+      const targetId = String(btn.getAttribute('data-step-target') || '').trim();
+      const dir = Number(btn.getAttribute('data-step-dir') || 0);
+      const input = targetId ? document.getElementById(targetId) : null;
+      if (!(input instanceof HTMLInputElement) || !Number.isFinite(dir) || dir === 0) return;
+      input.focus({ preventScroll: true });
+      if (dir > 0 && typeof input.stepUp === 'function') input.stepUp();
+      else if (dir < 0 && typeof input.stepDown === 'function') input.stepDown();
+      else {
+        const step = Number(input.step) || 1;
+        const min = Number(input.min);
+        const max = Number(input.max);
+        let next = (Number(input.value) || 0) + (dir * step);
+        if (Number.isFinite(min)) next = Math.max(min, next);
+        if (Number.isFinite(max)) next = Math.min(max, next);
+        input.value = String(next);
+      }
+      triggerBoardStepperInput(input);
+    });
+  });
+}
+
+initBoardSteppers();
 const startCombatBtn = document.getElementById("start-combat");
 const startExplorationBtn = document.getElementById("start-exploration");
 
@@ -393,6 +466,16 @@ function applyRoleToUI() {
       else isAllyCheckbox.style.display = gm ? '' : 'none';
 
       if (!gm) isAllyCheckbox.checked = false;
+    }
+  } catch {}
+
+  try {
+    if (typeof isEnemyCheckbox !== 'undefined' && isEnemyCheckbox) {
+      const label = isEnemyCheckbox.closest('label');
+      if (label) label.style.display = gm ? '' : 'none';
+      else isEnemyCheckbox.style.display = gm ? '' : 'none';
+
+      if (!gm) isEnemyCheckbox.checked = false;
     }
   } catch {}
 
