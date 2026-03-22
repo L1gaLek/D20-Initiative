@@ -2826,9 +2826,9 @@ board.addEventListener('click', e => {
   }
 
   const combatRestricted = !!window.isCombatRestrictedSelection?.(selectedPlayer);
+  const moveInfo = combatRestricted ? window.getCombatMoveBudgetInfo?.(selectedPlayer) : null;
+  const dashActive = !!moveInfo?.dash?.active;
   if (combatRestricted) {
-    const moveInfo = window.getCombatMoveBudgetInfo?.(selectedPlayer);
-    const dashActive = !!moveInfo?.dash?.active;
     if (moveInfo) {
       const toOrigin = (Number(x) === Number(moveInfo.originX) && Number(y) === Number(moveInfo.originY));
       const canMove = dashActive
@@ -2844,7 +2844,6 @@ board.addEventListener('click', e => {
   sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: !!dashActive });
 
   if (combatRestricted) {
-    const moveInfo = window.getCombatMoveBudgetInfo?.(selectedPlayer);
     if (moveInfo?.dash?.active) {
       try { window.commitCombatDashMove?.(selectedPlayer, x, y); } catch {}
       try {
