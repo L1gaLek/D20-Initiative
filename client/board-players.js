@@ -596,6 +596,12 @@ const TOKEN_MINI_ACTION_SVG = `
     <path d="M9.2 10.4h5.6" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="1.6" stroke-linecap="round"></path>
   </svg>
 `;
+const TOKEN_DASH_SVG = `
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+    <path d="M4 15.5c2.6-3.2 5.7-5.3 9.3-6.4l-1.6 3.5 8.3-4.1-6.1-7.2-.6 4C8.2 6.6 4.3 9.5 2.5 14.4c-.3.8.8 1.7 1.5 1.1z" fill="currentColor" opacity="0.95"></path>
+    <path d="M8.5 18.5c1.6-.9 3.1-1.3 4.7-1.4" fill="none" stroke="rgba(0,0,0,0.45)" stroke-width="1.8" stroke-linecap="round"></path>
+  </svg>
+`;
 
 function formatTokenMiniUses(current, total) {
   const cur = Math.max(0, Number(current) || 0);
@@ -1494,6 +1500,49 @@ function updateTokenConditionIndicators(player, tokenEl) {
   `;
 }
 
+function updateTokenCombatActions(player, tokenEl) {
+  if (!player || !tokenEl) return;
+
+  let wrap = tokenEl.querySelector('.token-combat-actions');
+  const isSelected = !!selectedPlayer && String(selectedPlayer?.id || '') === String(player?.id || '');
+  const canDash = !!window.canUseCombatDashAction?.(player);
+  const dashActive = !!window.isCombatDashActiveForPlayer?.(player);
+
+  if (!isSelected || !canDash) {
+    if (wrap) wrap.remove();
+    return;
+  }
+
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'token-combat-actions';
+    tokenEl.appendChild(wrap);
+  }
+
+  wrap.innerHTML = `
+    <button type="button" class="token-combat-action ${dashActive ? 'is-active' : ''}" data-token-action="dash" aria-label="Рывок" title="Рывок">
+      <span class="token-combat-action__icon" aria-hidden="true">${TOKEN_DASH_SVG}</span>
+      <span class="token-combat-action__label">Рывок</span>
+    </button>
+  `;
+
+  const btn = wrap.querySelector('[data-token-action="dash"]');
+  if (btn) {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try { window.activateCombatDashForPlayer?.(player); } catch {}
+      try { window.syncSelectedPlayerUi?.(); } catch {}
+      try { window.renderCombatMoveOverlay?.(); } catch {}
+    });
+  }
+}
+window.updateTokenCombatActions = updateTokenCombatActions;
+
 window.refreshPlayerConditionIndicators = function (playerId) {
   try {
     const pid = String(playerId || '');
@@ -1634,6 +1683,7 @@ function setPlayerPosition(player) {
   // Apply portrait / color mode
   try { applyTokenVisual(el, player); } catch {}
   try { updateTokenConditionIndicators(player, el); } catch {}
+  try { updateTokenCombatActions(player, el); } catch {}
   el.style.width = `${player.size * 50}px`;
   el.style.height = `${player.size * 50}px`;
 
@@ -1934,6 +1984,8 @@ addPlayerBtn.addEventListener('click', () => {
         currentY: baseY,
         spentFeet: 0,
         totalFeet: getPlayerSpeedFeet(player),
+        dashUsed: false,
+        dashActive: false,
         teleportAvailable: false,
         teleportRangeFeet: 0,
         teleportUsed: false,
@@ -2256,6 +2308,17 @@ addPlayerBtn.addEventListener('click', () => {
     };
   }
 
+  function getDashInfo(player) {
+    const rec = getTracker(player, { create: true });
+    if (!rec || !isCombatPhase() || rec.dashUsed) return null;
+    const rangeFeet = Math.max(0, Number(rec.totalFeet) || 0);
+    return {
+      rangeFeet,
+      rangeCells: Math.max(0, Math.floor(rangeFeet / getFeetPerCell())),
+      active: !!rec.dashActive
+    };
+  }
+
   function canTeleportTo(player, x, y) {
     const live = getLivePlayer(player) || player;
     const rec = getTracker(live, { create: true });
@@ -2343,12 +2406,55 @@ addPlayerBtn.addEventListener('click', () => {
     rec.teleportActive = false;
   }
 
+  function buildReachableMapForFeet(player, rec, feetBudget) {
+    const live = getLivePlayer(player) || player;
+    if (!live || !rec) return new Map();
+    const size = Math.max(1, Number(live?.size) || 1);
+    const feetPerCell = getFeetPerCell();
+    const stepsLeft = Math.max(0, Math.floor(Math.max(0, Number(feetBudget) || 0) / feetPerCell));
+    const out = new Map();
+    const wallsSet = getWallsSet();
+    const q = [{ x: Number(rec.currentX) || 0, y: Number(rec.currentY) || 0, d: 0 }];
+    const seen = new Map([[`${Number(rec.currentX) || 0},${Number(rec.currentY) || 0}`, 0]]);
+
+    while (q.length) {
+      const cur = q.shift();
+      if (!cur) continue;
+      if (cur.d >= stepsLeft) continue;
+      for (const [dx, dy] of DIRS) {
+        const nx = cur.x + dx;
+        const ny = cur.y + dy;
+        const nd = cur.d + 1;
+        const key = `${nx},${ny}`;
+        const prev = seen.get(key);
+        if (prev != null && prev <= nd) continue;
+        if (!canStepBetween(live, cur.x, cur.y, nx, ny, size, wallsSet)) continue;
+        seen.set(key, nd);
+        out.set(key, nd);
+        q.push({ x: nx, y: ny, d: nd });
+      }
+    }
+
+    return out;
+  }
+
   function canSpendMoveTo(player, x, y) {
     const rec = getTracker(player, { create: true });
     if (!rec) return true;
     if (Number(x) === Number(rec.originX) && Number(y) === Number(rec.originY)) return true;
-    const map = buildWalkReachableMap(player, rec);
+    const map = buildReachableMapForFeet(player, rec, getRemainingFeet(player));
     return map.has(`${Number(x) || 0},${Number(y) || 0}`);
+  }
+
+  function canSpendDashTo(player, x, y) {
+    const rec = getTracker(player, { create: true });
+    const dash = getDashInfo(player);
+    if (!rec || !dash) return false;
+    const nx = Number(x) || 0;
+    const ny = Number(y) || 0;
+    if (nx === Number(rec.currentX) && ny === Number(rec.currentY)) return true;
+    const map = buildReachableMapForFeet(player, rec, dash.rangeFeet);
+    return map.has(`${nx},${ny}`);
   }
 
   function commitMove(player, x, y) {
@@ -2367,6 +2473,18 @@ addPlayerBtn.addEventListener('click', () => {
     rec.spentFeet = Math.max(0, Number(rec.spentFeet) || 0) + (steps * getFeetPerCell());
     rec.currentX = nx;
     rec.currentY = ny;
+  }
+
+  function commitDashMove(player, x, y) {
+    const rec = getTracker(player, { create: true });
+    if (!rec) return;
+    const nx = Number(x) || 0;
+    const ny = Number(y) || 0;
+    if (nx === Number(rec.currentX) && ny === Number(rec.currentY)) return;
+    rec.currentX = nx;
+    rec.currentY = ny;
+    rec.dashUsed = true;
+    rec.dashActive = false;
   }
 
   function ensureLayer() {
@@ -2397,6 +2515,30 @@ addPlayerBtn.addEventListener('click', () => {
     if (isCombatRestrictedSelection(player)) return true;
     if (tp) return true;
     return !!isGmNow();
+  }
+
+  function canUseDashAction(playerOrId) {
+    const live = getLivePlayer(playerOrId);
+    if (!live || !isCombatPhase()) return false;
+    const rec = getTracker(live, { create: true });
+    if (!rec || rec.dashUsed || rec.teleportActive) return false;
+    if (isGmNow()) return true;
+    return isCombatRestrictedSelection(live);
+  }
+
+  function activateDash(playerOrId) {
+    const live = getLivePlayer(playerOrId);
+    if (!canUseDashAction(live)) return false;
+    const rec = getTracker(live, { create: true });
+    if (!rec) return false;
+    rec.dashActive = !rec.dashActive;
+    try {
+      selectedPlayer = live;
+      try { window.syncSelectedPlayerUi?.(); } catch {}
+    } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.renderCombatMoveOverlay?.(); } catch {}
+    return true;
   }
 
   function appendOverlayCell(layer, cls, x, y, size) {
@@ -2446,6 +2588,20 @@ addPlayerBtn.addEventListener('click', () => {
       return;
     }
 
+    const dash = getDashInfo(live);
+    if (dash?.active) {
+      const dashMap = buildReachableMapForFeet(live, rec, dash.rangeFeet);
+      for (const [key] of dashMap.entries()) {
+        const parts = key.split(',');
+        const x = Number(parts[0]);
+        const y = Number(parts[1]);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (x === rec.currentX && y === rec.currentY) continue;
+        appendOverlayCell(layer, 'combat-move-cell--dash', x, y, size);
+      }
+      return;
+    }
+
     const walkMap = buildWalkReachableMap(live, rec);
     for (const [key] of walkMap.entries()) {
       const parts = key.split(',');
@@ -2472,6 +2628,7 @@ addPlayerBtn.addEventListener('click', () => {
       spentFeet: Number(rec.spentFeet) || 0,
       totalFeet: Number(rec.totalFeet) || 0,
       remainingFeet: getRemainingFeet(player),
+      dash: getDashInfo(player),
       teleport: getTeleportInfo(player)
     };
   };
@@ -2484,6 +2641,11 @@ addPlayerBtn.addEventListener('click', () => {
   window.canUseCombatTeleportTo = canTeleportTo;
   window.consumeCombatTeleportTo = consumeTeleport;
   window.getCombatTeleportInfo = getTeleportInfo;
+  window.canUseCombatDashAction = canUseDashAction;
+  window.activateCombatDashForPlayer = activateDash;
+  window.canUseCombatDashTo = canSpendDashTo;
+  window.commitCombatDashMove = commitDashMove;
+  window.isCombatDashActiveForPlayer = (player) => !!getDashInfo(player)?.active;
 })();
 
 // ================== MOVE PREVIEW ==================
@@ -2649,9 +2811,13 @@ board.addEventListener('click', e => {
   const combatRestricted = !!window.isCombatRestrictedSelection?.(selectedPlayer);
   if (combatRestricted) {
     const moveInfo = window.getCombatMoveBudgetInfo?.(selectedPlayer);
+    const dashActive = !!moveInfo?.dash?.active;
     if (moveInfo) {
       const toOrigin = (Number(x) === Number(moveInfo.originX) && Number(y) === Number(moveInfo.originY));
-      if (!toOrigin && !window.canSpendCombatMoveTo?.(selectedPlayer, x, y)) {
+      const canMove = dashActive
+        ? !!window.canUseCombatDashTo?.(selectedPlayer, x, y)
+        : !!window.canSpendCombatMoveTo?.(selectedPlayer, x, y);
+      if (!toOrigin && !canMove) {
         alert("Недостаточно скорости для такого перемещения");
         return;
       }
@@ -2661,7 +2827,18 @@ board.addEventListener('click', e => {
   sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
 
   if (combatRestricted) {
-    const movedId = selectedPlayer?.id;
+    const moveInfo = window.getCombatMoveBudgetInfo?.(selectedPlayer);
+    if (moveInfo?.dash?.active) {
+      try { window.commitCombatDashMove?.(selectedPlayer, x, y); } catch {}
+      try {
+        selectedPlayer = null;
+        try { window.syncSelectedPlayerUi?.(); } catch {}
+      } catch {}
+      try { window.hideMovePreview?.(); } catch {}
+      try { window.hideCombatMoveOverlay?.(); } catch {}
+      return;
+    }
+
     try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
     try {
       selectedPlayer = null;

@@ -1732,7 +1732,7 @@
 }
 
 .board-stepper__btn{
-  min-width: 7px;
+  min-width: 4px;
   min-height: 28px;
   padding: 0;
   display: inline-flex;
@@ -1955,7 +1955,7 @@
 }
 
 .board-stepper__btn{
-  min-width: 6px;
+  min-width: 3px;
   min-height: 24px;
   font-size: 7px;
 }

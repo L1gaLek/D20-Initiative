@@ -939,6 +939,10 @@ function syncSelectedPlayerUi() {
     playerElements.forEach((el, id) => {
       if (!el) return;
       el.classList.toggle('selected', !!selectedId && String(id) === selectedId);
+      try {
+        const player = (Array.isArray(players) ? players : []).find((p) => String(p?.id || '') === String(id));
+        window.updateTokenCombatActions?.(player, el);
+      } catch {}
     });
   } catch {}
 
