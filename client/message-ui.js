@@ -471,8 +471,10 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // Preserve newer local character sheets if an incoming room_state snapshot is older.
       try {
+        const ownUserId = String(getAppStorageItem?.('int_user_id') || window.myId || '').trim();
         (lastState.players || []).forEach(p => {
           if (!p || !p.id) return;
+          if (!ownUserId || String(p.ownerId || '') !== ownUserId) return;
           const prev = prevSheets.get(String(p.id));
           if (!prev) return;
           const incomingTs = Number(p.sheetUpdatedAt) || 0;

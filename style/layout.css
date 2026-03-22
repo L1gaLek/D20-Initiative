@@ -1732,7 +1732,7 @@
 }
 
 .board-stepper__btn{
-  min-width: 14px;
+  min-width: 7px;
   min-height: 28px;
   padding: 0;
   display: inline-flex;
@@ -1743,7 +1743,7 @@
   background: linear-gradient(180deg, rgba(122,76,30,0.92) 0%, rgba(68,40,15,0.96) 100%);
   color: #ffe4b7;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1;
   opacity: 0;
   visibility: hidden;
@@ -1955,9 +1955,9 @@
 }
 
 .board-stepper__btn{
-  min-width: 12px;
+  min-width: 6px;
   min-height: 24px;
-  font-size: 8px;
+  font-size: 7px;
 }
 
 .board-settings-box button{
