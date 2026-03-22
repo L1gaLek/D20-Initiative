@@ -505,7 +505,7 @@ function applyTokenRowToLocalState(row) {
         if (Number.isFinite(size) && size > 0) p.size = size;
         if (color) p.color = color;
         // map-local safety
-        if (mapId) p.mapId = mapId;
+        if (mapId && isMapScopedPlayer(p)) p.mapId = mapId;
 
         // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates.
         // But for GM-created non-allies the default is hidden, and the first placement on the board
@@ -1010,45 +1010,8 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
   }
 }
 
-async function mirrorGlobalPlayersToMap(roomId, state, targetMapId) {
-  try {
-    await ensureSupabaseReady();
-    const rid = String(roomId || '').trim();
-    const mapId = String(targetMapId || '').trim();
-    if (!rid || !mapId) return;
-
-    const roster = Array.isArray(state?.players) ? state.players : [];
-    const globals = roster.filter((p) => p && !p.isEnemy && p.id);
-    const globalIds = globals.map((p) => String(p.id)).filter(Boolean);
-    if (!globalIds.length) return;
-
-    const { error: delErr } = await sbClient
-      .from('room_tokens')
-      .delete()
-      .eq('room_id', rid)
-      .eq('map_id', mapId)
-      .in('token_id', globalIds);
-    if (delErr) throw delErr;
-
-    const payload = globals
-      .filter((p) => Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y)))
-      .map((p) => ({
-        room_id: rid,
-        map_id: mapId,
-        token_id: String(p.id),
-        x: Number(p.x),
-        y: Number(p.y),
-        size: Number(p?.size) || 1,
-        color: (typeof p?.color === 'string') ? p.color : null,
-        is_public: !!p?.isPublic
-      }));
-    if (!payload.length) return;
-
-    const { error: upErr } = await sbClient.from('room_tokens').upsert(payload);
-    if (upErr) throw upErr;
-  } catch (e) {
-    console.warn('mirrorGlobalPlayersToMap failed', e);
-  }
+function isMapScopedPlayer(player) {
+  return !!(player && player.isEnemy && !player.isBase);
 }
 
 async function insertRoomLog(roomId, text) {
@@ -2179,7 +2142,6 @@ async function sendMessage(msg) {
             playersPos: {}
           });
 
-          await mirrorGlobalPlayersToMap(currentRoomId, next, newId);
           loadMapToRoot(next, newId);
           logEventToState(next, `Создана новая карта: ${name}`);
         }
@@ -2191,7 +2153,6 @@ async function sendMessage(msg) {
           if (!targetId) return;
 
           syncActiveToMap(next);
-          await mirrorGlobalPlayersToMap(currentRoomId, next, targetId);
           loadMapToRoot(next, targetId);
 
           const m = getActiveMap(next);
