@@ -111,6 +111,11 @@
   background: rgba(64, 220, 64, 0.22);
   box-shadow: inset 0 0 0 1px rgba(185, 255, 185, 0.20);
 }
+#combat-move-layer .combat-move-cell--dash {
+  border: 1px solid rgba(196, 180, 54, 0.95);
+  background: rgba(163, 148, 25, 0.30);
+  box-shadow: inset 0 0 0 1px rgba(236, 225, 129, 0.18), 0 0 10px rgba(163, 148, 25, 0.16);
+}
 #combat-move-layer .combat-move-cell--origin {
   border: 2px solid rgba(255, 168, 54, 0.98);
   background: rgba(255, 153, 0, 0.22);

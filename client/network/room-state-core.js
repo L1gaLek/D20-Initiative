@@ -376,6 +376,8 @@ function createInitialGameState() {
       tracks: [], // [{id,name,desc,url,path,createdAt}]
       currentTrackId: null,
       isPlaying: false,
+      startedAt: 0,
+      pausedAt: 0,
       volume: 40 // 0..100
     }
   };

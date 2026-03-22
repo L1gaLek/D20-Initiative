@@ -439,6 +439,27 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
 
       try {
+        const prevBg = (lastState && typeof lastState.bgMusic === 'object') ? lastState.bgMusic : null;
+        const nextBg = (normalized && typeof normalized.bgMusic === 'object') ? normalized.bgMusic : null;
+        const nextLooksDetachedPlaceholder = !!nextBg
+          && Array.isArray(nextBg.tracks)
+          && nextBg.tracks.length === 0
+          && !String(nextBg.currentTrackId || '').trim()
+          && !nextBg.isPlaying
+          && !(Number(nextBg.startedAt) > 0)
+          && !(Number(nextBg.pausedAt) > 0);
+        const prevLooksMeaningful = !!prevBg
+          && ((Array.isArray(prevBg.tracks) && prevBg.tracks.length > 0)
+            || !!String(prevBg.currentTrackId || '').trim()
+            || !!prevBg.isPlaying
+            || Number(prevBg.startedAt) > 0
+            || Number(prevBg.pausedAt) > 0);
+        if (nextLooksDetachedPlaceholder && prevLooksMeaningful) {
+          normalized.bgMusic = deepClone(prevBg);
+        }
+      } catch {}
+
+      try {
         const modEvent = getRoomModerationEventForUi(normalized);
         if (handleOwnModerationEvent(modEvent)) return;
       } catch {}
@@ -450,8 +471,10 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // Preserve newer local character sheets if an incoming room_state snapshot is older.
       try {
+        const ownUserId = String(getAppStorageItem?.('int_user_id') || window.myId || '').trim();
         (lastState.players || []).forEach(p => {
           if (!p || !p.id) return;
+          if (!ownUserId || String(p.ownerId || '') !== ownUserId) return;
           const prev = prevSheets.get(String(p.id));
           if (!prev) return;
           const incomingTs = Number(p.sheetUpdatedAt) || 0;
@@ -916,6 +939,10 @@ function syncSelectedPlayerUi() {
     playerElements.forEach((el, id) => {
       if (!el) return;
       el.classList.toggle('selected', !!selectedId && String(id) === selectedId);
+      try {
+        const player = (Array.isArray(players) ? players : []).find((p) => String(p?.id || '') === String(id));
+        window.updateTokenCombatActions?.(player, el);
+      } catch {}
     });
   } catch {}
 
