@@ -1695,7 +1695,7 @@
 .board-settings-box input[type="number"]{
   width: 62px;
   min-height: 38px;
-  padding: 6px 8px;
+  padding: 6px 10px 6px 6px;
   text-align: center;
 }
 
@@ -1780,6 +1780,7 @@
 
 .cell-feet-inline input[type="number"]{
   width: 72px;
+  padding-right: 10px;
   text-align: center;
 }
 
@@ -1932,7 +1933,7 @@
 .board-settings-box input[type="number"]{
   width: 54px;
   min-height: 32px;
-  padding: 4px 6px;
+  padding: 4px 8px 4px 6px;
   font-size: 13px;
 }
 
