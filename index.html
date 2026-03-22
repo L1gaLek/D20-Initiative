@@ -353,7 +353,11 @@
               <div id="cell-feet-gm-box" class="board-settings-box cell-feet-box" style="display:none;">
                 <label id="cell-feet-gm-wrap" class="cell-feet-inline cell-feet-inline--gm-box">
                   <span>1 клетка =</span>
-                  <input type="number" id="cell-feet-gm" value="10" min="1" max="100" step="1" title="Сколько футов в одной клетке">
+                  <span class="board-stepper">
+                    <button type="button" class="board-stepper__btn" data-step-target="cell-feet-gm" data-step-dir="-1" aria-label="Уменьшить число футов в клетке">◀</button>
+                    <input type="number" id="cell-feet-gm" value="10" min="1" max="100" step="1" title="Сколько футов в одной клетке">
+                    <button type="button" class="board-stepper__btn" data-step-target="cell-feet-gm" data-step-dir="1" aria-label="Увеличить число футов в клетке">▶</button>
+                  </span>
                   <span>футов</span>
                 </label>
               </div>
@@ -373,10 +377,18 @@
                 1 клетка = <span id="cell-feet-player-value">10</span> футов
               </div>
               <label>Ширина поля:
-                <input type="number" id="board-width" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
+                <span class="board-stepper">
+                  <button type="button" class="board-stepper__btn" data-step-target="board-width" data-step-dir="-1" aria-label="Уменьшить ширину поля">◀</button>
+                  <input type="number" id="board-width" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
+                  <button type="button" class="board-stepper__btn" data-step-target="board-width" data-step-dir="1" aria-label="Увеличить ширину поля">▶</button>
+                </span>
               </label>
               <label>Высота поля:
-                <input type="number" id="board-height" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
+                <span class="board-stepper">
+                  <button type="button" class="board-stepper__btn" data-step-target="board-height" data-step-dir="-1" aria-label="Уменьшить высоту поля">◀</button>
+                  <input type="number" id="board-height" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
+                  <button type="button" class="board-stepper__btn" data-step-target="board-height" data-step-dir="1" aria-label="Увеличить высоту поля">▶</button>
+                </span>
               </label>
               <button id="create-board" type="button" title="Применить размер рамки (только для вас)">Применить вид</button>
             </div>
@@ -384,10 +396,18 @@
             <!-- Только для GM: реальный размер карты (количество клеток внутри поля) -->
             <div id="board-settings-gm" class="board-settings-box">
               <label>Ширина поля (ГМ):
-                <input type="number" id="board-width-gm" value="10" min="5" max="150" title="Реальная ширина карты в клетках (5–150)">
+                <span class="board-stepper">
+                  <button type="button" class="board-stepper__btn" data-step-target="board-width-gm" data-step-dir="-1" aria-label="Уменьшить ширину поля ГМ">◀</button>
+                  <input type="number" id="board-width-gm" value="10" min="5" max="150" title="Реальная ширина карты в клетках (5–150)">
+                  <button type="button" class="board-stepper__btn" data-step-target="board-width-gm" data-step-dir="1" aria-label="Увеличить ширину поля ГМ">▶</button>
+                </span>
               </label>
               <label>Высота поля (ГМ):
-                <input type="number" id="board-height-gm" value="10" min="5" max="150" title="Реальная высота карты в клетках (5–150)">
+                <span class="board-stepper">
+                  <button type="button" class="board-stepper__btn" data-step-target="board-height-gm" data-step-dir="-1" aria-label="Уменьшить высоту поля ГМ">◀</button>
+                  <input type="number" id="board-height-gm" value="10" min="5" max="150" title="Реальная высота карты в клетках (5–150)">
+                  <button type="button" class="board-stepper__btn" data-step-target="board-height-gm" data-step-dir="1" aria-label="Увеличить высоту поля ГМ">▶</button>
+                </span>
               </label>
               <button id="create-board-gm" type="button" title="Изменить реальный размер карты (видно всем)">Применить карту</button>
             </div>

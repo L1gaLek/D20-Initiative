@@ -1685,6 +1685,8 @@
 }
 
 .board-settings-box label{
+  display: inline-flex;
+  align-items: center;
   color: var(--room-text-soft);
   font-size: 12px;
   font-weight: 700;
@@ -1695,6 +1697,81 @@
   min-height: 38px;
   padding: 6px 8px;
   text-align: center;
+}
+
+.board-stepper{
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(224, 177, 90, 0.18);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(54,34,19,0.88) 0%, rgba(24,15,9,0.94) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.board-stepper:focus-within{
+  border-color: rgba(255, 203, 114, 0.55);
+  box-shadow:
+    0 0 0 3px rgba(255,176,81,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.board-stepper input[type="number"]{
+  appearance: textfield;
+  -moz-appearance: textfield;
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.12);
+}
+
+.board-stepper input[type="number"]::-webkit-inner-spin-button,
+.board-stepper input[type="number"]::-webkit-outer-spin-button{
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+.board-stepper__btn{
+  min-width: 14px;
+  min-height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 199, 122, 0.22);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(122,76,30,0.92) 0%, rgba(68,40,15,0.96) 100%);
+  color: #ffe4b7;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: scaleX(0.92);
+  transition: opacity 140ms ease, transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.board-stepper:focus-within .board-stepper__btn{
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: scaleX(1);
+}
+
+.board-stepper__btn:hover{
+  background: linear-gradient(180deg, rgba(145,92,34,0.96) 0%, rgba(83,50,19,0.98) 100%);
+  border-color: rgba(255, 213, 139, 0.34);
+}
+
+.board-stepper__btn:active{
+  transform: translateY(1px);
+}
+
+.board-stepper__btn:focus-visible{
+  outline: none;
+  border-color: rgba(255, 214, 141, 0.65);
+  box-shadow: 0 0 0 3px rgba(255,176,81,0.16);
 }
 
 .board-settings-box button{
@@ -1869,6 +1946,17 @@
   min-height: 32px;
   padding: 4px 6px;
   font-size: 13px;
+}
+
+.board-stepper{
+  gap: 2px;
+  padding: 2px;
+}
+
+.board-stepper__btn{
+  min-width: 12px;
+  min-height: 24px;
+  font-size: 8px;
 }
 
 .board-settings-box button{
