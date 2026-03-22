@@ -1924,8 +1924,11 @@ addPlayerBtn.addEventListener('click', () => {
 
   function getPlayerSpeedFeet(player) {
     try {
-      const raw = Number(player?.sheet?.parsed?.vitality?.speed?.value);
-      if (Number.isFinite(raw) && raw > 0) return Math.max(0, Math.trunc(raw));
+      const rawValue = player?.sheet?.parsed?.vitality?.speed?.value;
+      if (rawValue !== null && typeof rawValue !== 'undefined' && String(rawValue).trim() !== '') {
+        const raw = Number(rawValue);
+        if (Number.isFinite(raw)) return Math.max(0, Math.trunc(raw));
+      }
     } catch {}
     return DEFAULT_SPEED;
   }
