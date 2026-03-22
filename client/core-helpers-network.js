@@ -2806,6 +2806,36 @@ async function sendMessage(msg) {
           return;
         }
 
+        else if (type === 'moveMark') {
+          const raw = msg.mark;
+          if (!raw || typeof raw !== 'object') return;
+          const id = String(raw.id || '').trim();
+          if (!id) return;
+          const m = getActiveMap(next);
+          if (!m) return;
+          const mapId = String(next.currentMapId || m.id || '');
+          const cached = Array.isArray(__roomDetachedCache.marksByMap.get(mapId)) ? __roomDetachedCache.marksByMap.get(mapId) : [];
+          const mark = cached.find(mm => String(mm?.id || '') === id);
+          if (!mark) return;
+          if (!isGM && String(mark.ownerId || '') !== String(myId || '')) return;
+          const safe = deepClone(mark);
+          if (String(mark.kind || '') === 'rect') {
+            safe.x = Number(raw.x) || 0;
+            safe.y = Number(raw.y) || 0;
+          } else if (String(mark.kind || '') === 'circle') {
+            safe.cx = Number(raw.cx) || 0;
+            safe.cy = Number(raw.cy) || 0;
+          } else if (String(mark.kind || '') === 'poly' && Array.isArray(raw.pts) && raw.pts.length >= 3) {
+            safe.pts = raw.pts.map((p) => ({
+              x: Number(p?.x) || 0,
+              y: Number(p?.y) || 0
+            }));
+          }
+          await upsertRoomMarkRow(currentRoomId, safe);
+          _refreshDetachedRoomView();
+          return;
+        }
+
         else if (type === 'clearMarks') {
           const m = getActiveMap(next);
           if (!m) return;

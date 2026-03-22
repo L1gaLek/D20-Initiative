@@ -118,6 +118,40 @@ const addWallBtn = document.getElementById('add-wall');
 const removeWallBtn = document.getElementById('remove-wall');
 
 const startInitiativeBtn = document.getElementById("start-initiative");
+
+function triggerBoardStepperInput(input) {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function initBoardSteppers() {
+  document.querySelectorAll('.board-stepper__btn[data-step-target]').forEach((btn) => {
+    if (btn.dataset.stepperBound === '1') return;
+    btn.dataset.stepperBound = '1';
+    btn.addEventListener('click', () => {
+      const targetId = String(btn.getAttribute('data-step-target') || '').trim();
+      const dir = Number(btn.getAttribute('data-step-dir') || 0);
+      const input = targetId ? document.getElementById(targetId) : null;
+      if (!(input instanceof HTMLInputElement) || !Number.isFinite(dir) || dir === 0) return;
+      input.focus({ preventScroll: true });
+      if (dir > 0 && typeof input.stepUp === 'function') input.stepUp();
+      else if (dir < 0 && typeof input.stepDown === 'function') input.stepDown();
+      else {
+        const step = Number(input.step) || 1;
+        const min = Number(input.min);
+        const max = Number(input.max);
+        let next = (Number(input.value) || 0) + (dir * step);
+        if (Number.isFinite(min)) next = Math.max(min, next);
+        if (Number.isFinite(max)) next = Math.min(max, next);
+        input.value = String(next);
+      }
+      triggerBoardStepperInput(input);
+    });
+  });
+}
+
+initBoardSteppers();
 const startCombatBtn = document.getElementById("start-combat");
 const startExplorationBtn = document.getElementById("start-exploration");
 
