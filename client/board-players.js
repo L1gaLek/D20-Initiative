@@ -2798,10 +2798,9 @@ board.addEventListener('click', e => {
       return;
     }
 
+    try { window.consumeCombatTeleportTo?.(selectedPlayer, x, y); } catch {}
     sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
 
-    const movedId = selectedPlayer?.id;
-    try { window.consumeCombatTeleportTo?.(selectedPlayer, x, y); } catch {}
     try {
       selectedPlayer = null;
       try { window.syncSelectedPlayerUi?.(); } catch {}
@@ -2827,11 +2826,10 @@ board.addEventListener('click', e => {
     }
   }
 
-  sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: !!dashActive });
-
   if (combatRestricted) {
     if (moveInfo?.dash?.active) {
       try { window.commitCombatDashMove?.(selectedPlayer, x, y); } catch {}
+      sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: true });
       try {
         selectedPlayer = null;
         try { window.syncSelectedPlayerUi?.(); } catch {}
@@ -2842,6 +2840,7 @@ board.addEventListener('click', e => {
     }
 
     try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
     try {
       selectedPlayer = null;
       try { window.syncSelectedPlayerUi?.(); } catch {}
@@ -2850,6 +2849,8 @@ board.addEventListener('click', e => {
     try { window.hideCombatMoveOverlay?.(); } catch {}
     return;
   }
+
+  sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: !!dashActive });
 
   selectedPlayer = null;
   try { window.syncSelectedPlayerUi?.(); } catch {}
