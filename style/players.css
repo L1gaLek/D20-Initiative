@@ -294,6 +294,60 @@
   box-shadow: 0 0 12px rgba(255, 255, 0, 0.75);
 }
 
+.player.player--gm-hidden{
+  opacity: 0.48;
+}
+
+.player .token-combat-actions{
+  position:absolute;
+  left:50%;
+  bottom:-18px;
+  transform:translateX(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:auto;
+  z-index:12;
+}
+
+.player .token-combat-action{
+  min-width:34px;
+  min-height:18px;
+  padding:1px 5px;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  border-radius:999px;
+  border:1px solid rgba(255, 226, 157, 0.26);
+  background:rgba(33, 24, 9, 0.54);
+  color:#f7e2a8;
+  opacity:0.82;
+  box-shadow:0 6px 16px rgba(0,0,0,0.25);
+  backdrop-filter:blur(4px);
+}
+
+.player .token-combat-action:hover,
+.player .token-combat-action.is-active{
+  opacity:0.96;
+  border-color:rgba(255, 225, 138, 0.48);
+  background:rgba(78, 60, 16, 0.88);
+}
+
+.player .token-combat-action__icon{
+  width:10px;
+  height:10px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.player .token-combat-action__label{
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:0.02em;
+  white-space:nowrap;
+}
+
 /* Призванные/временные до "К бою" — лёгкая пунктирная рамка */
 .player.pending-combat {
   outline: 2px dashed rgba(255,255,255,0.7);
