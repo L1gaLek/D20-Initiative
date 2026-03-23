@@ -170,6 +170,23 @@
     }
   }
 
+  function extractBestiaryUrl(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+    const direct = normalizeBestiaryUrl(raw);
+    if (direct) return direct;
+    const matches = raw.match(/(?:https?:\/\/[^\s<>"')\]]+|(?:^|[\s(])(?:[\w.-]+\.[a-z]{2,}\/[^\s<>"')\]]+)|(?:^|[\s(])(?:\/bestiary\/[^\s<>"')\]]+))/ig) || [];
+    for (const match of matches) {
+      const candidate = String(match || '')
+        .trim()
+        .replace(/^[\s(]+/, '')
+        .replace(/[),.;!?]+$/, '');
+      const normalized = normalizeBestiaryUrl(candidate);
+      if (normalized) return normalized;
+    }
+    return '';
+  }
+
   async function fetchMonsterPage(url) {
     const targetUrl = normalizeBestiaryUrl(url);
     if (!targetUrl) throw new Error('Нужна корректная ссылка на страницу с текстом монстра');
@@ -646,7 +663,12 @@
         if (!currentSection) currentSection = 'traits';
         continue;
       }
-      const normalizedSectionLine = line.replace(/[—–-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+      const normalizedSectionLine = line
+        .replace(/[—–-]/g, ' ')
+        .replace(/[:.!?]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
       if (Object.prototype.hasOwnProperty.call(sectionMap, normalizedSectionLine)) {
         contentStarted = true;
         flushBuffer();
@@ -674,7 +696,7 @@
   }
 
   async function importMonsterFromUrl(url) {
-    const normalized = normalizeBestiaryUrl(url);
+    const normalized = extractBestiaryUrl(url) || normalizeBestiaryUrl(url);
     if (normalized) {
       const rawPage = await fetchMonsterPage(normalized);
       return parseMonsterText(rawPage, normalized);
@@ -1174,7 +1196,7 @@
     };
 
     button.addEventListener('click', async () => {
-      const href = normalizeBestiaryUrl(input.value);
+      const href = extractBestiaryUrl(input.value) || normalizeBestiaryUrl(input.value);
       setBusy(true);
       try {
         const monster = await importMonsterFromUrl(href || input.value);
