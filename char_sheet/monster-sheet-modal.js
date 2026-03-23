@@ -554,11 +554,11 @@
       .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
       .monster-hero-card--hp{flex:0 0 306px;min-width:0}
-      .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:10px;flex:0 0 92px;min-width:92px}
-      .monster-hero-card--compact{padding:10px 8px;text-align:center}
-      .monster-hero-card--compact .monster-hero-card__label{font-size:11px;line-height:1.15;margin-bottom:6px}
-      .monster-hero-card--compact .monster-hero-card__input{padding:8px 4px;font-size:18px;text-align:center}
-      .monster-hero-card--compact .monster-hero-card__sub{font-size:10px;line-height:1.2;word-break:break-word}
+      .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:0 0 88px;min-width:88px}
+      .monster-hero-card--compact{padding:5px 6px;text-align:center}
+      .monster-hero-card--compact .monster-hero-card__label{font-size:9px;line-height:1.05;margin-bottom:4px}
+      .monster-hero-card--compact .monster-hero-card__input{padding:4px 3px;font-size:15px;text-align:center}
+      .monster-hero-card--compact .monster-hero-card__sub{font-size:8px;line-height:1.05;word-break:break-word;margin-top:3px}
       .monster-hero-card--stats{display:flex;flex:1 1 auto;flex-direction:column;min-width:0}
       .monster-hero-card--stats .monster-panel__title{margin-bottom:12px}
       .monster-hero-card__label{font-size:12px;color:rgba(255,236,212,.72);margin-bottom:7px}
@@ -599,6 +599,7 @@
       .monster-stat__label{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
       .monster-stat__mod{margin-top:4px;font-size:12px;color:#ffd5a0}
+      .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 6px;font-size:18px;font-weight:800;text-align:center}
       .monster-list{display:grid;gap:10px}
       .monster-list-item{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,226,197,.08)}
       .monster-list-item b{color:#fff2db}
@@ -730,10 +731,8 @@
       bonusActions: normalizeMonsterEntries(monster?.bonus_actions),
       stats: statOrder.map(([key, label]) => {
         const monsterStat = abilities?.[key] || null;
-        const score = toInt(monsterStat?.score, toInt(get(sheet, `stats.${key}.score`, 10), 10));
-        const modifier = Number.isFinite(Number(monsterStat?.mod))
-          ? toInt(monsterStat.mod, 0)
-          : toInt(get(sheet, `stats.${key}.modifier`, Math.floor((score - 10) / 2)), Math.floor((score - 10) / 2));
+        const score = toInt(get(sheet, `stats.${key}.score`, monsterStat?.score), toInt(monsterStat?.score, 10));
+        const modifier = toInt(get(sheet, `stats.${key}.modifier`, Math.floor((score - 10) / 2)), Math.floor((score - 10) / 2));
         return { key, label, score, modifier };
       })
     };
@@ -823,6 +822,15 @@
         const next = Math.max(0, toInt(input.value, 0));
         const sheet = ensureEnemySheet(player);
         set(sheet, path, next);
+
+        const statMatch = String(path).match(/^stats\.(str|dex|con|int|wis|cha)\.score$/);
+        if (statMatch) {
+          const statKey = statMatch[1];
+          const mod = Math.floor((next - 10) / 2);
+          set(sheet, `stats.${statKey}.modifier`, mod);
+          const modEl = root.querySelector(`[data-monster-stat-mod="${statKey}"]`);
+          if (modEl) modEl.textContent = signed(mod);
+        }
 
         const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', get(sheet, 'monsterHpRoll.lastTotal', next)), get(sheet, 'monsterHpRoll.lastTotal', next)));
         const curHp = Math.max(0, Math.min(maxHp, toInt(get(sheet, 'vitality.hp-current.value', 0), 0)));
@@ -1097,8 +1105,8 @@
                 ${vm.stats.map((stat) => `
                   <div class="monster-stat">
                     <div class="monster-stat__label">${esc(stat.label)}</div>
-                    <div class="monster-stat__score">${esc(String(stat.score))}</div>
-                    <div class="monster-stat__mod">${esc(signed(stat.modifier))}</div>
+                    <input class="monster-stat__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="stats.${esc(stat.key)}.score" value="${esc(String(stat.score))}">
+                    <div class="monster-stat__mod" data-monster-stat-mod="${esc(stat.key)}">${esc(signed(stat.modifier))}</div>
                   </div>
                 `).join('')}
               </div>
