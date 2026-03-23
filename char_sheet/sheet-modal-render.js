@@ -1383,6 +1383,13 @@ function renderShopTab(vm, canEdit) {
     const canEdit = (myRole === "GM" || String(player.ownerId) === String(myId));
     lastCanEdit = !!canEdit;
 
+    if (window.MonsterSheetModal?.shouldUseForPlayer?.(player)) {
+      window.MonsterSheetModal.render(player, { canEdit, force }).catch((err) => {
+        console.error('MonsterSheetModal render failed', err);
+      });
+      return;
+    }
+
     const shieldEquipped = !!String(player?.sheet?.parsed?.appearance?.slots?.shield || '').trim();
 
     sheetTitle.textContent = `Инфа: ${player.name}`;
