@@ -511,6 +511,40 @@ function monsterSizeToTokenSize(mon) {
   return 1;
 }
 
+function parseMonsterPrimaryNumber(raw) {
+  const match = String(raw || '').match(/(\d+)/);
+  return match ? Math.max(0, Math.trunc(Number(match[1]) || 0)) : 0;
+}
+
+function buildMonsterSheetPayload(name, mon) {
+  const abilities = mon?.abilities || {};
+  const stat = (key, fallback = 10) => {
+    const score = Math.max(1, Math.trunc(Number(abilities?.[key]?.score) || fallback));
+    return { score, modifier: Math.floor((score - 10) / 2), label: key.toUpperCase() };
+  };
+  return {
+    parsed: {
+      name: { value: name },
+      monster: mon,
+      vitality: {
+        'hp-max': { value: parseMonsterPrimaryNumber(mon?.hp) },
+        'hp-current': { value: parseMonsterPrimaryNumber(mon?.hp) },
+        'hp-temp': { value: 0 },
+        ac: { value: parseMonsterPrimaryNumber(mon?.ac) },
+        speed: { value: parseMonsterPrimaryNumber(mon?.speed) }
+      },
+      stats: {
+        str: { ...stat('str'), label: 'Сила' },
+        dex: { ...stat('dex'), label: 'Ловкость' },
+        con: { ...stat('con'), label: 'Телосложение' },
+        int: { ...stat('int'), label: 'Интеллект' },
+        wis: { ...stat('wis'), label: 'Мудрость' },
+        cha: { ...stat('cha'), label: 'Харизма' }
+      }
+    }
+  };
+}
+
 async function ensureMonstersLibrary() {
   if (monstersLibInited) return;
   monstersLibInited = true;
@@ -527,7 +561,7 @@ async function ensureMonstersLibrary() {
         const color = '#8b1a1a';
 
         // Minimal sheet payload (so the "Инфа" modal has something)
-        const sheet = { parsed: { name: { value: name }, monster: mon } };
+        const sheet = buildMonsterSheetPayload(name, mon);
 
         sendMessage({
           type: 'addPlayer',
