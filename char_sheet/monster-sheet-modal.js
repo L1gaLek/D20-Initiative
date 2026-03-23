@@ -229,8 +229,60 @@
     if (!/[<][a-z!/]/i.test(src)) return cleanupMonsterText(src);
     try {
       const doc = new DOMParser().parseFromString(src, 'text/html');
-      const root = doc.querySelector('main') || doc.body || doc.documentElement;
-      return cleanupMonsterText(root?.innerText || root?.textContent || src);
+      [
+        'script',
+        'style',
+        'noscript',
+        'svg',
+        'iframe',
+        'header',
+        'footer',
+        'nav',
+        'aside',
+        'form',
+        '.comments-block',
+        '.comments',
+        '#comments',
+        '[data-comments]',
+        '.comment-list',
+        '.breadcrumbs',
+        '.breadcrumb',
+        '.menu',
+        '.navbar',
+        '.nav',
+        '.pagination',
+        '.share',
+        '.social',
+        '.gallery',
+        '.sidebar'
+      ].forEach((selector) => {
+        doc.querySelectorAll(selector).forEach((node) => node.remove());
+      });
+
+      const candidates = [
+        'article',
+        '.card',
+        '.card__article',
+        '.card__article-body',
+        '.monster',
+        '.monster-block',
+        '.page-content',
+        'main',
+        'body'
+      ];
+      const relevantPattern = /(Класс Доспеха|Хиты|Скорость|Опасность|Действия|Бонусные действия|Реакции|Легендарные действия)/i;
+      let bestText = '';
+      for (const selector of candidates) {
+        doc.querySelectorAll(selector).forEach((node) => {
+          const textValue = cleanupMonsterText(node?.innerText || node?.textContent || '');
+          if (!textValue) return;
+          const score = (relevantPattern.test(textValue) ? 100000 : 0) + textValue.length;
+          const bestScore = (relevantPattern.test(bestText) ? 100000 : 0) + bestText.length;
+          if (score > bestScore) bestText = textValue;
+        });
+      }
+
+      return bestText || cleanupMonsterText(doc.body?.innerText || doc.body?.textContent || src);
     } catch {
       return cleanupMonsterText(src.replace(/<[^>]+>/g, ' '));
     }
@@ -241,6 +293,72 @@
       .split(/\n{2,}/)
       .map((part) => part.split('\n').map((line) => line.replace(/^[-*•]\s*/, '').replace(/^#+\s*/, '').trim()).filter(Boolean).join('\n').trim())
       .filter(Boolean);
+  }
+
+  function normalizeMonsterLine(line) {
+    return String(line || '')
+      .replace(/^[-*•]\s*/, '')
+      .replace(/^#+\s*/, '')
+      .trim();
+  }
+
+  function isMonsterCommentBoundary(line) {
+    return /^(?:Комментарии(?:\s*\(\d+\))?|Комментари[йия](?:\s*[:.].*)?|Comments?(?:\s*\(\d+\))?|Comment section|Leave a comment|Add comment|Discussion(?:\s*\(\d+\))?|Disqus|Авторизуйтесь, чтобы оставлять комментарии|Log in to leave a comment|Log in to post comments?)$/i.test(normalizeMonsterLine(line));
+  }
+
+  function isMonsterChromeStopLine(line) {
+    return /^(?:Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены|Источник:|Подробности|Обсуждение|Версия для печати)$/i.test(normalizeMonsterLine(line));
+  }
+
+  function isMonsterSubtitleLine(line) {
+    return /,/.test(String(line || '')) && /(крош|мал|сред|больш|огром|испол|tiny|small|medium|large|huge|gargantuan)/i.test(String(line || ''));
+  }
+
+  function isMonsterTitleCandidate(line) {
+    const normalized = normalizeMonsterLine(line);
+    if (!normalized) return false;
+    if (isMonsterCommentBoundary(normalized) || isMonsterChromeStopLine(normalized)) return false;
+    if (/^(?:DnD\.su|Официальные|Homebrew|Справочники|Новичку|Статьи|Пользователь|Партнёры|Разное|Регистрация)$/i.test(normalized)) return false;
+    if (/^(?:Boosty|Discord|Новости сообщества|Контакты|Помощь сайту)$/i.test(normalized)) return false;
+    if (/^(?:Удав|.+)\s+—\s+Бестиарий$/i.test(normalized) && !/[\[(]/.test(normalized)) return false;
+    if (/^(?:Класс Доспеха|Armor Class|Хиты|Hit Points|Скорость|Speed|Чувства|Senses|Опасность|Challenge)\b/i.test(normalized)) return false;
+    if (/^(?:Сил|Лов|Тел|Инт|Мдр|Хар)$/i.test(normalized)) return false;
+    return true;
+  }
+
+  function findMonsterTitleLine(lines, subtitleIndex) {
+    if (!Array.isArray(lines) || !lines.length) return '';
+    if (subtitleIndex > 0) {
+      for (let i = subtitleIndex - 1; i >= 0; i--) {
+        const candidate = normalizeMonsterLine(lines[i]);
+        if (!candidate) continue;
+        if (!isMonsterTitleCandidate(candidate)) continue;
+        return candidate;
+      }
+    }
+    return lines.find((line) => /\[[^\]]+\]/.test(line) || /\([^)]+\)/.test(line) || /(?:—|\|)\s*Бестиарий/i.test(line) || isMonsterTitleCandidate(line)) || '';
+  }
+
+  function detectMonsterSourceLabel(sourceUrl) {
+    const raw = String(sourceUrl || '').trim();
+    if (!raw) return 'external';
+    try {
+      if (typeof URL === 'function') {
+        const host = new URL(raw).hostname.toLowerCase();
+        return host.replace(/^www\./, '') || 'external';
+      }
+    } catch {}
+    const match = raw.match(/^[a-z]+:\/\/([^/]+)/i);
+    return match ? String(match[1] || '').toLowerCase().replace(/^www\./, '') || 'external' : 'external';
+  }
+
+  function cleanupMonsterTitle(rawTitle) {
+    return String(rawTitle || '')
+      .replace(/[–—-]\s*Бестиарий.*$/i, '')
+      .replace(/\|\s*Бестиарий.*$/i, '')
+      .replace(/\|\s*Monster Manual.*$/i, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
 
   function paragraphToEntry(paragraph) {
@@ -340,7 +458,13 @@
   function parseMonsterText(raw, sourceUrl = '') {
     const plainText = htmlToMonsterText(raw);
     const paragraphs = splitMonsterParagraphs(plainText);
-    const lines = plainText.split('\n').map((line) => line.replace(/^[-*•]\s*/, '').replace(/^#+\s*/, '').trim()).filter(Boolean);
+    const allLines = plainText.split('\n').map(normalizeMonsterLine).filter(Boolean);
+    const subtitleIndex = allLines.findIndex(isMonsterSubtitleLine);
+    const titleLine = findMonsterTitleLine(allLines, subtitleIndex);
+    const titleLineIndex = titleLine ? allLines.indexOf(titleLine) : -1;
+    const stopLineIndex = allLines.findIndex((line, index) => index > titleLineIndex && isMonsterCommentBoundary(line));
+    const contentLines = allLines.slice(titleLineIndex >= 0 ? titleLineIndex : 0, stopLineIndex >= 0 ? stopLineIndex : allLines.length);
+    const lines = contentLines.length ? contentLines : allLines;
 
     const data = {
       id: '',
@@ -370,28 +494,41 @@
       reactions: [],
       legendary_actions: [],
       description_ru: '',
-      source: 'dnd.su',
+      source: sourceUrl ? detectMonsterSourceLabel(sourceUrl) : 'external',
       source_url: sourceUrl
     };
 
-    const titleLine = lines.find((line) => /\[[^\]]+\]/.test(line) || /—\s*Бестиарий/i.test(line)) || '';
     if (titleLine) {
-      const cleanTitle = titleLine.replace(/—\s*Бестиарий/ig, '').trim();
-      const nameMatch = cleanTitle.match(/^(.+?)\s*\[([^\]]+)\]\s*([A-Z0-9 ._-]+)?$/);
+      const cleanTitle = cleanupMonsterTitle(titleLine);
+      const nameMatch = cleanTitle.match(/^(.+?)\s*\[([^\]]+)\]\s*([A-Z0-9 ._/-]+)?$/);
       if (nameMatch) {
         data.name_ru = nameMatch[1].trim();
         data.name_en = nameMatch[2].trim();
         if (nameMatch[3]) data.source = nameMatch[3].trim();
       } else {
-        data.name_ru = cleanTitle.trim();
+        const parenMatch = cleanTitle.match(/^(.+?)\s*\(([^)]+)\)\s*([A-Z0-9 ._/-]+)?$/);
+        if (parenMatch) {
+          data.name_ru = parenMatch[1].trim();
+          data.name_en = parenMatch[2].trim();
+          if (parenMatch[3]) data.source = parenMatch[3].trim();
+        } else {
+          data.name_ru = cleanTitle.trim();
+        }
       }
     }
     if (!data.name_ru) {
-      const fallbackTitle = paragraphs.find((item) => /—\s*Бестиарий/i.test(item)) || '';
-      data.name_ru = fallbackTitle.replace(/—\s*Бестиарий/ig, '').trim();
+      const fallbackTitle = paragraphs.find((item) => /\[[^\]]+\]/.test(item) || /\([^)]+\)/.test(item) || /(?:—|\|)\s*Бестиарий/i.test(item)) || '';
+      const cleanFallbackTitle = cleanupMonsterTitle(fallbackTitle);
+      const parenMatch = cleanFallbackTitle.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+      if (parenMatch) {
+        data.name_ru = parenMatch[1].trim();
+        data.name_en = parenMatch[2].trim();
+      } else {
+        data.name_ru = cleanFallbackTitle.trim();
+      }
     }
 
-    const sizeLine = lines.find((line) => /,/.test(line) && /(крош|мал|сред|больш|огром|испол|tiny|small|medium|large|huge|gargantuan)/i.test(line)) || '';
+    const sizeLine = lines.find(isMonsterSubtitleLine) || '';
     if (sizeLine) {
       const cleaned = sizeLine.replace(/^[-*•]\s*/, '').trim();
       const commaIndex = cleaned.indexOf(',');
@@ -407,6 +544,9 @@
       ['ac', /^Класс Доспеха\s+(.+)$/i],
       ['hp', /^Хиты\s+(.+)$/i],
       ['speed', /^Скорость\s+(.+)$/i],
+      ['ac', /^Armor Class\s+(.+)$/i],
+      ['hp', /^Hit Points\s+(.+)$/i],
+      ['speed', /^Speed\s+(.+)$/i],
       ['saving_throws', /^Спасброски\s+(.+)$/i],
       ['skills', /^Навыки\s+(.+)$/i],
       ['damage_vulnerabilities', /^Уязвим(?:ость|ости) к урону\s+(.+)$/i],
@@ -415,7 +555,16 @@
       ['condition_immunities', /^Иммунитет к состояни(?:ю|ям)\s+(.+)$/i],
       ['senses', /^Чувства\s+(.+)$/i],
       ['languages', /^Языки\s+(.+)$/i],
-      ['proficiency_bonus', /^Бонус мастерства\s+(.+)$/i]
+      ['proficiency_bonus', /^Бонус мастерства\s+(.+)$/i],
+      ['saving_throws', /^Saving Throws\s+(.+)$/i],
+      ['skills', /^Skills\s+(.+)$/i],
+      ['damage_vulnerabilities', /^Damage Vulnerabilities\s+(.+)$/i],
+      ['damage_resistances', /^Damage Resistances\s+(.+)$/i],
+      ['damage_immunities', /^Damage Immunities\s+(.+)$/i],
+      ['condition_immunities', /^Condition Immunities\s+(.+)$/i],
+      ['senses', /^Senses\s+(.+)$/i],
+      ['languages', /^Languages\s+(.+)$/i],
+      ['proficiency_bonus', /^Proficiency Bonus\s+(.+)$/i]
     ];
 
     for (const line of lines) {
@@ -423,10 +572,10 @@
         const match = line.match(regex);
         if (match) data[key] = match[1].trim();
       }
-      const crMatch = line.match(/^Опасность\s+([^()]+?)(?:\(([^)]+)\))?$/i);
+      const crMatch = line.match(/^(?:Опасность|Challenge)\s+([^()]+?)(?:\(([^)]+)\))?$/i);
       if (crMatch) {
         data.cr = crMatch[1].trim();
-        const xpMatch = String(crMatch[2] || '').replace(/\s+/g, ' ').match(/([\d\s]+)\s*опыта/i);
+        const xpMatch = String(crMatch[2] || '').replace(/\s+/g, ' ').match(/([\d\s,]+)\s*(?:опыта|XP)/i);
         if (xpMatch) data.xp = toInt(xpMatch[1].replace(/\s+/g, ''), 0);
       }
     }
@@ -434,18 +583,28 @@
     data.abilities = parseMonsterAbilities(lines, plainText);
 
     const sectionMap = {
+      'черты': 'traits',
+      'особые черты': 'traits',
+      'traits': 'traits',
       'действия': 'actions',
+      'actions': 'actions',
       'бонусные действия': 'bonus_actions',
+      'bonus actions': 'bonus_actions',
       'реакции': 'reactions',
-      'легендарные действия': 'legendary_actions'
+      'reactions': 'reactions',
+      'легендарные действия': 'legendary_actions',
+      'legendary actions': 'legendary_actions'
     };
 
-    const rawLines = cleanupMonsterText(plainText)
-      .split('\n')
-      .map((line) => line.replace(/^[-*•]\s*/, '').trim());
-    const siteChromeStopPattern = /^(Комментарии|Комментари[йия]|Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены)$/i;
+    const rawLines = lines.slice();
+    const abilityStatLabels = new Set(['Сил', 'Лов', 'Тел', 'Инт', 'Мдр', 'Хар']);
+    const abilityLabelRowPattern = /^Сил\s+Лов\s+Тел\s+Инт\s+Мдр\s+Хар$/i;
+    const abilityValueRowPattern = /(-?\d+)\s*\(([+−\-]?\d+)\)/g;
+    const hasAbilityValues = (line) => Array.from(String(line || '').matchAll(abilityValueRowPattern)).length >= 3;
+    const isSingleAbilityValueLine = (line) => /^-?\d+\s*\(([+−\-]?\d+)\)$/.test(String(line || '').trim());
 
     let currentSection = '';
+    let contentStarted = false;
     let buffer = [];
     const flushBuffer = () => {
       const paragraph = buffer.join(' ').trim();
@@ -456,34 +615,46 @@
     };
 
     for (const rawLine of rawLines) {
-      const line = String(rawLine || '').replace(/^#+\s*/, '').trim();
+      const line = normalizeMonsterLine(rawLine);
       if (!line) {
         flushBuffer();
         continue;
       }
-      if (currentSection && siteChromeStopPattern.test(line)) {
+      if (isMonsterCommentBoundary(line)) {
         flushBuffer();
         break;
       }
-      if (/^(Распечатать|Комментарии|Галерея)$/i.test(line)) {
+      if (isMonsterChromeStopLine(line)) {
         flushBuffer();
+        if (currentSection) break;
         continue;
       }
       if (line === titleLine || /—\s*Бестиарий/i.test(line) || line === sizeLine) {
+        contentStarted = true;
         flushBuffer();
         continue;
       }
       if (fieldMatchers.some(([, regex]) => regex.test(line)) || /^Опасность\s+/i.test(line) || /^Бонус мастерства\s+/i.test(line)) {
+        contentStarted = true;
         flushBuffer();
+        if (!currentSection) currentSection = 'traits';
+        continue;
+      }
+      if (abilityStatLabels.has(line) || abilityLabelRowPattern.test(line) || hasAbilityValues(line) || isSingleAbilityValueLine(line)) {
+        contentStarted = true;
+        flushBuffer();
+        if (!currentSection) currentSection = 'traits';
         continue;
       }
       const normalizedSectionLine = line.replace(/[—–-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
       if (Object.prototype.hasOwnProperty.call(sectionMap, normalizedSectionLine)) {
+        contentStarted = true;
         flushBuffer();
         currentSection = sectionMap[normalizedSectionLine] || currentSection;
         continue;
       }
-      if (!currentSection) continue;
+      if (!contentStarted) continue;
+      if (!currentSection) currentSection = 'traits';
       if (buffer.length && /^[^.]{1,120}\.\s/.test(line)) flushBuffer();
       buffer.push(line);
     }
@@ -730,6 +901,8 @@
       damageResistances: monster?.damage_resistances || '',
       damageImmunities: monster?.damage_immunities || '',
       conditionImmunities: monster?.condition_immunities || '',
+      traits: normalizeMonsterEntries(monster?.traits),
+      description: monster?.description_ru || '',
       actions: normalizeMonsterEntries(monster?.actions),
       reactions: normalizeMonsterEntries(monster?.reactions),
       legendaryActions: normalizeMonsterEntries(monster?.legendary_actions),
@@ -786,6 +959,13 @@
             ${renderMetaRow('Иммунитеты к состояниям', vm.conditionImmunities)}
           </div>
         </div>
+        ${vm.description ? `
+          <div class="monster-panel monster-panel--wide">
+            <div class="monster-panel__title">Описание</div>
+            <div class="monster-desc">${esc(vm.description)}</div>
+          </div>
+        ` : ''}
+        ${renderEntries('Особенности', vm.traits)}
       </div>
     `;
   }
