@@ -824,6 +824,8 @@
       const structured = {
         description_html: '',
         description_text: '',
+        main_html: '',
+        main_text: '',
         traits: [],
         actions: [],
         bonus_actions: [],
@@ -843,6 +845,16 @@
         structured.description_html = [structured.description_html, html].filter(Boolean).join('');
         structured.description_text = [structured.description_text, text].filter(Boolean).join('\n\n');
         hasUsefulContent = true;
+      };
+
+      const pushMainContent = (node, textValue) => {
+        const headingHtml = isMonsterSectionHeadingBlock(node, textValue)
+          ? sanitizeMonsterRichHtml(`<p><b>${esc(textValue)}</b></p>`, sourceUrl)
+          : sanitizeMonsterRichHtml(node.outerHTML || node.innerHTML || node.textContent || '', sourceUrl);
+        const headingText = stripMonsterHtml(headingHtml);
+        if (!headingHtml && !headingText) return;
+        structured.main_html = [structured.main_html, headingHtml].filter(Boolean).join('');
+        structured.main_text = [structured.main_text, headingText].filter(Boolean).join('\n\n');
       };
 
       const pushEntry = (entry) => {
@@ -866,6 +878,8 @@
         if (isMonsterSourceBadgeLine(text)) continue;
         if (metaLinePattern.test(text)) continue;
         if (isMonsterSubtitleLine(text) || /—\s*Бестиарий/i.test(text) || (text.length <= 120 && !/[.!?:]/.test(text) && /(?:\[[^\]]+\]|\([^)]+\))/.test(text))) continue;
+
+        pushMainContent(block, text);
 
         const normalizedSection = text
           .replace(/[—–-]/g, ' ')
@@ -898,6 +912,8 @@
       if (!hasUsefulContent) return null;
       structured.description_html = sanitizeMonsterRichHtml(structured.description_html, sourceUrl);
       structured.description_text = stripMonsterHtml(structured.description_html) || structured.description_text;
+      structured.main_html = sanitizeMonsterRichHtml(structured.main_html, sourceUrl);
+      structured.main_text = stripMonsterHtml(structured.main_html) || structured.main_text;
       return structured;
     } catch {
       return null;
@@ -944,6 +960,8 @@
       legendary_actions: [],
       description_ru: '',
       description_html: '',
+      main_body_text: '',
+      main_body_html: '',
       source: sourceUrl ? detectMonsterSourceLabel(sourceUrl) : 'external',
       source_url: sourceUrl
     };
@@ -1058,6 +1076,7 @@
     let currentSection = '';
     let contentStarted = false;
     let buffer = [];
+    let mainBodyLines = [];
     const flushBuffer = () => {
       const paragraph = buffer.join(' ').trim();
       buffer = [];
@@ -1114,14 +1133,30 @@
         contentStarted = true;
         flushBuffer();
         currentSection = sectionMap[normalizedSectionLine] || currentSection;
+        mainBodyLines.push(line);
         continue;
       }
       if (!contentStarted) continue;
       if (!currentSection) currentSection = 'traits';
       if (buffer.length && /^[^.]{1,120}\.\s/.test(line)) flushBuffer();
       buffer.push(line);
+      mainBodyLines.push(line);
     }
     flushBuffer();
+    data.main_body_text = cleanupMonsterText(mainBodyLines.join('\n'));
+
+    const structuredContent = parseMonsterStructuredContent(raw, sourceUrl);
+    if (structuredContent) {
+      if (structuredContent.description_text) data.description_ru = structuredContent.description_text;
+      if (structuredContent.description_html) data.description_html = structuredContent.description_html;
+      if (structuredContent.main_text) data.main_body_text = structuredContent.main_text;
+      if (structuredContent.main_html) data.main_body_html = structuredContent.main_html;
+      ['traits', 'actions', 'bonus_actions', 'reactions', 'legendary_actions'].forEach((key) => {
+        if (Array.isArray(structuredContent[key]) && structuredContent[key].length) {
+          data[key] = structuredContent[key];
+        }
+      });
+    }
 
     const structuredContent = parseMonsterStructuredContent(raw, sourceUrl);
     if (structuredContent) {
@@ -1382,6 +1417,8 @@
       traits: normalizeMonsterEntries(monster?.traits),
       description: monster?.description_ru || '',
       descriptionHtml: String(monster?.description_html || '').trim(),
+      mainBodyText: String(monster?.main_body_text || '').trim(),
+      mainBodyHtml: String(monster?.main_body_html || '').trim(),
       actions: normalizeMonsterEntries(monster?.actions),
       reactions: normalizeMonsterEntries(monster?.reactions),
       legendaryActions: normalizeMonsterEntries(monster?.legendary_actions),
@@ -1477,6 +1514,12 @@
           <div class="monster-panel monster-panel--wide">
             <div class="monster-panel__title">Описание</div>
             <div class="monster-desc">${vm.descriptionHtml || esc(vm.description)}</div>
+          </div>
+        ` : ''}
+        ${(vm.mainBodyText || vm.mainBodyHtml) ? `
+          <div class="monster-panel monster-panel--wide">
+            <div class="monster-panel__title">Текст источника</div>
+            <div class="monster-desc">${vm.mainBodyHtml || esc(vm.mainBodyText)}</div>
           </div>
         ` : ''}
         ${renderMainTraitPanels(vm.traits)}
