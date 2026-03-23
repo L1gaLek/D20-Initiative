@@ -1,7 +1,5 @@
-body{
-  cursor: url("cursor/cursor.cur"),
-  url("cursor/cursor.png") 6 5, auto,
-    pointer;
+html, body {
+  cursor: url("cursors/NormalSelect.cur"), auto;
 }
 
 /* ===== Appearance (Облик) ===== */
