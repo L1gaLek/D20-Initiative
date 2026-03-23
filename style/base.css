@@ -1,5 +1,5 @@
-body{
-  cursor: url("cursor/cursor.cur") 6 5, auto;
+html, body {
+  cursor: url("/D20-Initiative/cursor/cursor.cur"), auto;
 }
 
 /* ===== Appearance (Облик) ===== */
