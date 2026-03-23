@@ -485,12 +485,22 @@
       .monster-sheet__subtitle{margin-top:6px;color:rgba(255,238,215,.82);font-size:14px}
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
-      .monster-hero-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:stretch}
-      .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11)}
+      .monster-hero-cards{display:grid;grid-template-columns:minmax(200px,.95fr) minmax(72px,.28fr) minmax(0,1.65fr);gap:10px;align-items:stretch}
+      .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
+      .monster-hero-card--hp{min-width:0}
+      .monster-hero-card--stack{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
+      .monster-hero-card--compact{padding:10px 8px;text-align:center}
+      .monster-hero-card--compact .monster-hero-card__label{font-size:11px;line-height:1.15;margin-bottom:6px}
+      .monster-hero-card--compact .monster-hero-card__input{padding:8px 4px;font-size:18px;text-align:center}
+      .monster-hero-card--compact .monster-hero-card__sub{font-size:10px;line-height:1.2;word-break:break-word}
+      .monster-hero-card--stats{display:flex;flex-direction:column;min-width:0}
+      .monster-hero-card--stats .monster-panel__title{margin-bottom:12px}
       .monster-hero-card__label{font-size:12px;color:rgba(255,236,212,.72);margin-bottom:7px}
       .monster-hero-card__value{font-size:22px;font-weight:800;color:#fff7ef}
       .monster-hero-card__sub{font-size:12px;color:rgba(255,236,212,.7);margin-top:5px}
       .monster-hero-card__input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:20px;font-weight:700}
+      .monster-hero-card--hp .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:end;margin-top:10px}
+      .monster-hero-card--hp .monster-die-btn{width:100%;height:42px;grid-column:1/-1}
       .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card__mini-field{display:flex;flex-direction:column;gap:4px}
       .monster-hero-card__mini-field span{font-size:11px;color:rgba(255,236,212,.72)}
@@ -532,7 +542,7 @@
       .monster-empty{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,228,204,.14);color:#ddc9b2}
       @media (max-width: 980px){
         .monster-sheet__hero,.monster-layout{grid-template-columns:1fr}
-        .monster-hero-cards,.monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid{grid-template-columns:1fr}
+        .monster-hero-cards,.monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid,.monster-hero-card--stack{grid-template-columns:1fr}
         .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
       }
     `;
@@ -674,19 +684,6 @@
   function renderMainTab(vm, canEdit) {
     return `
       <div class="monster-grid">
-        <div class="monster-panel monster-panel--wide">
-          <div class="monster-panel__title">Характеристики</div>
-          <div class="monster-stat-grid">
-            ${vm.stats.map((stat) => `
-              <div class="monster-stat">
-                <div class="monster-stat__label">${esc(stat.label)}</div>
-                <div class="monster-stat__score">${esc(String(stat.score))}</div>
-                <div class="monster-stat__mod">${esc(signed(stat.modifier))}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
         <div class="monster-panel monster-panel--wide">
           <div class="monster-panel__title">Подробности</div>
           <div class="monster-meta">
@@ -937,15 +934,29 @@
                 </button>
               </div>
             </div>
-            <div class="monster-hero-card">
-              <div class="monster-hero-card__label">КД</div>
-              <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.ac.value" value="${esc(String(vm.acValue || 0))}">
-              <div class="monster-hero-card__sub">${esc(vm.acText || 'Без уточнений')}</div>
+            <div class="monster-hero-card--stack">
+              <div class="monster-hero-card monster-hero-card--compact">
+                <div class="monster-hero-card__label">КД</div>
+                <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.ac.value" value="${esc(String(vm.acValue || 0))}">
+                <div class="monster-hero-card__sub">${esc(vm.acText || 'Без уточнений')}</div>
+              </div>
+              <div class="monster-hero-card monster-hero-card--compact">
+                <div class="monster-hero-card__label">Скорость</div>
+                <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.speed.value" value="${esc(String(vm.speedValue || 0))}">
+                <div class="monster-hero-card__sub">${esc(vm.speedText || vm.senses || 'Без уточнений')}</div>
+              </div>
             </div>
-            <div class="monster-hero-card">
-              <div class="monster-hero-card__label">Скорость</div>
-              <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.speed.value" value="${esc(String(vm.speedValue || 0))}">
-              <div class="monster-hero-card__sub">${esc(vm.speedText || vm.senses || 'Без уточнений')}</div>
+            <div class="monster-hero-card monster-hero-card--stats">
+              <div class="monster-panel__title">Характеристики</div>
+              <div class="monster-stat-grid">
+                ${vm.stats.map((stat) => `
+                  <div class="monster-stat">
+                    <div class="monster-stat__label">${esc(stat.label)}</div>
+                    <div class="monster-stat__score">${esc(String(stat.score))}</div>
+                    <div class="monster-stat__mod">${esc(signed(stat.modifier))}</div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           </div>
         </div>
