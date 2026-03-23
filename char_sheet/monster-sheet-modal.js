@@ -1073,10 +1073,34 @@
     const hasAbilityValues = (line) => Array.from(String(line || '').matchAll(abilityValueRowPattern)).length >= 3;
     const isSingleAbilityValueLine = (line) => /^-?\d+\s*\(([+−\-]?\d+)\)$/.test(String(line || '').trim());
 
+    const extractMonsterMainBodyLines = (inputLines = []) => {
+      const proficiencyIndex = inputLines.findIndex((line) => /^Бонус мастерства\s+.+$/i.test(line) || /^Proficiency Bonus\s+.+$/i.test(line));
+      const challengeIndex = inputLines.findIndex((line) => /^Опасность\s+.+$/i.test(line) || /^Challenge\s+.+$/i.test(line));
+      const startIndex = proficiencyIndex >= 0 ? proficiencyIndex : challengeIndex;
+      if (startIndex < 0) return [];
+
+      const result = [];
+      let bodyStarted = false;
+      for (let index = startIndex + 1; index < inputLines.length; index++) {
+        const line = normalizeMonsterLine(inputLines[index]);
+        if (!line) continue;
+        if (isMonsterCommentBoundary(line)) break;
+        if (isMonsterSourceBadgeLine(line)) continue;
+        if (isMonsterChromeStopLine(line)) {
+          if (bodyStarted) break;
+          continue;
+        }
+        if (fieldMatchers.some(([, regex]) => regex.test(line)) || /^Опасность\s+.+$/i.test(line) || /^Challenge\s+.+$/i.test(line)) continue;
+        if (abilityStatLabels.has(line) || abilityLabelRowPattern.test(line) || hasAbilityValues(line) || isSingleAbilityValueLine(line)) continue;
+        bodyStarted = true;
+        result.push(line);
+      }
+      return result;
+    };
+
     let currentSection = '';
     let contentStarted = false;
     let buffer = [];
-    let mainBodyLines = [];
     const flushBuffer = () => {
       const paragraph = buffer.join(' ').trim();
       buffer = [];
@@ -1133,17 +1157,15 @@
         contentStarted = true;
         flushBuffer();
         currentSection = sectionMap[normalizedSectionLine] || currentSection;
-        mainBodyLines.push(line);
         continue;
       }
       if (!contentStarted) continue;
       if (!currentSection) currentSection = 'traits';
       if (buffer.length && /^[^.]{1,120}\.\s/.test(line)) flushBuffer();
       buffer.push(line);
-      mainBodyLines.push(line);
     }
     flushBuffer();
-    data.main_body_text = cleanupMonsterText(mainBodyLines.join('\n'));
+    data.main_body_text = cleanupMonsterText(extractMonsterMainBodyLines(rawLines).join('\n'));
 
     const structuredContent = parseMonsterStructuredContent(raw, sourceUrl);
     if (structuredContent) {
@@ -1151,17 +1173,6 @@
       if (structuredContent.description_html) data.description_html = structuredContent.description_html;
       if (structuredContent.main_text) data.main_body_text = structuredContent.main_text;
       if (structuredContent.main_html) data.main_body_html = structuredContent.main_html;
-      ['traits', 'actions', 'bonus_actions', 'reactions', 'legendary_actions'].forEach((key) => {
-        if (Array.isArray(structuredContent[key]) && structuredContent[key].length) {
-          data[key] = structuredContent[key];
-        }
-      });
-    }
-
-    const structuredContent = parseMonsterStructuredContent(raw, sourceUrl);
-    if (structuredContent) {
-      if (structuredContent.description_text) data.description_ru = structuredContent.description_text;
-      if (structuredContent.description_html) data.description_html = structuredContent.description_html;
       ['traits', 'actions', 'bonus_actions', 'reactions', 'legendary_actions'].forEach((key) => {
         if (Array.isArray(structuredContent[key]) && structuredContent[key].length) {
           data[key] = structuredContent[key];
