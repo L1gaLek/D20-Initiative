@@ -101,6 +101,18 @@
     return { total: Math.max(0, total), rolls };
   }
 
+  function getMonsterHpRange(config) {
+    const normalized = normalizeMonsterHpRollConfig(config);
+    const hasDice = normalized.count > 0 && normalized.sides > 0;
+    const minBase = hasDice ? normalized.count : 0;
+    const maxBase = hasDice ? normalized.count * normalized.sides : 0;
+    return {
+      min: Math.max(0, minBase + normalized.bonus),
+      max: Math.max(0, maxBase + normalized.bonus),
+      received: Math.max(0, normalized.lastTotal)
+    };
+  }
+
   function ensureMonsterHpRollConfig(sheet, monster) {
     if (!sheet || typeof sheet !== 'object') return normalizeMonsterHpRollConfig();
     const parsed = parseHpFormula(monster?.hp || get(sheet, 'monster.hp', ''));
@@ -144,17 +156,15 @@
     const raw = String(url || '').trim();
     if (!raw) return '';
     let candidate = raw;
-    if (/^\/bestiary\//i.test(candidate)) candidate = `https://dnd.su${candidate}`;
+    if (/^\/\S+/i.test(candidate)) candidate = `https://dnd.su${candidate}`;
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) && /^[\w.-]+\.[a-z]{2,}(?:\/|$)/i.test(candidate)) {
+      candidate = `https://${candidate}`;
+    }
     try {
       const parsed = new URL(candidate);
-      const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
-      if (host !== 'dnd.su') return '';
-      if (!/^\/bestiary\//i.test(parsed.pathname)) return '';
+      if (!/^https?:$/i.test(parsed.protocol)) return '';
       parsed.hash = '';
-      parsed.search = '';
-      let href = parsed.toString();
-      if (!href.endsWith('/')) href += '/';
-      return href;
+      return parsed.toString();
     } catch {
       return '';
     }
@@ -162,7 +172,7 @@
 
   async function fetchMonsterPage(url) {
     const targetUrl = normalizeBestiaryUrl(url);
-    if (!targetUrl) throw new Error('Нужна корректная ссылка вида https://dnd.su/bestiary/...');
+    if (!targetUrl) throw new Error('Нужна корректная ссылка на страницу с текстом монстра');
 
     try {
       const fn = (typeof window !== 'undefined' && window.SUPABASE_FETCH_FN) ? String(window.SUPABASE_FETCH_FN) : '';
@@ -247,6 +257,12 @@
     return { name_ru: '', text_ru: normalized };
   }
 
+  function parseSignedPrimaryNumber(raw, fallback = 0) {
+    const text = String(raw || '').replace(/−/g, '-');
+    const match = text.match(/([+\-]?\d+)/);
+    return match ? toInt(match[1], fallback) : fallback;
+  }
+
   function parseAbilityBlock(lines, startIndex) {
     const map = {
       'Сил': 'str',
@@ -270,6 +286,55 @@
       i += 2;
     }
     return { abilities, nextIndex: i };
+  }
+
+  function parseMonsterAbilities(lines, plainText) {
+    const map = {
+      'Сил': 'str',
+      'Лов': 'dex',
+      'Тел': 'con',
+      'Инт': 'int',
+      'Мдр': 'wis',
+      'Хар': 'cha'
+    };
+    const orderedLabels = ['Сил', 'Лов', 'Тел', 'Инт', 'Мдр', 'Хар'];
+
+    const inlineMatches = Array.from(String(plainText || '').matchAll(/(Сил|Лов|Тел|Инт|Мдр|Хар)\s*(-?\d+)\s*\(([+−\-]?\d+)\)/g));
+    if (inlineMatches.length >= 3) {
+      return inlineMatches.reduce((acc, match) => {
+        const key = map[match[1]];
+        if (!key) return acc;
+        acc[key] = {
+          score: toInt(match[2], 0),
+          mod: toInt(String(match[3] || '').replace('−', '-'), 0)
+        };
+        return acc;
+      }, {});
+    }
+
+    const labelLineIndex = lines.findIndex((line) => orderedLabels.every((label) => String(line || '').includes(label)));
+    if (labelLineIndex >= 0) {
+      const valueSource = [lines[labelLineIndex + 1], lines[labelLineIndex + 2]].filter(Boolean).join(' ');
+      const valueMatches = Array.from(valueSource.matchAll(/(-?\d+)\s*\(([+−\-]?\d+)\)/g));
+      if (valueMatches.length >= orderedLabels.length) {
+        return orderedLabels.reduce((acc, label, index) => {
+          const match = valueMatches[index];
+          const key = map[label];
+          if (!match || !key) return acc;
+          acc[key] = {
+            score: toInt(match[1], 0),
+            mod: toInt(String(match[2] || '').replace('−', '-'), 0)
+          };
+          return acc;
+        }, {});
+      }
+    }
+
+    const abilityStart = lines.findIndex((line) => orderedLabels.includes(line));
+    if (abilityStart >= 0) {
+      return parseAbilityBlock(lines, abilityStart).abilities;
+    }
+    return {};
   }
 
   function parseMonsterText(raw, sourceUrl = '') {
@@ -366,35 +431,28 @@
       }
     }
 
-    const abilityStart = lines.findIndex((line) => ['Сил', 'Лов', 'Тел', 'Инт', 'Мдр', 'Хар'].includes(line));
-    if (abilityStart >= 0) {
-      data.abilities = parseAbilityBlock(lines, abilityStart).abilities;
-    }
+    data.abilities = parseMonsterAbilities(lines, plainText);
 
     const sectionMap = {
-      'Действия': 'actions',
-      'Бонусные действия': 'bonus_actions',
-      'Реакции': 'reactions',
-      'Легендарные действия': 'legendary_actions',
-      'Описание': 'description_ru'
+      'действия': 'actions',
+      'бонусные действия': 'bonus_actions',
+      'реакции': 'reactions',
+      'легендарные действия': 'legendary_actions'
     };
 
     const rawLines = cleanupMonsterText(plainText)
       .split('\n')
       .map((line) => line.replace(/^[-*•]\s*/, '').trim());
+    const siteChromeStopPattern = /^(Комментарии|Комментари[йия]|Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены)$/i;
 
-    let currentSection = 'traits';
+    let currentSection = '';
     let buffer = [];
     const flushBuffer = () => {
       const paragraph = buffer.join(' ').trim();
       buffer = [];
-      if (!paragraph) return;
-      if (currentSection === 'description_ru') {
-        data.description_ru = data.description_ru ? `${data.description_ru}\n\n${paragraph}` : paragraph;
-      } else {
-        const entry = paragraphToEntry(paragraph);
-        if (entry) data[currentSection].push(entry);
-      }
+      if (!paragraph || !currentSection || !Array.isArray(data[currentSection])) return;
+      const entry = paragraphToEntry(paragraph);
+      if (entry) data[currentSection].push(entry);
     };
 
     for (const rawLine of rawLines) {
@@ -402,6 +460,10 @@
       if (!line) {
         flushBuffer();
         continue;
+      }
+      if (currentSection && siteChromeStopPattern.test(line)) {
+        flushBuffer();
+        break;
       }
       if (/^(Распечатать|Комментарии|Галерея)$/i.test(line)) {
         flushBuffer();
@@ -415,17 +477,20 @@
         flushBuffer();
         continue;
       }
-      if (Object.prototype.hasOwnProperty.call(sectionMap, line)) {
+      const normalizedSectionLine = line.replace(/[—–-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(sectionMap, normalizedSectionLine)) {
         flushBuffer();
-        currentSection = sectionMap[line] || currentSection;
+        currentSection = sectionMap[normalizedSectionLine] || currentSection;
         continue;
       }
-      if (currentSection !== 'description_ru' && buffer.length && /^[^.]{1,120}\.\s/.test(line)) flushBuffer();
+      if (!currentSection) continue;
+      if (buffer.length && /^[^.]{1,120}\.\s/.test(line)) flushBuffer();
       buffer.push(line);
     }
     flushBuffer();
 
-    if (!data.actions.length && !data.traits.length && !data.description_ru) {
+    const hasCoreMonsterData = !!(data.name_ru || data.name_en || data.ac || data.hp || data.speed || Object.keys(data.abilities || {}).length);
+    if (!hasCoreMonsterData && !data.actions.length && !data.bonus_actions.length && !data.reactions.length && !data.legendary_actions.length) {
       throw new Error('Не удалось распознать данные монстра на странице');
     }
 
@@ -439,9 +504,13 @@
 
   async function importMonsterFromUrl(url) {
     const normalized = normalizeBestiaryUrl(url);
-    if (!normalized) throw new Error('Нужна ссылка формата https://dnd.su/bestiary/...');
-    const rawPage = await fetchMonsterPage(normalized);
-    return parseMonsterText(rawPage, normalized);
+    if (normalized) {
+      const rawPage = await fetchMonsterPage(normalized);
+      return parseMonsterText(rawPage, normalized);
+    }
+    const rawText = String(url || '').trim();
+    if (!rawText) throw new Error('Нужна ссылка или текст с описанием монстра');
+    return parseMonsterText(rawText, '');
   }
 
   function ensureImportedMonsterStats(sheet, monster) {
@@ -449,12 +518,14 @@
     const hpInfo = parseHpFormula(monster.hp);
     const acInfo = parseAc(monster.ac);
     const speedInfo = parseSpeed(monster.speed);
+    const proficiencyBonus = parseSignedPrimaryNumber(monster.proficiency_bonus, toInt(get(sheet, 'proficiency', 0), 0));
     set(sheet, 'monster', monster);
     set(sheet, 'monsterHpRoll', normalizeMonsterHpRollConfig({ count: hpInfo.count, sides: hpInfo.sides, bonus: hpInfo.bonus, lastTotal: 0 }));
     set(sheet, 'vitality.hp-max.value', 0);
     set(sheet, 'vitality.hp-current.value', 0);
     set(sheet, 'vitality.ac.value', Math.max(0, acInfo.value));
     set(sheet, 'vitality.speed.value', Math.max(0, speedInfo.value));
+    set(sheet, 'proficiency', proficiencyBonus);
     const labels = { str: 'Сила', dex: 'Ловкость', con: 'Телосложение', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
     Object.entries(monster.abilities || {}).forEach(([key, entry]) => {
       if (!entry) return;
@@ -468,7 +539,7 @@
     if (!canEdit) return '';
     return `
       <div class="monster-import" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-        <input type="url" class="popup-field" style="min-width:320px;flex:1;" placeholder="https://dnd.su/bestiary/..." data-monster-import-url value="${esc(sourceUrl || '')}">
+        <input type="text" class="popup-field" style="min-width:320px;flex:1;" placeholder="Ссылка или текст статблока монстра" data-monster-import-url value="${esc(sourceUrl || '')}">
         <button type="button" class="btn" data-monster-import-btn>Импортировать по ссылке</button>
       </div>
     `;
@@ -485,12 +556,31 @@
       .monster-sheet__subtitle{margin-top:6px;color:rgba(255,238,215,.82);font-size:14px}
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
-      .monster-hero-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:stretch}
-      .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11)}
+      .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
+      .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
+      .monster-hero-card--hp{flex:0 0 306px;min-width:0}
+      .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:0 0 88px;min-width:88px}
+      .monster-hero-card--compact{padding:5px 6px;text-align:center}
+      .monster-hero-card--compact .monster-hero-card__label{font-size:9px;line-height:1.05;margin-bottom:4px}
+      .monster-hero-card--compact .monster-hero-card__input{padding:4px 3px;font-size:15px;text-align:center}
+      .monster-hero-card--compact .monster-hero-card__sub{font-size:8px;line-height:1.05;word-break:break-word;margin-top:3px}
+      .monster-hero-card--stats{display:flex;flex:1 1 auto;flex-direction:column;min-width:0}
+      .monster-hero-card--stats .monster-panel__title{margin-bottom:12px}
       .monster-hero-card__label{font-size:12px;color:rgba(255,236,212,.72);margin-bottom:7px}
       .monster-hero-card__value{font-size:22px;font-weight:800;color:#fff7ef}
       .monster-hero-card__sub{font-size:12px;color:rgba(255,236,212,.7);margin-top:5px}
       .monster-hero-card__input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:20px;font-weight:700}
+      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(84px,.9fr) minmax(98px,1fr) minmax(66px,.64fr);gap:6px;align-items:end}
+      .monster-hp-summary-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+      .monster-hp-summary-field span{font-size:10px;color:rgba(255,236,212,.72)}
+      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 7px;font-size:14px;font-weight:700;line-height:1.15;min-height:39px;display:flex;align-items:center}
+      .monster-hero-card--hp .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
+      .monster-hero-card--hp .monster-die-btn{width:42px;height:42px}
+      .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:10px}
+      .monster-hp-adjust-btn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:none;border-radius:12px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 10px 20px rgba(0,0,0,.24)}
+      .monster-hp-adjust-btn:hover{filter:brightness(1.06)}
+      .monster-hp-adjust-btn:disabled{opacity:.5;cursor:default;filter:none}
+      .monster-hp-adjust .monster-hero-card__mini-field{gap:6px}
       .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card__mini-field{display:flex;flex-direction:column;gap:4px}
       .monster-hero-card__mini-field span{font-size:11px;color:rgba(255,236,212,.72)}
@@ -514,6 +604,7 @@
       .monster-stat__label{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
       .monster-stat__mod{margin-top:4px;font-size:12px;color:#ffd5a0}
+      .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 6px;font-size:18px;font-weight:800;text-align:center}
       .monster-list{display:grid;gap:10px}
       .monster-list-item{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,226,197,.08)}
       .monster-list-item b{color:#fff2db}
@@ -532,8 +623,16 @@
       .monster-empty{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,228,204,.14);color:#ddc9b2}
       @media (max-width: 980px){
         .monster-sheet__hero,.monster-layout{grid-template-columns:1fr}
-        .monster-hero-cards,.monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid{grid-template-columns:1fr}
+        .monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid{grid-template-columns:1fr}
         .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+      }
+      @media (max-width: 760px){
+        .monster-hero-cards{flex-direction:column}
+        .monster-hero-card--hp,.monster-hero-card--stack,.monster-hero-card--stats{flex:auto;width:100%}
+        .monster-hero-card--stack{grid-template-columns:1fr;min-width:0}
+        .monster-hp-top-grid{grid-template-columns:1fr}
+        .monster-hero-card--hp .monster-hero-card__mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .monster-hp-adjust{grid-template-columns:42px minmax(0,1fr) 42px}
       }
     `;
     document.head.appendChild(style);
@@ -600,10 +699,12 @@
     const acInfo = parseAc(monster?.ac);
     const speedInfo = parseSpeed(monster?.speed);
     const hpRoll = ensureMonsterHpRollConfig(sheet, monster);
+    const hpRange = getMonsterHpRange(hpRoll);
     const currentHp = Math.max(0, toInt(get(sheet, 'vitality.hp-current.value', hpRoll.lastTotal || hpInfo.value || vm.hpCur || 0), hpRoll.lastTotal || hpInfo.value || vm.hpCur || 0));
     const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', hpRoll.lastTotal || hpInfo.value || vm.hp || 0), hpRoll.lastTotal || hpInfo.value || vm.hp || 0));
     const acValue = Math.max(0, toInt(get(sheet, 'vitality.ac.value', acInfo.value || vm.ac || 0), acInfo.value || vm.ac || 0));
     const speedFeet = Math.max(0, toInt(get(sheet, 'vitality.speed.value', speedInfo.value || vm.spd || 0), speedInfo.value || vm.spd || 0));
+    const proficiencyBonus = toInt(get(sheet, 'proficiency', parseSignedPrimaryNumber(monster?.proficiency_bonus, 0)), parseSignedPrimaryNumber(monster?.proficiency_bonus, 0));
 
     return {
       playerName: player?.name || vm.name,
@@ -611,6 +712,7 @@
       source: monster?.source || '',
       challenge: monster?.cr != null ? `CR ${monster.cr}` : '',
       xp: monster?.xp ? `${monster.xp} XP` : '',
+      proficiencyBonus,
       senses: monster?.senses || '',
       languages: monster?.languages || '',
       acValue,
@@ -619,6 +721,7 @@
       maxHp,
       hpText: hpInfo.text,
       hpRoll,
+      hpRange,
       speedValue: speedFeet,
       speedText: speedInfo.text || monster?.speed || '',
       saves: monster?.saving_throws || '',
@@ -627,18 +730,14 @@
       damageResistances: monster?.damage_resistances || '',
       damageImmunities: monster?.damage_immunities || '',
       conditionImmunities: monster?.condition_immunities || '',
-      description: monster?.description_ru || monster?.description_en || monster?.desc_ru || monster?.desc_en || '',
-      traits: normalizeMonsterEntries(monster?.traits),
       actions: normalizeMonsterEntries(monster?.actions),
       reactions: normalizeMonsterEntries(monster?.reactions),
       legendaryActions: normalizeMonsterEntries(monster?.legendary_actions),
       bonusActions: normalizeMonsterEntries(monster?.bonus_actions),
       stats: statOrder.map(([key, label]) => {
         const monsterStat = abilities?.[key] || null;
-        const score = toInt(monsterStat?.score, toInt(get(sheet, `stats.${key}.score`, 10), 10));
-        const modifier = Number.isFinite(Number(monsterStat?.mod))
-          ? toInt(monsterStat.mod, 0)
-          : toInt(get(sheet, `stats.${key}.modifier`, Math.floor((score - 10) / 2)), Math.floor((score - 10) / 2));
+        const score = toInt(get(sheet, `stats.${key}.score`, monsterStat?.score), toInt(monsterStat?.score, 10));
+        const modifier = toInt(get(sheet, `stats.${key}.modifier`, Math.floor((score - 10) / 2)), Math.floor((score - 10) / 2));
         return { key, label, score, modifier };
       })
     };
@@ -675,19 +774,6 @@
     return `
       <div class="monster-grid">
         <div class="monster-panel monster-panel--wide">
-          <div class="monster-panel__title">Характеристики</div>
-          <div class="monster-stat-grid">
-            ${vm.stats.map((stat) => `
-              <div class="monster-stat">
-                <div class="monster-stat__label">${esc(stat.label)}</div>
-                <div class="monster-stat__score">${esc(String(stat.score))}</div>
-                <div class="monster-stat__mod">${esc(signed(stat.modifier))}</div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <div class="monster-panel monster-panel--wide">
           <div class="monster-panel__title">Подробности</div>
           <div class="monster-meta">
             ${renderMetaRow('Спасброски', vm.saves)}
@@ -705,19 +791,12 @@
   }
 
   function renderExtraTab(vm) {
-    const hasEntries = vm.traits.length || vm.actions.length || vm.reactions.length || vm.legendaryActions.length || vm.bonusActions.length || vm.description;
+    const hasEntries = vm.actions.length || vm.reactions.length || vm.legendaryActions.length || vm.bonusActions.length;
     if (!hasEntries) {
       return `<div class="monster-empty">Для этого врага пока нет расширенных данных монстра. Если токен создан из библиотеки SRD, они появятся автоматически.</div>`;
     }
     return `
       <div class="monster-grid">
-        ${vm.description ? `
-          <div class="monster-panel monster-panel--wide">
-            <div class="monster-panel__title">Описание</div>
-            <div class="monster-desc">${esc(vm.description)}</div>
-          </div>
-        ` : ''}
-        ${renderEntries('Особенности', vm.traits)}
         ${renderEntries('Действия', vm.actions)}
         ${renderEntries('Бонусные действия', vm.bonusActions)}
         ${renderEntries('Реакции', vm.reactions)}
@@ -749,6 +828,15 @@
         const sheet = ensureEnemySheet(player);
         set(sheet, path, next);
 
+        const statMatch = String(path).match(/^stats\.(str|dex|con|int|wis|cha)\.score$/);
+        if (statMatch) {
+          const statKey = statMatch[1];
+          const mod = Math.floor((next - 10) / 2);
+          set(sheet, `stats.${statKey}.modifier`, mod);
+          const modEl = root.querySelector(`[data-monster-stat-mod="${statKey}"]`);
+          if (modEl) modEl.textContent = signed(mod);
+        }
+
         const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', get(sheet, 'monsterHpRoll.lastTotal', next)), get(sheet, 'monsterHpRoll.lastTotal', next)));
         const curHp = Math.max(0, Math.min(maxHp, toInt(get(sheet, 'vitality.hp-current.value', 0), 0)));
         set(sheet, 'vitality.hp-max.value', maxHp);
@@ -772,6 +860,8 @@
     if (!canEdit) return;
     const inputs = Array.from(root.querySelectorAll('[data-monster-hp-roll-field]'));
     const rerollBtn = root.querySelector('[data-monster-hp-roll]');
+    const hpRangeEl = root.querySelector('[data-monster-hp-range]');
+    const hpReceivedEl = root.querySelector('[data-monster-hp-received]');
     if (!inputs.length || !rerollBtn) return;
 
     const syncConfig = () => {
@@ -783,7 +873,11 @@
         bonus: toInt(root.querySelector('[data-monster-hp-roll-field="bonus"]')?.value, current.bonus),
         lastTotal: current.lastTotal
       };
-      set(sheet, 'monsterHpRoll', normalizeMonsterHpRollConfig(next, current));
+      const normalized = normalizeMonsterHpRollConfig(next, current);
+      set(sheet, 'monsterHpRoll', normalized);
+      const range = getMonsterHpRange(normalized);
+      if (hpRangeEl) hpRangeEl.textContent = `${range.min} / ${range.max}`;
+      if (hpReceivedEl) hpReceivedEl.textContent = String(range.received);
       markModalInteracted(player.id);
       scheduleSave(player);
       return sheet;
@@ -807,6 +901,50 @@
     });
   }
 
+  function bindMonsterHpAdjustControls(root, player, canEdit) {
+    if (!canEdit) return;
+    const valueInput = root.querySelector('[data-monster-hp-adjust-value]');
+    const buttons = Array.from(root.querySelectorAll('[data-monster-hp-adjust]'));
+    const hpInput = root.querySelector('[data-monster-sheet-path="vitality.hp-current.value"]');
+    if (!valueInput || !buttons.length || !hpInput) return;
+
+    const normalizeAdjustValue = () => {
+      const value = Math.max(0, toInt(valueInput.value, 0));
+      if (toInt(valueInput.value, 0) !== value) valueInput.value = String(value);
+      return value;
+    };
+
+    valueInput.addEventListener('input', () => {
+      normalizeAdjustValue();
+    });
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const deltaSign = toInt(button.getAttribute('data-monster-hp-adjust') || '0', 0);
+        if (!deltaSign) return;
+        const amount = normalizeAdjustValue();
+        const sheet = ensureEnemySheet(player);
+        const received = Math.max(0, toInt(get(sheet, 'monsterHpRoll.lastTotal', get(sheet, 'vitality.hp-max.value', 0)), get(sheet, 'vitality.hp-max.value', 0)));
+        const currentHp = Math.max(0, toInt(get(sheet, 'vitality.hp-current.value', 0), 0));
+        const nextHp = deltaSign < 0
+          ? Math.max(0, currentHp - amount)
+          : Math.min(received, currentHp + amount);
+
+        set(sheet, 'vitality.hp-max.value', received);
+        set(sheet, 'vitality.hp-current.value', nextHp);
+        hpInput.value = String(nextHp);
+
+        try {
+          const tokenEl = playerElements?.get?.(String(player?.id || ''));
+          if (tokenEl) updateHpBar?.(player, tokenEl);
+        } catch {}
+
+        markModalInteracted(player.id);
+        scheduleSave(player);
+      });
+    });
+  }
+
   function bindTabs(root, player, vm, canEdit) {
     const buttons = Array.from(root.querySelectorAll('[data-monster-tab]'));
     const main = root.querySelector('#sheet-main');
@@ -822,6 +960,7 @@
         main.innerHTML = tabId === 'monster-extra' ? renderExtraTab(vm) : renderMainTab(vm, canEdit);
         bindMonsterSheetInputs(root, player);
         bindMonsterHpRollControls(root, player, canEdit);
+        bindMonsterHpAdjustControls(root, player, canEdit);
         markModalInteracted(player.id);
       });
     });
@@ -841,14 +980,9 @@
 
     button.addEventListener('click', async () => {
       const href = normalizeBestiaryUrl(input.value);
-      if (!href) {
-        alert('Нужна ссылка вида https://dnd.su/bestiary/...');
-        return;
-      }
-
       setBusy(true);
       try {
-        const monster = await importMonsterFromUrl(href);
+        const monster = await importMonsterFromUrl(href || input.value);
         const sheet = ensureEnemySheet(player);
         ensureImportedMonsterStats(sheet, monster);
         scheduleSave(player);
@@ -909,8 +1043,20 @@
           </div>
           <div class="monster-hero-cards">
             <div class="monster-hero-card monster-hero-card--hp">
-              <div class="monster-hero-card__label">Текущее здоровье</div>
-              <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-current.value" value="${esc(String(vm.currentHp))}">
+              <div class="monster-hp-top-grid">
+                <label class="monster-hp-summary-field">
+                  <span>Текущее здоровье</span>
+                  <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-current.value" value="${esc(String(vm.currentHp))}">
+                </label>
+                <div class="monster-hp-summary-field">
+                  <span>Мин/Макс здоровья</span>
+                  <div class="monster-hp-summary-value" data-monster-hp-range>${esc(`${vm.hpRange.min} / ${vm.hpRange.max}`)}</div>
+                </div>
+                <div class="monster-hp-summary-field">
+                  <span>Получено</span>
+                  <div class="monster-hp-summary-value" data-monster-hp-received>${esc(String(vm.hpRange.received))}</div>
+                </div>
+              </div>
               <div class="monster-hero-card__sub">${esc(vm.hpText || 'HP будет выбран после броска кубика')}</div>
               <div class="monster-hero-card__mini-grid">
                 <label class="monster-hero-card__mini-field">
@@ -925,10 +1071,6 @@
                   <span>Бонус</span>
                   <input type="number" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="bonus" value="${esc(String(vm.hpRoll?.bonus || 0))}">
                 </label>
-                <label class="monster-hero-card__mini-field">
-                  <span>Макс HP</span>
-                  <input type="number" value="${esc(String(vm.maxHp))}" disabled>
-                </label>
                 <button type="button" class="monster-die-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-roll title="Бросить HP" aria-label="Бросить HP">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor"></path>
@@ -936,16 +1078,43 @@
                   </svg>
                 </button>
               </div>
+              <div class="monster-hp-adjust">
+                <button type="button" class="monster-hp-adjust-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust="-1" aria-label="Убавить здоровье">−</button>
+                <label class="monster-hero-card__mini-field">
+                  <span>Изменить здоровье</span>
+                  <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust-value value="1">
+                </label>
+                <button type="button" class="monster-hp-adjust-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust="1" aria-label="Добавить здоровье">+</button>
+              </div>
             </div>
-            <div class="monster-hero-card">
-              <div class="monster-hero-card__label">КД</div>
-              <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.ac.value" value="${esc(String(vm.acValue || 0))}">
-              <div class="monster-hero-card__sub">${esc(vm.acText || 'Без уточнений')}</div>
+            <div class="monster-hero-card--stack">
+              <div class="monster-hero-card monster-hero-card--compact">
+                <div class="monster-hero-card__label">Бонус мастерства</div>
+                <input class="monster-hero-card__input" type="number" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="proficiency" value="${esc(String(vm.proficiencyBonus || 0))}">
+                <div class="monster-hero-card__sub">${esc(monster?.proficiency_bonus || 'Без уточнений')}</div>
+              </div>
+              <div class="monster-hero-card monster-hero-card--compact">
+                <div class="monster-hero-card__label">КД</div>
+                <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.ac.value" value="${esc(String(vm.acValue || 0))}">
+                <div class="monster-hero-card__sub">${esc(vm.acText || 'Без уточнений')}</div>
+              </div>
+              <div class="monster-hero-card monster-hero-card--compact">
+                <div class="monster-hero-card__label">Скорость</div>
+                <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.speed.value" value="${esc(String(vm.speedValue || 0))}">
+                <div class="monster-hero-card__sub">${esc(vm.speedText || vm.senses || 'Без уточнений')}</div>
+              </div>
             </div>
-            <div class="monster-hero-card">
-              <div class="monster-hero-card__label">Скорость</div>
-              <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.speed.value" value="${esc(String(vm.speedValue || 0))}">
-              <div class="monster-hero-card__sub">${esc(vm.speedText || vm.senses || 'Без уточнений')}</div>
+            <div class="monster-hero-card monster-hero-card--stats">
+              <div class="monster-panel__title">Характеристики</div>
+              <div class="monster-stat-grid">
+                ${vm.stats.map((stat) => `
+                  <div class="monster-stat">
+                    <div class="monster-stat__label">${esc(stat.label)}</div>
+                    <input class="monster-stat__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="stats.${esc(stat.key)}.score" value="${esc(String(stat.score))}">
+                    <div class="monster-stat__mod" data-monster-stat-mod="${esc(stat.key)}">${esc(signed(stat.modifier))}</div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           </div>
         </div>
@@ -974,6 +1143,7 @@
 
     bindMonsterSheetInputs(sheetContent, player);
     bindMonsterHpRollControls(sheetContent, player, canEdit);
+    bindMonsterHpAdjustControls(sheetContent, player, canEdit);
     bindTabs(sheetContent, player, vm, canEdit);
     bindImportControls(player, canEdit);
     return true;
