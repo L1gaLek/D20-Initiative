@@ -786,10 +786,14 @@
         const sheet = ensureEnemySheet(player);
         set(sheet, path, next);
 
-        const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', get(sheet, 'monsterHpRoll.lastTotal', next)), get(sheet, 'monsterHpRoll.lastTotal', next)));
+        const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', next), next));
         const curHp = Math.max(0, Math.min(maxHp, toInt(get(sheet, 'vitality.hp-current.value', 0), 0)));
         set(sheet, 'vitality.hp-max.value', maxHp);
         set(sheet, 'vitality.hp-current.value', curHp);
+        if (String(path) === 'vitality.hp-max.value') {
+          const curInput = root.querySelector('[data-monster-sheet-path="vitality.hp-current.value"]');
+          if (curInput) curInput.value = String(curHp);
+        }
         if (String(path) === 'vitality.hp-current.value' && toInt(input.value, 0) !== curHp) {
           input.value = String(curHp);
         }
