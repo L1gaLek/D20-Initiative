@@ -295,6 +295,21 @@
       .filter(Boolean);
   }
 
+  function normalizeMonsterLine(line) {
+    return String(line || '')
+      .replace(/^[-*•]\s*/, '')
+      .replace(/^#+\s*/, '')
+      .trim();
+  }
+
+  function isMonsterCommentBoundary(line) {
+    return /^(?:Комментарии(?:\s*\(\d+\))?|Комментари[йия](?:\s*[:.].*)?|Comments?(?:\s*\(\d+\))?|Comment section|Leave a comment|Add comment|Discussion(?:\s*\(\d+\))?|Disqus|Авторизуйтесь, чтобы оставлять комментарии|Log in to leave a comment|Log in to post comments?)$/i.test(normalizeMonsterLine(line));
+  }
+
+  function isMonsterChromeStopLine(line) {
+    return /^(?:Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены|Источник:|Подробности|Обсуждение|Версия для печати)$/i.test(normalizeMonsterLine(line));
+  }
+
   function detectMonsterSourceLabel(sourceUrl) {
     const raw = String(sourceUrl || '').trim();
     if (!raw) return 'external';
@@ -414,7 +429,7 @@
   function parseMonsterText(raw, sourceUrl = '') {
     const plainText = htmlToMonsterText(raw);
     const paragraphs = splitMonsterParagraphs(plainText);
-    const lines = plainText.split('\n').map((line) => line.replace(/^[-*•]\s*/, '').replace(/^#+\s*/, '').trim()).filter(Boolean);
+    const lines = plainText.split('\n').map(normalizeMonsterLine).filter(Boolean);
 
     const data = {
       id: '',
@@ -549,8 +564,7 @@
 
     const rawLines = cleanupMonsterText(plainText)
       .split('\n')
-      .map((line) => line.replace(/^[-*•]\s*/, '').trim());
-    const siteChromeStopPattern = /^(Комментарии|Комментари[йия]|Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены|Источник:|Подробности|Обсуждение|Версия для печати)$/i;
+      .map(normalizeMonsterLine);
     const abilityStatLabels = new Set(['Сил', 'Лов', 'Тел', 'Инт', 'Мдр', 'Хар']);
     const abilityLabelRowPattern = /^Сил\s+Лов\s+Тел\s+Инт\s+Мдр\s+Хар$/i;
     const abilityValueRowPattern = /(-?\d+)\s*\(([+−\-]?\d+)\)/g;
@@ -569,18 +583,18 @@
     };
 
     for (const rawLine of rawLines) {
-      const line = String(rawLine || '').replace(/^#+\s*/, '').trim();
+      const line = normalizeMonsterLine(rawLine);
       if (!line) {
         flushBuffer();
         continue;
       }
-      if (currentSection && siteChromeStopPattern.test(line)) {
+      if (isMonsterCommentBoundary(line)) {
         flushBuffer();
         break;
       }
-      if (/^(Распечатать|Комментарии|Галерея)$/i.test(line)) {
+      if (currentSection && isMonsterChromeStopLine(line)) {
         flushBuffer();
-        continue;
+        break;
       }
       if (line === titleLine || /—\s*Бестиарий/i.test(line) || line === sizeLine) {
         contentStarted = true;
