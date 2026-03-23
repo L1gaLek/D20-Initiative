@@ -229,8 +229,60 @@
     if (!/[<][a-z!/]/i.test(src)) return cleanupMonsterText(src);
     try {
       const doc = new DOMParser().parseFromString(src, 'text/html');
-      const root = doc.querySelector('main') || doc.body || doc.documentElement;
-      return cleanupMonsterText(root?.innerText || root?.textContent || src);
+      [
+        'script',
+        'style',
+        'noscript',
+        'svg',
+        'iframe',
+        'header',
+        'footer',
+        'nav',
+        'aside',
+        'form',
+        '.comments-block',
+        '.comments',
+        '#comments',
+        '[data-comments]',
+        '.comment-list',
+        '.breadcrumbs',
+        '.breadcrumb',
+        '.menu',
+        '.navbar',
+        '.nav',
+        '.pagination',
+        '.share',
+        '.social',
+        '.gallery',
+        '.sidebar'
+      ].forEach((selector) => {
+        doc.querySelectorAll(selector).forEach((node) => node.remove());
+      });
+
+      const candidates = [
+        'article',
+        '.card',
+        '.card__article',
+        '.card__article-body',
+        '.monster',
+        '.monster-block',
+        '.page-content',
+        'main',
+        'body'
+      ];
+      const relevantPattern = /(Класс Доспеха|Хиты|Скорость|Опасность|Действия|Бонусные действия|Реакции|Легендарные действия)/i;
+      let bestText = '';
+      for (const selector of candidates) {
+        doc.querySelectorAll(selector).forEach((node) => {
+          const textValue = cleanupMonsterText(node?.innerText || node?.textContent || '');
+          if (!textValue) return;
+          const score = (relevantPattern.test(textValue) ? 100000 : 0) + textValue.length;
+          const bestScore = (relevantPattern.test(bestText) ? 100000 : 0) + bestText.length;
+          if (score > bestScore) bestText = textValue;
+        });
+      }
+
+      return bestText || cleanupMonsterText(doc.body?.innerText || doc.body?.textContent || src);
     } catch {
       return cleanupMonsterText(src.replace(/<[^>]+>/g, ' '));
     }
@@ -434,6 +486,8 @@
     data.abilities = parseMonsterAbilities(lines, plainText);
 
     const sectionMap = {
+      'черты': 'traits',
+      'особые черты': 'traits',
       'действия': 'actions',
       'бонусные действия': 'bonus_actions',
       'реакции': 'reactions',
@@ -443,9 +497,15 @@
     const rawLines = cleanupMonsterText(plainText)
       .split('\n')
       .map((line) => line.replace(/^[-*•]\s*/, '').trim());
-    const siteChromeStopPattern = /^(Комментарии|Комментари[йия]|Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены)$/i;
+    const siteChromeStopPattern = /^(Комментарии|Комментари[йия]|Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены|Источник:|Подробности|Обсуждение|Версия для печати)$/i;
+    const abilityStatLabels = new Set(['Сил', 'Лов', 'Тел', 'Инт', 'Мдр', 'Хар']);
+    const abilityLabelRowPattern = /^Сил\s+Лов\s+Тел\s+Инт\s+Мдр\s+Хар$/i;
+    const abilityValueRowPattern = /(-?\d+)\s*\(([+−\-]?\d+)\)/g;
+    const hasAbilityValues = (line) => Array.from(String(line || '').matchAll(abilityValueRowPattern)).length >= 3;
+    const isSingleAbilityValueLine = (line) => /^-?\d+\s*\(([+−\-]?\d+)\)$/.test(String(line || '').trim());
 
     let currentSection = '';
+    let contentStarted = false;
     let buffer = [];
     const flushBuffer = () => {
       const paragraph = buffer.join(' ').trim();
@@ -470,20 +530,31 @@
         continue;
       }
       if (line === titleLine || /—\s*Бестиарий/i.test(line) || line === sizeLine) {
+        contentStarted = true;
         flushBuffer();
         continue;
       }
       if (fieldMatchers.some(([, regex]) => regex.test(line)) || /^Опасность\s+/i.test(line) || /^Бонус мастерства\s+/i.test(line)) {
+        contentStarted = true;
         flushBuffer();
+        if (!currentSection) currentSection = 'traits';
+        continue;
+      }
+      if (abilityStatLabels.has(line) || abilityLabelRowPattern.test(line) || hasAbilityValues(line) || isSingleAbilityValueLine(line)) {
+        contentStarted = true;
+        flushBuffer();
+        if (!currentSection) currentSection = 'traits';
         continue;
       }
       const normalizedSectionLine = line.replace(/[—–-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
       if (Object.prototype.hasOwnProperty.call(sectionMap, normalizedSectionLine)) {
+        contentStarted = true;
         flushBuffer();
         currentSection = sectionMap[normalizedSectionLine] || currentSection;
         continue;
       }
-      if (!currentSection) continue;
+      if (!contentStarted) continue;
+      if (!currentSection) currentSection = 'traits';
       if (buffer.length && /^[^.]{1,120}\.\s/.test(line)) flushBuffer();
       buffer.push(line);
     }
@@ -730,6 +801,8 @@
       damageResistances: monster?.damage_resistances || '',
       damageImmunities: monster?.damage_immunities || '',
       conditionImmunities: monster?.condition_immunities || '',
+      traits: normalizeMonsterEntries(monster?.traits),
+      description: monster?.description_ru || '',
       actions: normalizeMonsterEntries(monster?.actions),
       reactions: normalizeMonsterEntries(monster?.reactions),
       legendaryActions: normalizeMonsterEntries(monster?.legendary_actions),
@@ -786,6 +859,13 @@
             ${renderMetaRow('Иммунитеты к состояниям', vm.conditionImmunities)}
           </div>
         </div>
+        ${vm.description ? `
+          <div class="monster-panel monster-panel--wide">
+            <div class="monster-panel__title">Описание</div>
+            <div class="monster-desc">${esc(vm.description)}</div>
+          </div>
+        ` : ''}
+        ${renderEntries('Особенности', vm.traits)}
       </div>
     `;
   }
