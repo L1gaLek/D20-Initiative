@@ -365,10 +365,10 @@
     const text = String(paragraph || '').trim();
     if (!text) return null;
     const normalized = text.replace(/\n+/g, ' ').trim();
-    const match = normalized.match(/^([^.!?]{2,120}[.!?])\s+([\s\S]+)$/);
+    const match = normalized.match(/^([^.!?:]{2,120}[.!?:])\s+([\s\S]+)$/);
     if (match) {
       return {
-        name_ru: match[1].replace(/[.!?]+$/, '').trim(),
+        name_ru: match[1].replace(/[.!?:]+$/, '').trim(),
         text_ru: match[2].trim()
       };
     }
@@ -770,7 +770,7 @@
       .monster-panel{border:1px solid rgba(255,224,197,.11);background:rgba(255,255,255,.03);border-radius:16px;padding:14px}
       .monster-panel--wide{grid-column:1/-1}
       .monster-panel__title{font-size:15px;font-weight:800;color:#fff1de;margin-bottom:10px}
-      .monster-stat-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+      .monster-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
       .monster-stat{border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,228,204,.1);padding:10px;text-align:center}
       .monster-stat__label{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
@@ -943,6 +943,21 @@
     `;
   }
 
+  function renderMainTraitPanels(entries) {
+    if (!entries?.length) return '';
+    const titledEntries = entries.filter((entry) => String(entry?.title || '').trim());
+    const untitledEntries = entries.filter((entry) => !String(entry?.title || '').trim());
+    return `
+      ${titledEntries.map((entry) => `
+        <div class="monster-panel">
+          <div class="monster-panel__title">${esc(entry.title || 'Особенность')}</div>
+          <div class="monster-desc">${esc(entry.text || '')}</div>
+        </div>
+      `).join('')}
+      ${untitledEntries.length ? renderEntries('Особенности', untitledEntries) : ''}
+    `;
+  }
+
   function renderMainTab(vm, canEdit) {
     return `
       <div class="monster-grid">
@@ -965,7 +980,7 @@
             <div class="monster-desc">${esc(vm.description)}</div>
           </div>
         ` : ''}
-        ${renderEntries('Особенности', vm.traits)}
+        ${renderMainTraitPanels(vm.traits)}
       </div>
     `;
   }
