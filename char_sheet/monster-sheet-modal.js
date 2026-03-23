@@ -1158,6 +1158,17 @@
       });
     }
 
+    const structuredContent = parseMonsterStructuredContent(raw, sourceUrl);
+    if (structuredContent) {
+      if (structuredContent.description_text) data.description_ru = structuredContent.description_text;
+      if (structuredContent.description_html) data.description_html = structuredContent.description_html;
+      ['traits', 'actions', 'bonus_actions', 'reactions', 'legendary_actions'].forEach((key) => {
+        if (Array.isArray(structuredContent[key]) && structuredContent[key].length) {
+          data[key] = structuredContent[key];
+        }
+      });
+    }
+
     const hasCoreMonsterData = !!(data.name_ru || data.name_en || data.ac || data.hp || data.speed || Object.keys(data.abilities || {}).length);
     if (!hasCoreMonsterData && !data.actions.length && !data.bonus_actions.length && !data.reactions.length && !data.legendary_actions.length) {
       throw new Error('Не удалось распознать данные монстра на странице');
