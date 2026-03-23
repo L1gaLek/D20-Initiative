@@ -511,6 +511,56 @@ function monsterSizeToTokenSize(mon) {
   return 1;
 }
 
+function parseMonsterPrimaryNumber(raw) {
+  const match = String(raw || '').match(/(\d+)/);
+  return match ? Math.max(0, Math.trunc(Number(match[1]) || 0)) : 0;
+}
+
+function parseMonsterHpRoll(raw) {
+  const text = String(raw || '').trim();
+  const match = text.match(/\((\d+)\s*[кkхx*d]\s*(\d+)\s*([+\-−]\s*\d+)?\)/i);
+  if (!match) {
+    return { count: 0, sides: 0, bonus: 0, total: parseMonsterPrimaryNumber(raw) };
+  }
+  const count = Math.max(0, Math.trunc(Number(match[1]) || 0));
+  const sides = Math.max(0, Math.trunc(Number(match[2]) || 0));
+  const bonus = Math.trunc(Number(String(match[3] || '').replace(/\s+/g, '').replace('−', '-')) || 0);
+  let total = Math.max(0, bonus);
+  for (let i = 0; i < count; i++) total += 1 + Math.floor(Math.random() * Math.max(1, sides));
+  return { count, sides, bonus, total: Math.max(0, total) };
+}
+
+function buildMonsterSheetPayload(name, mon) {
+  const abilities = mon?.abilities || {};
+  const hpRoll = parseMonsterHpRoll(mon?.hp);
+  const stat = (key, fallback = 10) => {
+    const score = Math.max(1, Math.trunc(Number(abilities?.[key]?.score) || fallback));
+    return { score, modifier: Math.floor((score - 10) / 2), label: key.toUpperCase() };
+  };
+  return {
+    parsed: {
+      name: { value: name },
+      monster: mon,
+      vitality: {
+        'hp-max': { value: hpRoll.total },
+        'hp-current': { value: hpRoll.total },
+        'hp-temp': { value: 0 },
+        ac: { value: parseMonsterPrimaryNumber(mon?.ac) },
+        speed: { value: parseMonsterPrimaryNumber(mon?.speed) }
+      },
+      monsterHpRoll: { count: hpRoll.count, sides: hpRoll.sides, bonus: hpRoll.bonus, lastTotal: hpRoll.total },
+      stats: {
+        str: { ...stat('str'), label: 'Сила' },
+        dex: { ...stat('dex'), label: 'Ловкость' },
+        con: { ...stat('con'), label: 'Телосложение' },
+        int: { ...stat('int'), label: 'Интеллект' },
+        wis: { ...stat('wis'), label: 'Мудрость' },
+        cha: { ...stat('cha'), label: 'Харизма' }
+      }
+    }
+  };
+}
+
 async function ensureMonstersLibrary() {
   if (monstersLibInited) return;
   monstersLibInited = true;
@@ -527,7 +577,7 @@ async function ensureMonstersLibrary() {
         const color = '#8b1a1a';
 
         // Minimal sheet payload (so the "Инфа" modal has something)
-        const sheet = { parsed: { name: { value: name }, monster: mon } };
+        const sheet = buildMonsterSheetPayload(name, mon);
 
         sendMessage({
           type: 'addPlayer',
