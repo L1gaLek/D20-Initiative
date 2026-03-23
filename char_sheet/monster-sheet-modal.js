@@ -449,9 +449,13 @@
 
   async function importMonsterFromUrl(url) {
     const normalized = normalizeBestiaryUrl(url);
-    if (!normalized) throw new Error('Нужна корректная ссылка на страницу с описанием монстра');
-    const rawPage = await fetchMonsterPage(normalized);
-    return parseMonsterText(rawPage, normalized);
+    if (normalized) {
+      const rawPage = await fetchMonsterPage(normalized);
+      return parseMonsterText(rawPage, normalized);
+    }
+    const rawText = String(url || '').trim();
+    if (!rawText) throw new Error('Нужна ссылка или текст с описанием монстра');
+    return parseMonsterText(rawText, '');
   }
 
   function ensureImportedMonsterStats(sheet, monster) {
@@ -478,7 +482,7 @@
     if (!canEdit) return '';
     return `
       <div class="monster-import" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-        <input type="text" class="popup-field" style="min-width:320px;flex:1;" placeholder="https://site.tld/monster-page" data-monster-import-url value="${esc(sourceUrl || '')}">
+        <input type="text" class="popup-field" style="min-width:320px;flex:1;" placeholder="Ссылка или текст статблока монстра" data-monster-import-url value="${esc(sourceUrl || '')}">
         <button type="button" class="btn" data-monster-import-btn>Импортировать по ссылке</button>
       </div>
     `;
@@ -497,7 +501,7 @@
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
       .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
-      .monster-hero-card--hp{flex:0 0 334px;min-width:0}
+      .monster-hero-card--hp{flex:0 0 306px;min-width:0}
       .monster-hero-card--stack{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;flex:0 0 84px;min-width:84px}
       .monster-hero-card--compact{padding:10px 8px;text-align:center}
       .monster-hero-card--compact .monster-hero-card__label{font-size:11px;line-height:1.15;margin-bottom:6px}
@@ -509,10 +513,10 @@
       .monster-hero-card__value{font-size:22px;font-weight:800;color:#fff7ef}
       .monster-hero-card__sub{font-size:12px;color:rgba(255,236,212,.7);margin-top:5px}
       .monster-hero-card__input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:20px;font-weight:700}
-      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(96px,.95fr) minmax(116px,1.05fr) minmax(78px,.72fr);gap:7px;align-items:end}
+      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(84px,.9fr) minmax(98px,1fr) minmax(66px,.64fr);gap:6px;align-items:end}
       .monster-hp-summary-field{display:flex;flex-direction:column;gap:4px;min-width:0}
-      .monster-hp-summary-field span{font-size:11px;color:rgba(255,236,212,.72)}
-      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 8px;font-size:15px;font-weight:700;line-height:1.2;min-height:41px;display:flex;align-items:center}
+      .monster-hp-summary-field span{font-size:10px;color:rgba(255,236,212,.72)}
+      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 7px;font-size:14px;font-weight:700;line-height:1.15;min-height:39px;display:flex;align-items:center}
       .monster-hero-card--hp .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card--hp .monster-die-btn{width:42px;height:42px}
       .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:10px}
@@ -918,14 +922,9 @@
 
     button.addEventListener('click', async () => {
       const href = normalizeBestiaryUrl(input.value);
-      if (!href) {
-        alert('Нужна обычная ссылка на страницу, где есть текст монстра');
-        return;
-      }
-
       setBusy(true);
       try {
-        const monster = await importMonsterFromUrl(href);
+        const monster = await importMonsterFromUrl(href || input.value);
         const sheet = ensureEnemySheet(player);
         ensureImportedMonsterStats(sheet, monster);
         scheduleSave(player);
