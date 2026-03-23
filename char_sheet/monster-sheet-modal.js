@@ -65,12 +65,59 @@
 
   function parseHpFormula(raw) {
     const text = String(raw || '').trim();
-    if (!text) return { value: 0, text: '' };
-    const match = text.match(/(\d+)/);
+    if (!text) return { value: 0, text: '', count: 0, sides: 0, bonus: 0 };
+    const averageMatch = text.match(/(\d+)/);
+    const formulaMatch = text.match(/\((\d+)\s*[кkхx*d]\s*(\d+)\s*([+\-−]\s*\d+)?\)/i);
+    const count = formulaMatch ? Math.max(0, toInt(formulaMatch[1], 0)) : 0;
+    const sides = formulaMatch ? Math.max(0, toInt(formulaMatch[2], 0)) : 0;
+    const bonusRaw = formulaMatch ? String(formulaMatch[3] || '').replace(/\s+/g, '').replace('−', '-') : '';
     return {
-      value: match ? Math.max(0, toInt(match[1], 0)) : 0,
-      text
+      value: averageMatch ? Math.max(0, toInt(averageMatch[1], 0)) : 0,
+      text,
+      count,
+      sides,
+      bonus: bonusRaw ? toInt(bonusRaw, 0) : 0
     };
+  }
+
+  function normalizeMonsterHpRollConfig(config = {}, fallback = {}) {
+    const count = Math.max(0, toInt(config.count, fallback.count || 0));
+    const sides = Math.max(0, toInt(config.sides, fallback.sides || 0));
+    const bonus = toInt(config.bonus, fallback.bonus || 0);
+    const lastTotal = Math.max(0, toInt(config.lastTotal, fallback.lastTotal || 0));
+    return { count, sides, bonus, lastTotal };
+  }
+
+  function rollMonsterHp(config, rng = Math.random) {
+    const normalized = normalizeMonsterHpRollConfig(config);
+    if (!normalized.count || !normalized.sides) return { total: Math.max(0, normalized.bonus), rolls: [] };
+    const rolls = [];
+    let total = normalized.bonus;
+    for (let i = 0; i < normalized.count; i++) {
+      const roll = 1 + Math.floor(Math.max(0, Math.min(0.999999, Number(rng()) || 0)) * normalized.sides);
+      rolls.push(roll);
+      total += roll;
+    }
+    return { total: Math.max(0, total), rolls };
+  }
+
+  function ensureMonsterHpRollConfig(sheet, monster) {
+    if (!sheet || typeof sheet !== 'object') return normalizeMonsterHpRollConfig();
+    const parsed = parseHpFormula(monster?.hp || get(sheet, 'monster.hp', ''));
+    const fallback = { count: parsed.count, sides: parsed.sides, bonus: parsed.bonus, lastTotal: parsed.value };
+    const current = normalizeMonsterHpRollConfig(get(sheet, 'monsterHpRoll', {}), fallback);
+    set(sheet, 'monsterHpRoll', current);
+    return current;
+  }
+
+  function applyMonsterHpRoll(sheet, monster, rng = Math.random) {
+    const config = ensureMonsterHpRollConfig(sheet, monster);
+    const rolled = rollMonsterHp(config, rng);
+    const next = { ...config, lastTotal: rolled.total };
+    set(sheet, 'monsterHpRoll', next);
+    set(sheet, 'vitality.hp-max.value', rolled.total);
+    set(sheet, 'vitality.hp-current.value', rolled.total);
+    return next;
   }
 
   function parseAc(raw) {
@@ -403,8 +450,8 @@
     const acInfo = parseAc(monster.ac);
     const speedInfo = parseSpeed(monster.speed);
     set(sheet, 'monster', monster);
-    set(sheet, 'vitality.hp-max.value', Math.max(0, hpInfo.value));
-    set(sheet, 'vitality.hp-current.value', Math.max(0, hpInfo.value));
+    set(sheet, 'monsterHpRoll', normalizeMonsterHpRollConfig({ count: hpInfo.count, sides: hpInfo.sides, bonus: hpInfo.bonus, lastTotal: hpInfo.value }));
+    applyMonsterHpRoll(sheet, monster);
     set(sheet, 'vitality.ac.value', Math.max(0, acInfo.value));
     set(sheet, 'vitality.speed.value', Math.max(0, speedInfo.value));
     const labels = { str: 'Сила', dex: 'Ловкость', con: 'Телосложение', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
@@ -467,6 +514,7 @@
       .monster-meta__v{font-size:14px;color:#fff2dd;line-height:1.45;white-space:pre-wrap}
       .monster-note{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,223,197,.18);color:#eedcc8;line-height:1.5}
       .monster-desc{color:#efdfca;line-height:1.65;white-space:pre-wrap}
+      .monster-quick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
       .monster-edit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
       .monster-edit-field{display:flex;flex-direction:column;gap:6px}
       .monster-edit-field span{font-size:12px;color:rgba(255,236,219,.72)}
@@ -474,7 +522,7 @@
       .monster-empty{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,228,204,.14);color:#ddc9b2}
       @media (max-width: 980px){
         .monster-sheet__hero,.monster-layout{grid-template-columns:1fr}
-        .monster-hero-cards,.monster-grid,.monster-meta,.monster-edit-grid{grid-template-columns:1fr}
+        .monster-hero-cards,.monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid{grid-template-columns:1fr}
         .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
       }
     `;
@@ -541,8 +589,9 @@
     const hpInfo = parseHpFormula(monster?.hp);
     const acInfo = parseAc(monster?.ac);
     const speedInfo = parseSpeed(monster?.speed);
-    const currentHp = Math.max(0, toInt(get(sheet, 'vitality.hp-current.value', hpInfo.value || vm.hpCur || 0), hpInfo.value || vm.hpCur || 0));
-    const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', hpInfo.value || vm.hp || 0), hpInfo.value || vm.hp || 0));
+    const hpRoll = ensureMonsterHpRollConfig(sheet, monster);
+    const currentHp = Math.max(0, toInt(get(sheet, 'vitality.hp-current.value', hpRoll.lastTotal || hpInfo.value || vm.hpCur || 0), hpRoll.lastTotal || hpInfo.value || vm.hpCur || 0));
+    const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', hpRoll.lastTotal || hpInfo.value || vm.hp || 0), hpRoll.lastTotal || hpInfo.value || vm.hp || 0));
     const acValue = Math.max(0, toInt(get(sheet, 'vitality.ac.value', acInfo.value || vm.ac || 0), acInfo.value || vm.ac || 0));
     const speedFeet = Math.max(0, toInt(get(sheet, 'vitality.speed.value', speedInfo.value || vm.spd || 0), speedInfo.value || vm.spd || 0));
 
@@ -559,6 +608,7 @@
       currentHp,
       maxHp,
       hpText: hpInfo.text,
+      hpRoll,
       speedValue: speedFeet,
       speedText: speedInfo.text || monster?.speed || '',
       saves: monster?.saving_throws || '',
@@ -612,18 +662,17 @@
   }
 
   function renderMainTab(vm, canEdit) {
+    const hpFormulaLabel = vm.hpRoll?.count && vm.hpRoll?.sides
+      ? `${vm.hpRoll.count}к${vm.hpRoll.sides}${vm.hpRoll.bonus ? ` ${vm.hpRoll.bonus >= 0 ? '+' : '-'} ${Math.abs(vm.hpRoll.bonus)}` : ''}`
+      : 'Формула не распознана';
     return `
       <div class="monster-grid">
         <div class="monster-panel monster-panel--wide">
           <div class="monster-panel__title">Быстрые параметры</div>
-          <div class="monster-edit-grid">
+          <div class="monster-quick-grid">
             <label class="monster-edit-field">
               <span>Текущее здоровье</span>
               <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-current.value" value="${esc(String(vm.currentHp))}">
-            </label>
-            <label class="monster-edit-field">
-              <span>Максимум здоровья</span>
-              <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-max.value" value="${esc(String(vm.maxHp))}">
             </label>
             <label class="monster-edit-field">
               <span>Класс доспеха</span>
@@ -634,9 +683,28 @@
               <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.speed.value" value="${esc(String(vm.speedValue))}">
             </label>
           </div>
+          <div class="monster-hp-roll-grid" style="margin-top:12px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;align-items:end;">
+            <label class="monster-edit-field">
+              <span>Кол-во кубиков</span>
+              <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="count" value="${esc(String(vm.hpRoll?.count || 0))}">
+            </label>
+            <label class="monster-edit-field">
+              <span>Граней</span>
+              <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="sides" value="${esc(String(vm.hpRoll?.sides || 0))}">
+            </label>
+            <label class="monster-edit-field">
+              <span>Бонус</span>
+              <input type="number" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="bonus" value="${esc(String(vm.hpRoll?.bonus || 0))}">
+            </label>
+            <div class="monster-note" style="margin:0;height:100%;display:flex;flex-direction:column;justify-content:center;">
+              <b>Макс. HP: ${esc(String(vm.maxHp))}</b>
+              <span>Формула: ${esc(hpFormulaLabel)}</span>
+            </div>
+            <button type="button" class="btn" ${canEdit ? '' : 'disabled'} data-monster-hp-roll>Перебросить HP</button>
+          </div>
           ${vm.hpText || vm.acText || vm.speedText ? `
             <div class="monster-note" style="margin-top:12px">
-              ${vm.hpText ? `Базовое HP из монстра: <b>${esc(vm.hpText)}</b><br>` : ''}
+              ${vm.hpText ? `Среднее HP из монстра: <b>${esc(vm.hpText)}</b><br>` : ''}
               ${vm.acText ? `Базовый КД из монстра: <b>${esc(vm.acText)}</b><br>` : ''}
               ${vm.speedText ? `Базовая скорость: <b>${esc(vm.speedText)}</b>` : ''}
             </div>
@@ -741,6 +809,45 @@
     });
   }
 
+  function bindMonsterHpRollControls(root, player, canEdit) {
+    if (!canEdit) return;
+    const inputs = Array.from(root.querySelectorAll('[data-monster-hp-roll-field]'));
+    const rerollBtn = root.querySelector('[data-monster-hp-roll]');
+    if (!inputs.length || !rerollBtn) return;
+
+    const syncConfig = () => {
+      const sheet = ensureEnemySheet(player);
+      const current = ensureMonsterHpRollConfig(sheet, sheet?.monster || null);
+      const next = {
+        count: Math.max(0, toInt(root.querySelector('[data-monster-hp-roll-field="count"]')?.value, current.count)),
+        sides: Math.max(0, toInt(root.querySelector('[data-monster-hp-roll-field="sides"]')?.value, current.sides)),
+        bonus: toInt(root.querySelector('[data-monster-hp-roll-field="bonus"]')?.value, current.bonus),
+        lastTotal: current.lastTotal
+      };
+      set(sheet, 'monsterHpRoll', normalizeMonsterHpRollConfig(next, current));
+      markModalInteracted(player.id);
+      scheduleSave(player);
+      return sheet;
+    };
+
+    inputs.forEach((input) => {
+      input.addEventListener('input', () => {
+        syncConfig();
+      });
+    });
+
+    rerollBtn.addEventListener('click', async () => {
+      const sheet = syncConfig();
+      applyMonsterHpRoll(sheet, sheet?.monster || null);
+      try {
+        const tokenEl = playerElements?.get?.(String(player?.id || ''));
+        if (tokenEl) updateHpBar?.(player, tokenEl);
+      } catch {}
+      scheduleSave(player);
+      await render(player, { canEdit, force: true });
+    });
+  }
+
   function bindTabs(root, player, vm, canEdit) {
     const buttons = Array.from(root.querySelectorAll('[data-monster-tab]'));
     const main = root.querySelector('#sheet-main');
@@ -755,6 +862,7 @@
         buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
         main.innerHTML = tabId === 'monster-extra' ? renderExtraTab(vm) : renderMainTab(vm, canEdit);
         bindMonsterSheetInputs(root, player);
+        bindMonsterHpRollControls(root, player, canEdit);
         markModalInteracted(player.id);
       });
     });
@@ -882,6 +990,7 @@
     sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
     bindMonsterSheetInputs(sheetContent, player);
+    bindMonsterHpRollControls(sheetContent, player, canEdit);
     bindTabs(sheetContent, player, vm, canEdit);
     bindImportControls(player, canEdit);
     return true;
