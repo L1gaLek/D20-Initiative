@@ -156,17 +156,15 @@
     const raw = String(url || '').trim();
     if (!raw) return '';
     let candidate = raw;
-    if (/^\/bestiary\//i.test(candidate)) candidate = `https://dnd.su${candidate}`;
+    if (/^\/\S+/i.test(candidate)) candidate = `https://dnd.su${candidate}`;
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) && /^[\w.-]+\.[a-z]{2,}(?:\/|$)/i.test(candidate)) {
+      candidate = `https://${candidate}`;
+    }
     try {
       const parsed = new URL(candidate);
-      const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
-      if (host !== 'dnd.su') return '';
-      if (!/^\/bestiary\//i.test(parsed.pathname)) return '';
+      if (!/^https?:$/i.test(parsed.protocol)) return '';
       parsed.hash = '';
-      parsed.search = '';
-      let href = parsed.toString();
-      if (!href.endsWith('/')) href += '/';
-      return href;
+      return parsed.toString();
     } catch {
       return '';
     }
@@ -174,7 +172,7 @@
 
   async function fetchMonsterPage(url) {
     const targetUrl = normalizeBestiaryUrl(url);
-    if (!targetUrl) throw new Error('Нужна корректная ссылка вида https://dnd.su/bestiary/...');
+    if (!targetUrl) throw new Error('Нужна корректная ссылка на страницу с текстом монстра');
 
     try {
       const fn = (typeof window !== 'undefined' && window.SUPABASE_FETCH_FN) ? String(window.SUPABASE_FETCH_FN) : '';
@@ -451,7 +449,7 @@
 
   async function importMonsterFromUrl(url) {
     const normalized = normalizeBestiaryUrl(url);
-    if (!normalized) throw new Error('Нужна ссылка формата https://dnd.su/bestiary/...');
+    if (!normalized) throw new Error('Нужна корректная ссылка на страницу с описанием монстра');
     const rawPage = await fetchMonsterPage(normalized);
     return parseMonsterText(rawPage, normalized);
   }
@@ -480,7 +478,7 @@
     if (!canEdit) return '';
     return `
       <div class="monster-import" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-        <input type="url" class="popup-field" style="min-width:320px;flex:1;" placeholder="https://dnd.su/bestiary/..." data-monster-import-url value="${esc(sourceUrl || '')}">
+        <input type="text" class="popup-field" style="min-width:320px;flex:1;" placeholder="https://site.tld/monster-page" data-monster-import-url value="${esc(sourceUrl || '')}">
         <button type="button" class="btn" data-monster-import-btn>Импортировать по ссылке</button>
       </div>
     `;
@@ -499,7 +497,7 @@
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
       .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
-      .monster-hero-card--hp{flex:0 0 360px;min-width:0}
+      .monster-hero-card--hp{flex:0 0 334px;min-width:0}
       .monster-hero-card--stack{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;flex:0 0 84px;min-width:84px}
       .monster-hero-card--compact{padding:10px 8px;text-align:center}
       .monster-hero-card--compact .monster-hero-card__label{font-size:11px;line-height:1.15;margin-bottom:6px}
@@ -511,10 +509,10 @@
       .monster-hero-card__value{font-size:22px;font-weight:800;color:#fff7ef}
       .monster-hero-card__sub{font-size:12px;color:rgba(255,236,212,.7);margin-top:5px}
       .monster-hero-card__input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:20px;font-weight:700}
-      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(110px,1fr) minmax(132px,1.2fr) minmax(92px,.8fr);gap:8px;align-items:end}
+      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(96px,.95fr) minmax(116px,1.05fr) minmax(78px,.72fr);gap:7px;align-items:end}
       .monster-hp-summary-field{display:flex;flex-direction:column;gap:4px;min-width:0}
       .monster-hp-summary-field span{font-size:11px;color:rgba(255,236,212,.72)}
-      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:16px;font-weight:700;line-height:1.25;min-height:43px;display:flex;align-items:center}
+      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 8px;font-size:15px;font-weight:700;line-height:1.2;min-height:41px;display:flex;align-items:center}
       .monster-hero-card--hp .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card--hp .monster-die-btn{width:42px;height:42px}
       .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:10px}
@@ -921,7 +919,7 @@
     button.addEventListener('click', async () => {
       const href = normalizeBestiaryUrl(input.value);
       if (!href) {
-        alert('Нужна ссылка вида https://dnd.su/bestiary/...');
+        alert('Нужна обычная ссылка на страницу, где есть текст монстра');
         return;
       }
 
