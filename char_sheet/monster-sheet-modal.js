@@ -485,15 +485,15 @@
       .monster-sheet__subtitle{margin-top:6px;color:rgba(255,238,215,.82);font-size:14px}
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
-      .monster-hero-cards{display:grid;grid-template-columns:minmax(200px,.95fr) minmax(72px,.28fr) minmax(0,1.65fr);gap:10px;align-items:stretch}
+      .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
-      .monster-hero-card--hp{min-width:0}
-      .monster-hero-card--stack{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
+      .monster-hero-card--hp{flex:0 0 220px;min-width:0}
+      .monster-hero-card--stack{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;flex:0 0 84px;min-width:84px}
       .monster-hero-card--compact{padding:10px 8px;text-align:center}
       .monster-hero-card--compact .monster-hero-card__label{font-size:11px;line-height:1.15;margin-bottom:6px}
       .monster-hero-card--compact .monster-hero-card__input{padding:8px 4px;font-size:18px;text-align:center}
       .monster-hero-card--compact .monster-hero-card__sub{font-size:10px;line-height:1.2;word-break:break-word}
-      .monster-hero-card--stats{display:flex;flex-direction:column;min-width:0}
+      .monster-hero-card--stats{display:flex;flex:1 1 auto;flex-direction:column;min-width:0}
       .monster-hero-card--stats .monster-panel__title{margin-bottom:12px}
       .monster-hero-card__label{font-size:12px;color:rgba(255,236,212,.72);margin-bottom:7px}
       .monster-hero-card__value{font-size:22px;font-weight:800;color:#fff7ef}
@@ -542,8 +542,13 @@
       .monster-empty{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,228,204,.14);color:#ddc9b2}
       @media (max-width: 980px){
         .monster-sheet__hero,.monster-layout{grid-template-columns:1fr}
-        .monster-hero-cards,.monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid,.monster-hero-card--stack{grid-template-columns:1fr}
+        .monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid{grid-template-columns:1fr}
         .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+      }
+      @media (max-width: 760px){
+        .monster-hero-cards{flex-direction:column}
+        .monster-hero-card--hp,.monster-hero-card--stack,.monster-hero-card--stats{flex:auto;width:100%}
+        .monster-hero-card--stack{grid-template-columns:1fr;min-width:0}
       }
     `;
     document.head.appendChild(style);
