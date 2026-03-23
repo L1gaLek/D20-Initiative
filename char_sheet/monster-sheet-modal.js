@@ -443,6 +443,7 @@
     const rawLines = cleanupMonsterText(plainText)
       .split('\n')
       .map((line) => line.replace(/^[-*•]\s*/, '').trim());
+    const siteChromeStopPattern = /^(Комментарии|Комментари[йия]|Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены)$/i;
 
     let currentSection = '';
     let buffer = [];
@@ -459,6 +460,10 @@
       if (!line) {
         flushBuffer();
         continue;
+      }
+      if (currentSection && siteChromeStopPattern.test(line)) {
+        flushBuffer();
+        break;
       }
       if (/^(Распечатать|Комментарии|Галерея)$/i.test(line)) {
         flushBuffer();
