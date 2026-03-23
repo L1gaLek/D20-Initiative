@@ -257,6 +257,12 @@
     return { name_ru: '', text_ru: normalized };
   }
 
+  function parseSignedPrimaryNumber(raw, fallback = 0) {
+    const text = String(raw || '').replace(/−/g, '-');
+    const match = text.match(/([+\-]?\d+)/);
+    return match ? toInt(match[1], fallback) : fallback;
+  }
+
   function parseAbilityBlock(lines, startIndex) {
     const map = {
       'Сил': 'str',
@@ -280,6 +286,55 @@
       i += 2;
     }
     return { abilities, nextIndex: i };
+  }
+
+  function parseMonsterAbilities(lines, plainText) {
+    const map = {
+      'Сил': 'str',
+      'Лов': 'dex',
+      'Тел': 'con',
+      'Инт': 'int',
+      'Мдр': 'wis',
+      'Хар': 'cha'
+    };
+    const orderedLabels = ['Сил', 'Лов', 'Тел', 'Инт', 'Мдр', 'Хар'];
+
+    const inlineMatches = Array.from(String(plainText || '').matchAll(/(Сил|Лов|Тел|Инт|Мдр|Хар)\s*(-?\d+)\s*\(([+−\-]?\d+)\)/g));
+    if (inlineMatches.length >= 3) {
+      return inlineMatches.reduce((acc, match) => {
+        const key = map[match[1]];
+        if (!key) return acc;
+        acc[key] = {
+          score: toInt(match[2], 0),
+          mod: toInt(String(match[3] || '').replace('−', '-'), 0)
+        };
+        return acc;
+      }, {});
+    }
+
+    const labelLineIndex = lines.findIndex((line) => orderedLabels.every((label) => String(line || '').includes(label)));
+    if (labelLineIndex >= 0) {
+      const valueSource = [lines[labelLineIndex + 1], lines[labelLineIndex + 2]].filter(Boolean).join(' ');
+      const valueMatches = Array.from(valueSource.matchAll(/(-?\d+)\s*\(([+−\-]?\d+)\)/g));
+      if (valueMatches.length >= orderedLabels.length) {
+        return orderedLabels.reduce((acc, label, index) => {
+          const match = valueMatches[index];
+          const key = map[label];
+          if (!match || !key) return acc;
+          acc[key] = {
+            score: toInt(match[1], 0),
+            mod: toInt(String(match[2] || '').replace('−', '-'), 0)
+          };
+          return acc;
+        }, {});
+      }
+    }
+
+    const abilityStart = lines.findIndex((line) => orderedLabels.includes(line));
+    if (abilityStart >= 0) {
+      return parseAbilityBlock(lines, abilityStart).abilities;
+    }
+    return {};
   }
 
   function parseMonsterText(raw, sourceUrl = '') {
@@ -376,35 +431,27 @@
       }
     }
 
-    const abilityStart = lines.findIndex((line) => ['Сил', 'Лов', 'Тел', 'Инт', 'Мдр', 'Хар'].includes(line));
-    if (abilityStart >= 0) {
-      data.abilities = parseAbilityBlock(lines, abilityStart).abilities;
-    }
+    data.abilities = parseMonsterAbilities(lines, plainText);
 
     const sectionMap = {
-      'Действия': 'actions',
-      'Бонусные действия': 'bonus_actions',
-      'Реакции': 'reactions',
-      'Легендарные действия': 'legendary_actions',
-      'Описание': 'description_ru'
+      'действия': 'actions',
+      'бонусные действия': 'bonus_actions',
+      'реакции': 'reactions',
+      'легендарные действия': 'legendary_actions'
     };
 
     const rawLines = cleanupMonsterText(plainText)
       .split('\n')
       .map((line) => line.replace(/^[-*•]\s*/, '').trim());
 
-    let currentSection = 'traits';
+    let currentSection = '';
     let buffer = [];
     const flushBuffer = () => {
       const paragraph = buffer.join(' ').trim();
       buffer = [];
-      if (!paragraph) return;
-      if (currentSection === 'description_ru') {
-        data.description_ru = data.description_ru ? `${data.description_ru}\n\n${paragraph}` : paragraph;
-      } else {
-        const entry = paragraphToEntry(paragraph);
-        if (entry) data[currentSection].push(entry);
-      }
+      if (!paragraph || !currentSection || !Array.isArray(data[currentSection])) return;
+      const entry = paragraphToEntry(paragraph);
+      if (entry) data[currentSection].push(entry);
     };
 
     for (const rawLine of rawLines) {
@@ -425,17 +472,20 @@
         flushBuffer();
         continue;
       }
-      if (Object.prototype.hasOwnProperty.call(sectionMap, line)) {
+      const normalizedSectionLine = line.replace(/[—–-]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(sectionMap, normalizedSectionLine)) {
         flushBuffer();
-        currentSection = sectionMap[line] || currentSection;
+        currentSection = sectionMap[normalizedSectionLine] || currentSection;
         continue;
       }
-      if (currentSection !== 'description_ru' && buffer.length && /^[^.]{1,120}\.\s/.test(line)) flushBuffer();
+      if (!currentSection) continue;
+      if (buffer.length && /^[^.]{1,120}\.\s/.test(line)) flushBuffer();
       buffer.push(line);
     }
     flushBuffer();
 
-    if (!data.actions.length && !data.traits.length && !data.description_ru) {
+    const hasCoreMonsterData = !!(data.name_ru || data.name_en || data.ac || data.hp || data.speed || Object.keys(data.abilities || {}).length);
+    if (!hasCoreMonsterData && !data.actions.length && !data.bonus_actions.length && !data.reactions.length && !data.legendary_actions.length) {
       throw new Error('Не удалось распознать данные монстра на странице');
     }
 
@@ -463,12 +513,14 @@
     const hpInfo = parseHpFormula(monster.hp);
     const acInfo = parseAc(monster.ac);
     const speedInfo = parseSpeed(monster.speed);
+    const proficiencyBonus = parseSignedPrimaryNumber(monster.proficiency_bonus, toInt(get(sheet, 'proficiency', 0), 0));
     set(sheet, 'monster', monster);
     set(sheet, 'monsterHpRoll', normalizeMonsterHpRollConfig({ count: hpInfo.count, sides: hpInfo.sides, bonus: hpInfo.bonus, lastTotal: 0 }));
     set(sheet, 'vitality.hp-max.value', 0);
     set(sheet, 'vitality.hp-current.value', 0);
     set(sheet, 'vitality.ac.value', Math.max(0, acInfo.value));
     set(sheet, 'vitality.speed.value', Math.max(0, speedInfo.value));
+    set(sheet, 'proficiency', proficiencyBonus);
     const labels = { str: 'Сила', dex: 'Ловкость', con: 'Телосложение', int: 'Интеллект', wis: 'Мудрость', cha: 'Харизма' };
     Object.entries(monster.abilities || {}).forEach(([key, entry]) => {
       if (!entry) return;
@@ -502,7 +554,7 @@
       .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
       .monster-hero-card--hp{flex:0 0 306px;min-width:0}
-      .monster-hero-card--stack{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;flex:0 0 84px;min-width:84px}
+      .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:10px;flex:0 0 92px;min-width:92px}
       .monster-hero-card--compact{padding:10px 8px;text-align:center}
       .monster-hero-card--compact .monster-hero-card__label{font-size:11px;line-height:1.15;margin-bottom:6px}
       .monster-hero-card--compact .monster-hero-card__input{padding:8px 4px;font-size:18px;text-align:center}
@@ -646,6 +698,7 @@
     const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', hpRoll.lastTotal || hpInfo.value || vm.hp || 0), hpRoll.lastTotal || hpInfo.value || vm.hp || 0));
     const acValue = Math.max(0, toInt(get(sheet, 'vitality.ac.value', acInfo.value || vm.ac || 0), acInfo.value || vm.ac || 0));
     const speedFeet = Math.max(0, toInt(get(sheet, 'vitality.speed.value', speedInfo.value || vm.spd || 0), speedInfo.value || vm.spd || 0));
+    const proficiencyBonus = toInt(get(sheet, 'proficiency', parseSignedPrimaryNumber(monster?.proficiency_bonus, 0)), parseSignedPrimaryNumber(monster?.proficiency_bonus, 0));
 
     return {
       playerName: player?.name || vm.name,
@@ -653,6 +706,7 @@
       source: monster?.source || '',
       challenge: monster?.cr != null ? `CR ${monster.cr}` : '',
       xp: monster?.xp ? `${monster.xp} XP` : '',
+      proficiencyBonus,
       senses: monster?.senses || '',
       languages: monster?.languages || '',
       acValue,
@@ -670,8 +724,6 @@
       damageResistances: monster?.damage_resistances || '',
       damageImmunities: monster?.damage_immunities || '',
       conditionImmunities: monster?.condition_immunities || '',
-      description: monster?.description_ru || monster?.description_en || monster?.desc_ru || monster?.desc_en || '',
-      traits: normalizeMonsterEntries(monster?.traits),
       actions: normalizeMonsterEntries(monster?.actions),
       reactions: normalizeMonsterEntries(monster?.reactions),
       legendaryActions: normalizeMonsterEntries(monster?.legendary_actions),
@@ -735,19 +787,12 @@
   }
 
   function renderExtraTab(vm) {
-    const hasEntries = vm.traits.length || vm.actions.length || vm.reactions.length || vm.legendaryActions.length || vm.bonusActions.length || vm.description;
+    const hasEntries = vm.actions.length || vm.reactions.length || vm.legendaryActions.length || vm.bonusActions.length;
     if (!hasEntries) {
       return `<div class="monster-empty">Для этого врага пока нет расширенных данных монстра. Если токен создан из библиотеки SRD, они появятся автоматически.</div>`;
     }
     return `
       <div class="monster-grid">
-        ${vm.description ? `
-          <div class="monster-panel monster-panel--wide">
-            <div class="monster-panel__title">Описание</div>
-            <div class="monster-desc">${esc(vm.description)}</div>
-          </div>
-        ` : ''}
-        ${renderEntries('Особенности', vm.traits)}
         ${renderEntries('Действия', vm.actions)}
         ${renderEntries('Бонусные действия', vm.bonusActions)}
         ${renderEntries('Реакции', vm.reactions)}
@@ -1030,6 +1075,11 @@
               </div>
             </div>
             <div class="monster-hero-card--stack">
+              <div class="monster-hero-card monster-hero-card--compact">
+                <div class="monster-hero-card__label">Бонус мастерства</div>
+                <input class="monster-hero-card__input" type="number" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="proficiency" value="${esc(String(vm.proficiencyBonus || 0))}">
+                <div class="monster-hero-card__sub">${esc(monster?.proficiency_bonus || 'Без уточнений')}</div>
+              </div>
               <div class="monster-hero-card monster-hero-card--compact">
                 <div class="monster-hero-card__label">КД</div>
                 <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.ac.value" value="${esc(String(vm.acValue || 0))}">
