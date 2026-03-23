@@ -446,7 +446,13 @@
       '.share',
       '.social',
       '.gallery',
-      '.sidebar'
+      '.sidebar',
+      '.leftbar',
+      '.sidebar-left',
+      '.sidebar-menu',
+      '.catalog-menu',
+      '.site-menu',
+      '[role="navigation"]'
     ].forEach((selector) => {
       doc.querySelectorAll(selector).forEach((node) => node.remove());
     });
@@ -462,18 +468,29 @@
       '.card__article-body',
       '.monster',
       '.monster-block',
+      '.content',
+      '.article-content',
+      '.page__content',
       '.page-content',
       'main',
       'body'
     ];
-    const relevantPattern = /(Класс Доспеха|Хиты|Скорость|Опасность|Действия|Бонусные действия|Реакции|Легендарные действия)/i;
+    const relevantPattern = /(Класс Доспеха|Хиты|Скорость|Опасность|Действия|Бонусные действия|Реакции|Легендарные действия|Описание)/i;
+    const navPattern = /(Справочники|Новичку|Статьи|Инструменты|Пользователь|Классы|Расы и происхождения|Предыстории|Черты|Заклинания|Бестиарий|Магические предметы|Поиск по сайту|Комментарии|Настройки)/i;
     let bestNode = doc?.body || null;
     let bestScore = -1;
     for (const selector of candidates) {
       doc?.querySelectorAll?.(selector)?.forEach((node) => {
         const textValue = cleanupMonsterText(node?.innerText || node?.textContent || '');
         if (!textValue) return;
-        const score = (relevantPattern.test(textValue) ? 100000 : 0) + textValue.length;
+        const lines = textValue.split('\n').map((line) => line.trim()).filter(Boolean);
+        const paragraphCount = lines.filter((line) => line.length >= 80).length;
+        const shortLines = lines.filter((line) => line.length <= 32).length;
+        const relevantHits = Array.from(textValue.matchAll(new RegExp(relevantPattern, 'gi'))).length;
+        const navHits = Array.from(textValue.matchAll(new RegExp(navPattern, 'gi'))).length;
+        const classId = `${node?.className || ''} ${node?.id || ''}`.toLowerCase();
+        const sidebarPenalty = /(sidebar|menu|catalog|nav|toolbar|search|filter|leftbar|left-menu)/.test(classId) ? 20000 : 0;
+        const score = (relevantHits * 6000) + (paragraphCount * 900) + Math.min(textValue.length, 12000) - (shortLines * 35) - (navHits * 2800) - sidebarPenalty;
         if (score > bestScore) {
           bestScore = score;
           bestNode = node;
@@ -688,9 +705,13 @@
       'реакции': true,
       'reactions': true,
       'легендарные действия': true,
-      'legendary actions': true
+      'legendary actions': true,
+      'описание': true,
+      'description': true
     };
-    return !!sectionMap[normalized] && isUppercaseMonsterHeading(text) && isBoldMonsterNode(node);
+    const raw = String(text || '').trim();
+    const dashedHeading = /^[—–-]\s*.+?\s*[—–-]$/.test(raw);
+    return !!sectionMap[normalized] && isUppercaseMonsterHeading(text) && (isBoldMonsterNode(node) || dashedHeading);
   }
 
   function getMonsterBlockNodes(root) {
@@ -796,7 +817,9 @@
         'реакции': 'reactions',
         'reactions': 'reactions',
         'легендарные действия': 'legendary_actions',
-        'legendary actions': 'legendary_actions'
+        'legendary actions': 'legendary_actions',
+        'описание': 'description',
+        'description': 'description'
       };
       const structured = {
         description_html: '',
@@ -823,7 +846,14 @@
       };
 
       const pushEntry = (entry) => {
-        if (!entry || !currentSection || !Array.isArray(structured[currentSection])) return;
+        if (!entry || !currentSection) return;
+        if (currentSection === 'description') {
+          structured.description_html = [structured.description_html, entry.html || ''].filter(Boolean).join('');
+          structured.description_text = [structured.description_text, entry.text || ''].filter(Boolean).join('\n\n');
+          hasUsefulContent = true;
+          return;
+        }
+        if (!Array.isArray(structured[currentSection])) return;
         structured[currentSection].push(entry);
         activeEntry = structured[currentSection][structured[currentSection].length - 1];
         hasUsefulContent = true;
@@ -853,6 +883,7 @@
         const entry = extractMonsterRichEntryFromBlock(block, sourceUrl);
         if (entry?.title) {
           pushEntry(entry);
+          if (currentSection === 'description') activeEntry = null;
           continue;
         }
         if (activeEntry && currentSection && Array.isArray(structured[currentSection])) {
@@ -1012,7 +1043,9 @@
       'реакции': 'reactions',
       'reactions': 'reactions',
       'легендарные действия': 'legendary_actions',
-      'legendary actions': 'legendary_actions'
+      'legendary actions': 'legendary_actions',
+      'описание': 'description',
+      'description': 'description'
     };
 
     const rawLines = lines.slice();
@@ -1028,7 +1061,12 @@
     const flushBuffer = () => {
       const paragraph = buffer.join(' ').trim();
       buffer = [];
-      if (!paragraph || !currentSection || !Array.isArray(data[currentSection])) return;
+      if (!paragraph || !currentSection) return;
+      if (currentSection === 'description') {
+        data.description_ru = [String(data.description_ru || '').trim(), paragraph].filter(Boolean).join('\n\n');
+        return;
+      }
+      if (!Array.isArray(data[currentSection])) return;
       const entry = paragraphToEntry(paragraph);
       if (entry) data[currentSection].push(entry);
     };
