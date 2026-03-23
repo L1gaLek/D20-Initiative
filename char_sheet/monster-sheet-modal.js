@@ -310,6 +310,35 @@
     return /^(?:Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены|Источник:|Подробности|Обсуждение|Версия для печати)$/i.test(normalizeMonsterLine(line));
   }
 
+  function isMonsterSubtitleLine(line) {
+    return /,/.test(String(line || '')) && /(крош|мал|сред|больш|огром|испол|tiny|small|medium|large|huge|gargantuan)/i.test(String(line || ''));
+  }
+
+  function isMonsterTitleCandidate(line) {
+    const normalized = normalizeMonsterLine(line);
+    if (!normalized) return false;
+    if (isMonsterCommentBoundary(normalized) || isMonsterChromeStopLine(normalized)) return false;
+    if (/^(?:DnD\.su|Официальные|Homebrew|Справочники|Новичку|Статьи|Пользователь|Партнёры|Разное|Регистрация)$/i.test(normalized)) return false;
+    if (/^(?:Boosty|Discord|Новости сообщества|Контакты|Помощь сайту)$/i.test(normalized)) return false;
+    if (/^(?:Удав|.+)\s+—\s+Бестиарий$/i.test(normalized) && !/[\[(]/.test(normalized)) return false;
+    if (/^(?:Класс Доспеха|Armor Class|Хиты|Hit Points|Скорость|Speed|Чувства|Senses|Опасность|Challenge)\b/i.test(normalized)) return false;
+    if (/^(?:Сил|Лов|Тел|Инт|Мдр|Хар)$/i.test(normalized)) return false;
+    return true;
+  }
+
+  function findMonsterTitleLine(lines, subtitleIndex) {
+    if (!Array.isArray(lines) || !lines.length) return '';
+    if (subtitleIndex > 0) {
+      for (let i = subtitleIndex - 1; i >= 0; i--) {
+        const candidate = normalizeMonsterLine(lines[i]);
+        if (!candidate) continue;
+        if (!isMonsterTitleCandidate(candidate)) continue;
+        return candidate;
+      }
+    }
+    return lines.find((line) => /\[[^\]]+\]/.test(line) || /\([^)]+\)/.test(line) || /(?:—|\|)\s*Бестиарий/i.test(line) || isMonsterTitleCandidate(line)) || '';
+  }
+
   function detectMonsterSourceLabel(sourceUrl) {
     const raw = String(sourceUrl || '').trim();
     if (!raw) return 'external';
@@ -429,7 +458,13 @@
   function parseMonsterText(raw, sourceUrl = '') {
     const plainText = htmlToMonsterText(raw);
     const paragraphs = splitMonsterParagraphs(plainText);
-    const lines = plainText.split('\n').map(normalizeMonsterLine).filter(Boolean);
+    const allLines = plainText.split('\n').map(normalizeMonsterLine).filter(Boolean);
+    const subtitleIndex = allLines.findIndex(isMonsterSubtitleLine);
+    const titleLine = findMonsterTitleLine(allLines, subtitleIndex);
+    const titleLineIndex = titleLine ? allLines.indexOf(titleLine) : -1;
+    const stopLineIndex = allLines.findIndex((line, index) => index > titleLineIndex && isMonsterCommentBoundary(line));
+    const contentLines = allLines.slice(titleLineIndex >= 0 ? titleLineIndex : 0, stopLineIndex >= 0 ? stopLineIndex : allLines.length);
+    const lines = contentLines.length ? contentLines : allLines;
 
     const data = {
       id: '',
@@ -463,7 +498,6 @@
       source_url: sourceUrl
     };
 
-    const titleLine = lines.find((line) => /\[[^\]]+\]/.test(line) || /\([^)]+\)/.test(line) || /(?:—|\|)\s*Бестиарий/i.test(line)) || '';
     if (titleLine) {
       const cleanTitle = cleanupMonsterTitle(titleLine);
       const nameMatch = cleanTitle.match(/^(.+?)\s*\[([^\]]+)\]\s*([A-Z0-9 ._/-]+)?$/);
@@ -483,7 +517,7 @@
       }
     }
     if (!data.name_ru) {
-      const fallbackTitle = paragraphs.find((item) => /(?:—|\|)\s*Бестиарий/i.test(item)) || '';
+      const fallbackTitle = paragraphs.find((item) => /\[[^\]]+\]/.test(item) || /\([^)]+\)/.test(item) || /(?:—|\|)\s*Бестиарий/i.test(item)) || '';
       const cleanFallbackTitle = cleanupMonsterTitle(fallbackTitle);
       const parenMatch = cleanFallbackTitle.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
       if (parenMatch) {
@@ -494,7 +528,7 @@
       }
     }
 
-    const sizeLine = lines.find((line) => /,/.test(line) && /(крош|мал|сред|больш|огром|испол|tiny|small|medium|large|huge|gargantuan)/i.test(line)) || '';
+    const sizeLine = lines.find(isMonsterSubtitleLine) || '';
     if (sizeLine) {
       const cleaned = sizeLine.replace(/^[-*•]\s*/, '').trim();
       const commaIndex = cleaned.indexOf(',');
@@ -562,9 +596,7 @@
       'legendary actions': 'legendary_actions'
     };
 
-    const rawLines = cleanupMonsterText(plainText)
-      .split('\n')
-      .map(normalizeMonsterLine);
+    const rawLines = lines.slice();
     const abilityStatLabels = new Set(['Сил', 'Лов', 'Тел', 'Инт', 'Мдр', 'Хар']);
     const abilityLabelRowPattern = /^Сил\s+Лов\s+Тел\s+Инт\s+Мдр\s+Хар$/i;
     const abilityValueRowPattern = /(-?\d+)\s*\(([+−\-]?\d+)\)/g;
@@ -592,9 +624,10 @@
         flushBuffer();
         break;
       }
-      if (currentSection && isMonsterChromeStopLine(line)) {
+      if (isMonsterChromeStopLine(line)) {
         flushBuffer();
-        break;
+        if (currentSection) break;
+        continue;
       }
       if (line === titleLine || /—\s*Бестиарий/i.test(line) || line === sizeLine) {
         contentStarted = true;
