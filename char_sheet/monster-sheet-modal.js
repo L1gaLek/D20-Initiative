@@ -84,6 +84,49 @@
     return '';
   }
 
+  function linkifyMonsterTextNodes(root, baseUrl = '') {
+    if (!root || typeof document === 'undefined' || typeof NodeFilter === 'undefined') return;
+    const urlRe = /((https?:\/\/|www\.)[^\s<]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+    const nodes = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (!node?.parentElement || node.parentElement.closest('a')) continue;
+      if (!urlRe.test(String(node.textContent || ''))) continue;
+      nodes.push(node);
+      urlRe.lastIndex = 0;
+    }
+    nodes.forEach((node) => {
+      const text = String(node.textContent || '');
+      if (!text.trim()) return;
+      urlRe.lastIndex = 0;
+      let match;
+      let lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      while ((match = urlRe.exec(text))) {
+        const value = String(match[0] || '');
+        const index = match.index;
+        if (index > lastIndex) frag.appendChild(document.createTextNode(text.slice(lastIndex, index)));
+        const href = value.includes('@') && !/^https?:\/\//i.test(value)
+          ? `mailto:${value}`
+          : normalizeMonsterHref(/^www\./i.test(value) ? `https://${value}` : value, baseUrl);
+        if (href) {
+          const a = document.createElement('a');
+          a.setAttribute('href', href);
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+          a.textContent = value;
+          frag.appendChild(a);
+        } else {
+          frag.appendChild(document.createTextNode(value));
+        }
+        lastIndex = index + value.length;
+      }
+      if (lastIndex < text.length) frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+      node.replaceWith(frag);
+    });
+  }
+
   function sanitizeMonsterRichHtml(html, baseUrl = '') {
     try {
       const tpl = document.createElement('template');
@@ -167,6 +210,7 @@
         }
       };
       walk(tpl.content);
+      linkifyMonsterTextNodes(tpl.content, baseUrl);
       return String(tpl.innerHTML || '')
         .replace(/<p>\s*<\/p>/gi, '')
         .replace(/\n{3,}/g, '\n\n')
@@ -461,6 +505,10 @@
     return /^(?:Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены|Источник:|Подробности|Обсуждение|Версия для печати)$/i.test(normalizeMonsterLine(line));
   }
 
+  function isMonsterSourceBadgeLine(line) {
+    return /^(?:Официальные|Official|Homebrew)$/i.test(normalizeMonsterLine(line));
+  }
+
   function isMonsterSubtitleLine(line) {
     return /,/.test(String(line || '')) && /(крош|мал|сред|больш|огром|испол|tiny|small|medium|large|huge|gargantuan)/i.test(String(line || ''));
   }
@@ -468,7 +516,7 @@
   function isMonsterTitleCandidate(line) {
     const normalized = normalizeMonsterLine(line);
     if (!normalized) return false;
-    if (isMonsterCommentBoundary(normalized) || isMonsterChromeStopLine(normalized)) return false;
+    if (isMonsterCommentBoundary(normalized) || isMonsterChromeStopLine(normalized) || isMonsterSourceBadgeLine(normalized)) return false;
     if (/^(?:DnD\.su|Официальные|Homebrew|Справочники|Новичку|Статьи|Пользователь|Партнёры|Разное|Регистрация)$/i.test(normalized)) return false;
     if (/^(?:Boosty|Discord|Новости сообщества|Контакты|Помощь сайту)$/i.test(normalized)) return false;
     if (/^(?:Удав|.+)\s+—\s+Бестиарий$/i.test(normalized) && !/[\[(]/.test(normalized)) return false;
@@ -785,6 +833,7 @@
         const text = cleanupMonsterText(block.textContent || '');
         if (!text) continue;
         if (isMonsterCommentBoundary(text) || isMonsterChromeStopLine(text)) break;
+        if (isMonsterSourceBadgeLine(text)) continue;
         if (metaLinePattern.test(text)) continue;
         if (isMonsterSubtitleLine(text) || /—\s*Бестиарий/i.test(text) || (text.length <= 120 && !/[.!?:]/.test(text) && /(?:\[[^\]]+\]|\([^)]+\))/.test(text))) continue;
 
@@ -994,6 +1043,7 @@
         flushBuffer();
         break;
       }
+      if (isMonsterSourceBadgeLine(line)) continue;
       if (isMonsterChromeStopLine(line)) {
         flushBuffer();
         if (currentSection) break;
@@ -1349,6 +1399,26 @@
     `;
   }
 
+  function renderMainSectionPanels(sectionTitle, entries) {
+    if (!entries?.length) return '';
+    const titledEntries = entries.filter((entry) => String(entry?.title || '').trim());
+    const untitledEntries = entries.filter((entry) => !String(entry?.title || '').trim());
+    return `
+      <div class="monster-panel monster-panel--wide">
+        <div class="monster-panel__title">${esc(sectionTitle)}</div>
+        ${untitledEntries.length ? `
+          <div class="monster-desc">${untitledEntries.map((entry) => entry.html || esc(entry.text || '')).join('')}</div>
+        ` : ''}
+      </div>
+      ${titledEntries.map((entry) => `
+        <div class="monster-panel">
+          <div class="monster-panel__title">${esc(entry.title)}</div>
+          <div class="monster-desc">${entry.html || esc(entry.text || '')}</div>
+        </div>
+      `).join('')}
+    `;
+  }
+
   function renderMainTab(vm, canEdit) {
     return `
       <div class="monster-grid">
@@ -1372,6 +1442,10 @@
           </div>
         ` : ''}
         ${renderMainTraitPanels(vm.traits)}
+        ${renderMainSectionPanels('ДЕЙСТВИЯ', vm.actions)}
+        ${renderMainSectionPanels('БОНУСНЫЕ ДЕЙСТВИЯ', vm.bonusActions)}
+        ${renderMainSectionPanels('РЕАКЦИИ', vm.reactions)}
+        ${renderMainSectionPanels('ЛЕГЕНДАРНЫЕ ДЕЙСТВИЯ', vm.legendaryActions)}
       </div>
     `;
   }
