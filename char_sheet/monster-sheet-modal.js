@@ -49,6 +49,22 @@
     return `${n >= 0 ? '+' : ''}${n}`;
   }
 
+  function isMonsterStyleAlly(player) {
+    return !!player && !player?.isEnemy && !player?.isBase && String(player?.ownerRole || '').trim() !== 'GM';
+  }
+
+  function getMonsterSheetTypeLabel(player) {
+    return isMonsterStyleAlly(player) ? 'союзник' : 'враг';
+  }
+
+  function getMonsterSheetTitleLabel(player) {
+    return isMonsterStyleAlly(player) ? 'Лист союзника' : 'Лист монстра';
+  }
+
+  function shouldUseMonsterStyleSheet(player) {
+    return !!player && (!!player?.isEnemy || isMonsterStyleAlly(player));
+  }
+
   function normalizeMonsterEntries(entries) {
     if (!Array.isArray(entries)) return [];
     return entries
@@ -712,6 +728,8 @@
     const acInfo = parseAc(monster.ac);
     const speedInfo = parseSpeed(monster.speed);
     const proficiencyBonus = parseSignedPrimaryNumber(monster.proficiency_bonus, toInt(get(sheet, 'proficiency', 0), 0));
+    const importedName = String(monster.name_ru || monster.name_en || '').trim();
+    if (importedName) set(sheet, 'name.value', importedName);
     set(sheet, 'monster', monster);
     set(sheet, 'monsterHpRoll', normalizeMonsterHpRollConfig({ count: hpInfo.count, sides: hpInfo.sides, bonus: hpInfo.bonus, lastTotal: 0 }));
     set(sheet, 'vitality.hp-max.value', 0);
@@ -731,9 +749,13 @@
   function renderImportControls(canEdit, sourceUrl) {
     if (!canEdit) return '';
     return `
-      <div class="monster-import" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
-        <input type="text" class="popup-field" style="min-width:320px;flex:1;" placeholder="Ссылка или текст статблока монстра" data-monster-import-url value="${esc(sourceUrl || '')}">
-        <button type="button" class="btn" data-monster-import-btn>Импортировать по ссылке</button>
+      <div class="monster-import-card">
+        <div class="monster-import-card__title">Импорт монстра</div>
+        <div class="monster-import-card__subtitle">Вставь ссылку на страницу монстра или готовый текст статблока.</div>
+        <div class="monster-import">
+          <input type="text" class="popup-field monster-import__input" placeholder="Ссылка или текст статблока монстра" data-monster-import-url value="${esc(sourceUrl || '')}">
+          <button type="button" class="btn" data-monster-import-btn>Импортировать</button>
+        </div>
       </div>
     `;
   }
@@ -746,6 +768,9 @@
       .monster-sheet{display:flex;flex-direction:column;gap:16px;color:#f6ead7}
       .monster-sheet__hero{display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:18px;background:linear-gradient(180deg,rgba(79,24,20,.96),rgba(29,12,10,.94));border:1px solid rgba(255,216,183,.16);box-shadow:0 16px 38px rgba(0,0,0,.28)}
       .monster-sheet__title{font-size:30px;font-weight:800;line-height:1.05;color:#fff2df}
+      .monster-sheet__title-input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,226,197,.16);color:#fff2df;font-size:30px;font-weight:800;line-height:1.05;padding:0 0 6px;outline:none}
+      .monster-sheet__title-input:focus{border-bottom-color:rgba(255,226,197,.42)}
+      .monster-sheet__title-input:disabled{opacity:1;cursor:default}
       .monster-sheet__subtitle{margin-top:6px;color:rgba(255,238,215,.82);font-size:14px}
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
@@ -788,6 +813,11 @@
       .monster-sidebar__btn{padding:12px 14px;text-align:left;border-radius:14px;border:1px solid rgba(255,226,197,.12);background:rgba(39,20,14,.9);color:#ffe9ce;cursor:pointer;font-weight:700}
       .monster-sidebar__btn.active{background:linear-gradient(180deg,rgba(146,64,44,.95),rgba(104,36,23,.95));border-color:rgba(255,219,180,.28);box-shadow:0 8px 18px rgba(0,0,0,.25)}
       .monster-main{min-height:0;overflow:auto;border-radius:18px;border:1px solid rgba(255,220,188,.12);background:linear-gradient(180deg,rgba(24,14,11,.98),rgba(17,10,8,.98));padding:16px}
+      .monster-import-card{width:100%;margin:0 auto;padding:10px 14px;border-radius:16px;border:1px solid rgba(255,221,191,.16);background:linear-gradient(180deg,rgba(48,22,16,.9),rgba(28,14,11,.94));box-shadow:0 12px 28px rgba(0,0,0,.2);text-align:center}
+      .monster-import-card__title{font-size:18px;font-weight:800;color:#fff1de}
+      .monster-import-card__subtitle{margin-top:3px;color:rgba(255,233,210,.72);font-size:12px;line-height:1.35}
+      .monster-import{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:nowrap;margin-top:8px}
+      .monster-import__input{min-width:0;flex:1 1 auto}
       .monster-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
       .monster-panel{border:1px solid rgba(255,224,197,.11);background:rgba(255,255,255,.03);border-radius:16px;padding:14px}
       .monster-panel--wide{grid-column:1/-1}
@@ -814,9 +844,30 @@
       .monster-edit-field span{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-edit-field input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,228,204,.14);border-radius:10px;color:#fff7ed;padding:9px 10px}
       .monster-empty{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);border:1px dashed rgba(255,228,204,.14);color:#ddc9b2}
+      .monster-manual-toolbar{display:flex;justify-content:flex-end;margin-bottom:14px}
+      .monster-manual-list{display:grid;gap:12px}
+      .monster-manual-card{border:1px solid rgba(255,224,197,.11);background:rgba(255,255,255,.03);border-radius:16px;padding:14px}
+      .monster-manual-card.is-collapsed .monster-manual-card__body{display:none}
+      .monster-manual-card__head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+      .monster-manual-card__title{min-width:0;flex:1 1 auto}
+      .monster-manual-card__title-input{width:100%;background:transparent;border:none;color:#fff1de;font-size:15px;font-weight:800;padding:0;outline:none}
+      .monster-manual-card__title-input::placeholder{color:rgba(255,241,222,.68)}
+      .monster-manual-card__actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+      .monster-manual-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,221,191,.12);background:rgba(255,255,255,.05);color:#ffe6ca;cursor:pointer;font-size:15px}
+      .monster-manual-icon:hover{filter:brightness(1.08)}
+      .monster-manual-card__body{display:grid;gap:10px;margin-top:12px}
+      .monster-manual-field{display:flex;flex-direction:column;gap:6px}
+      .monster-manual-field span{font-size:12px;color:rgba(255,236,219,.72)}
+      .monster-manual-field input,.monster-manual-field textarea{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,228,204,.14);border-radius:10px;color:#fff7ed;padding:10px}
+      .monster-manual-field textarea{min-height:140px;resize:vertical;line-height:1.5}
+      .monster-token-layout{display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);gap:14px}
+      .monster-token-card{border:1px solid rgba(255,224,197,.11);background:rgba(255,255,255,.03);border-radius:16px;padding:14px}
+      .monster-token-card__title{font-size:15px;font-weight:800;color:#fff1de;margin-bottom:10px}
+      .monster-token-preview-wrap{border-radius:18px;padding:12px;background:rgba(12,8,8,.3);border:1px solid rgba(255,233,205,.11)}
+      .monster-token-preview-wrap .appearance-preview{width:100%;aspect-ratio:1/1;object-fit:contain;border-radius:14px;background:rgba(255,255,255,.04)}
       @media (max-width: 980px){
         .monster-sheet__hero,.monster-layout{grid-template-columns:1fr}
-        .monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid{grid-template-columns:1fr}
+        .monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid,.monster-token-layout{grid-template-columns:1fr}
         .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
       }
       @media (max-width: 760px){
@@ -826,6 +877,8 @@
         .monster-hp-top-grid{grid-template-columns:1fr}
         .monster-hero-card--hp .monster-hero-card__mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
         .monster-hp-adjust{grid-template-columns:42px minmax(0,1fr) 42px}
+        .monster-import{flex-direction:column;flex-wrap:wrap}
+        .monster-import__input{min-width:100%;width:100%}
       }
     `;
     document.head.appendChild(style);
@@ -900,8 +953,8 @@
     const proficiencyBonus = toInt(get(sheet, 'proficiency', parseSignedPrimaryNumber(monster?.proficiency_bonus, 0)), parseSignedPrimaryNumber(monster?.proficiency_bonus, 0));
 
     return {
-      playerName: player?.name || vm.name,
-      subtitle: [monster?.size_ru || monster?.size_en, monster?.type_ru || monster?.type_en, monster?.alignment_ru || monster?.alignment_en].filter(Boolean).join(', ') || 'Лист врага',
+      playerName: String(get(sheet, 'name.value', '') || player?.name || vm.name || 'Враг').trim() || 'Враг',
+      subtitle: [monster?.size_ru || monster?.size_en, monster?.type_ru || monster?.type_en, monster?.alignment_ru || monster?.alignment_en].filter(Boolean).join(', ') || `Лист ${getMonsterSheetTypeLabel(player)}`,
       source: monster?.source || '',
       challenge: monster?.cr != null ? `CR ${monster.cr}` : '',
       xp: monster?.xp ? `${monster.xp} XP` : '',
@@ -1022,6 +1075,133 @@
     `;
   }
 
+  function normalizeManualDescriptionEntries(entries) {
+    if (!Array.isArray(entries)) return [];
+    return entries.map((entry) => ({
+      title: String(entry?.title || '').trim(),
+      text: String(entry?.text || '').trim(),
+      collapsed: !!entry?.collapsed
+    }));
+  }
+
+  function ensureMonsterManualState(sheet) {
+    if (!sheet || typeof sheet !== 'object') return { entries: [] };
+    if (!sheet.monsterManual || typeof sheet.monsterManual !== 'object') sheet.monsterManual = {};
+    if (!Array.isArray(sheet.monsterManual.entries)) sheet.monsterManual.entries = [];
+    sheet.monsterManual.entries = normalizeManualDescriptionEntries(sheet.monsterManual.entries);
+    return sheet.monsterManual;
+  }
+
+  function renderManualDescriptionsTab(player, canEdit) {
+    const sheet = ensureEnemySheet(player);
+    const manual = ensureMonsterManualState(sheet);
+    const entries = manual.entries || [];
+    return `
+      <div class="monster-panel monster-panel--wide">
+        <div class="monster-panel__title">Ручное описание</div>
+        ${canEdit ? `
+          <div class="monster-manual-toolbar">
+            <button type="button" class="btn" data-monster-manual-add>Добавить описание</button>
+          </div>
+        ` : ''}
+        ${entries.length ? `
+          <div class="monster-manual-list">
+            ${entries.map((entry, index) => `
+              <div class="monster-manual-card ${entry.collapsed ? 'is-collapsed' : ''}" data-monster-manual-item="${index}">
+                <div class="monster-manual-card__head">
+                  <label class="monster-manual-card__title">
+                    <input
+                      class="monster-manual-card__title-input"
+                      type="text"
+                      ${canEdit ? '' : 'disabled'}
+                      data-monster-manual-title="${index}"
+                      value="${esc(entry.title || `Описание ${index + 1}`)}"
+                      placeholder="Описание ${index + 1}"
+                    >
+                  </label>
+                  <div class="monster-manual-card__actions">
+                    <button type="button" class="monster-manual-icon" data-monster-manual-toggle="${index}" title="${entry.collapsed ? 'Развернуть описание' : 'Свернуть описание'}" aria-label="${entry.collapsed ? 'Развернуть описание' : 'Свернуть описание'}">${entry.collapsed ? '▸' : '▾'}</button>
+                    ${canEdit ? `<button type="button" class="monster-manual-icon" data-monster-manual-delete="${index}" title="Удалить описание" aria-label="Удалить описание">✕</button>` : ''}
+                  </div>
+                </div>
+                <div class="monster-manual-card__body">
+                  <label class="monster-manual-field">
+                    <span>Описание</span>
+                    <textarea ${canEdit ? '' : 'disabled'} data-monster-manual-text="${index}" placeholder="Подробное описание">${esc(entry.text || '')}</textarea>
+                  </label>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : `<div class="monster-empty">Пока нет ручных описаний. Добавь отдельный блок, чтобы записать слабости, тактику или лор врага.</div>`}
+      </div>
+    `;
+  }
+
+  function renderTokenTab(player, canEdit) {
+    const sheet = ensureEnemySheet(player);
+    const baseUrl = esc(String(get(sheet, 'appearance.baseUrl', '') || '').trim());
+    return `
+      <div class="monster-token-layout" data-appearance-root>
+        <div class="monster-token-card">
+          <div class="monster-token-card__title">Персонаж</div>
+          <div class="monster-token-preview-wrap">
+            <img class="appearance-preview" data-appearance-preview src="${baseUrl}" alt="Токен монстра" />
+          </div>
+          <label class="monster-manual-field" style="margin-top:12px">
+            <span>Ссылка на картинку или GIF</span>
+            <input type="text" data-sheet-path="appearance.baseUrl" data-appearance-base-override ${canEdit ? '' : 'disabled'} value="${baseUrl}" placeholder="https://...">
+          </label>
+        </div>
+        <div class="monster-token-card">
+          <div class="appearance-tokenbox" data-tokenbox>
+            <div class="appearance-tokenbox__title">Токен на поле</div>
+            <div class="appearance-tokenbox__body">
+              <div class="appearance-tokenbox__preview" data-token-preview aria-label="Превью токена"></div>
+              <div class="appearance-tokenbox__controls">
+                <div class="appearance-tokenbox__modes">
+                  <label class="token-mode">
+                    <input type="radio" name="monsterTokenMode" value="color" data-sheet-path="appearance.token.mode" ${canEdit ? '' : 'disabled'}>
+                    <span>Цвет</span>
+                  </label>
+                  <label class="token-mode">
+                    <input type="radio" name="monsterTokenMode" value="full" data-sheet-path="appearance.token.mode" ${canEdit ? '' : 'disabled'}>
+                    <span>Персонаж целиком</span>
+                  </label>
+                  <label class="token-mode">
+                    <input type="radio" name="monsterTokenMode" value="crop" data-sheet-path="appearance.token.mode" ${canEdit ? '' : 'disabled'}>
+                    <span>Выбрать область</span>
+                  </label>
+                </div>
+                <div class="appearance-tokenbox__crop" data-token-crop>
+                  <div class="token-crop-row">
+                    <div class="token-crop-lbl">X</div>
+                    <input type="range" min="0" max="100" step="1" data-sheet-path="appearance.token.crop.x" ${canEdit ? '' : 'disabled'}>
+                  </div>
+                  <div class="token-crop-row">
+                    <div class="token-crop-lbl">Y</div>
+                    <input type="range" min="0" max="100" step="1" data-sheet-path="appearance.token.crop.y" ${canEdit ? '' : 'disabled'}>
+                  </div>
+                  <div class="token-crop-row">
+                    <div class="token-crop-lbl">Зум</div>
+                    <input type="range" min="80" max="220" step="1" data-sheet-path="appearance.token.crop.zoom" ${canEdit ? '' : 'disabled'}>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMonsterTabContent(tabId, player, vm, canEdit) {
+    if (tabId === 'monster-extra') return renderExtraTab(vm);
+    if (tabId === 'monster-manual') return renderManualDescriptionsTab(player, canEdit);
+    if (tabId === 'monster-token') return renderTokenTab(player, canEdit);
+    return renderMainTab(vm, canEdit);
+  }
+
   function scheduleSave(player) {
     const pid = String(player?.id || '');
     if (!pid || !ctx?.sendMessage) return;
@@ -1070,6 +1250,28 @@
         markModalInteracted(player.id);
         scheduleSave(player);
       });
+    });
+  }
+
+  function bindMonsterNameInput(root, player, canEdit) {
+    const input = root.querySelector('[data-monster-player-name]');
+    if (!input) return;
+    input.value = String(get(player, 'sheet.parsed.name.value', player?.name || '') || player?.name || '').trim() || 'Враг';
+    if (!canEdit) {
+      input.disabled = true;
+      return;
+    }
+    if (input.__monsterNameBound) return;
+    input.__monsterNameBound = true;
+
+    input.addEventListener('input', () => {
+      const nextName = String(input.value || '').trimStart();
+      const sheet = ensureEnemySheet(player);
+      set(sheet, 'name.value', nextName);
+      player.name = nextName || 'Враг';
+      if (sheetTitle) sheetTitle.textContent = `${getMonsterSheetTitleLabel(player)}: ${player.name}`;
+      markModalInteracted(player.id);
+      scheduleSave(player);
     });
   }
 
@@ -1162,10 +1364,96 @@
     });
   }
 
+  function bindManualDescriptionTab(root, player, vm, canEdit) {
+    const main = root.querySelector('#sheet-main');
+    if (!main) return;
+
+    const rerenderTab = () => {
+      main.innerHTML = renderMonsterTabContent('monster-manual', player, vm, canEdit);
+      bindMonsterNameInput(root, player, canEdit);
+      bindMonsterSheetInputs(root, player);
+      bindMonsterHpRollControls(root, player, canEdit);
+      bindMonsterHpAdjustControls(root, player, canEdit);
+      if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
+      if (typeof bindAppearanceUi === 'function') bindAppearanceUi(root, player, canEdit);
+      bindManualDescriptionTab(root, player, vm, canEdit);
+      markModalInteracted(player.id);
+    };
+
+    const addBtn = main.querySelector('[data-monster-manual-add]');
+    if (addBtn && canEdit) {
+      addBtn.addEventListener('click', () => {
+        const sheet = ensureEnemySheet(player);
+        const manual = ensureMonsterManualState(sheet);
+        manual.entries.push({ title: `Описание ${manual.entries.length + 1}`, text: '', collapsed: false });
+        scheduleSave(player);
+        rerenderTab();
+      });
+    }
+
+    main.querySelectorAll('[data-monster-manual-title]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const idx = Math.max(0, toInt(input.getAttribute('data-monster-manual-title') || '0', 0));
+        const sheet = ensureEnemySheet(player);
+        const manual = ensureMonsterManualState(sheet);
+        if (!manual.entries[idx]) return;
+        manual.entries[idx].title = String(input.value || '');
+        markModalInteracted(player.id);
+        scheduleSave(player);
+      });
+    });
+
+    main.querySelectorAll('[data-monster-manual-text]').forEach((textarea) => {
+      textarea.addEventListener('input', () => {
+        const idx = Math.max(0, toInt(textarea.getAttribute('data-monster-manual-text') || '0', 0));
+        const sheet = ensureEnemySheet(player);
+        const manual = ensureMonsterManualState(sheet);
+        if (!manual.entries[idx]) return;
+        manual.entries[idx].text = String(textarea.value || '');
+        markModalInteracted(player.id);
+        scheduleSave(player);
+      });
+    });
+
+    main.querySelectorAll('[data-monster-manual-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const idx = Math.max(0, toInt(button.getAttribute('data-monster-manual-toggle') || '0', 0));
+        const sheet = ensureEnemySheet(player);
+        const manual = ensureMonsterManualState(sheet);
+        if (!manual.entries[idx]) return;
+        manual.entries[idx].collapsed = !manual.entries[idx].collapsed;
+        scheduleSave(player);
+        rerenderTab();
+      });
+    });
+
+    main.querySelectorAll('[data-monster-manual-delete]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const idx = Math.max(0, toInt(button.getAttribute('data-monster-manual-delete') || '0', 0));
+        const sheet = ensureEnemySheet(player);
+        const manual = ensureMonsterManualState(sheet);
+        if (!manual.entries[idx]) return;
+        manual.entries.splice(idx, 1);
+        scheduleSave(player);
+        rerenderTab();
+      });
+    });
+  }
+
   function bindTabs(root, player, vm, canEdit) {
     const buttons = Array.from(root.querySelectorAll('[data-monster-tab]'));
     const main = root.querySelector('#sheet-main');
     if (!buttons.length || !main) return;
+
+    const bindCurrentTab = () => {
+      bindMonsterNameInput(root, player, canEdit);
+      bindMonsterSheetInputs(root, player);
+      bindMonsterHpRollControls(root, player, canEdit);
+      bindMonsterHpAdjustControls(root, player, canEdit);
+      if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
+      if (typeof bindAppearanceUi === 'function') bindAppearanceUi(root, player, canEdit);
+      if (player._activeSheetTab === 'monster-manual') bindManualDescriptionTab(root, player, vm, canEdit);
+    };
 
     buttons.forEach((button) => {
       button.addEventListener('click', () => {
@@ -1174,25 +1462,25 @@
         const st = getUiState(player.id);
         st.activeTab = tabId;
         buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
-        main.innerHTML = tabId === 'monster-extra' ? renderExtraTab(vm) : renderMainTab(vm, canEdit);
-        bindMonsterSheetInputs(root, player);
-        bindMonsterHpRollControls(root, player, canEdit);
-        bindMonsterHpAdjustControls(root, player, canEdit);
+        main.innerHTML = renderMonsterTabContent(tabId, player, vm, canEdit);
+        bindCurrentTab();
         markModalInteracted(player.id);
       });
     });
+
+    bindCurrentTab();
   }
 
   function bindImportControls(player, canEdit) {
     if (!canEdit) return;
-    const input = sheetActions.querySelector('[data-monster-import-url]');
-    const button = sheetActions.querySelector('[data-monster-import-btn]');
+    const input = sheetContent?.querySelector?.('[data-monster-import-url]');
+    const button = sheetContent?.querySelector?.('[data-monster-import-btn]');
     if (!input || !button) return;
 
     const setBusy = (busy) => {
       input.disabled = !!busy;
       button.disabled = !!busy;
-      button.textContent = busy ? 'Импорт…' : 'Импортировать по ссылке';
+      button.textContent = busy ? 'Импорт…' : 'Импортировать';
     };
 
     button.addEventListener('click', async () => {
@@ -1202,6 +1490,11 @@
         const monster = await importMonsterFromUrl(href || input.value);
         const sheet = ensureEnemySheet(player);
         ensureImportedMonsterStats(sheet, monster);
+        const importedName = String(monster?.name_ru || monster?.name_en || '').trim();
+        if (importedName) {
+          player.name = importedName;
+          set(sheet, 'name.value', importedName);
+        }
         scheduleSave(player);
         markModalInteracted(player.id);
         await render(player, { canEdit, force: true });
@@ -1222,21 +1515,21 @@
     const sheet = ensureEnemySheet(player);
     const activeUi = getUiState(player.id);
     let activeTab = String(player?._activeSheetTab || activeUi?.activeTab || 'monster-main');
-    if (activeTab !== 'monster-main' && activeTab !== 'monster-extra') activeTab = 'monster-main';
+    if (!['monster-main', 'monster-extra', 'monster-manual', 'monster-token'].includes(activeTab)) activeTab = 'monster-main';
     player._activeSheetTab = activeTab;
     activeUi.activeTab = activeTab;
 
-    sheetTitle.textContent = `Лист монстра: ${player.name}`;
+    sheetTitle.textContent = `${getMonsterSheetTitleLabel(player)}: ${player.name}`;
     sheetSubtitle.textContent = player.ownerName
-      ? `Владелец: ${player.ownerName} • Тип: враг`
-      : 'Тип: враг';
+      ? `Владелец: ${player.ownerName} • Тип: ${getMonsterSheetTypeLabel(player)}`
+      : `Тип: ${getMonsterSheetTypeLabel(player)}`;
 
     sheetActions.innerHTML = '';
     const note = document.createElement('div');
     note.className = 'sheet-note';
-    note.innerHTML = `${esc(canEdit
-      ? 'Это отдельный лист врага. Основные боевые параметры можно менять сразу здесь.'
-      : 'Просмотр листа врага. Изменять параметры может только GM.')}${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}`;
+    note.textContent = canEdit
+      ? `Это отдельный лист ${getMonsterSheetTypeLabel(player)}. Основные боевые параметры можно менять сразу здесь.`
+      : `Просмотр листа ${getMonsterSheetTypeLabel(player)}. Изменять параметры может только GM.`;
     sheetActions.appendChild(note);
 
     sheetContent.innerHTML = '<div class="monster-note">Загружаю данные монстра…</div>';
@@ -1247,9 +1540,17 @@
     const vm = buildMonsterViewModel(player, sheet, monster);
     sheetContent.innerHTML = `
       <div class="monster-sheet">
+        ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
         <div class="monster-sheet__hero">
           <div>
-            <div class="monster-sheet__title">${esc(vm.playerName)}</div>
+            <input
+              class="monster-sheet__title-input"
+              type="text"
+              ${canEdit ? '' : 'disabled'}
+              data-monster-player-name
+              value="${esc(vm.playerName)}"
+              placeholder="Имя персонажа"
+            >
             <div class="monster-sheet__subtitle">${esc(vm.subtitle || 'Лист врага')}</div>
             <div class="monster-sheet__summary">
               ${vm.challenge ? `<span class="monster-chip">${esc(vm.challenge)}</span>` : ''}
@@ -1340,9 +1641,11 @@
           <div class="monster-sidebar">
             <button type="button" class="monster-sidebar__btn ${activeTab === 'monster-main' ? 'active' : ''}" data-monster-tab="monster-main">Основное</button>
             <button type="button" class="monster-sidebar__btn ${activeTab === 'monster-extra' ? 'active' : ''}" data-monster-tab="monster-extra">Дополнительно</button>
+            <button type="button" class="monster-sidebar__btn ${activeTab === 'monster-manual' ? 'active' : ''}" data-monster-tab="monster-manual">Ручное описание</button>
+            <button type="button" class="monster-sidebar__btn ${activeTab === 'monster-token' ? 'active' : ''}" data-monster-tab="monster-token">Токен</button>
           </div>
           <div class="monster-main" id="sheet-main">
-            ${activeTab === 'monster-extra' ? renderExtraTab(vm) : renderMainTab(vm, canEdit)}
+            ${renderMonsterTabContent(activeTab, player, vm, canEdit)}
           </div>
         </div>
       </div>
@@ -1358,16 +1661,13 @@
     sheetContent.addEventListener('pointerdown', () => markModalInteracted(player.id), { passive: true });
     sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
-    bindMonsterSheetInputs(sheetContent, player);
-    bindMonsterHpRollControls(sheetContent, player, canEdit);
-    bindMonsterHpAdjustControls(sheetContent, player, canEdit);
     bindTabs(sheetContent, player, vm, canEdit);
     bindImportControls(player, canEdit);
     return true;
   }
 
   function shouldUseForPlayer(player) {
-    return !!player?.isEnemy;
+    return shouldUseMonsterStyleSheet(player);
   }
 
   window.MonsterSheetModal = {
