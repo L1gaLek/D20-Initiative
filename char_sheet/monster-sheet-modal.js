@@ -54,13 +54,178 @@
     return entries
       .map((entry) => {
         if (!entry) return null;
-        if (typeof entry === 'string') return { title: '', text: entry };
+        if (typeof entry === 'string') return { title: '', text: entry, html: '' };
         const title = String(entry.name_ru || entry.name_en || entry.title || '').trim();
         const text = String(entry.text_ru || entry.text_en || entry.text || '').trim();
+        const html = String(entry.html || entry.text_html || '').trim();
         if (!title && !text) return null;
-        return { title, text };
+        return { title, text, html };
       })
       .filter(Boolean);
+  }
+
+  function normalizeMonsterHref(href, baseUrl = '') {
+    const raw = String(href || '').trim();
+    if (!raw) return '';
+    if (/^(?:javascript|data|vbscript):/i.test(raw)) return '';
+    if (/^(?:mailto|tel):/i.test(raw)) return raw;
+    try {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
+        const url = new URL(raw);
+        return /^(?:https?:)$/i.test(url.protocol) ? url.toString() : '';
+      }
+      if (baseUrl) {
+        const url = new URL(raw, baseUrl);
+        return /^(?:https?:)$/i.test(url.protocol) ? url.toString() : '';
+      }
+      if (/^(?:\/|\.\/|\.\.\/)/.test(raw)) return raw;
+      if (/^[\w.-]+\.[a-z]{2,}(?:\/|$)/i.test(raw)) return `https://${raw}`;
+    } catch {}
+    return '';
+  }
+
+  function linkifyMonsterTextNodes(root, baseUrl = '') {
+    if (!root || typeof document === 'undefined' || typeof NodeFilter === 'undefined') return;
+    const urlRe = /((https?:\/\/|www\.)[^\s<]+)|([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+    const nodes = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (!node?.parentElement || node.parentElement.closest('a')) continue;
+      if (!urlRe.test(String(node.textContent || ''))) continue;
+      nodes.push(node);
+      urlRe.lastIndex = 0;
+    }
+    nodes.forEach((node) => {
+      const text = String(node.textContent || '');
+      if (!text.trim()) return;
+      urlRe.lastIndex = 0;
+      let match;
+      let lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      while ((match = urlRe.exec(text))) {
+        const value = String(match[0] || '');
+        const index = match.index;
+        if (index > lastIndex) frag.appendChild(document.createTextNode(text.slice(lastIndex, index)));
+        const href = value.includes('@') && !/^https?:\/\//i.test(value)
+          ? `mailto:${value}`
+          : normalizeMonsterHref(/^www\./i.test(value) ? `https://${value}` : value, baseUrl);
+        if (href) {
+          const a = document.createElement('a');
+          a.setAttribute('href', href);
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+          a.textContent = value;
+          frag.appendChild(a);
+        } else {
+          frag.appendChild(document.createTextNode(value));
+        }
+        lastIndex = index + value.length;
+      }
+      if (lastIndex < text.length) frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+      node.replaceWith(frag);
+    });
+  }
+
+  function sanitizeMonsterRichHtml(html, baseUrl = '') {
+    try {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = String(html || '');
+      const allowed = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'BR', 'UL', 'OL', 'LI', 'A', 'P', 'DIV', 'SPAN']);
+      const walk = (node) => {
+        const children = Array.from(node.childNodes || []);
+        for (const child of children) {
+          if (child.nodeType === Node.TEXT_NODE) continue;
+          if (child.nodeType !== Node.ELEMENT_NODE) {
+            child.remove();
+            continue;
+          }
+          const tag = String(child.tagName || '').toUpperCase();
+          if (!allowed.has(tag)) {
+            const frag = document.createDocumentFragment();
+            while (child.firstChild) frag.appendChild(child.firstChild);
+            child.replaceWith(frag);
+            walk(node);
+            continue;
+          }
+          if (tag === 'DIV') {
+            const p = document.createElement('p');
+            while (child.firstChild) p.appendChild(child.firstChild);
+            child.replaceWith(p);
+            walk(p);
+            continue;
+          }
+
+          if (tag === 'SPAN') {
+            const style = String(child.getAttribute('style') || '');
+            const isBold = /font-weight\s*:\s*(?:bold|bolder|[6-9]00)/i.test(style);
+            const isItalic = /font-style\s*:\s*italic/i.test(style);
+            const isUnderline = /text-decoration\s*:\s*[^;]*underline/i.test(style);
+            if (isBold || isItalic || isUnderline) {
+              let inner = document.createDocumentFragment();
+              while (child.firstChild) inner.appendChild(child.firstChild);
+              if (isUnderline) {
+                const u = document.createElement('u');
+                u.appendChild(inner);
+                inner = u;
+              }
+              if (isItalic) {
+                const i = document.createElement('i');
+                i.appendChild(inner);
+                inner = i;
+              }
+              if (isBold) {
+                const b = document.createElement('b');
+                b.appendChild(inner);
+                inner = b;
+              }
+              child.replaceWith(inner);
+              walk(node);
+              continue;
+            }
+            child.removeAttribute('style');
+            child.removeAttribute('class');
+          } else if (tag === 'A') {
+            const href = normalizeMonsterHref(child.getAttribute('href') || '', baseUrl);
+            if (!href) {
+              const frag = document.createDocumentFragment();
+              while (child.firstChild) frag.appendChild(child.firstChild);
+              child.replaceWith(frag);
+              walk(node);
+              continue;
+            }
+            child.setAttribute('href', href);
+            child.setAttribute('target', '_blank');
+            child.setAttribute('rel', 'noopener noreferrer');
+            Array.from(child.attributes || []).forEach((attr) => {
+              if (!['href', 'target', 'rel'].includes(String(attr.name || '').toLowerCase())) {
+                child.removeAttribute(attr.name);
+              }
+            });
+          } else {
+            Array.from(child.attributes || []).forEach((attr) => child.removeAttribute(attr.name));
+          }
+
+          walk(child);
+        }
+      };
+      walk(tpl.content);
+      linkifyMonsterTextNodes(tpl.content, baseUrl);
+      return String(tpl.innerHTML || '')
+        .replace(/<p>\s*<\/p>/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    } catch {
+      return '';
+    }
+  }
+
+  function stripMonsterHtml(html) {
+    const safe = sanitizeMonsterRichHtml(html);
+    if (!safe) return '';
+    const div = document.createElement('div');
+    div.innerHTML = safe;
+    return cleanupMonsterText(div.textContent || div.innerText || '');
   }
 
   function parseHpFormula(raw) {
@@ -246,63 +411,93 @@
     if (!/[<][a-z!/]/i.test(src)) return cleanupMonsterText(src);
     try {
       const doc = new DOMParser().parseFromString(src, 'text/html');
-      [
-        'script',
-        'style',
-        'noscript',
-        'svg',
-        'iframe',
-        'header',
-        'footer',
-        'nav',
-        'aside',
-        'form',
-        '.comments-block',
-        '.comments',
-        '#comments',
-        '[data-comments]',
-        '.comment-list',
-        '.breadcrumbs',
-        '.breadcrumb',
-        '.menu',
-        '.navbar',
-        '.nav',
-        '.pagination',
-        '.share',
-        '.social',
-        '.gallery',
-        '.sidebar'
-      ].forEach((selector) => {
-        doc.querySelectorAll(selector).forEach((node) => node.remove());
-      });
-
-      const candidates = [
-        'article',
-        '.card',
-        '.card__article',
-        '.card__article-body',
-        '.monster',
-        '.monster-block',
-        '.page-content',
-        'main',
-        'body'
-      ];
-      const relevantPattern = /(Класс Доспеха|Хиты|Скорость|Опасность|Действия|Бонусные действия|Реакции|Легендарные действия)/i;
-      let bestText = '';
-      for (const selector of candidates) {
-        doc.querySelectorAll(selector).forEach((node) => {
-          const textValue = cleanupMonsterText(node?.innerText || node?.textContent || '');
-          if (!textValue) return;
-          const score = (relevantPattern.test(textValue) ? 100000 : 0) + textValue.length;
-          const bestScore = (relevantPattern.test(bestText) ? 100000 : 0) + bestText.length;
-          if (score > bestScore) bestText = textValue;
-        });
-      }
-
+      const root = findBestMonsterContentRoot(doc);
+      const bestText = cleanupMonsterText(root?.innerText || root?.textContent || '');
       return bestText || cleanupMonsterText(doc.body?.innerText || doc.body?.textContent || src);
     } catch {
       return cleanupMonsterText(src.replace(/<[^>]+>/g, ' '));
     }
+  }
+
+  function pruneMonsterHtmlDocument(doc) {
+    if (!doc?.querySelectorAll) return doc;
+    [
+      'script',
+      'style',
+      'noscript',
+      'svg',
+      'iframe',
+      'header',
+      'footer',
+      'nav',
+      'aside',
+      'form',
+      '.comments-block',
+      '.comments',
+      '#comments',
+      '[data-comments]',
+      '.comment-list',
+      '.breadcrumbs',
+      '.breadcrumb',
+      '.menu',
+      '.navbar',
+      '.nav',
+      '.pagination',
+      '.share',
+      '.social',
+      '.gallery',
+      '.sidebar',
+      '.leftbar',
+      '.sidebar-left',
+      '.sidebar-menu',
+      '.catalog-menu',
+      '.site-menu',
+      '[role="navigation"]'
+    ].forEach((selector) => {
+      doc.querySelectorAll(selector).forEach((node) => node.remove());
+    });
+    return doc;
+  }
+
+  function findBestMonsterContentRoot(doc) {
+    pruneMonsterHtmlDocument(doc);
+    const candidates = [
+      'article',
+      '.card',
+      '.card__article',
+      '.card__article-body',
+      '.monster',
+      '.monster-block',
+      '.content',
+      '.article-content',
+      '.page__content',
+      '.page-content',
+      'main',
+      'body'
+    ];
+    const relevantPattern = /(Класс Доспеха|Хиты|Скорость|Опасность|Действия|Бонусные действия|Реакции|Легендарные действия|Описание)/i;
+    const navPattern = /(Справочники|Новичку|Статьи|Инструменты|Пользователь|Классы|Расы и происхождения|Предыстории|Черты|Заклинания|Бестиарий|Магические предметы|Поиск по сайту|Комментарии|Настройки)/i;
+    let bestNode = doc?.body || null;
+    let bestScore = -1;
+    for (const selector of candidates) {
+      doc?.querySelectorAll?.(selector)?.forEach((node) => {
+        const textValue = cleanupMonsterText(node?.innerText || node?.textContent || '');
+        if (!textValue) return;
+        const lines = textValue.split('\n').map((line) => line.trim()).filter(Boolean);
+        const paragraphCount = lines.filter((line) => line.length >= 80).length;
+        const shortLines = lines.filter((line) => line.length <= 32).length;
+        const relevantHits = Array.from(textValue.matchAll(new RegExp(relevantPattern, 'gi'))).length;
+        const navHits = Array.from(textValue.matchAll(new RegExp(navPattern, 'gi'))).length;
+        const classId = `${node?.className || ''} ${node?.id || ''}`.toLowerCase();
+        const sidebarPenalty = /(sidebar|menu|catalog|nav|toolbar|search|filter|leftbar|left-menu)/.test(classId) ? 20000 : 0;
+        const score = (relevantHits * 6000) + (paragraphCount * 900) + Math.min(textValue.length, 12000) - (shortLines * 35) - (navHits * 2800) - sidebarPenalty;
+        if (score > bestScore) {
+          bestScore = score;
+          bestNode = node;
+        }
+      });
+    }
+    return bestNode || doc?.body || null;
   }
 
   function splitMonsterParagraphs(textValue) {
@@ -327,6 +522,10 @@
     return /^(?:Галерея|Распечатать|Поделиться|Поделиться:|Наверх|Назад|Вперёд|Следующая запись|Предыдущая запись|Похожие материалы|Смотрите также|Показать комментарии|Оставить комментарий|Toggle navigation|Меню|Главная|Бестиарий|Заклинания|Снаряжение|Предметы|Контакты|О сайте|Все права защищены|Источник:|Подробности|Обсуждение|Версия для печати)$/i.test(normalizeMonsterLine(line));
   }
 
+  function isMonsterSourceBadgeLine(line) {
+    return /^(?:Официальные|Official|Homebrew)$/i.test(normalizeMonsterLine(line));
+  }
+
   function isMonsterSubtitleLine(line) {
     return /,/.test(String(line || '')) && /(крош|мал|сред|больш|огром|испол|tiny|small|medium|large|huge|gargantuan)/i.test(String(line || ''));
   }
@@ -334,7 +533,7 @@
   function isMonsterTitleCandidate(line) {
     const normalized = normalizeMonsterLine(line);
     if (!normalized) return false;
-    if (isMonsterCommentBoundary(normalized) || isMonsterChromeStopLine(normalized)) return false;
+    if (isMonsterCommentBoundary(normalized) || isMonsterChromeStopLine(normalized) || isMonsterSourceBadgeLine(normalized)) return false;
     if (/^(?:DnD\.su|Официальные|Homebrew|Справочники|Новичку|Статьи|Пользователь|Партнёры|Разное|Регистрация)$/i.test(normalized)) return false;
     if (/^(?:Boosty|Discord|Новости сообщества|Контакты|Помощь сайту)$/i.test(normalized)) return false;
     if (/^(?:Удав|.+)\s+—\s+Бестиарий$/i.test(normalized) && !/[\[(]/.test(normalized)) return false;
@@ -472,6 +671,239 @@
     return {};
   }
 
+  function isUppercaseMonsterHeading(text) {
+    const value = String(text || '').trim();
+    if (!value) return false;
+    const letters = value.replace(/[^A-Za-zА-ЯЁа-яё]/g, '');
+    if (letters.length < 3) return false;
+    return letters === letters.toUpperCase();
+  }
+
+  function isBoldMonsterNode(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+    const tag = String(node.tagName || '').toUpperCase();
+    if (/^H[1-6]$/.test(tag) || tag === 'B' || tag === 'STRONG') return true;
+    const style = String(node.getAttribute?.('style') || '');
+    return /font-weight\s*:\s*(?:bold|bolder|[6-9]00)/i.test(style);
+  }
+
+  function isMonsterSectionHeadingBlock(node, text) {
+    const normalized = String(text || '')
+      .replace(/[—–-]/g, ' ')
+      .replace(/[:.!?]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+    const sectionMap = {
+      'черты': true,
+      'особые черты': true,
+      'traits': true,
+      'действия': true,
+      'actions': true,
+      'бонусные действия': true,
+      'bonus actions': true,
+      'реакции': true,
+      'reactions': true,
+      'легендарные действия': true,
+      'legendary actions': true,
+      'описание': true,
+      'description': true
+    };
+    const raw = String(text || '').trim();
+    const dashedHeading = /^[—–-]\s*.+?\s*[—–-]$/.test(raw);
+    return !!sectionMap[normalized] && isUppercaseMonsterHeading(text) && (isBoldMonsterNode(node) || dashedHeading);
+  }
+
+  function getMonsterBlockNodes(root) {
+    if (!root?.querySelectorAll) return [];
+    return Array.from(root.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6'))
+      .filter((node) => {
+        if (!node?.parentElement) return false;
+        if (node.closest('script, style, noscript, svg, iframe')) return false;
+        if (node.parentElement.closest('p, li, h1, h2, h3, h4, h5, h6')) return false;
+        return cleanupMonsterText(node.textContent || '').length > 0;
+      });
+  }
+
+  function cleanupMonsterEntryTitle(raw) {
+    return String(raw || '')
+      .replace(/\s+/g, ' ')
+      .replace(/[.!?:]+$/g, '')
+      .trim();
+  }
+
+  function trimLeadingMonsterEntryHtml(html) {
+    const safe = String(html || '').trim();
+    if (!safe) return '';
+    const div = document.createElement('div');
+    div.innerHTML = safe;
+    while (div.firstChild && div.firstChild.nodeType === Node.TEXT_NODE && !String(div.firstChild.textContent || '').trim()) {
+      div.removeChild(div.firstChild);
+    }
+    if (div.firstChild?.nodeType === Node.TEXT_NODE) {
+      div.firstChild.textContent = String(div.firstChild.textContent || '').replace(/^\s*[.:—–-]\s*/, '');
+    }
+    return div.innerHTML.trim();
+  }
+
+  function extractMonsterRichEntryFromBlock(node, baseUrl = '') {
+    if (!node) return null;
+    const text = cleanupMonsterText(node.textContent || '');
+    if (!text) return null;
+
+    const wrap = document.createElement('div');
+    wrap.appendChild(node.cloneNode(true));
+    const firstChild = wrap.firstElementChild;
+    if (!firstChild) return null;
+
+    const firstSignificant = Array.from(firstChild.childNodes || []).find((child) => {
+      if (child.nodeType === Node.TEXT_NODE) return String(child.textContent || '').trim().length > 0;
+      return child.nodeType === Node.ELEMENT_NODE && cleanupMonsterText(child.textContent || '').length > 0;
+    });
+
+    const titleSource = firstSignificant && firstSignificant.nodeType === Node.ELEMENT_NODE && isBoldMonsterNode(firstSignificant)
+      ? firstSignificant
+      : (/^H[1-6]$/i.test(firstChild.tagName || '') ? firstChild : null);
+
+    if (!titleSource) {
+      const html = sanitizeMonsterRichHtml(firstChild.innerHTML || firstChild.textContent || '', baseUrl);
+      return { title: '', text: stripMonsterHtml(html), html };
+    }
+
+    const title = cleanupMonsterEntryTitle(titleSource.textContent || '');
+    if (!title) {
+      const html = sanitizeMonsterRichHtml(firstChild.innerHTML || firstChild.textContent || '', baseUrl);
+      return { title: '', text: stripMonsterHtml(html), html };
+    }
+
+    if (titleSource === firstChild && /^H[1-6]$/i.test(firstChild.tagName || '')) {
+      return { title, text: '', html: '' };
+    }
+
+    titleSource.remove();
+    const html = trimLeadingMonsterEntryHtml(sanitizeMonsterRichHtml(firstChild.innerHTML || '', baseUrl));
+    return { title, text: stripMonsterHtml(html), html };
+  }
+
+  function appendMonsterEntryContent(entry, node, baseUrl = '') {
+    if (!entry || !node) return entry;
+    const html = sanitizeMonsterRichHtml(node.innerHTML || node.textContent || '', baseUrl);
+    const text = stripMonsterHtml(html);
+    if (!html && !text) return entry;
+    return {
+      ...entry,
+      text: [String(entry.text || '').trim(), text].filter(Boolean).join('\n\n'),
+      html: [String(entry.html || '').trim(), html].filter(Boolean).join('')
+    };
+  }
+
+  function parseMonsterStructuredContent(raw, sourceUrl = '') {
+    const src = String(raw || '');
+    if (!/[<][a-z!/]/i.test(src)) return null;
+    try {
+      const doc = new DOMParser().parseFromString(src, 'text/html');
+      const root = findBestMonsterContentRoot(doc);
+      const blocks = getMonsterBlockNodes(root);
+      if (!blocks.length) return null;
+
+      const sectionMap = {
+        'черты': 'traits',
+        'особые черты': 'traits',
+        'traits': 'traits',
+        'действия': 'actions',
+        'actions': 'actions',
+        'бонусные действия': 'bonus_actions',
+        'bonus actions': 'bonus_actions',
+        'реакции': 'reactions',
+        'reactions': 'reactions',
+        'легендарные действия': 'legendary_actions',
+        'legendary actions': 'legendary_actions',
+        'описание': 'description',
+        'description': 'description'
+      };
+      const structured = {
+        description_html: '',
+        description_text: '',
+        traits: [],
+        actions: [],
+        bonus_actions: [],
+        reactions: [],
+        legendary_actions: []
+      };
+      const metaLinePattern = /^(?:Класс Доспеха|Armor Class|Хиты|Hit Points|Скорость|Speed|Спасброски|Saving Throws|Навыки|Skills|Уязвим(?:ость|ости) к урону|Damage Vulnerabilities|Сопротивл(?:ение|ения) к урону|Damage Resistances|Иммунитет к урону|Damage Immunities|Иммунитет к состояни(?:ю|ям)|Condition Immunities|Чувства|Senses|Языки|Languages|Бонус мастерства|Proficiency Bonus|Опасность|Challenge)\b/i;
+
+      let currentSection = 'traits';
+      let activeEntry = null;
+      let hasUsefulContent = false;
+
+      const pushDescription = (node) => {
+        const html = sanitizeMonsterRichHtml(node.outerHTML || node.innerHTML || node.textContent || '', sourceUrl);
+        const text = stripMonsterHtml(html);
+        if (!html && !text) return;
+        structured.description_html = [structured.description_html, html].filter(Boolean).join('');
+        structured.description_text = [structured.description_text, text].filter(Boolean).join('\n\n');
+        hasUsefulContent = true;
+      };
+
+      const pushEntry = (entry) => {
+        if (!entry || !currentSection) return;
+        if (currentSection === 'description') {
+          structured.description_html = [structured.description_html, entry.html || ''].filter(Boolean).join('');
+          structured.description_text = [structured.description_text, entry.text || ''].filter(Boolean).join('\n\n');
+          hasUsefulContent = true;
+          return;
+        }
+        if (!Array.isArray(structured[currentSection])) return;
+        structured[currentSection].push(entry);
+        activeEntry = structured[currentSection][structured[currentSection].length - 1];
+        hasUsefulContent = true;
+      };
+
+      for (const block of blocks) {
+        const text = cleanupMonsterText(block.textContent || '');
+        if (!text) continue;
+        if (isMonsterCommentBoundary(text) || isMonsterChromeStopLine(text)) break;
+        if (isMonsterSourceBadgeLine(text)) continue;
+        if (metaLinePattern.test(text)) continue;
+        if (isMonsterSubtitleLine(text) || /—\s*Бестиарий/i.test(text) || (text.length <= 120 && !/[.!?:]/.test(text) && /(?:\[[^\]]+\]|\([^)]+\))/.test(text))) continue;
+
+        const normalizedSection = text
+          .replace(/[—–-]/g, ' ')
+          .replace(/[:.!?]+$/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase();
+        if (isMonsterSectionHeadingBlock(block, text) && sectionMap[normalizedSection]) {
+          currentSection = sectionMap[normalizedSection];
+          activeEntry = null;
+          hasUsefulContent = true;
+          continue;
+        }
+
+        const entry = extractMonsterRichEntryFromBlock(block, sourceUrl);
+        if (entry?.title) {
+          pushEntry(entry);
+          if (currentSection === 'description') activeEntry = null;
+          continue;
+        }
+        if (activeEntry && currentSection && Array.isArray(structured[currentSection])) {
+          const next = appendMonsterEntryContent(activeEntry, block, sourceUrl);
+          Object.assign(activeEntry, next);
+          hasUsefulContent = true;
+          continue;
+        }
+        pushDescription(block);
+      }
+
+      if (!hasUsefulContent) return null;
+      structured.description_html = sanitizeMonsterRichHtml(structured.description_html, sourceUrl);
+      structured.description_text = stripMonsterHtml(structured.description_html) || structured.description_text;
+      return structured;
+    } catch {
+      return null;
+    }
+  }
+
   function parseMonsterText(raw, sourceUrl = '') {
     const plainText = htmlToMonsterText(raw);
     const paragraphs = splitMonsterParagraphs(plainText);
@@ -511,6 +943,7 @@
       reactions: [],
       legendary_actions: [],
       description_ru: '',
+      description_html: '',
       source: sourceUrl ? detectMonsterSourceLabel(sourceUrl) : 'external',
       source_url: sourceUrl
     };
@@ -610,7 +1043,9 @@
       'реакции': 'reactions',
       'reactions': 'reactions',
       'легендарные действия': 'legendary_actions',
-      'legendary actions': 'legendary_actions'
+      'legendary actions': 'legendary_actions',
+      'описание': 'description',
+      'description': 'description'
     };
 
     const rawLines = lines.slice();
@@ -626,7 +1061,12 @@
     const flushBuffer = () => {
       const paragraph = buffer.join(' ').trim();
       buffer = [];
-      if (!paragraph || !currentSection || !Array.isArray(data[currentSection])) return;
+      if (!paragraph || !currentSection) return;
+      if (currentSection === 'description') {
+        data.description_ru = [String(data.description_ru || '').trim(), paragraph].filter(Boolean).join('\n\n');
+        return;
+      }
+      if (!Array.isArray(data[currentSection])) return;
       const entry = paragraphToEntry(paragraph);
       if (entry) data[currentSection].push(entry);
     };
@@ -641,6 +1081,7 @@
         flushBuffer();
         break;
       }
+      if (isMonsterSourceBadgeLine(line)) continue;
       if (isMonsterChromeStopLine(line)) {
         flushBuffer();
         if (currentSection) break;
@@ -681,6 +1122,17 @@
       buffer.push(line);
     }
     flushBuffer();
+
+    const structuredContent = parseMonsterStructuredContent(raw, sourceUrl);
+    if (structuredContent) {
+      if (structuredContent.description_text) data.description_ru = structuredContent.description_text;
+      if (structuredContent.description_html) data.description_html = structuredContent.description_html;
+      ['traits', 'actions', 'bonus_actions', 'reactions', 'legendary_actions'].forEach((key) => {
+        if (Array.isArray(structuredContent[key]) && structuredContent[key].length) {
+          data[key] = structuredContent[key];
+        }
+      });
+    }
 
     const hasCoreMonsterData = !!(data.name_ru || data.name_en || data.ac || data.hp || data.speed || Object.keys(data.abilities || {}).length);
     if (!hasCoreMonsterData && !data.actions.length && !data.bonus_actions.length && !data.reactions.length && !data.legendary_actions.length) {
@@ -802,6 +1254,10 @@
       .monster-list-item{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,226,197,.08)}
       .monster-list-item b{color:#fff2db}
       .monster-list-item div{margin-top:4px;color:#f1dfca;line-height:1.5;white-space:pre-wrap}
+      .monster-list-item div p,.monster-desc p{margin:0 0 10px}
+      .monster-list-item div p:last-child,.monster-desc p:last-child{margin-bottom:0}
+      .monster-list-item div ul,.monster-list-item div ol,.monster-desc ul,.monster-desc ol{margin:8px 0 8px 20px;padding:0}
+      .monster-list-item div a,.monster-desc a{color:#ffd59c;text-decoration:underline;font-weight:700}
       .monster-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
       .monster-meta__row{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,226,197,.08)}
       .monster-meta__k{font-size:12px;color:rgba(255,236,219,.68);margin-bottom:4px}
@@ -925,6 +1381,7 @@
       conditionImmunities: monster?.condition_immunities || '',
       traits: normalizeMonsterEntries(monster?.traits),
       description: monster?.description_ru || '',
+      descriptionHtml: String(monster?.description_html || '').trim(),
       actions: normalizeMonsterEntries(monster?.actions),
       reactions: normalizeMonsterEntries(monster?.reactions),
       legendaryActions: normalizeMonsterEntries(monster?.legendary_actions),
@@ -957,7 +1414,7 @@
           ${entries.map((entry) => `
             <div class="monster-list-item">
               ${entry.title ? `<b>${esc(entry.title)}</b>` : ''}
-              <div>${esc(entry.text || '')}</div>
+              <div>${entry.html || esc(entry.text || '')}</div>
             </div>
           `).join('')}
         </div>
@@ -973,10 +1430,30 @@
       ${titledEntries.map((entry) => `
         <div class="monster-panel">
           <div class="monster-panel__title">${esc(entry.title || 'Особенность')}</div>
-          <div class="monster-desc">${esc(entry.text || '')}</div>
+          <div class="monster-desc">${entry.html || esc(entry.text || '')}</div>
         </div>
       `).join('')}
       ${untitledEntries.length ? renderEntries('Особенности', untitledEntries) : ''}
+    `;
+  }
+
+  function renderMainSectionPanels(sectionTitle, entries) {
+    if (!entries?.length) return '';
+    const titledEntries = entries.filter((entry) => String(entry?.title || '').trim());
+    const untitledEntries = entries.filter((entry) => !String(entry?.title || '').trim());
+    return `
+      <div class="monster-panel monster-panel--wide">
+        <div class="monster-panel__title">${esc(sectionTitle)}</div>
+        ${untitledEntries.length ? `
+          <div class="monster-desc">${untitledEntries.map((entry) => entry.html || esc(entry.text || '')).join('')}</div>
+        ` : ''}
+      </div>
+      ${titledEntries.map((entry) => `
+        <div class="monster-panel">
+          <div class="monster-panel__title">${esc(entry.title)}</div>
+          <div class="monster-desc">${entry.html || esc(entry.text || '')}</div>
+        </div>
+      `).join('')}
     `;
   }
 
@@ -996,13 +1473,17 @@
             ${renderMetaRow('Иммунитеты к состояниям', vm.conditionImmunities)}
           </div>
         </div>
-        ${vm.description ? `
+        ${(vm.description || vm.descriptionHtml) ? `
           <div class="monster-panel monster-panel--wide">
             <div class="monster-panel__title">Описание</div>
-            <div class="monster-desc">${esc(vm.description)}</div>
+            <div class="monster-desc">${vm.descriptionHtml || esc(vm.description)}</div>
           </div>
         ` : ''}
         ${renderMainTraitPanels(vm.traits)}
+        ${renderMainSectionPanels('ДЕЙСТВИЯ', vm.actions)}
+        ${renderMainSectionPanels('БОНУСНЫЕ ДЕЙСТВИЯ', vm.bonusActions)}
+        ${renderMainSectionPanels('РЕАКЦИИ', vm.reactions)}
+        ${renderMainSectionPanels('ЛЕГЕНДАРНЫЕ ДЕЙСТВИЯ', vm.legendaryActions)}
       </div>
     `;
   }
