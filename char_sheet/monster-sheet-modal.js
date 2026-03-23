@@ -712,6 +712,8 @@
     const acInfo = parseAc(monster.ac);
     const speedInfo = parseSpeed(monster.speed);
     const proficiencyBonus = parseSignedPrimaryNumber(monster.proficiency_bonus, toInt(get(sheet, 'proficiency', 0), 0));
+    const importedName = String(monster.name_ru || monster.name_en || '').trim();
+    if (importedName) set(sheet, 'name.value', importedName);
     set(sheet, 'monster', monster);
     set(sheet, 'monsterHpRoll', normalizeMonsterHpRollConfig({ count: hpInfo.count, sides: hpInfo.sides, bonus: hpInfo.bonus, lastTotal: 0 }));
     set(sheet, 'vitality.hp-max.value', 0);
@@ -736,7 +738,7 @@
         <div class="monster-import-card__subtitle">Вставь ссылку на страницу монстра или готовый текст статблока.</div>
         <div class="monster-import">
           <input type="text" class="popup-field monster-import__input" placeholder="Ссылка или текст статблока монстра" data-monster-import-url value="${esc(sourceUrl || '')}">
-          <button type="button" class="btn" data-monster-import-btn>Импортировать по ссылке</button>
+          <button type="button" class="btn" data-monster-import-btn>Импортировать</button>
         </div>
       </div>
     `;
@@ -750,6 +752,9 @@
       .monster-sheet{display:flex;flex-direction:column;gap:16px;color:#f6ead7}
       .monster-sheet__hero{display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:18px;background:linear-gradient(180deg,rgba(79,24,20,.96),rgba(29,12,10,.94));border:1px solid rgba(255,216,183,.16);box-shadow:0 16px 38px rgba(0,0,0,.28)}
       .monster-sheet__title{font-size:30px;font-weight:800;line-height:1.05;color:#fff2df}
+      .monster-sheet__title-input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,226,197,.16);color:#fff2df;font-size:30px;font-weight:800;line-height:1.05;padding:0 0 6px;outline:none}
+      .monster-sheet__title-input:focus{border-bottom-color:rgba(255,226,197,.42)}
+      .monster-sheet__title-input:disabled{opacity:1;cursor:default}
       .monster-sheet__subtitle{margin-top:6px;color:rgba(255,238,215,.82);font-size:14px}
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
@@ -795,8 +800,8 @@
       .monster-import-card{width:min(760px,100%);margin:0 auto;padding:18px;border-radius:18px;border:1px solid rgba(255,221,191,.16);background:linear-gradient(180deg,rgba(48,22,16,.9),rgba(28,14,11,.94));box-shadow:0 16px 36px rgba(0,0,0,.22);text-align:center}
       .monster-import-card__title{font-size:18px;font-weight:800;color:#fff1de}
       .monster-import-card__subtitle{margin-top:6px;color:rgba(255,233,210,.72);font-size:13px;line-height:1.45}
-      .monster-import{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:14px}
-      .monster-import__input{min-width:min(460px,100%);flex:1 1 380px}
+      .monster-import{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:nowrap;margin-top:14px}
+      .monster-import__input{min-width:0;flex:1 1 auto}
       .monster-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
       .monster-panel{border:1px solid rgba(255,224,197,.11);background:rgba(255,255,255,.03);border-radius:16px;padding:14px}
       .monster-panel--wide{grid-column:1/-1}
@@ -828,7 +833,9 @@
       .monster-manual-card{border:1px solid rgba(255,224,197,.11);background:rgba(255,255,255,.03);border-radius:16px;padding:14px}
       .monster-manual-card.is-collapsed .monster-manual-card__body{display:none}
       .monster-manual-card__head{display:flex;align-items:center;justify-content:space-between;gap:10px}
-      .monster-manual-card__title{font-size:15px;font-weight:800;color:#fff1de;min-width:0;word-break:break-word}
+      .monster-manual-card__title{min-width:0;flex:1 1 auto}
+      .monster-manual-card__title-input{width:100%;background:transparent;border:none;color:#fff1de;font-size:15px;font-weight:800;padding:0;outline:none}
+      .monster-manual-card__title-input::placeholder{color:rgba(255,241,222,.68)}
       .monster-manual-card__actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
       .monster-manual-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,221,191,.12);background:rgba(255,255,255,.05);color:#ffe6ca;cursor:pointer;font-size:15px}
       .monster-manual-icon:hover{filter:brightness(1.08)}
@@ -854,7 +861,7 @@
         .monster-hp-top-grid{grid-template-columns:1fr}
         .monster-hero-card--hp .monster-hero-card__mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
         .monster-hp-adjust{grid-template-columns:42px minmax(0,1fr) 42px}
-        .monster-import{flex-direction:column}
+        .monster-import{flex-direction:column;flex-wrap:wrap}
         .monster-import__input{min-width:100%;width:100%}
       }
     `;
@@ -930,7 +937,7 @@
     const proficiencyBonus = toInt(get(sheet, 'proficiency', parseSignedPrimaryNumber(monster?.proficiency_bonus, 0)), parseSignedPrimaryNumber(monster?.proficiency_bonus, 0));
 
     return {
-      playerName: player?.name || vm.name,
+      playerName: String(get(sheet, 'name.value', '') || player?.name || vm.name || 'Враг').trim() || 'Враг',
       subtitle: [monster?.size_ru || monster?.size_en, monster?.type_ru || monster?.type_en, monster?.alignment_ru || monster?.alignment_en].filter(Boolean).join(', ') || 'Лист врага',
       source: monster?.source || '',
       challenge: monster?.cr != null ? `CR ${monster.cr}` : '',
@@ -1086,17 +1093,22 @@
             ${entries.map((entry, index) => `
               <div class="monster-manual-card ${entry.collapsed ? 'is-collapsed' : ''}" data-monster-manual-item="${index}">
                 <div class="monster-manual-card__head">
-                  <div class="monster-manual-card__title">${esc(entry.title || `Описание ${index + 1}`)}</div>
+                  <label class="monster-manual-card__title">
+                    <input
+                      class="monster-manual-card__title-input"
+                      type="text"
+                      ${canEdit ? '' : 'disabled'}
+                      data-monster-manual-title="${index}"
+                      value="${esc(entry.title || `Описание ${index + 1}`)}"
+                      placeholder="Описание ${index + 1}"
+                    >
+                  </label>
                   <div class="monster-manual-card__actions">
                     <button type="button" class="monster-manual-icon" data-monster-manual-toggle="${index}" title="${entry.collapsed ? 'Развернуть описание' : 'Свернуть описание'}" aria-label="${entry.collapsed ? 'Развернуть описание' : 'Свернуть описание'}">${entry.collapsed ? '▸' : '▾'}</button>
                     ${canEdit ? `<button type="button" class="monster-manual-icon" data-monster-manual-delete="${index}" title="Удалить описание" aria-label="Удалить описание">✕</button>` : ''}
                   </div>
                 </div>
                 <div class="monster-manual-card__body">
-                  <label class="monster-manual-field">
-                    <span>Название</span>
-                    <input type="text" ${canEdit ? '' : 'disabled'} data-monster-manual-title="${index}" value="${esc(entry.title || '')}" placeholder="Название блока">
-                  </label>
                   <label class="monster-manual-field">
                     <span>Описание</span>
                     <textarea ${canEdit ? '' : 'disabled'} data-monster-manual-text="${index}" placeholder="Подробное описание">${esc(entry.text || '')}</textarea>
@@ -1225,6 +1237,28 @@
     });
   }
 
+  function bindMonsterNameInput(root, player, canEdit) {
+    const input = root.querySelector('[data-monster-player-name]');
+    if (!input) return;
+    input.value = String(get(player, 'sheet.parsed.name.value', player?.name || '') || player?.name || '').trim() || 'Враг';
+    if (!canEdit) {
+      input.disabled = true;
+      return;
+    }
+    if (input.__monsterNameBound) return;
+    input.__monsterNameBound = true;
+
+    input.addEventListener('input', () => {
+      const nextName = String(input.value || '').trimStart();
+      const sheet = ensureEnemySheet(player);
+      set(sheet, 'name.value', nextName);
+      player.name = nextName || 'Враг';
+      if (sheetTitle) sheetTitle.textContent = `Лист монстра: ${player.name}`;
+      markModalInteracted(player.id);
+      scheduleSave(player);
+    });
+  }
+
   function bindMonsterHpRollControls(root, player, canEdit) {
     if (!canEdit) return;
     const inputs = Array.from(root.querySelectorAll('[data-monster-hp-roll-field]'));
@@ -1317,10 +1351,10 @@
   function bindManualDescriptionTab(root, player, vm, canEdit) {
     const main = root.querySelector('#sheet-main');
     if (!main) return;
-    const renderMainShell = () => `${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}${renderMonsterTabContent('monster-manual', player, vm, canEdit)}`;
 
     const rerenderTab = () => {
-      main.innerHTML = renderMainShell();
+      main.innerHTML = renderMonsterTabContent('monster-manual', player, vm, canEdit);
+      bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
       bindMonsterHpRollControls(root, player, canEdit);
       bindMonsterHpAdjustControls(root, player, canEdit);
@@ -1335,7 +1369,7 @@
       addBtn.addEventListener('click', () => {
         const sheet = ensureEnemySheet(player);
         const manual = ensureMonsterManualState(sheet);
-        manual.entries.push({ title: '', text: '', collapsed: false });
+        manual.entries.push({ title: `Описание ${manual.entries.length + 1}`, text: '', collapsed: false });
         scheduleSave(player);
         rerenderTab();
       });
@@ -1348,8 +1382,6 @@
         const manual = ensureMonsterManualState(sheet);
         if (!manual.entries[idx]) return;
         manual.entries[idx].title = String(input.value || '');
-        const titleEl = main.querySelector(`[data-monster-manual-item="${idx}"] .monster-manual-card__title`);
-        if (titleEl) titleEl.textContent = String(input.value || '').trim() || `Описание ${idx + 1}`;
         markModalInteracted(player.id);
         scheduleSave(player);
       });
@@ -1398,13 +1430,13 @@
     if (!buttons.length || !main) return;
 
     const bindCurrentTab = () => {
+      bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
       bindMonsterHpRollControls(root, player, canEdit);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
       if (typeof bindAppearanceUi === 'function') bindAppearanceUi(root, player, canEdit);
       if (player._activeSheetTab === 'monster-manual') bindManualDescriptionTab(root, player, vm, canEdit);
-      bindImportControls(player, canEdit);
     };
 
     buttons.forEach((button) => {
@@ -1414,7 +1446,7 @@
         const st = getUiState(player.id);
         st.activeTab = tabId;
         buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
-        main.innerHTML = `${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}${renderMonsterTabContent(tabId, player, vm, canEdit)}`;
+        main.innerHTML = renderMonsterTabContent(tabId, player, vm, canEdit);
         bindCurrentTab();
         markModalInteracted(player.id);
       });
@@ -1432,7 +1464,7 @@
     const setBusy = (busy) => {
       input.disabled = !!busy;
       button.disabled = !!busy;
-      button.textContent = busy ? 'Импорт…' : 'Импортировать по ссылке';
+      button.textContent = busy ? 'Импорт…' : 'Импортировать';
     };
 
     button.addEventListener('click', async () => {
@@ -1442,6 +1474,11 @@
         const monster = await importMonsterFromUrl(href || input.value);
         const sheet = ensureEnemySheet(player);
         ensureImportedMonsterStats(sheet, monster);
+        const importedName = String(monster?.name_ru || monster?.name_en || '').trim();
+        if (importedName) {
+          player.name = importedName;
+          set(sheet, 'name.value', importedName);
+        }
         scheduleSave(player);
         markModalInteracted(player.id);
         await render(player, { canEdit, force: true });
@@ -1487,9 +1524,17 @@
     const vm = buildMonsterViewModel(player, sheet, monster);
     sheetContent.innerHTML = `
       <div class="monster-sheet">
+        ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
         <div class="monster-sheet__hero">
           <div>
-            <div class="monster-sheet__title">${esc(vm.playerName)}</div>
+            <input
+              class="monster-sheet__title-input"
+              type="text"
+              ${canEdit ? '' : 'disabled'}
+              data-monster-player-name
+              value="${esc(vm.playerName)}"
+              placeholder="Имя монстра"
+            >
             <div class="monster-sheet__subtitle">${esc(vm.subtitle || 'Лист врага')}</div>
             <div class="monster-sheet__summary">
               ${vm.challenge ? `<span class="monster-chip">${esc(vm.challenge)}</span>` : ''}
@@ -1584,7 +1629,6 @@
             <button type="button" class="monster-sidebar__btn ${activeTab === 'monster-token' ? 'active' : ''}" data-monster-tab="monster-token">Токен</button>
           </div>
           <div class="monster-main" id="sheet-main">
-            ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
             ${renderMonsterTabContent(activeTab, player, vm, canEdit)}
           </div>
         </div>
