@@ -2311,6 +2311,7 @@ async function sendMessage(msg) {
 
         else if (type === "addPlayer") {
           const player = msg.player || {};
+          const DEFAULT_ALLY_BASE_URL = 'token/sheet/souz.png';
           const DEFAULT_MONSTER_BASE_URL = 'token/sheet/monstr.png';
           const ownerRole = String(myRole || "").trim() || "";
           const wantsEnemy = !!player.isEnemy;
@@ -2341,14 +2342,18 @@ async function sendMessage(msg) {
             }
           }
           const id = player.id || (crypto?.randomUUID ? crypto.randomUUID() : ("p-" + Math.random().toString(16).slice(2)));
+          const defaultTokenBaseUrl = isEnemy
+            ? DEFAULT_MONSTER_BASE_URL
+            : (isAlly ? DEFAULT_ALLY_BASE_URL : '');
+          const hasRoleTokenPreset = !!defaultTokenBaseUrl;
           const providedSheet = (player.sheet && typeof player.sheet === 'object') ? player.sheet : null;
           const defaultSheet = {
             parsed: {
               name: { value: player.name },
               appearance: {
-                baseUrl: (isEnemy && !isBase) ? DEFAULT_MONSTER_BASE_URL : '',
+                baseUrl: defaultTokenBaseUrl,
                 token: {
-                  mode: (isEnemy && !isBase) ? 'full' : 'crop',
+                  mode: hasRoleTokenPreset ? 'full' : 'crop',
                   crop: { x: 50, y: 35, zoom: 140 }
                 }
               }

@@ -3,6 +3,7 @@
   let monsterDbPromise = null;
   let monsterSheetStylesReady = false;
   const saveTimers = new Map();
+  const DEFAULT_ALLY_BASE_URL = 'token/sheet/souz.png';
   const DEFAULT_MONSTER_BASE_URL = 'token/sheet/monstr.png';
 
   function esc(value) {
@@ -932,7 +933,11 @@
     if (sheet.appearance.token.crop.y === undefined) sheet.appearance.token.crop.y = 35;
     if (sheet.appearance.token.crop.zoom === undefined) sheet.appearance.token.crop.zoom = 140;
     const baseUrl = String(sheet.appearance.baseUrl || '').trim();
-    if (!baseUrl) sheet.appearance.baseUrl = DEFAULT_MONSTER_BASE_URL;
+    if (!baseUrl) {
+      sheet.appearance.baseUrl = player?.isEnemy
+        ? DEFAULT_MONSTER_BASE_URL
+        : (player?.isAlly ? DEFAULT_ALLY_BASE_URL : DEFAULT_MONSTER_BASE_URL);
+    }
     if (!String(sheet.appearance.token.mode || '').trim()) sheet.appearance.token.mode = 'full';
     if (!player.sheet || typeof player.sheet !== 'object') {
       player.sheet = { source: 'manual', importedAt: Date.now(), raw: null, parsed: sheet };
