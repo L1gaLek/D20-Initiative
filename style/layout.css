@@ -395,7 +395,7 @@
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.04);
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
 
 .saved-bases-row-main {
@@ -1096,7 +1096,7 @@
   background: rgba(255,255,255,0.06);
   color: #fff;
   font-weight: 900;
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1119,7 +1119,7 @@
   font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
-  cursor: default;
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
   user-select: none;
 }
 
@@ -1218,7 +1218,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   user-select: none;
   min-width: 92px;
   min-height: 54px;
@@ -1242,7 +1242,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   color: rgba(255,255,255,0.92);
 }
 .sheet-chip--rest .rest-half + .rest-half{
@@ -1271,10 +1271,10 @@
 }
 .rest-popover__head{ display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.10); }
 .rest-popover__title{ font-weight: 700; }
-.rest-popover__x{ border: 0; background: transparent; color: rgba(255,255,255,0.80); cursor: pointer; font-size: 18px; line-height: 1; }
+.rest-popover__x{ border: 0; background: transparent; color: rgba(255,255,255,0.80); cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer; font-size: 18px; line-height: 1; }
 .rest-popover__body{ padding: 12px; }
 .rest-row{ display:flex; align-items:center; gap: 10px; }
-.rest-die-btn{ width: 46px; height: 46px; border: 0; background: transparent; cursor: pointer; padding: 0; }
+.rest-die-btn{ width: 46px; height: 46px; border: 0; background: transparent; cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer; padding: 0; }
 .rest-hd-info{ flex: 1; }
 .rest-hd-info .lbl{ font-size: 12px; opacity: 0.75; }
 .rest-hd-info .val{ font-size: 14px; font-weight: 700; margin-top: 2px; }
@@ -1283,7 +1283,7 @@
 .rest-dot.is-selected{ background: rgb(138,0,0); border-color: rgba(255,255,255,0.18); }
 .rest-dot.is-disabled{ opacity: 0.25; }
 .rest-actions{ display:flex; justify-content:flex-end; gap: 10px; margin-top: 14px; }
-.rest-btn{ border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+.rest-btn{ border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.92); padding: 8px 12px; border-radius: 10px; cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer; }
 .rest-btn:hover{ background: rgba(255,255,255,0.10); }
 
 /* ===== Top line in Basic tab (Exhaustion + Conditions) ===== */
@@ -1353,7 +1353,7 @@
   background: rgba(255,255,255,0.04);
   color: inherit;
   text-align:left;
-  cursor:pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
 
 .cond-list{ display:grid; gap: 10px; }
@@ -1425,7 +1425,7 @@
   border:1px solid rgba(255,255,255,0.12);
   background:rgba(0,0,0,0.18);
   color:rgba(255,255,255,0.9);
-  cursor:pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   flex:0 0 auto;
 }
 
@@ -1598,7 +1598,7 @@
 .cpw-dot.on{ background: rgba(204,130,36,.9); border-color: rgba(204,130,36,.95); }
 .cpw-dot.off{ background: transparent; border-color: rgba(255,255,255,.25); }
 
-.cpw-dotbtn{ width:14px; height:14px; border-radius:999px; border:1px solid rgba(255,255,255,.25); background: transparent; padding:0; cursor:pointer; }
+.cpw-dotbtn{ width:14px; height:14px; border-radius:999px; border:1px solid rgba(255,255,255,.25); background: transparent; padding:0; cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer; }
 .cpw-dotbtn.on{ background: rgba(204,130,36,.9); border-color: rgba(204,130,36,.95); }
 .cpw-dotbtn.off{ background: transparent; }
 
