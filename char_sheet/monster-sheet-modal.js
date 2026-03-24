@@ -238,8 +238,7 @@
       console.warn('MonsterSheetModal: Supabase URL fetch failed, falling back to proxy', err);
     }
 
-    const clean = targetUrl.replace(/^https?:\/\//i, '');
-    const proxyUrl = `https://r.jina.ai/http://${clean}`;
+    const proxyUrl = `https://r.jina.ai/${targetUrl}`;
     const res = await fetch(proxyUrl, { method: 'GET' });
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
     return await res.text();
@@ -1662,6 +1661,7 @@
     sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
     bindTabs(sheetContent, player, vm, canEdit);
+    bindImportControls(player, canEdit);
     return true;
   }
 
