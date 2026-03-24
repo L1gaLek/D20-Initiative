@@ -2,6 +2,10 @@ html, body {
   cursor: url("/D20-Initiative/cursor/normalcursor.cur"), auto;
 }
 
+* {
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
+}
+
 /* ===== Appearance (Облик) ===== */
 .appearance-layout{
   display:flex;
