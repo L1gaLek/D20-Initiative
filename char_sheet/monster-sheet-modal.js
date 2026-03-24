@@ -3,6 +3,8 @@
   let monsterDbPromise = null;
   let monsterSheetStylesReady = false;
   const saveTimers = new Map();
+  const DEFAULT_ALLY_BASE_URL = 'token/sheet/souz.png';
+  const DEFAULT_MONSTER_BASE_URL = 'token/sheet/monstr.png';
 
   function esc(value) {
     return String(value ?? '')
@@ -50,7 +52,7 @@
   }
 
   function isMonsterStyleAlly(player) {
-    return !!player && !player?.isEnemy && !player?.isBase && String(player?.ownerRole || '').trim() !== 'GM';
+    return !!player && !!player?.isAlly && !player?.isEnemy && !player?.isBase;
   }
 
   function getMonsterSheetTypeLabel(player) {
@@ -62,7 +64,9 @@
   }
 
   function shouldUseMonsterStyleSheet(player) {
-    return !!player && (!!player?.isEnemy || isMonsterStyleAlly(player));
+    if (!player) return false;
+    if (player?.isBase) return false;
+    return !!player?.isEnemy || isMonsterStyleAlly(player);
   }
 
   function normalizeMonsterEntries(entries) {
@@ -238,8 +242,7 @@
       console.warn('MonsterSheetModal: Supabase URL fetch failed, falling back to proxy', err);
     }
 
-    const clean = targetUrl.replace(/^https?:\/\//i, '');
-    const proxyUrl = `https://r.jina.ai/http://${clean}`;
+    const proxyUrl = `https://r.jina.ai/${targetUrl}`;
     const res = await fetch(proxyUrl, { method: 'GET' });
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
     return await res.text();
@@ -921,6 +924,21 @@
     let sheet = player?.sheet?.parsed;
     if (!sheet || typeof sheet !== 'object') sheet = createEmptySheet(player?.name || 'Враг');
     sheet = ensureSheetShape(sheet, player?.name || 'Враг');
+    if (!sheet.appearance || typeof sheet.appearance !== 'object') sheet.appearance = {};
+    if (!sheet.appearance.token || typeof sheet.appearance.token !== 'object') sheet.appearance.token = {};
+    if (!sheet.appearance.token.crop || typeof sheet.appearance.token.crop !== 'object') {
+      sheet.appearance.token.crop = { x: 50, y: 35, zoom: 140 };
+    }
+    if (sheet.appearance.token.crop.x === undefined) sheet.appearance.token.crop.x = 50;
+    if (sheet.appearance.token.crop.y === undefined) sheet.appearance.token.crop.y = 35;
+    if (sheet.appearance.token.crop.zoom === undefined) sheet.appearance.token.crop.zoom = 140;
+    const baseUrl = String(sheet.appearance.baseUrl || '').trim();
+    if (!baseUrl) {
+      sheet.appearance.baseUrl = player?.isEnemy
+        ? DEFAULT_MONSTER_BASE_URL
+        : (player?.isAlly ? DEFAULT_ALLY_BASE_URL : DEFAULT_MONSTER_BASE_URL);
+    }
+    if (!String(sheet.appearance.token.mode || '').trim()) sheet.appearance.token.mode = 'full';
     if (!player.sheet || typeof player.sheet !== 'object') {
       player.sheet = { source: 'manual', importedAt: Date.now(), raw: null, parsed: sheet };
     } else {
@@ -1662,6 +1680,7 @@
     sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
     bindTabs(sheetContent, player, vm, canEdit);
+    bindImportControls(player, canEdit);
     return true;
   }
 

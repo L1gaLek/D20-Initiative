@@ -2311,6 +2311,8 @@ async function sendMessage(msg) {
 
         else if (type === "addPlayer") {
           const player = msg.player || {};
+          const DEFAULT_ALLY_BASE_URL = 'token/sheet/souz.png';
+          const DEFAULT_MONSTER_BASE_URL = 'token/sheet/monstr.png';
           const ownerRole = String(myRole || "").trim() || "";
           const wantsEnemy = !!player.isEnemy;
           const isAlly = (ownerRole === "GM") ? (!!player.isAlly && !wantsEnemy) : !!player.isAlly;
@@ -2340,6 +2342,24 @@ async function sendMessage(msg) {
             }
           }
           const id = player.id || (crypto?.randomUUID ? crypto.randomUUID() : ("p-" + Math.random().toString(16).slice(2)));
+          const defaultTokenBaseUrl = isEnemy
+            ? DEFAULT_MONSTER_BASE_URL
+            : (isAlly ? DEFAULT_ALLY_BASE_URL : '');
+          const hasRoleTokenPreset = !!defaultTokenBaseUrl;
+          const providedSheet = (player.sheet && typeof player.sheet === 'object') ? player.sheet : null;
+          const defaultSheet = {
+            parsed: {
+              name: { value: player.name },
+              appearance: {
+                baseUrl: defaultTokenBaseUrl,
+                token: {
+                  mode: hasRoleTokenPreset ? 'full' : 'crop',
+                  crop: { x: 50, y: 35, zoom: 140 }
+                }
+              }
+            }
+          };
+
           next.players.push({
             id,
             name: player.name,
@@ -2364,7 +2384,7 @@ async function sendMessage(msg) {
             ownerRole,
             mapId,
             ownerName: myNameSpan?.textContent || "",
-            sheet: player.sheet || { parsed: { name: { value: player.name } } }
+            sheet: providedSheet || defaultSheet
           });
           logEventToState(next, `${isMonster ? 'Добавлен монстр' : 'Добавлен игрок'} ${player.name}`);
         }
