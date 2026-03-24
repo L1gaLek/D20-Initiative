@@ -8,6 +8,12 @@ textarea {
 }
 
 input[type="number"],
+input[type="text"],
+input[type="password"],
+input[type="search"],
+input[type="email"],
+input[type="url"],
+input[type="tel"],
 input[type="checkbox"],
 input[type="radio"] {
   cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
