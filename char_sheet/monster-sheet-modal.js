@@ -796,7 +796,7 @@
       .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:10px}
       .monster-hp-adjust-btn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:none;border-radius:12px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 10px 20px rgba(0,0,0,.24)}
       .monster-hp-adjust-btn:hover{filter:brightness(1.06)}
-      .monster-hp-adjust-btn:disabled{opacity:.5;cursor:default;filter:none}
+      .monster-hp-adjust-btn:disabled{opacity:.5;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default;filter:none}
       .monster-hp-adjust .monster-hero-card__mini-field{gap:6px}
       .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card__mini-field{display:flex;flex-direction:column;gap:4px}
@@ -804,7 +804,7 @@
       .monster-hero-card__mini-field input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 8px;font-size:13px}
       .monster-die-btn{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border:none;border-radius:14px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;cursor:pointer;box-shadow:0 10px 20px rgba(0,0,0,.3)}
       .monster-die-btn:hover{filter:brightness(1.06)}
-      .monster-die-btn:disabled{opacity:.5;cursor:default;filter:none}
+      .monster-die-btn:disabled{opacity:.5;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default;filter:none}
       .monster-die-btn svg{display:block;width:28px;height:28px}
       .monster-hero-card input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:19px;font-weight:700}
       .monster-layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:14px;min-height:420px}

@@ -145,7 +145,7 @@
   border-radius:8px;
   padding:2px 4px;
   line-height:0;
-  cursor:pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   color:rgb(155,155,155);
 }
 
@@ -296,7 +296,7 @@
   padding: 7px 8px;
   font-weight: 900;
   font-size: 12px;
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
 
 /* Инициатива — отдельной строкой, внутри панели */
@@ -469,7 +469,7 @@
   color: #fff;
   padding: 7px 10px;
   font-weight: 900;
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
 
 #dice-canvas{
@@ -507,7 +507,7 @@
   border: 1px solid rgba(255,165,0,.38);
   background: rgba(255,165,0,.12);
   color: rgba(255,165,0,.95);
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   padding: 0;
 
   /* ✅ ключевое: SVG не вылезает и кнопка не сжимается */
@@ -688,7 +688,7 @@
   border: 1px solid rgba(26,157,234,.55);
   background: rgba(26,157,234,.14);
   color: rgb(26,157,234);
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   padding: 0;
   line-height: 0;
 }
@@ -719,7 +719,7 @@
   border: 1px solid rgba(80,170,255,.45);
   background: rgba(80,170,255,.16);
   color: rgba(110,195,255,.95);
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   padding: 0;
   overflow: auto;
   flex: 0 0 auto;
@@ -762,7 +762,7 @@
   background: transparent;
   border: 0;
   padding: 0;
-  cursor: pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
 .marks-toolbar__title:hover{ text-decoration: underline; }
 .marks-toolbar.is-collapsed .marks-toolbar__body{ display:none; }
