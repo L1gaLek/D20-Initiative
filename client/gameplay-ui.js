@@ -38,10 +38,15 @@ if (diceVizValue) diceVizValue.textContent = String(sum);
 
 renderRollChips(shown, -1, sides);
 
-// ✅ крит-подсветка ТОЛЬКО для чистого d20
-let critNote = "";
-if (sides === 20 && count === 1) {
-  critNote = applyPureD20CritUI(finals[0]);
+// ✅ крит-подсветка только для одиночного d20 (без инициативы)
+const critType = getSingleD20CritType({
+  sides,
+  count,
+  rolls: finals,
+  kindText: `d${sides} × ${count}`
+});
+if (critType) {
+  applySingleD20CritUI(finals[0], critType);
 } else {
   clearCritUI();
 }
