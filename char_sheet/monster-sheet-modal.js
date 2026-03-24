@@ -3,6 +3,7 @@
   let monsterDbPromise = null;
   let monsterSheetStylesReady = false;
   const saveTimers = new Map();
+  const DEFAULT_MONSTER_BASE_URL = 'token/sheet/monstr.png';
 
   function esc(value) {
     return String(value ?? '')
@@ -922,6 +923,17 @@
     let sheet = player?.sheet?.parsed;
     if (!sheet || typeof sheet !== 'object') sheet = createEmptySheet(player?.name || 'Враг');
     sheet = ensureSheetShape(sheet, player?.name || 'Враг');
+    if (!sheet.appearance || typeof sheet.appearance !== 'object') sheet.appearance = {};
+    if (!sheet.appearance.token || typeof sheet.appearance.token !== 'object') sheet.appearance.token = {};
+    if (!sheet.appearance.token.crop || typeof sheet.appearance.token.crop !== 'object') {
+      sheet.appearance.token.crop = { x: 50, y: 35, zoom: 140 };
+    }
+    if (sheet.appearance.token.crop.x === undefined) sheet.appearance.token.crop.x = 50;
+    if (sheet.appearance.token.crop.y === undefined) sheet.appearance.token.crop.y = 35;
+    if (sheet.appearance.token.crop.zoom === undefined) sheet.appearance.token.crop.zoom = 140;
+    const baseUrl = String(sheet.appearance.baseUrl || '').trim();
+    if (!baseUrl) sheet.appearance.baseUrl = DEFAULT_MONSTER_BASE_URL;
+    if (!String(sheet.appearance.token.mode || '').trim()) sheet.appearance.token.mode = 'full';
     if (!player.sheet || typeof player.sheet !== 'object') {
       player.sheet = { source: 'manual', importedAt: Date.now(), raw: null, parsed: sheet };
     } else {
