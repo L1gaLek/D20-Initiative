@@ -50,7 +50,7 @@
   }
 
   function isMonsterStyleAlly(player) {
-    return !!player && !player?.isEnemy && !player?.isBase && String(player?.ownerRole || '').trim() !== 'GM';
+    return !!player && !!player?.isAlly && !player?.isEnemy && !player?.isBase;
   }
 
   function getMonsterSheetTypeLabel(player) {
@@ -62,7 +62,9 @@
   }
 
   function shouldUseMonsterStyleSheet(player) {
-    return !!player && (!!player?.isEnemy || isMonsterStyleAlly(player));
+    if (!player) return false;
+    if (player?.isBase) return false;
+    return !!player?.isEnemy || isMonsterStyleAlly(player);
   }
 
   function normalizeMonsterEntries(entries) {
@@ -238,8 +240,7 @@
       console.warn('MonsterSheetModal: Supabase URL fetch failed, falling back to proxy', err);
     }
 
-    const clean = targetUrl.replace(/^https?:\/\//i, '');
-    const proxyUrl = `https://r.jina.ai/http://${clean}`;
+    const proxyUrl = `https://r.jina.ai/${targetUrl}`;
     const res = await fetch(proxyUrl, { method: 'GET' });
     if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
     return await res.text();
@@ -1662,6 +1663,7 @@
     sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
     bindTabs(sheetContent, player, vm, canEdit);
+    bindImportControls(player, canEdit);
     return true;
   }
 
