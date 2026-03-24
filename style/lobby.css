@@ -801,7 +801,7 @@ body.lobby-active #lobby-scene {
   color:#e7d9bf;
   font-size:12px;
   font-weight:700;
-  cursor:pointer;
+  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
   white-space:nowrap;
 }
 .tavern-chat-tab:hover{ filter:brightness(1.06); }
