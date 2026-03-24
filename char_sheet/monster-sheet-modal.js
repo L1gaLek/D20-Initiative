@@ -49,22 +49,6 @@
     return `${n >= 0 ? '+' : ''}${n}`;
   }
 
-  function isMonsterStyleAlly(player) {
-    return !!player && !player?.isEnemy && !player?.isBase && String(player?.ownerRole || '').trim() !== 'GM';
-  }
-
-  function getMonsterSheetTypeLabel(player) {
-    return isMonsterStyleAlly(player) ? 'союзник' : 'враг';
-  }
-
-  function getMonsterSheetTitleLabel(player) {
-    return isMonsterStyleAlly(player) ? 'Лист союзника' : 'Лист монстра';
-  }
-
-  function shouldUseMonsterStyleSheet(player) {
-    return !!player && (!!player?.isEnemy || isMonsterStyleAlly(player));
-  }
-
   function normalizeMonsterEntries(entries) {
     if (!Array.isArray(entries)) return [];
     return entries
@@ -813,10 +797,10 @@
       .monster-sidebar__btn{padding:12px 14px;text-align:left;border-radius:14px;border:1px solid rgba(255,226,197,.12);background:rgba(39,20,14,.9);color:#ffe9ce;cursor:pointer;font-weight:700}
       .monster-sidebar__btn.active{background:linear-gradient(180deg,rgba(146,64,44,.95),rgba(104,36,23,.95));border-color:rgba(255,219,180,.28);box-shadow:0 8px 18px rgba(0,0,0,.25)}
       .monster-main{min-height:0;overflow:auto;border-radius:18px;border:1px solid rgba(255,220,188,.12);background:linear-gradient(180deg,rgba(24,14,11,.98),rgba(17,10,8,.98));padding:16px}
-      .monster-import-card{width:100%;margin:0 auto;padding:10px 14px;border-radius:16px;border:1px solid rgba(255,221,191,.16);background:linear-gradient(180deg,rgba(48,22,16,.9),rgba(28,14,11,.94));box-shadow:0 12px 28px rgba(0,0,0,.2);text-align:center}
+      .monster-import-card{width:min(760px,100%);margin:0 auto;padding:18px;border-radius:18px;border:1px solid rgba(255,221,191,.16);background:linear-gradient(180deg,rgba(48,22,16,.9),rgba(28,14,11,.94));box-shadow:0 16px 36px rgba(0,0,0,.22);text-align:center}
       .monster-import-card__title{font-size:18px;font-weight:800;color:#fff1de}
-      .monster-import-card__subtitle{margin-top:3px;color:rgba(255,233,210,.72);font-size:12px;line-height:1.35}
-      .monster-import{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:nowrap;margin-top:8px}
+      .monster-import-card__subtitle{margin-top:6px;color:rgba(255,233,210,.72);font-size:13px;line-height:1.45}
+      .monster-import{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:nowrap;margin-top:14px}
       .monster-import__input{min-width:0;flex:1 1 auto}
       .monster-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
       .monster-panel{border:1px solid rgba(255,224,197,.11);background:rgba(255,255,255,.03);border-radius:16px;padding:14px}
@@ -954,7 +938,7 @@
 
     return {
       playerName: String(get(sheet, 'name.value', '') || player?.name || vm.name || 'Враг').trim() || 'Враг',
-      subtitle: [monster?.size_ru || monster?.size_en, monster?.type_ru || monster?.type_en, monster?.alignment_ru || monster?.alignment_en].filter(Boolean).join(', ') || `Лист ${getMonsterSheetTypeLabel(player)}`,
+      subtitle: [monster?.size_ru || monster?.size_en, monster?.type_ru || monster?.type_en, monster?.alignment_ru || monster?.alignment_en].filter(Boolean).join(', ') || 'Лист врага',
       source: monster?.source || '',
       challenge: monster?.cr != null ? `CR ${monster.cr}` : '',
       xp: monster?.xp ? `${monster.xp} XP` : '',
@@ -1269,7 +1253,7 @@
       const sheet = ensureEnemySheet(player);
       set(sheet, 'name.value', nextName);
       player.name = nextName || 'Враг';
-      if (sheetTitle) sheetTitle.textContent = `${getMonsterSheetTitleLabel(player)}: ${player.name}`;
+      if (sheetTitle) sheetTitle.textContent = `Лист монстра: ${player.name}`;
       markModalInteracted(player.id);
       scheduleSave(player);
     });
@@ -1519,17 +1503,17 @@
     player._activeSheetTab = activeTab;
     activeUi.activeTab = activeTab;
 
-    sheetTitle.textContent = `${getMonsterSheetTitleLabel(player)}: ${player.name}`;
+    sheetTitle.textContent = `Лист монстра: ${player.name}`;
     sheetSubtitle.textContent = player.ownerName
-      ? `Владелец: ${player.ownerName} • Тип: ${getMonsterSheetTypeLabel(player)}`
-      : `Тип: ${getMonsterSheetTypeLabel(player)}`;
+      ? `Владелец: ${player.ownerName} • Тип: враг`
+      : 'Тип: враг';
 
     sheetActions.innerHTML = '';
     const note = document.createElement('div');
     note.className = 'sheet-note';
     note.textContent = canEdit
-      ? `Это отдельный лист ${getMonsterSheetTypeLabel(player)}. Основные боевые параметры можно менять сразу здесь.`
-      : `Просмотр листа ${getMonsterSheetTypeLabel(player)}. Изменять параметры может только GM.`;
+      ? 'Это отдельный лист врага. Основные боевые параметры можно менять сразу здесь.'
+      : 'Просмотр листа врага. Изменять параметры может только GM.';
     sheetActions.appendChild(note);
 
     sheetContent.innerHTML = '<div class="monster-note">Загружаю данные монстра…</div>';
@@ -1549,7 +1533,7 @@
               ${canEdit ? '' : 'disabled'}
               data-monster-player-name
               value="${esc(vm.playerName)}"
-              placeholder="Имя персонажа"
+              placeholder="Имя монстра"
             >
             <div class="monster-sheet__subtitle">${esc(vm.subtitle || 'Лист врага')}</div>
             <div class="monster-sheet__summary">
@@ -1666,7 +1650,7 @@
   }
 
   function shouldUseForPlayer(player) {
-    return shouldUseMonsterStyleSheet(player);
+    return !!player?.isEnemy;
   }
 
   window.MonsterSheetModal = {
