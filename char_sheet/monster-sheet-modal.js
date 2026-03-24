@@ -50,7 +50,7 @@
   }
 
   function isMonsterStyleAlly(player) {
-    return !!player && !player?.isEnemy && !player?.isBase && String(player?.ownerRole || '').trim() !== 'GM';
+    return !!player && !!player?.isAlly && !player?.isEnemy && !player?.isBase;
   }
 
   function getMonsterSheetTypeLabel(player) {
@@ -62,7 +62,9 @@
   }
 
   function shouldUseMonsterStyleSheet(player) {
-    return !!player && (!!player?.isEnemy || isMonsterStyleAlly(player));
+    if (!player) return false;
+    if (player?.isBase) return false;
+    return !!player?.isEnemy || isMonsterStyleAlly(player);
   }
 
   function normalizeMonsterEntries(entries) {
