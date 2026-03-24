@@ -7,6 +7,17 @@ textarea {
   cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
 }
 
+input[type="number"],
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
+}
+
 textarea::-webkit-resizer {
   cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
 }
@@ -277,10 +288,12 @@ html{
 
 *::-webkit-scrollbar-thumb:hover{
   background: linear-gradient(180deg, rgba(206, 140, 54, 0.99) 0%, rgba(125, 75, 24, 0.99) 100%);
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
 }
 
 *::-webkit-scrollbar-corner{
   background: rgba(18, 12, 8, 0.96);
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
 }
 
 .pm-row--size{ justify-content: space-between; }
