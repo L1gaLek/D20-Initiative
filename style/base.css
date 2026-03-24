@@ -2,7 +2,13 @@ html, body {
   cursor: url("/D20-Initiative/cursor/normalcursor.cur"), auto;
 }
 
-* {
+button,
+select,
+input[type="button"],
+input[type="submit"],
+.player,
+.lobby-toolbar__btn,
+.tavern-toolbar__btn {
   cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
 
