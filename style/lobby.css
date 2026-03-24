@@ -372,6 +372,15 @@ body.lobby-active #lobby-scene {
   font-weight:800;
   color:#fff2d8;
 }
+.tavern-topbar__banner{
+  display:block;
+  width:100%;
+  max-width:100%;
+  height:auto;
+  margin-top:8px;
+  border-radius:10px;
+  border:1px solid rgba(255,224,183,0.25);
+}
 .tavern-topbar__subtitle{
   margin-top:4px;
   font-size:13px;
