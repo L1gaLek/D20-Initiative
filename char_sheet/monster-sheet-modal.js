@@ -1472,38 +1472,64 @@
   }
 
   function bindImportControls(player, canEdit) {
-    if (!canEdit) return;
-    const input = sheetContent?.querySelector?.('[data-monster-import-url]');
-    const button = sheetContent?.querySelector?.('[data-monster-import-btn]');
-    if (!input || !button) return;
+    if (!sheetContent) return;
+    sheetContent.__monsterImportState = { player, canEdit };
+    if (sheetContent.__monsterImportBound) return;
+    sheetContent.__monsterImportBound = true;
 
+    const getState = () => sheetContent.__monsterImportState || { player, canEdit };
     const setBusy = (busy) => {
-      input.disabled = !!busy;
-      button.disabled = !!busy;
-      button.textContent = busy ? 'Импорт…' : 'Импортировать';
+      const input = sheetContent?.querySelector?.('[data-monster-import-url]');
+      const button = sheetContent?.querySelector?.('[data-monster-import-btn]');
+      if (input) input.disabled = !!busy;
+      if (button) {
+        button.disabled = !!busy;
+        button.dataset.busy = busy ? '1' : '0';
+        button.textContent = busy ? 'Импорт…' : 'Импортировать';
+      }
     };
 
-    button.addEventListener('click', async () => {
+    const runImport = async () => {
+      const { player: currentPlayer, canEdit: currentCanEdit } = getState();
+      if (!currentCanEdit) return;
+      const input = sheetContent?.querySelector?.('[data-monster-import-url]');
+      const button = sheetContent?.querySelector?.('[data-monster-import-btn]');
+      if (!input || !button || button.dataset.busy === '1') return;
+
       const href = extractBestiaryUrl(input.value) || normalizeBestiaryUrl(input.value);
       setBusy(true);
       try {
         const monster = await importMonsterFromUrl(href || input.value);
-        const sheet = ensureEnemySheet(player);
+        const sheet = ensureEnemySheet(currentPlayer);
         ensureImportedMonsterStats(sheet, monster);
         const importedName = String(monster?.name_ru || monster?.name_en || '').trim();
         if (importedName) {
-          player.name = importedName;
+          currentPlayer.name = importedName;
           set(sheet, 'name.value', importedName);
         }
-        scheduleSave(player);
-        markModalInteracted(player.id);
-        await render(player, { canEdit, force: true });
+        scheduleSave(currentPlayer);
+        markModalInteracted(currentPlayer.id);
+        await render(currentPlayer, { canEdit: currentCanEdit, force: true });
       } catch (err) {
         console.error('Monster import failed', err);
         alert(err?.message || 'Не удалось импортировать монстра по ссылке');
       } finally {
         setBusy(false);
       }
+    };
+
+    sheetContent.addEventListener('click', (event) => {
+      const button = event.target?.closest?.('[data-monster-import-btn]');
+      if (!button) return;
+      event.preventDefault();
+      runImport();
+    });
+
+    sheetContent.addEventListener('keydown', (event) => {
+      const input = event.target?.closest?.('[data-monster-import-url]');
+      if (!input || event.key !== 'Enter') return;
+      event.preventDefault();
+      runImport();
     });
   }
 
