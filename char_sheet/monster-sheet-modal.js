@@ -769,7 +769,7 @@
       .monster-sheet__title{font-size:30px;font-weight:800;line-height:1.05;color:#fff2df}
       .monster-sheet__title-input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,226,197,.16);color:#fff2df;font-size:30px;font-weight:800;line-height:1.05;padding:0 0 6px;outline:none}
       .monster-sheet__title-input:focus{border-bottom-color:rgba(255,226,197,.42)}
-      .monster-sheet__title-input:disabled{opacity:1;cursor:default}
+      .monster-sheet__title-input:disabled{opacity:1;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default}
       .monster-sheet__subtitle{margin-top:6px;color:rgba(255,238,215,.82);font-size:14px}
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
