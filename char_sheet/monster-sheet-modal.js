@@ -773,7 +773,7 @@
       .monster-sheet__title{font-size:30px;font-weight:800;line-height:1.05;color:#fff2df}
       .monster-sheet__title-input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,226,197,.16);color:#fff2df;font-size:30px;font-weight:800;line-height:1.05;padding:0 0 6px;outline:none}
       .monster-sheet__title-input:focus{border-bottom-color:rgba(255,226,197,.42)}
-      .monster-sheet__title-input:disabled{opacity:1;cursor:default}
+      .monster-sheet__title-input:disabled{opacity:1;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default}
       .monster-sheet__subtitle{margin-top:6px;color:rgba(255,238,215,.82);font-size:14px}
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
@@ -800,7 +800,7 @@
       .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:10px}
       .monster-hp-adjust-btn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:none;border-radius:12px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 10px 20px rgba(0,0,0,.24)}
       .monster-hp-adjust-btn:hover{filter:brightness(1.06)}
-      .monster-hp-adjust-btn:disabled{opacity:.5;cursor:default;filter:none}
+      .monster-hp-adjust-btn:disabled{opacity:.5;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default;filter:none}
       .monster-hp-adjust .monster-hero-card__mini-field{gap:6px}
       .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card__mini-field{display:flex;flex-direction:column;gap:4px}
@@ -808,7 +808,7 @@
       .monster-hero-card__mini-field input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 8px;font-size:13px}
       .monster-die-btn{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border:none;border-radius:14px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;cursor:pointer;box-shadow:0 10px 20px rgba(0,0,0,.3)}
       .monster-die-btn:hover{filter:brightness(1.06)}
-      .monster-die-btn:disabled{opacity:.5;cursor:default;filter:none}
+      .monster-die-btn:disabled{opacity:.5;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default;filter:none}
       .monster-die-btn svg{display:block;width:28px;height:28px}
       .monster-hero-card input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:19px;font-weight:700}
       .monster-layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:14px;min-height:420px}
