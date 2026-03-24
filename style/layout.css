@@ -1119,7 +1119,7 @@
   font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
-  cursor: default;
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
   user-select: none;
 }
 

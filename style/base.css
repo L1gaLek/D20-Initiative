@@ -559,7 +559,7 @@ button:hover {
 }
 
 .token-mini .token-mini-dots--spell .slot-dot{
-  cursor: default;
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
 }
 
 .token-mini .token-mini-dots-empty{
@@ -2956,7 +2956,7 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .sheet-card--profile{ width: 100%; }
 
 .sheet-chip--insp[data-readonly]{
-  cursor: default;
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
   opacity: 0.85;
 }
 
@@ -3035,7 +3035,7 @@ textarea[data-sheet-path="text.profPlain.value"]{
 .mini-popover__body{ padding-top: 10px; }
 
 .exh-row--head{
-  cursor: default;
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
   font-weight: 800;
   opacity: 0.9;
 }
@@ -3150,7 +3150,7 @@ textarea[data-sheet-path="text.profPlain.value"]{
 
 .cond-item__iconbtn:disabled{
   opacity: 0.45;
-  cursor: default;
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default;
 }
 
 .cond-item__iconbtn--add{
