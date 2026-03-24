@@ -12,6 +12,11 @@ input[type="submit"],
   cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
 
+*[style*="cursor: context-menu"],
+*[style*="cursor:context-menu"] {
+  cursor: url("/D20-Initiative/cursor/normalcursor.cur"), default !important;
+}
+
 /* ===== Appearance (Облик) ===== */
 .appearance-layout{
   display:flex;
