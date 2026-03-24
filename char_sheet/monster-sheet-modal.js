@@ -1688,7 +1688,6 @@
     sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
     bindTabs(sheetContent, player, vm, canEdit);
-    bindImportControls(player, canEdit);
     return true;
   }
 
