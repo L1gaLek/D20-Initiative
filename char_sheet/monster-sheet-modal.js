@@ -66,7 +66,9 @@
   function shouldUseMonsterStyleSheet(player) {
     if (!player) return false;
     if (player?.isBase) return false;
-    return !!player?.isEnemy || isMonsterStyleAlly(player);
+    const ownerRole = String(player?.ownerRole || '').trim();
+    const isRegularPlayerOwned = ownerRole && ownerRole !== 'GM';
+    return !!player?.isEnemy || isMonsterStyleAlly(player) || isRegularPlayerOwned;
   }
 
   function normalizeMonsterEntries(entries) {

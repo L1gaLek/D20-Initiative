@@ -2344,7 +2344,7 @@ async function sendMessage(msg) {
           const id = player.id || (crypto?.randomUUID ? crypto.randomUUID() : ("p-" + Math.random().toString(16).slice(2)));
           const defaultTokenBaseUrl = isEnemy
             ? DEFAULT_MONSTER_BASE_URL
-            : (isAlly ? DEFAULT_ALLY_BASE_URL : '');
+            : ((isAlly || (!isBase && ownerRole !== 'GM')) ? DEFAULT_ALLY_BASE_URL : '');
           const hasRoleTokenPreset = !!defaultTokenBaseUrl;
           const providedSheet = (player.sheet && typeof player.sheet === 'object') ? player.sheet : null;
           const defaultSheet = {
