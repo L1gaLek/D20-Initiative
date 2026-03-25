@@ -14,6 +14,24 @@
   const BUCKET = "room-audio";
   const STORAGE_PREFIX = "music"; // path: music/<roomId>/<trackId>_<name>
   const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h
+  const DIAG_KEY = "int_bg_music_diag";
+
+  function isDiagEnabled() {
+    try {
+      const fromQuery = new URLSearchParams(String(window.location?.search || '')).get('bgm_diag');
+      if (fromQuery === '1' || fromQuery === 'true') return true;
+    } catch {}
+    try {
+      const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(DIAG_KEY) : localStorage.getItem(DIAG_KEY));
+      return String(raw || '').trim() === '1';
+    } catch {}
+    return false;
+  }
+
+  function bgmDiag(...args) {
+    if (!isDiagEnabled()) return;
+    try { console.log('[BGM-DIAG]', ...args); } catch {}
+  }
 
   // ---------- Helpers ----------
   function getSb() {
@@ -121,13 +139,24 @@
 
   // local volume (per user)
   const LS_VOL = "int_bg_music_volume";
+  const LS_VOL_TOUCHED = "int_bg_music_volume_touched";
   function loadLocalVol() {
     const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(LS_VOL) : localStorage.getItem(LS_VOL));
+    const touchedRaw = (typeof getAppStorageItem === "function" ? getAppStorageItem(LS_VOL_TOUCHED) : localStorage.getItem(LS_VOL_TOUCHED));
+    const touched = String(touchedRaw || '').trim() === '1';
+    if (!touched) return 1;
+    if (raw == null || String(raw).trim() === '') return 1;
     const n = Number(raw);
-    return Number.isFinite(n) ? clamp01(n) : 0.4;
+    return Number.isFinite(n) ? clamp01(n) : 1;
   }
   function saveLocalVol(v) {
-    try { (typeof setAppStorageItem === "function" ? setAppStorageItem(LS_VOL, String(clamp01(v))) : localStorage.setItem(LS_VOL, String(clamp01(v)))); } catch {}
+    try {
+      const setter = (typeof setAppStorageItem === "function")
+        ? setAppStorageItem
+        : ((k, val) => localStorage.setItem(k, val));
+      setter(LS_VOL, String(clamp01(v)));
+      setter(LS_VOL_TOUCHED, '1');
+    } catch {}
   }
   audio.volume = loadLocalVol();
 
@@ -143,6 +172,7 @@
   let currentObjectUrl = '';
   let currentTrackKey = '';
   let currentResolvedUrl = '';
+  let lastPlaybackSync = { trackKey: '', isPlaying: false, startedAt: 0, pausedAt: 0 };
 
   function normalizeAudioOutput() {
     try { audio.muted = false; } catch {}
@@ -240,6 +270,7 @@
     const state = currentState || {};
     const bg = ensureBgMusic(state);
     const cur = getCurTrackFromState(state);
+    bgmDiag('tryUnlock:start', { resumeAfter, unlocked, isPlaying: !!bg?.isPlaying, hasTrack: !!cur });
 
     if (unlocked) {
       await resumeAudioPipeline().catch(() => {});
@@ -267,10 +298,12 @@
             } catch {}
             normalizeAudioOutput();
             await audio.play();
+            bgmDiag('tryUnlock:alreadyUnlocked->play ok');
             hideUnlockBtn();
             return true;
           } catch {}
         }
+        bgmDiag('tryUnlock:alreadyUnlocked->applyState');
         applyState(state);
       }
       return true;
@@ -299,16 +332,19 @@
         } catch {}
         await audio.play();
         unlocked = true;
+        bgmDiag('tryUnlock:success via direct play');
         hideUnlockBtn();
         return true;
       }
 
       await performUnlockProbe();
       unlocked = true;
+      bgmDiag('tryUnlock:success via probe');
       hideUnlockBtn();
       if (resumeAfter) applyState(state);
       return true;
     } catch {
+      bgmDiag('tryUnlock:failed');
       showUnlockBtn();
       return false;
     }
@@ -331,6 +367,7 @@
         const signed = await sb.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SEC);
         const signedUrl = String(signed?.data?.signedUrl || '').trim();
         if (signedUrl) {
+          bgmDiag('resolveTrackUrl:signedUrl', { cacheKey, hasPath: !!path });
           if (cacheKey) resolvedUrlCache.set(cacheKey, {
             url: signedUrl,
             expiresAt: now + (SIGNED_URL_TTL_SEC * 1000)
@@ -338,11 +375,26 @@
           return signedUrl;
         }
       } catch {}
+    }
 
+    // На клиентах без прав подписи path может не сработать.
+    // В этом случае предпочитаем уже подписанный URL от GM (track.url),
+    // и только потом пробуем public URL как самый слабый fallback.
+    if (directUrl) {
+      bgmDiag('resolveTrackUrl:directUrl', { cacheKey, hasPath: !!path });
+      if (cacheKey) resolvedUrlCache.set(cacheKey, {
+        url: directUrl,
+        expiresAt: now + (60 * 60 * 1000)
+      });
+      return directUrl;
+    }
+
+    if (path && sb?.storage?.from) {
       try {
         const pub = sb.storage.from(BUCKET).getPublicUrl(path);
         const publicUrl = String(pub?.data?.publicUrl || '').trim();
         if (publicUrl) {
+          bgmDiag('resolveTrackUrl:publicUrl fallback', { cacheKey, hasPath: !!path });
           if (cacheKey) resolvedUrlCache.set(cacheKey, {
             url: publicUrl,
             expiresAt: now + (12 * 60 * 60 * 1000)
@@ -352,24 +404,46 @@
       } catch {}
     }
 
-    if (directUrl) {
-      if (cacheKey) resolvedUrlCache.set(cacheKey, {
-        url: directUrl,
-        expiresAt: now + (60 * 60 * 1000)
-      });
-      return directUrl;
-    }
-
     return '';
   }
 
 
   async function materializePlayableUrl(track) {
-    // Важно: не пересобирать URL в blob на каждом клиентском апдейте.
-    // Из-за этого у remote-клиентов трек мог на пару секунд стартовать,
-    // затем src/audio pipeline пересоздавался и звук снова пропадал.
-    // Для стабильного непрерывного воспроизведения используем прямой storage URL.
-    return await resolveTrackUrl(track);
+    const t = track || {};
+    const key = String(t.id || t.path || t.url || '').trim();
+    const resolvedUrl = String(await resolveTrackUrl(t) || '').trim();
+    if (!resolvedUrl) return '';
+
+    const cached = key ? trackBlobUrlCache.get(key) : null;
+    if (cached?.objectUrl && cached?.sourceUrl === resolvedUrl) {
+      bgmDiag('materializePlayableUrl:cache-hit', { key });
+      return cached.objectUrl;
+    }
+
+    // На ряде браузеров потоковый playback по signed URL может "играть" без звука.
+    // Стараемся материализовать файл в blob/object URL (кэшируем по track key).
+    try {
+      const resp = await fetch(resolvedUrl, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'force-cache'
+      });
+      if (!resp.ok) throw new Error(`audio fetch failed: ${resp.status}`);
+      const blob = await resp.blob();
+      if (!blob || !(blob.size > 0)) throw new Error('empty audio blob');
+      const objectUrl = URL.createObjectURL(blob);
+      bgmDiag('materializePlayableUrl:blob-ok', { key, size: Number(blob.size) || 0 });
+      if (cached?.objectUrl && cached.objectUrl !== objectUrl) {
+        try { URL.revokeObjectURL(cached.objectUrl); } catch {}
+      }
+      if (key) trackBlobUrlCache.set(key, { objectUrl, sourceUrl: resolvedUrl });
+      return objectUrl;
+    } catch {
+      bgmDiag('materializePlayableUrl:fallback-direct', { key });
+      // Fallback: прямой URL, если fetch/blob недоступен (CORS/политики окружения).
+      return resolvedUrl;
+    }
   }
 
   function cleanupBlobUrls(keepKey = '') {
@@ -537,22 +611,63 @@
   }
 
   let unlockBtn = null;
+  let unlockOverlay = null;
+
+  async function onUnlockClick() {
+    await tryUnlock({ resumeAfter: true });
+  }
+
   function showUnlockBtn() {
-    if (!musicBox) return;
-    if (unlockBtn) return;
-    unlockBtn = document.createElement("button");
-    unlockBtn.type = "button";
-    unlockBtn.textContent = "Включить звук";
-    unlockBtn.style.marginTop = "8px";
-    unlockBtn.addEventListener("click", async () => {
-      await tryUnlock({ resumeAfter: true });
-    });
-    musicBox.appendChild(unlockBtn);
+    bgmDiag('showUnlockPrompt');
+    if (musicBox && !unlockBtn) {
+      unlockBtn = document.createElement("button");
+      unlockBtn.type = "button";
+      unlockBtn.textContent = "Включить звук";
+      unlockBtn.style.marginTop = "8px";
+      unlockBtn.addEventListener("click", onUnlockClick);
+      musicBox.appendChild(unlockBtn);
+    }
+
+    if (!unlockOverlay) {
+      unlockOverlay = document.createElement('div');
+      unlockOverlay.style.position = 'fixed';
+      unlockOverlay.style.right = '12px';
+      unlockOverlay.style.bottom = '12px';
+      unlockOverlay.style.zIndex = '9999';
+      unlockOverlay.style.display = 'flex';
+      unlockOverlay.style.alignItems = 'center';
+      unlockOverlay.style.gap = '8px';
+      unlockOverlay.style.padding = '10px 12px';
+      unlockOverlay.style.borderRadius = '10px';
+      unlockOverlay.style.background = 'rgba(20,20,20,.92)';
+      unlockOverlay.style.border = '1px solid rgba(255,255,255,.18)';
+      unlockOverlay.style.boxShadow = '0 8px 24px rgba(0,0,0,.35)';
+
+      const msg = document.createElement('span');
+      msg.textContent = 'Браузер заблокировал автозвук. Нажмите, чтобы включить музыку';
+      msg.style.fontSize = '12px';
+      msg.style.opacity = '0.95';
+      msg.style.maxWidth = '260px';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Включить';
+      btn.addEventListener('click', onUnlockClick);
+
+      unlockOverlay.appendChild(msg);
+      unlockOverlay.appendChild(btn);
+      document.body.appendChild(unlockOverlay);
+    }
   }
   function hideUnlockBtn() {
+    bgmDiag('hideUnlockPrompt');
     if (unlockBtn) {
       try { unlockBtn.remove(); } catch {}
       unlockBtn = null;
+    }
+    if (unlockOverlay) {
+      try { unlockOverlay.remove(); } catch {}
+      unlockOverlay = null;
     }
   }
 
@@ -884,7 +999,19 @@
       } catch {}
     });
     audio.addEventListener('playing', () => {
+      bgmDiag('audio:event:playing', { src: String(audio.currentSrc || audio.src || '') });
       try { hideUnlockBtn(); } catch {}
+    });
+    audio.addEventListener('pause', () => { bgmDiag('audio:event:pause'); });
+    audio.addEventListener('stalled', () => { bgmDiag('audio:event:stalled'); });
+    audio.addEventListener('waiting', () => { bgmDiag('audio:event:waiting'); });
+    audio.addEventListener('error', () => {
+      const err = audio.error;
+      bgmDiag('audio:event:error', {
+        code: Number(err?.code || 0) || null,
+        message: String(err?.message || ''),
+        src: String(audio.currentSrc || audio.src || '')
+      });
     });
   }
 
@@ -981,12 +1108,24 @@
     try { cleanupBlobUrls(String(cur?.id || cur?.path || cur?.url || '')); } catch {}
     syncSeekUi();
 
+    const playbackChanged = (
+      lastPlaybackSync.trackKey !== nextTrackKey
+      || lastPlaybackSync.isPlaying !== !!bg.isPlaying
+      || Math.abs(safeNum(lastPlaybackSync.startedAt, 0) - safeNum(bg.startedAt, 0)) > 500
+      || Math.abs(safeNum(lastPlaybackSync.pausedAt, 0) - safeNum(bg.pausedAt, 0)) > 0.5
+    );
+
     if (bg.isPlaying) {
       const offset = Math.max(0, (Date.now() - safeNum(bg.startedAt, Date.now())) / 1000);
       try {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          audio.currentTime = (offset % audio.duration);
-        } else {
+          const desiredTime = (offset % audio.duration);
+          const currentTime = safeNum(audio.currentTime, 0);
+          const drift = Math.abs(currentTime - desiredTime);
+          if (shouldReplaceSrc || playbackChanged || drift > 1.25) {
+            audio.currentTime = desiredTime;
+          }
+        } else if (shouldReplaceSrc || playbackChanged) {
           const handler = () => {
             audio.removeEventListener("loadedmetadata", handler);
             try {
@@ -1015,8 +1154,12 @@
       const pausedAt = Math.max(0, safeNum(bg.pausedAt, 0));
       try {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          audio.currentTime = Math.min(pausedAt, audio.duration);
-        } else if (pausedAt > 0) {
+          const target = Math.min(pausedAt, audio.duration);
+          const drift = Math.abs(safeNum(audio.currentTime, 0) - target);
+          if (shouldReplaceSrc || playbackChanged || drift > 0.75) {
+            audio.currentTime = target;
+          }
+        } else if (pausedAt > 0 && (shouldReplaceSrc || playbackChanged)) {
           const handler = () => {
             audio.removeEventListener('loadedmetadata', handler);
             try {
@@ -1029,6 +1172,13 @@
         }
       } catch {}
     }
+
+    lastPlaybackSync = {
+      trackKey: nextTrackKey,
+      isPlaying: !!bg.isPlaying,
+      startedAt: safeNum(bg.startedAt, 0),
+      pausedAt: safeNum(bg.pausedAt, 0)
+    };
 
     try { if (modal) renderList(); } catch {}
   }
@@ -1070,4 +1220,26 @@
   }
 
   window.MusicManager = { applyState };
+  try {
+    window.BgMusicDiag = {
+      enable() {
+        try { (typeof setAppStorageItem === "function" ? setAppStorageItem(DIAG_KEY, '1') : localStorage.setItem(DIAG_KEY, '1')); } catch {}
+        bgmDiag('enabled');
+      },
+      disable() {
+        try { (typeof removeAppStorageItem === "function" ? removeAppStorageItem(DIAG_KEY) : localStorage.removeItem(DIAG_KEY)); } catch {}
+        try { console.log('[BGM-DIAG]', 'disabled'); } catch {}
+      },
+      status() {
+        let localVol = null;
+        let touched = null;
+        try {
+          const g = (typeof getAppStorageItem === "function") ? getAppStorageItem : ((k) => localStorage.getItem(k));
+          localVol = g(LS_VOL);
+          touched = g(LS_VOL_TOUCHED);
+        } catch {}
+        return { enabled: isDiagEnabled(), localVol, touched };
+      }
+    };
+  } catch {}
 })();

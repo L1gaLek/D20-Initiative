@@ -2810,7 +2810,6 @@ async function sendMessage(msg) {
 
         // ===== Background Music (GM) =====
         else if (type === "bgMusicSet") {
-          if (!isGM) return;
           const incoming = (msg.bgMusic && typeof msg.bgMusic === 'object') ? deepClone(msg.bgMusic) : { tracks: [], currentTrackId: null, isPlaying: false, startedAt: 0, pausedAt: 0, volume: 40 };
           if (!Array.isArray(incoming.tracks)) incoming.tracks = [];
           incoming.tracks = incoming.tracks.slice(0, 10).map(t => ({
@@ -2827,9 +2826,16 @@ async function sendMessage(msg) {
           incoming.startedAt = Number.isFinite(Number(incoming.startedAt)) ? Math.max(0, Number(incoming.startedAt)) : 0;
           incoming.pausedAt = Number.isFinite(Number(incoming.pausedAt)) ? Math.max(0, Number(incoming.pausedAt)) : 0;
           incoming.volume = Number.isFinite(Number(incoming.volume)) ? clamp(Number(incoming.volume), 0, 100) : 40;
+
+          try { __roomDetachedCache.music = deepClone(incoming); } catch {}
+          _refreshDetachedRoomView();
+
+          // Только GM сохраняет состояние музыки в БД и пишет лог.
+          // Для остальных клиентов достаточно мгновенно применить detached-кэш.
+          if (!isGM) return;
+
           await upsertRoomMusicState(currentRoomId, incoming);
           try { await insertRoomLog(currentRoomId, 'Фоновая музыка обновлена'); } catch {}
-          _refreshDetachedRoomView();
           return;
         }
 
