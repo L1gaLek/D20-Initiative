@@ -14,6 +14,24 @@
   const BUCKET = "room-audio";
   const STORAGE_PREFIX = "music"; // path: music/<roomId>/<trackId>_<name>
   const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h
+  const DIAG_KEY = "int_bg_music_diag";
+
+  function isDiagEnabled() {
+    try {
+      const fromQuery = new URLSearchParams(String(window.location?.search || '')).get('bgm_diag');
+      if (fromQuery === '1' || fromQuery === 'true') return true;
+    } catch {}
+    try {
+      const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(DIAG_KEY) : localStorage.getItem(DIAG_KEY));
+      return String(raw || '').trim() === '1';
+    } catch {}
+    return false;
+  }
+
+  function bgmDiag(...args) {
+    if (!isDiagEnabled()) return;
+    try { console.log('[BGM-DIAG]', ...args); } catch {}
+  }
 
   // ---------- Helpers ----------
   function getSb() {
@@ -243,6 +261,7 @@
     const state = currentState || {};
     const bg = ensureBgMusic(state);
     const cur = getCurTrackFromState(state);
+    bgmDiag('tryUnlock:start', { resumeAfter, unlocked, isPlaying: !!bg?.isPlaying, hasTrack: !!cur });
 
     if (unlocked) {
       await resumeAudioPipeline().catch(() => {});
@@ -270,10 +289,12 @@
             } catch {}
             normalizeAudioOutput();
             await audio.play();
+            bgmDiag('tryUnlock:alreadyUnlocked->play ok');
             hideUnlockBtn();
             return true;
           } catch {}
         }
+        bgmDiag('tryUnlock:alreadyUnlocked->applyState');
         applyState(state);
       }
       return true;
@@ -302,16 +323,19 @@
         } catch {}
         await audio.play();
         unlocked = true;
+        bgmDiag('tryUnlock:success via direct play');
         hideUnlockBtn();
         return true;
       }
 
       await performUnlockProbe();
       unlocked = true;
+      bgmDiag('tryUnlock:success via probe');
       hideUnlockBtn();
       if (resumeAfter) applyState(state);
       return true;
     } catch {
+      bgmDiag('tryUnlock:failed');
       showUnlockBtn();
       return false;
     }
@@ -334,6 +358,7 @@
         const signed = await sb.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL_SEC);
         const signedUrl = String(signed?.data?.signedUrl || '').trim();
         if (signedUrl) {
+          bgmDiag('resolveTrackUrl:signedUrl', { cacheKey, hasPath: !!path });
           if (cacheKey) resolvedUrlCache.set(cacheKey, {
             url: signedUrl,
             expiresAt: now + (SIGNED_URL_TTL_SEC * 1000)
@@ -347,6 +372,7 @@
     // В этом случае предпочитаем уже подписанный URL от GM (track.url),
     // и только потом пробуем public URL как самый слабый fallback.
     if (directUrl) {
+      bgmDiag('resolveTrackUrl:directUrl', { cacheKey, hasPath: !!path });
       if (cacheKey) resolvedUrlCache.set(cacheKey, {
         url: directUrl,
         expiresAt: now + (60 * 60 * 1000)
@@ -359,6 +385,7 @@
         const pub = sb.storage.from(BUCKET).getPublicUrl(path);
         const publicUrl = String(pub?.data?.publicUrl || '').trim();
         if (publicUrl) {
+          bgmDiag('resolveTrackUrl:publicUrl fallback', { cacheKey, hasPath: !!path });
           if (cacheKey) resolvedUrlCache.set(cacheKey, {
             url: publicUrl,
             expiresAt: now + (12 * 60 * 60 * 1000)
@@ -380,6 +407,7 @@
 
     const cached = key ? trackBlobUrlCache.get(key) : null;
     if (cached?.objectUrl && cached?.sourceUrl === resolvedUrl) {
+      bgmDiag('materializePlayableUrl:cache-hit', { key });
       return cached.objectUrl;
     }
 
@@ -396,12 +424,14 @@
       const blob = await resp.blob();
       if (!blob || !(blob.size > 0)) throw new Error('empty audio blob');
       const objectUrl = URL.createObjectURL(blob);
+      bgmDiag('materializePlayableUrl:blob-ok', { key, size: Number(blob.size) || 0 });
       if (cached?.objectUrl && cached.objectUrl !== objectUrl) {
         try { URL.revokeObjectURL(cached.objectUrl); } catch {}
       }
       if (key) trackBlobUrlCache.set(key, { objectUrl, sourceUrl: resolvedUrl });
       return objectUrl;
     } catch {
+      bgmDiag('materializePlayableUrl:fallback-direct', { key });
       // Fallback: прямой URL, если fetch/blob недоступен (CORS/политики окружения).
       return resolvedUrl;
     }
@@ -579,6 +609,7 @@
   }
 
   function showUnlockBtn() {
+    bgmDiag('showUnlockPrompt');
     if (musicBox && !unlockBtn) {
       unlockBtn = document.createElement("button");
       unlockBtn.type = "button";
@@ -620,6 +651,7 @@
     }
   }
   function hideUnlockBtn() {
+    bgmDiag('hideUnlockPrompt');
     if (unlockBtn) {
       try { unlockBtn.remove(); } catch {}
       unlockBtn = null;
@@ -958,7 +990,19 @@
       } catch {}
     });
     audio.addEventListener('playing', () => {
+      bgmDiag('audio:event:playing', { src: String(audio.currentSrc || audio.src || '') });
       try { hideUnlockBtn(); } catch {}
+    });
+    audio.addEventListener('pause', () => { bgmDiag('audio:event:pause'); });
+    audio.addEventListener('stalled', () => { bgmDiag('audio:event:stalled'); });
+    audio.addEventListener('waiting', () => { bgmDiag('audio:event:waiting'); });
+    audio.addEventListener('error', () => {
+      const err = audio.error;
+      bgmDiag('audio:event:error', {
+        code: Number(err?.code || 0) || null,
+        message: String(err?.message || ''),
+        src: String(audio.currentSrc || audio.src || '')
+      });
     });
   }
 
@@ -1167,4 +1211,19 @@
   }
 
   window.MusicManager = { applyState };
+  try {
+    window.BgMusicDiag = {
+      enable() {
+        try { (typeof setAppStorageItem === "function" ? setAppStorageItem(DIAG_KEY, '1') : localStorage.setItem(DIAG_KEY, '1')); } catch {}
+        bgmDiag('enabled');
+      },
+      disable() {
+        try { (typeof removeAppStorageItem === "function" ? removeAppStorageItem(DIAG_KEY) : localStorage.removeItem(DIAG_KEY)); } catch {}
+        try { console.log('[BGM-DIAG]', 'disabled'); } catch {}
+      },
+      status() {
+        return { enabled: isDiagEnabled() };
+      }
+    };
+  } catch {}
 })();
