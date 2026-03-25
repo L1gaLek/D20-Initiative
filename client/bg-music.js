@@ -143,6 +143,7 @@
   let currentObjectUrl = '';
   let currentTrackKey = '';
   let currentResolvedUrl = '';
+  let lastPlaybackSync = { trackKey: '', isPlaying: false, startedAt: 0, pausedAt: 0 };
 
   function normalizeAudioOutput() {
     try { audio.muted = false; } catch {}
@@ -981,12 +982,24 @@
     try { cleanupBlobUrls(String(cur?.id || cur?.path || cur?.url || '')); } catch {}
     syncSeekUi();
 
+    const playbackChanged = (
+      lastPlaybackSync.trackKey !== nextTrackKey
+      || lastPlaybackSync.isPlaying !== !!bg.isPlaying
+      || Math.abs(safeNum(lastPlaybackSync.startedAt, 0) - safeNum(bg.startedAt, 0)) > 500
+      || Math.abs(safeNum(lastPlaybackSync.pausedAt, 0) - safeNum(bg.pausedAt, 0)) > 0.5
+    );
+
     if (bg.isPlaying) {
       const offset = Math.max(0, (Date.now() - safeNum(bg.startedAt, Date.now())) / 1000);
       try {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          audio.currentTime = (offset % audio.duration);
-        } else {
+          const desiredTime = (offset % audio.duration);
+          const currentTime = safeNum(audio.currentTime, 0);
+          const drift = Math.abs(currentTime - desiredTime);
+          if (shouldReplaceSrc || playbackChanged || drift > 1.25) {
+            audio.currentTime = desiredTime;
+          }
+        } else if (shouldReplaceSrc || playbackChanged) {
           const handler = () => {
             audio.removeEventListener("loadedmetadata", handler);
             try {
@@ -1015,8 +1028,12 @@
       const pausedAt = Math.max(0, safeNum(bg.pausedAt, 0));
       try {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          audio.currentTime = Math.min(pausedAt, audio.duration);
-        } else if (pausedAt > 0) {
+          const target = Math.min(pausedAt, audio.duration);
+          const drift = Math.abs(safeNum(audio.currentTime, 0) - target);
+          if (shouldReplaceSrc || playbackChanged || drift > 0.75) {
+            audio.currentTime = target;
+          }
+        } else if (pausedAt > 0 && (shouldReplaceSrc || playbackChanged)) {
           const handler = () => {
             audio.removeEventListener('loadedmetadata', handler);
             try {
@@ -1029,6 +1046,13 @@
         }
       } catch {}
     }
+
+    lastPlaybackSync = {
+      trackKey: nextTrackKey,
+      isPlaying: !!bg.isPlaying,
+      startedAt: safeNum(bg.startedAt, 0),
+      pausedAt: safeNum(bg.pausedAt, 0)
+    };
 
     try { if (modal) renderList(); } catch {}
   }
