@@ -572,22 +572,61 @@
   }
 
   let unlockBtn = null;
+  let unlockOverlay = null;
+
+  async function onUnlockClick() {
+    await tryUnlock({ resumeAfter: true });
+  }
+
   function showUnlockBtn() {
-    if (!musicBox) return;
-    if (unlockBtn) return;
-    unlockBtn = document.createElement("button");
-    unlockBtn.type = "button";
-    unlockBtn.textContent = "Включить звук";
-    unlockBtn.style.marginTop = "8px";
-    unlockBtn.addEventListener("click", async () => {
-      await tryUnlock({ resumeAfter: true });
-    });
-    musicBox.appendChild(unlockBtn);
+    if (musicBox && !unlockBtn) {
+      unlockBtn = document.createElement("button");
+      unlockBtn.type = "button";
+      unlockBtn.textContent = "Включить звук";
+      unlockBtn.style.marginTop = "8px";
+      unlockBtn.addEventListener("click", onUnlockClick);
+      musicBox.appendChild(unlockBtn);
+    }
+
+    if (!unlockOverlay) {
+      unlockOverlay = document.createElement('div');
+      unlockOverlay.style.position = 'fixed';
+      unlockOverlay.style.right = '12px';
+      unlockOverlay.style.bottom = '12px';
+      unlockOverlay.style.zIndex = '9999';
+      unlockOverlay.style.display = 'flex';
+      unlockOverlay.style.alignItems = 'center';
+      unlockOverlay.style.gap = '8px';
+      unlockOverlay.style.padding = '10px 12px';
+      unlockOverlay.style.borderRadius = '10px';
+      unlockOverlay.style.background = 'rgba(20,20,20,.92)';
+      unlockOverlay.style.border = '1px solid rgba(255,255,255,.18)';
+      unlockOverlay.style.boxShadow = '0 8px 24px rgba(0,0,0,.35)';
+
+      const msg = document.createElement('span');
+      msg.textContent = 'Браузер заблокировал автозвук. Нажмите, чтобы включить музыку';
+      msg.style.fontSize = '12px';
+      msg.style.opacity = '0.95';
+      msg.style.maxWidth = '260px';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Включить';
+      btn.addEventListener('click', onUnlockClick);
+
+      unlockOverlay.appendChild(msg);
+      unlockOverlay.appendChild(btn);
+      document.body.appendChild(unlockOverlay);
+    }
   }
   function hideUnlockBtn() {
     if (unlockBtn) {
       try { unlockBtn.remove(); } catch {}
       unlockBtn = null;
+    }
+    if (unlockOverlay) {
+      try { unlockOverlay.remove(); } catch {}
+      unlockOverlay = null;
     }
   }
 
