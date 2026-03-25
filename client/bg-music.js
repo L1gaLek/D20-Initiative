@@ -341,7 +341,20 @@
           return signedUrl;
         }
       } catch {}
+    }
 
+    // На клиентах без прав подписи path может не сработать.
+    // В этом случае предпочитаем уже подписанный URL от GM (track.url),
+    // и только потом пробуем public URL как самый слабый fallback.
+    if (directUrl) {
+      if (cacheKey) resolvedUrlCache.set(cacheKey, {
+        url: directUrl,
+        expiresAt: now + (60 * 60 * 1000)
+      });
+      return directUrl;
+    }
+
+    if (path && sb?.storage?.from) {
       try {
         const pub = sb.storage.from(BUCKET).getPublicUrl(path);
         const publicUrl = String(pub?.data?.publicUrl || '').trim();
@@ -353,14 +366,6 @@
           return publicUrl;
         }
       } catch {}
-    }
-
-    if (directUrl) {
-      if (cacheKey) resolvedUrlCache.set(cacheKey, {
-        url: directUrl,
-        expiresAt: now + (60 * 60 * 1000)
-      });
-      return directUrl;
     }
 
     return '';
