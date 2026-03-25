@@ -196,6 +196,13 @@ const startExplorationBtn = document.getElementById("start-exploration");
 
 const worldPhasesBox = document.getElementById('world-phases');
 const envEditorBox = document.getElementById('env-editor');
+const gmQuickToolbar = document.getElementById('gm-quick-toolbar');
+const gmQuickPhaseBtn = document.getElementById('gm-quick-phase');
+const gmQuickMapBtn = document.getElementById('gm-quick-map');
+const gmQuickSaveBtn = document.getElementById('gm-quick-save');
+const gmPanelPhase = document.getElementById('gm-panel-phase');
+const gmPanelMap = document.getElementById('gm-panel-map');
+const gmPanelSave = document.getElementById('gm-panel-save');
 
 // ===== Подложка карты (ГМ) =====
 const boardBgEl = document.getElementById('board-bg');
@@ -436,7 +443,7 @@ function applyRoleToUI() {
 
   // ГМ-панель справа (Фазы мира + Редактирование окружения)
   const rightPanel = document.getElementById('right-panel');
-  if (rightPanel) rightPanel.style.display = gm ? '' : 'none';
+  if (rightPanel && !gm) rightPanel.style.display = 'none';
 
   // GM-настройки размера карты (реальный размер поля)
   const gmBoardSettings = document.getElementById('board-settings-gm');
@@ -453,6 +460,8 @@ function applyRoleToUI() {
   if (typeof envEditorBox !== "undefined" && envEditorBox) {
     envEditorBox.style.display = gm ? '' : 'none';
   }
+  if (gmQuickToolbar) gmQuickToolbar.style.display = gm ? 'flex' : 'none';
+  if (!gm) setActiveGmQuickPanel('');
 
   // "Управление игроками" используется всеми, кроме зрителей
   const pm = document.getElementById('player-management');
@@ -496,6 +505,70 @@ function applyRoleToUI() {
   const monstersBtn = document.getElementById('open-monsters');
   if (monstersBtn) monstersBtn.style.display = gm ? '' : 'none';
 }
+
+function refreshGmQuickToolbarTop() {
+  if (!gmQuickToolbar) return;
+  const anchor = document.getElementById('action-log-container');
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const top = Math.max(90, Math.round(rect.top));
+  gmQuickToolbar.style.setProperty('--gm-quick-toolbar-top', `${top}px`);
+  const rightPanel = document.getElementById('right-panel');
+  if (rightPanel) rightPanel.style.setProperty('--gm-quick-toolbar-top', `${top}px`);
+}
+
+function setActiveGmQuickPanel(panelKey) {
+  const key = String(panelKey || '').trim();
+  const rightPanel = document.getElementById('right-panel');
+  const pairs = [
+    { key: 'phase', btn: gmQuickPhaseBtn, panel: gmPanelPhase },
+    { key: 'map', btn: gmQuickMapBtn, panel: gmPanelMap },
+    { key: 'save', btn: gmQuickSaveBtn, panel: gmPanelSave }
+  ];
+
+  let hasOpen = false;
+  pairs.forEach(({ key: itemKey, btn, panel }) => {
+    const active = !!key && itemKey === key;
+    if (btn) btn.classList.toggle('is-active', active);
+    if (panel) panel.classList.toggle('is-open', active);
+    if (active) hasOpen = true;
+  });
+
+  if (rightPanel) rightPanel.style.display = hasOpen ? 'block' : 'none';
+}
+
+if (gmQuickPhaseBtn) {
+  gmQuickPhaseBtn.addEventListener('click', () => {
+    const active = gmQuickPhaseBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'phase');
+  });
+}
+
+if (gmQuickMapBtn) {
+  gmQuickMapBtn.addEventListener('click', () => {
+    const active = gmQuickMapBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'map');
+  });
+}
+
+if (gmQuickSaveBtn) {
+  gmQuickSaveBtn.addEventListener('click', () => {
+    const active = gmQuickSaveBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'save');
+  });
+}
+
+document.addEventListener('click', (event) => {
+  const target = event?.target;
+  if (!(target instanceof Element)) return;
+  const insideToolbar = !!target.closest('#gm-quick-toolbar');
+  const insidePanel = !!target.closest('#right-panel');
+  if (!insideToolbar && !insidePanel) setActiveGmQuickPanel('');
+});
+
+window.addEventListener('resize', refreshGmQuickToolbarTop);
+window.addEventListener('scroll', refreshGmQuickToolbarTop, { passive: true });
+setTimeout(refreshGmQuickToolbarTop, 0);
 
 // ================== SRD MONSTERS LIBRARY (GM) ==================
 let monstersLibInited = false;
