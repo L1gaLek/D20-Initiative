@@ -139,15 +139,24 @@
 
   // local volume (per user)
   const LS_VOL = "int_bg_music_volume";
+  const LS_VOL_TOUCHED = "int_bg_music_volume_touched";
   function loadLocalVol() {
     const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(LS_VOL) : localStorage.getItem(LS_VOL));
+    const touchedRaw = (typeof getAppStorageItem === "function" ? getAppStorageItem(LS_VOL_TOUCHED) : localStorage.getItem(LS_VOL_TOUCHED));
+    const touched = String(touchedRaw || '').trim() === '1';
+    if (!touched) return 1;
+    if (raw == null || String(raw).trim() === '') return 1;
     const n = Number(raw);
-    // Если пользователь еще не трогал локальную громкость, не занижаем её по умолчанию.
-    // Иначе при room volume=40% итоговая громкость становилась слишком тихой.
     return Number.isFinite(n) ? clamp01(n) : 1;
   }
   function saveLocalVol(v) {
-    try { (typeof setAppStorageItem === "function" ? setAppStorageItem(LS_VOL, String(clamp01(v))) : localStorage.setItem(LS_VOL, String(clamp01(v)))); } catch {}
+    try {
+      const setter = (typeof setAppStorageItem === "function")
+        ? setAppStorageItem
+        : ((k, val) => localStorage.setItem(k, val));
+      setter(LS_VOL, String(clamp01(v)));
+      setter(LS_VOL_TOUCHED, '1');
+    } catch {}
   }
   audio.volume = loadLocalVol();
 
@@ -1222,7 +1231,14 @@
         try { console.log('[BGM-DIAG]', 'disabled'); } catch {}
       },
       status() {
-        return { enabled: isDiagEnabled() };
+        let localVol = null;
+        let touched = null;
+        try {
+          const g = (typeof getAppStorageItem === "function") ? getAppStorageItem : ((k) => localStorage.getItem(k));
+          localVol = g(LS_VOL);
+          touched = g(LS_VOL_TOUCHED);
+        } catch {}
+        return { enabled: isDiagEnabled(), localVol, touched };
       }
     };
   } catch {}
