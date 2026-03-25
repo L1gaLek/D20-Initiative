@@ -124,7 +124,9 @@
   function loadLocalVol() {
     const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(LS_VOL) : localStorage.getItem(LS_VOL));
     const n = Number(raw);
-    return Number.isFinite(n) ? clamp01(n) : 0.4;
+    // Если пользователь еще не трогал локальную громкость, не занижаем её по умолчанию.
+    // Иначе при room volume=40% итоговая громкость становилась слишком тихой.
+    return Number.isFinite(n) ? clamp01(n) : 1;
   }
   function saveLocalVol(v) {
     try { (typeof setAppStorageItem === "function" ? setAppStorageItem(LS_VOL, String(clamp01(v))) : localStorage.setItem(LS_VOL, String(clamp01(v)))); } catch {}
@@ -143,6 +145,7 @@
   let currentObjectUrl = '';
   let currentTrackKey = '';
   let currentResolvedUrl = '';
+  let lastPlaybackSync = { trackKey: '', isPlaying: false, startedAt: 0, pausedAt: 0 };
 
   function normalizeAudioOutput() {
     try { audio.muted = false; } catch {}
@@ -338,7 +341,20 @@
           return signedUrl;
         }
       } catch {}
+    }
 
+    // На клиентах без прав подписи path может не сработать.
+    // В этом случае предпочитаем уже подписанный URL от GM (track.url),
+    // и только потом пробуем public URL как самый слабый fallback.
+    if (directUrl) {
+      if (cacheKey) resolvedUrlCache.set(cacheKey, {
+        url: directUrl,
+        expiresAt: now + (60 * 60 * 1000)
+      });
+      return directUrl;
+    }
+
+    if (path && sb?.storage?.from) {
       try {
         const pub = sb.storage.from(BUCKET).getPublicUrl(path);
         const publicUrl = String(pub?.data?.publicUrl || '').trim();
@@ -352,24 +368,43 @@
       } catch {}
     }
 
-    if (directUrl) {
-      if (cacheKey) resolvedUrlCache.set(cacheKey, {
-        url: directUrl,
-        expiresAt: now + (60 * 60 * 1000)
-      });
-      return directUrl;
-    }
-
     return '';
   }
 
 
   async function materializePlayableUrl(track) {
-    // Важно: не пересобирать URL в blob на каждом клиентском апдейте.
-    // Из-за этого у remote-клиентов трек мог на пару секунд стартовать,
-    // затем src/audio pipeline пересоздавался и звук снова пропадал.
-    // Для стабильного непрерывного воспроизведения используем прямой storage URL.
-    return await resolveTrackUrl(track);
+    const t = track || {};
+    const key = String(t.id || t.path || t.url || '').trim();
+    const resolvedUrl = String(await resolveTrackUrl(t) || '').trim();
+    if (!resolvedUrl) return '';
+
+    const cached = key ? trackBlobUrlCache.get(key) : null;
+    if (cached?.objectUrl && cached?.sourceUrl === resolvedUrl) {
+      return cached.objectUrl;
+    }
+
+    // На ряде браузеров потоковый playback по signed URL может "играть" без звука.
+    // Стараемся материализовать файл в blob/object URL (кэшируем по track key).
+    try {
+      const resp = await fetch(resolvedUrl, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'force-cache'
+      });
+      if (!resp.ok) throw new Error(`audio fetch failed: ${resp.status}`);
+      const blob = await resp.blob();
+      if (!blob || !(blob.size > 0)) throw new Error('empty audio blob');
+      const objectUrl = URL.createObjectURL(blob);
+      if (cached?.objectUrl && cached.objectUrl !== objectUrl) {
+        try { URL.revokeObjectURL(cached.objectUrl); } catch {}
+      }
+      if (key) trackBlobUrlCache.set(key, { objectUrl, sourceUrl: resolvedUrl });
+      return objectUrl;
+    } catch {
+      // Fallback: прямой URL, если fetch/blob недоступен (CORS/политики окружения).
+      return resolvedUrl;
+    }
   }
 
   function cleanupBlobUrls(keepKey = '') {
@@ -537,22 +572,61 @@
   }
 
   let unlockBtn = null;
+  let unlockOverlay = null;
+
+  async function onUnlockClick() {
+    await tryUnlock({ resumeAfter: true });
+  }
+
   function showUnlockBtn() {
-    if (!musicBox) return;
-    if (unlockBtn) return;
-    unlockBtn = document.createElement("button");
-    unlockBtn.type = "button";
-    unlockBtn.textContent = "Включить звук";
-    unlockBtn.style.marginTop = "8px";
-    unlockBtn.addEventListener("click", async () => {
-      await tryUnlock({ resumeAfter: true });
-    });
-    musicBox.appendChild(unlockBtn);
+    if (musicBox && !unlockBtn) {
+      unlockBtn = document.createElement("button");
+      unlockBtn.type = "button";
+      unlockBtn.textContent = "Включить звук";
+      unlockBtn.style.marginTop = "8px";
+      unlockBtn.addEventListener("click", onUnlockClick);
+      musicBox.appendChild(unlockBtn);
+    }
+
+    if (!unlockOverlay) {
+      unlockOverlay = document.createElement('div');
+      unlockOverlay.style.position = 'fixed';
+      unlockOverlay.style.right = '12px';
+      unlockOverlay.style.bottom = '12px';
+      unlockOverlay.style.zIndex = '9999';
+      unlockOverlay.style.display = 'flex';
+      unlockOverlay.style.alignItems = 'center';
+      unlockOverlay.style.gap = '8px';
+      unlockOverlay.style.padding = '10px 12px';
+      unlockOverlay.style.borderRadius = '10px';
+      unlockOverlay.style.background = 'rgba(20,20,20,.92)';
+      unlockOverlay.style.border = '1px solid rgba(255,255,255,.18)';
+      unlockOverlay.style.boxShadow = '0 8px 24px rgba(0,0,0,.35)';
+
+      const msg = document.createElement('span');
+      msg.textContent = 'Браузер заблокировал автозвук. Нажмите, чтобы включить музыку';
+      msg.style.fontSize = '12px';
+      msg.style.opacity = '0.95';
+      msg.style.maxWidth = '260px';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = 'Включить';
+      btn.addEventListener('click', onUnlockClick);
+
+      unlockOverlay.appendChild(msg);
+      unlockOverlay.appendChild(btn);
+      document.body.appendChild(unlockOverlay);
+    }
   }
   function hideUnlockBtn() {
     if (unlockBtn) {
       try { unlockBtn.remove(); } catch {}
       unlockBtn = null;
+    }
+    if (unlockOverlay) {
+      try { unlockOverlay.remove(); } catch {}
+      unlockOverlay = null;
     }
   }
 
@@ -981,12 +1055,24 @@
     try { cleanupBlobUrls(String(cur?.id || cur?.path || cur?.url || '')); } catch {}
     syncSeekUi();
 
+    const playbackChanged = (
+      lastPlaybackSync.trackKey !== nextTrackKey
+      || lastPlaybackSync.isPlaying !== !!bg.isPlaying
+      || Math.abs(safeNum(lastPlaybackSync.startedAt, 0) - safeNum(bg.startedAt, 0)) > 500
+      || Math.abs(safeNum(lastPlaybackSync.pausedAt, 0) - safeNum(bg.pausedAt, 0)) > 0.5
+    );
+
     if (bg.isPlaying) {
       const offset = Math.max(0, (Date.now() - safeNum(bg.startedAt, Date.now())) / 1000);
       try {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          audio.currentTime = (offset % audio.duration);
-        } else {
+          const desiredTime = (offset % audio.duration);
+          const currentTime = safeNum(audio.currentTime, 0);
+          const drift = Math.abs(currentTime - desiredTime);
+          if (shouldReplaceSrc || playbackChanged || drift > 1.25) {
+            audio.currentTime = desiredTime;
+          }
+        } else if (shouldReplaceSrc || playbackChanged) {
           const handler = () => {
             audio.removeEventListener("loadedmetadata", handler);
             try {
@@ -1015,8 +1101,12 @@
       const pausedAt = Math.max(0, safeNum(bg.pausedAt, 0));
       try {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
-          audio.currentTime = Math.min(pausedAt, audio.duration);
-        } else if (pausedAt > 0) {
+          const target = Math.min(pausedAt, audio.duration);
+          const drift = Math.abs(safeNum(audio.currentTime, 0) - target);
+          if (shouldReplaceSrc || playbackChanged || drift > 0.75) {
+            audio.currentTime = target;
+          }
+        } else if (pausedAt > 0 && (shouldReplaceSrc || playbackChanged)) {
           const handler = () => {
             audio.removeEventListener('loadedmetadata', handler);
             try {
@@ -1029,6 +1119,13 @@
         }
       } catch {}
     }
+
+    lastPlaybackSync = {
+      trackKey: nextTrackKey,
+      isPlaying: !!bg.isPlaying,
+      startedAt: safeNum(bg.startedAt, 0),
+      pausedAt: safeNum(bg.pausedAt, 0)
+    };
 
     try { if (modal) renderList(); } catch {}
   }
