@@ -1886,6 +1886,58 @@
   margin: 0;
 }
 
+.gm-submenu{
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.03);
+}
+
+.gm-submenu summary{
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+  list-style: none;
+  margin-bottom: 8px;
+}
+
+.gm-submenu summary::-webkit-details-marker{
+  display: none;
+}
+
+.gm-submenu summary::after{
+  content: "▾";
+  float: right;
+  opacity: 0.8;
+}
+
+.gm-submenu:not([open]) summary{
+  margin-bottom: 0;
+}
+
+.gm-map-size-settings{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+#gm-panel-map .board-settings-box{
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+#gm-panel-map .board-settings-box label{
+  width: 100%;
+  justify-content: space-between;
+}
+
+#gm-panel-map #cell-feet-player-wrap{
+  margin: 6px 0;
+}
+
 #right-panel .side-box h3{
   font-size: 15px;
 }

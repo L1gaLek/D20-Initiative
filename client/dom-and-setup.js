@@ -198,10 +198,14 @@ const worldPhasesBox = document.getElementById('world-phases');
 const envEditorBox = document.getElementById('env-editor');
 const gmQuickToolbar = document.getElementById('gm-quick-toolbar');
 const gmQuickPhaseBtn = document.getElementById('gm-quick-phase');
+const gmQuickToolsBtn = document.getElementById('gm-quick-tools');
 const gmQuickMapBtn = document.getElementById('gm-quick-map');
+const gmQuickMusicBtn = document.getElementById('gm-quick-music');
 const gmQuickSaveBtn = document.getElementById('gm-quick-save');
 const gmPanelPhase = document.getElementById('gm-panel-phase');
+const gmPanelTools = document.getElementById('gm-panel-tools');
 const gmPanelMap = document.getElementById('gm-panel-map');
+const gmPanelMusic = document.getElementById('gm-panel-music');
 const gmPanelSave = document.getElementById('gm-panel-save');
 
 // ===== Подложка карты (ГМ) =====
@@ -522,7 +526,9 @@ function setActiveGmQuickPanel(panelKey) {
   const rightPanel = document.getElementById('right-panel');
   const pairs = [
     { key: 'phase', btn: gmQuickPhaseBtn, panel: gmPanelPhase },
+    { key: 'tools', btn: gmQuickToolsBtn, panel: gmPanelTools },
     { key: 'map', btn: gmQuickMapBtn, panel: gmPanelMap },
+    { key: 'music', btn: gmQuickMusicBtn, panel: gmPanelMusic },
     { key: 'save', btn: gmQuickSaveBtn, panel: gmPanelSave }
   ];
 
@@ -551,6 +557,20 @@ if (gmQuickMapBtn) {
   gmQuickMapBtn.addEventListener('click', () => {
     const active = gmQuickMapBtn.classList.contains('is-active');
     setActiveGmQuickPanel(active ? '' : 'map');
+  });
+}
+
+if (gmQuickToolsBtn) {
+  gmQuickToolsBtn.addEventListener('click', () => {
+    const active = gmQuickToolsBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'tools');
+  });
+}
+
+if (gmQuickMusicBtn) {
+  gmQuickMusicBtn.addEventListener('click', () => {
+    const active = gmQuickMusicBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'music');
   });
 }
 
