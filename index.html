@@ -243,10 +243,7 @@
   <!-- Верхняя строка -->
   <div id="status-bar">
     <div class="status-bar__meta">
-      <span>Вы: <strong id="myName">-</strong></span> |
-      <span>Роль: <strong id="myRole">-</strong></span> |
-      <span>Комната: <strong id="myRoom">-</strong></span> |
-      <span>Сценарий: <strong id="myScenario">-</strong></span>
+      <button id="room-details-open" class="room-details-btn" type="button">Подробно о комнате</button>
     </div>
 
     <div id="room-top-actions" class="room-top-actions" aria-label="Действия комнаты">
@@ -261,6 +258,34 @@
 
   <!-- Контент: 2 колонки -->
   <div id="content-row">
+
+<div id="gm-quick-toolbar" class="gm-quick-toolbar" aria-label="Быстрые действия ГМ">
+  <button id="gm-quick-phase" class="gm-quick-toolbar__btn" type="button" title="Фазы мира" aria-label="Фазы мира" data-gm-panel="phase">🌍</button>
+  <button id="gm-quick-tools" class="gm-quick-toolbar__btn" type="button" title="Инструменты карты" aria-label="Инструменты карты" data-gm-panel="tools">🧰</button>
+  <button id="gm-quick-map" class="gm-quick-toolbar__btn" type="button" title="Редактирование карты" aria-label="Редактирование карты" data-gm-panel="map">🗺️</button>
+  <button id="gm-quick-music" class="gm-quick-toolbar__btn" type="button" title="Музыка" aria-label="Музыка" data-gm-panel="music">🎵</button>
+  <button id="gm-quick-save" class="gm-quick-toolbar__btn" type="button" title="Сохранение игры" aria-label="Сохранение игры" data-gm-panel="save">💾</button>
+</div>
+
+<!-- ===== Room details modal ===== -->
+<div id="roomDetailsModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal room-details-modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Подробно о комнате</div>
+      </div>
+      <button id="roomDetailsClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="sheet-card room-entry-card" style="display:flex; flex-direction:column; gap:10px;">
+        <div><strong>Вы:</strong> <span id="myName">-</span></div>
+        <div><strong>Роль:</strong> <span id="myRole">-</span></div>
+        <div><strong>Комната:</strong> <span id="myRoom">-</span></div>
+        <div><strong>Сценарий:</strong> <span id="myScenario">-</span></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Левая панель -->
 <div id="action-log-container">
@@ -355,18 +380,6 @@
           <div id="board-topbar">
 
             <div id="board-topbar-primary">
-              <div id="cell-feet-gm-box" class="board-settings-box cell-feet-box" style="display:none;">
-                <label id="cell-feet-gm-wrap" class="cell-feet-inline cell-feet-inline--gm-box">
-                  <span>1 клетка =</span>
-                  <span class="board-stepper">
-                    <button type="button" class="board-stepper__btn" data-step-target="cell-feet-gm" data-step-dir="-1" aria-label="Уменьшить число футов в клетке">◀</button>
-                    <input type="number" id="cell-feet-gm" value="10" min="1" max="100" step="1" title="Сколько футов в одной клетке">
-                    <button type="button" class="board-stepper__btn" data-step-target="cell-feet-gm" data-step-dir="1" aria-label="Увеличить число футов в клетке">▶</button>
-                  </span>
-                  <span>футов</span>
-                </label>
-              </div>
-
               <!-- Текущий игрок — по центру поля, над рамками размеров -->
               <div id="current-turn">
                 Текущий игрок: <span id="current-player">-</span>
@@ -376,47 +389,7 @@
               </div>
             </div>
 
-            <div id="board-settings" class="board-settings-row">
-            <div id="board-settings-viewport" class="board-settings-box">
-              <div id="cell-feet-player-wrap" class="cell-feet-inline cell-feet-inline--player" style="display:none;">
-                1 клетка = <span id="cell-feet-player-value">10</span> футов
-              </div>
-              <label>Ширина поля:
-                <span class="board-stepper">
-                  <button type="button" class="board-stepper__btn" data-step-target="board-width" data-step-dir="-1" aria-label="Уменьшить ширину поля">◀</button>
-                  <input type="number" id="board-width" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
-                  <button type="button" class="board-stepper__btn" data-step-target="board-width" data-step-dir="1" aria-label="Увеличить ширину поля">▶</button>
-                </span>
-              </label>
-              <label>Высота поля:
-                <span class="board-stepper">
-                  <button type="button" class="board-stepper__btn" data-step-target="board-height" data-step-dir="-1" aria-label="Уменьшить высоту поля">◀</button>
-                  <input type="number" id="board-height" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
-                  <button type="button" class="board-stepper__btn" data-step-target="board-height" data-step-dir="1" aria-label="Увеличить высоту поля">▶</button>
-                </span>
-              </label>
-              <button id="create-board" type="button" title="Применить размер рамки (только для вас)">Применить вид</button>
-            </div>
-
-            <!-- Только для GM: реальный размер карты (количество клеток внутри поля) -->
-            <div id="board-settings-gm" class="board-settings-box">
-              <label>Ширина поля (ГМ):
-                <span class="board-stepper">
-                  <button type="button" class="board-stepper__btn" data-step-target="board-width-gm" data-step-dir="-1" aria-label="Уменьшить ширину поля ГМ">◀</button>
-                  <input type="number" id="board-width-gm" value="10" min="5" max="150" title="Реальная ширина карты в клетках (5–150)">
-                  <button type="button" class="board-stepper__btn" data-step-target="board-width-gm" data-step-dir="1" aria-label="Увеличить ширину поля ГМ">▶</button>
-                </span>
-              </label>
-              <label>Высота поля (ГМ):
-                <span class="board-stepper">
-                  <button type="button" class="board-stepper__btn" data-step-target="board-height-gm" data-step-dir="-1" aria-label="Уменьшить высоту поля ГМ">◀</button>
-                  <input type="number" id="board-height-gm" value="10" min="5" max="150" title="Реальная высота карты в клетках (5–150)">
-                  <button type="button" class="board-stepper__btn" data-step-target="board-height-gm" data-step-dir="1" aria-label="Увеличить высоту поля ГМ">▶</button>
-                </span>
-              </label>
-              <button id="create-board-gm" type="button" title="Изменить реальный размер карты (видно всем)">Применить карту</button>
-            </div>
-            </div>
+            <div id="board-settings" class="board-settings-row" style="display:none;"></div>
 
           </div>
 
@@ -435,35 +408,22 @@
 
         <!-- Правая колонка (только для GM, управляется в client.js) -->
         <div id="right-panel">
-
-          <div id="world-phases" class="side-box">
-            <h3>Фазы мира</h3>
-            <button id="start-exploration">Фаза исследования</button>
-            <button id="start-initiative">Фаза инициативы</button>
-            <button id="start-combat">Фаза бой</button>
-
-          <div id="bg-music-box" class="side-box">
-            <h3>Фоновая музыка</h3>
-            <button id="bg-music-open" type="button">Список</button>
-            <div id="bg-music-now" style="margin-top:8px; font-size:12px; opacity:.9;">Трек: —</div>
-            <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
-              <button id="bg-music-toggle" type="button" disabled>▶/⏸</button>
-              <button id="bg-music-stop" type="button" disabled>⏹</button>
-            </div>
-            <div style="margin-top:8px;">
-              <label style="display:flex; align-items:center; gap:8px;">
-                <span style="min-width:64px; font-size:12px; opacity:.9;">Громк.</span>
-                <input id="bg-music-volume" type="range" min="0" max="100" value="40" />
-              </label>
+          <div id="gm-panel-phase" class="gm-flyout-panel">
+            <div id="world-phases" class="side-box gm-side-box">
+              <h3>Фазы мира</h3>
+              <button id="start-exploration">Фаза исследования</button>
+              <button id="start-initiative">Фаза инициативы</button>
+              <button id="start-combat">Фаза бой</button>
             </div>
           </div>
 
-          </div>
-
-          <div id="env-editor" class="side-box">
-            <h3>Редактирования окружения</h3>
-            <button id="edit-environment">Редактирование окружения: ВЫКЛ</button>
-            <div class="env-wall-tools">
+          <div id="gm-panel-tools" class="gm-flyout-panel">
+            <div class="side-box gm-side-box">
+              <h3>Инструменты карты</h3>
+              <details class="gm-submenu" open>
+                <summary>Редактирование стен</summary>
+                <button id="edit-environment">Редактирование окружения: ВЫКЛ</button>
+                <div class="env-wall-tools">
               <div class="env-wall-row">
                 <button id="add-wall" disabled>Рисуем стены</button>
                 <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
@@ -523,67 +483,123 @@
                 <button id="clear-board" type="button" style="width:100%;">Очистить поле</button>
               </div>
             </div>
-            <div class="env-range-row">
-              <div class="env-range-title">
-                <span>Прозрачность стен</span>
-                <span id="wall-opacity-val">0%</span>
-              </div>
-              <input id="wall-opacity" type="range" min="0" max="100" value="0" />
+                <div class="env-range-row">
+                  <div class="env-range-title">
+                    <span>Прозрачность стен</span>
+                    <span id="wall-opacity-val">0%</span>
+                  </div>
+                  <input id="wall-opacity" type="range" min="0" max="100" value="0" />
+                </div>
+              </details>
+
+              <details class="gm-submenu">
+                <summary>Туман войны</summary>
+                <div class="fog-controls" id="fog-controls">
+                  <label class="fog-row"><input type="checkbox" id="fog-enabled"> Включить</label>
+                  <label class="fog-row" style="margin-top:-2px;"><input type="checkbox" id="fog-open-for-gm"> Открыть для ГМ</label>
+                  <div class="fog-row">
+                    <label>Режим:
+                      <select id="fog-mode">
+                        <option value="manual">Ручной</option>
+                        <option value="dynamic">Динамический (LOS)</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="fog-row">
+                    <label>Просмотр ГМ:
+                      <select id="fog-gm-view">
+                        <option value="gm">Режим ГМ</option>
+                        <option value="player">Как у игрока</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="fog-row fog-row--manual">
+                    <label class="fog-inline"><input type="checkbox" id="fog-draw"> Рисовать</label>
+                    <select id="fog-brush-mode" title="Режим">
+                      <option value="reveal">Открывать</option>
+                      <option value="hide">Закрывать</option>
+                    </select>
+                    <label class="fog-inline" title="Размер квадрата NxN (1..10)">
+                      <span style="opacity:0.85;">Размер:</span>
+                      <input id="fog-square-size" type="number" min="1" max="10" value="1" style="width:64px;">
+                    </label>
+                  </div>
+                  <div class="fog-row fog-row--manual">
+                    <button id="fog-hide-all" type="button">Скрыть всё</button>
+                    <button id="fog-reveal-all" type="button">Открыть всё</button>
+                  </div>
+                  <div class="fog-row fog-row--dynamic">
+                    <label>Зрение (клеток):
+                      <input id="fog-vision" type="number" min="1" max="60" value="8" style="width:72px;">
+                    </label>
+                    <label class="fog-inline"><input type="checkbox" id="fog-use-walls" checked> Учитывать стены</label>
+                  </div>
+                  <div class="fog-row">
+                    <label class="fog-inline"><input type="checkbox" id="fog-move-only-open"> Движение по открытому</label>
+                  </div>
+                  <div class="fog-row fog-row--dynamic">
+                    <label class="fog-inline"><input type="checkbox" id="fog-explored" checked> Исследованное</label>
+                    <button id="fog-clear-explored" type="button">Очистить исслед.</button>
+                  </div>
+                </div>
+              </details>
             </div>
+          </div>
 
-            <!-- Fog of war (GM) -->
-            <div class="fog-controls" id="fog-controls">
-              <div class="fog-title">Туман войны</div>
-              <label class="fog-row"><input type="checkbox" id="fog-enabled"> Включить</label>
-              <label class="fog-row" style="margin-top:-2px;"><input type="checkbox" id="fog-open-for-gm"> Открыть для ГМ</label>
-              <div class="fog-row">
-                <label>Режим:
-                  <select id="fog-mode">
-                    <option value="manual">Ручной</option>
-                    <option value="dynamic">Динамический (LOS)</option>
-                  </select>
+          <div id="gm-panel-map" class="gm-flyout-panel">
+            <div id="env-editor" class="side-box gm-side-box">
+              <h3>Редактирование карты</h3>
+              <div id="cell-feet-gm-box" class="board-settings-box cell-feet-box" style="display:none;">
+                <label id="cell-feet-gm-wrap" class="cell-feet-inline cell-feet-inline--gm-box">
+                  <span>1 клетка =</span>
+                  <span class="board-stepper">
+                    <button type="button" class="board-stepper__btn" data-step-target="cell-feet-gm" data-step-dir="-1" aria-label="Уменьшить число футов в клетке">◀</button>
+                    <input type="number" id="cell-feet-gm" value="10" min="1" max="100" step="1" title="Сколько футов в одной клетке">
+                    <button type="button" class="board-stepper__btn" data-step-target="cell-feet-gm" data-step-dir="1" aria-label="Увеличить число футов в клетке">▶</button>
+                  </span>
+                  <span>футов</span>
                 </label>
               </div>
-              <div class="fog-row">
-                <label>Просмотр ГМ:
-                  <select id="fog-gm-view">
-                    <option value="gm">Режим ГМ</option>
-                    <option value="player">Как у игрока</option>
-                  </select>
-                </label>
+              <div id="cell-feet-player-wrap" class="cell-feet-inline cell-feet-inline--player" style="display:none;">
+                1 клетка = <span id="cell-feet-player-value">10</span> футов
               </div>
-              <div class="fog-row fog-row--manual">
-                <label class="fog-inline"><input type="checkbox" id="fog-draw"> Рисовать</label>
-                <select id="fog-brush-mode" title="Режим">
-                  <option value="reveal">Открывать</option>
-                  <option value="hide">Закрывать</option>
-                </select>
-                <label class="fog-inline" title="Размер квадрата NxN (1..10)">
-  <span style="opacity:0.85;">Размер:</span>
-  <input id="fog-square-size" type="number" min="1" max="10" value="1" style="width:64px;">
-</label>
-</div>
-              <div class="fog-row fog-row--manual">
-                <button id="fog-hide-all" type="button">Скрыть всё</button>
-                <button id="fog-reveal-all" type="button">Открыть всё</button>
+              <div class="board-settings-row gm-map-size-settings">
+                <div id="board-settings-viewport" class="board-settings-box">
+                  <label>Ширина поля:
+                    <span class="board-stepper">
+                      <button type="button" class="board-stepper__btn" data-step-target="board-width" data-step-dir="-1" aria-label="Уменьшить ширину поля">◀</button>
+                      <input type="number" id="board-width" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
+                      <button type="button" class="board-stepper__btn" data-step-target="board-width" data-step-dir="1" aria-label="Увеличить ширину поля">▶</button>
+                    </span>
+                  </label>
+                  <label>Высота поля:
+                    <span class="board-stepper">
+                      <button type="button" class="board-stepper__btn" data-step-target="board-height" data-step-dir="-1" aria-label="Уменьшить высоту поля">◀</button>
+                      <input type="number" id="board-height" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
+                      <button type="button" class="board-stepper__btn" data-step-target="board-height" data-step-dir="1" aria-label="Увеличить высоту поля">▶</button>
+                    </span>
+                  </label>
+                  <button id="create-board" type="button" title="Применить размер рамки (только для вас)">Применить вид</button>
+                </div>
+                <div id="board-settings-gm" class="board-settings-box">
+                  <label>Ширина поля (ГМ):
+                    <span class="board-stepper">
+                      <button type="button" class="board-stepper__btn" data-step-target="board-width-gm" data-step-dir="-1" aria-label="Уменьшить ширину поля ГМ">◀</button>
+                      <input type="number" id="board-width-gm" value="10" min="5" max="150" title="Реальная ширина карты в клетках (5–150)">
+                      <button type="button" class="board-stepper__btn" data-step-target="board-width-gm" data-step-dir="1" aria-label="Увеличить ширину поля ГМ">▶</button>
+                    </span>
+                  </label>
+                  <label>Высота поля (ГМ):
+                    <span class="board-stepper">
+                      <button type="button" class="board-stepper__btn" data-step-target="board-height-gm" data-step-dir="-1" aria-label="Уменьшить высоту поля ГМ">◀</button>
+                      <input type="number" id="board-height-gm" value="10" min="5" max="150" title="Реальная высота карты в клетках (5–150)">
+                      <button type="button" class="board-stepper__btn" data-step-target="board-height-gm" data-step-dir="1" aria-label="Увеличить высоту поля ГМ">▶</button>
+                    </span>
+                  </label>
+                  <button id="create-board-gm" type="button" title="Изменить реальный размер карты (видно всем)">Применить карту</button>
+                </div>
               </div>
-              <div class="fog-row fog-row--dynamic">
-                <label>Зрение (клеток):
-                  <input id="fog-vision" type="number" min="1" max="60" value="8" style="width:72px;">
-                </label>
-                <label class="fog-inline"><input type="checkbox" id="fog-use-walls" checked> Учитывать стены</label>
-              </div>
-              <div class="fog-row">
-  <label class="fog-inline"><input type="checkbox" id="fog-move-only-open"> Движение по открытому</label>
-</div>
-<div class="fog-row fog-row--dynamic">
-  <label class="fog-inline"><input type="checkbox" id="fog-explored" checked> Исследованное</label>
-  <button id="fog-clear-explored" type="button">Очистить исслед.</button>
-</div>
-            </div>
-
-
-            <div class="env-bg-controls">
+              <div id="map-bg-controls" class="env-bg-controls">
               <div class="env-bg-title">Подложка карты</div>
               <div class="env-bg-url-row">
                 <input id="board-bg-url" type="text" placeholder="Ссылка на изображение или GIF (https://...)" />
@@ -601,8 +617,31 @@
               <input id="board-bg-file" type="file" accept="image/*,.gif" />
               <button id="board-bg-clear" type="button">Убрать подложку</button>
             </div>
+            </div>
+          </div>
 
-            <div class="campaign-maps-controls">
+          <div id="gm-panel-music" class="gm-flyout-panel">
+            <div id="bg-music-box" class="side-box gm-side-box">
+              <h3>Фоновая музыка</h3>
+              <button id="bg-music-open" type="button">Список</button>
+              <div id="bg-music-now" style="margin-top:8px; font-size:12px; opacity:.9;">Трек: —</div>
+              <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
+                <button id="bg-music-toggle" type="button" disabled>▶/⏸</button>
+                <button id="bg-music-stop" type="button" disabled>⏹</button>
+              </div>
+              <div style="margin-top:8px;">
+                <label style="display:flex; align-items:center; gap:8px;">
+                  <span style="min-width:64px; font-size:12px; opacity:.9;">Громк.</span>
+                  <input id="bg-music-volume" type="range" min="0" max="100" value="40" />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div id="gm-panel-save" class="gm-flyout-panel">
+            <div class="side-box gm-side-box">
+              <h3>Сохранение</h3>
+              <div class="campaign-maps-controls">
               <div class="campaign-maps-title">Карты кампании</div>
               <div class="campaign-maps-row">
                 <div class="campaign-active-map" title="Текущая выбранная карта">
@@ -613,12 +652,11 @@
               <!-- Старые элементы оставлены для совместимости, но скрыты (управление в окне «Параметры») -->
               <select id="campaign-maps-select" title="Выбор карты" style="display:none"></select>
               <button id="create-campaign-map" type="button" style="display:none">Создать карту</button>
+              </div>
+              <button id="save-campaign" type="button">Сохранить кампанию</button>
+              <button id="load-campaign" type="button">Загрузить кампанию</button>
+              <button id="reset-game">Сбросить игру полностью</button>
             </div>
-
-            <button id="save-campaign" type="button">Сохранить кампанию</button>
-            <button id="load-campaign" type="button">Загрузить кампанию</button>
-
-            <button id="reset-game">Сбросить игру полностью</button>
           </div>
 
         </div>

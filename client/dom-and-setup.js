@@ -56,6 +56,9 @@ const roomChatBadgeGlobal = document.getElementById('room-chat-badge-global');
 const roomChatBadgeDirect = document.getElementById('room-chat-badge-direct');
 const roomChatOpenBtn = document.getElementById('room-chat-open');
 const roomReturnTavernBtn = document.getElementById('room-return-tavern');
+const roomDetailsOpenBtn = document.getElementById('room-details-open');
+const roomDetailsModal = document.getElementById('roomDetailsModal');
+const roomDetailsCloseBtn = document.getElementById('roomDetailsClose');
 
 const createRoomBtn = document.getElementById('createRoomBtn');
 const createRoomModal = document.getElementById('createRoomModal');
@@ -191,11 +194,41 @@ function initBoardSteppers() {
 }
 
 initBoardSteppers();
+
+function openRoomDetailsModal() {
+  if (!roomDetailsModal) return;
+  roomDetailsModal.classList.remove('hidden');
+}
+
+function closeRoomDetailsModal() {
+  if (!roomDetailsModal) return;
+  roomDetailsModal.classList.add('hidden');
+}
+
+if (roomDetailsOpenBtn) roomDetailsOpenBtn.addEventListener('click', openRoomDetailsModal);
+if (roomDetailsCloseBtn) roomDetailsCloseBtn.addEventListener('click', closeRoomDetailsModal);
+if (roomDetailsModal) {
+  roomDetailsModal.addEventListener('click', (e) => {
+    if (e.target === roomDetailsModal) closeRoomDetailsModal();
+  });
+}
+
 const startCombatBtn = document.getElementById("start-combat");
 const startExplorationBtn = document.getElementById("start-exploration");
 
 const worldPhasesBox = document.getElementById('world-phases');
 const envEditorBox = document.getElementById('env-editor');
+const gmQuickToolbar = document.getElementById('gm-quick-toolbar');
+const gmQuickPhaseBtn = document.getElementById('gm-quick-phase');
+const gmQuickToolsBtn = document.getElementById('gm-quick-tools');
+const gmQuickMapBtn = document.getElementById('gm-quick-map');
+const gmQuickMusicBtn = document.getElementById('gm-quick-music');
+const gmQuickSaveBtn = document.getElementById('gm-quick-save');
+const gmPanelPhase = document.getElementById('gm-panel-phase');
+const gmPanelTools = document.getElementById('gm-panel-tools');
+const gmPanelMap = document.getElementById('gm-panel-map');
+const gmPanelMusic = document.getElementById('gm-panel-music');
+const gmPanelSave = document.getElementById('gm-panel-save');
 
 // ===== Подложка карты (ГМ) =====
 const boardBgEl = document.getElementById('board-bg');
@@ -436,7 +469,7 @@ function applyRoleToUI() {
 
   // ГМ-панель справа (Фазы мира + Редактирование окружения)
   const rightPanel = document.getElementById('right-panel');
-  if (rightPanel) rightPanel.style.display = gm ? '' : 'none';
+  if (rightPanel && !gm) rightPanel.style.display = 'none';
 
   // GM-настройки размера карты (реальный размер поля)
   const gmBoardSettings = document.getElementById('board-settings-gm');
@@ -451,8 +484,17 @@ function applyRoleToUI() {
     worldPhasesBox.style.display = gm ? '' : 'none';
   }
   if (typeof envEditorBox !== "undefined" && envEditorBox) {
-    envEditorBox.style.display = gm ? '' : 'none';
+    envEditorBox.style.display = '';
+    const mapBgControls = envEditorBox.querySelector('#map-bg-controls');
+    if (mapBgControls) mapBgControls.style.display = gm ? '' : 'none';
   }
+  if (gmQuickToolbar) gmQuickToolbar.style.display = spectator ? 'none' : 'flex';
+  if (gmQuickPhaseBtn) gmQuickPhaseBtn.style.display = gm ? '' : 'none';
+  if (gmQuickToolsBtn) gmQuickToolsBtn.style.display = gm ? '' : 'none';
+  if (gmQuickMusicBtn) gmQuickMusicBtn.style.display = gm ? '' : 'none';
+  if (gmQuickSaveBtn) gmQuickSaveBtn.style.display = gm ? '' : 'none';
+  if (gmQuickMapBtn) gmQuickMapBtn.style.display = spectator ? 'none' : '';
+  if (!gm) setActiveGmQuickPanel('');
 
   // "Управление игроками" используется всеми, кроме зрителей
   const pm = document.getElementById('player-management');
@@ -496,6 +538,92 @@ function applyRoleToUI() {
   const monstersBtn = document.getElementById('open-monsters');
   if (monstersBtn) monstersBtn.style.display = gm ? '' : 'none';
 }
+
+function refreshGmQuickToolbarTop() {
+  if (!gmQuickToolbar) return;
+  const anchor = document.getElementById('action-log-container');
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const top = Math.max(90, Math.round(rect.top));
+  gmQuickToolbar.style.setProperty('--gm-quick-toolbar-top', `${top}px`);
+  gmQuickToolbar.style.left = 'auto';
+  gmQuickToolbar.style.right = '8px';
+
+  const toolbarRect = gmQuickToolbar.getBoundingClientRect();
+  const rightPanel = document.getElementById('right-panel');
+  if (rightPanel) {
+    rightPanel.style.setProperty('--gm-quick-toolbar-top', `${Math.round(toolbarRect.top)}px`);
+    const panelWidth = Math.max(220, Math.round(rightPanel.getBoundingClientRect().width || 280));
+    const leftTry = Math.round(toolbarRect.left - panelWidth - 10);
+    const leftFallback = Math.round(toolbarRect.right + 10);
+    rightPanel.style.left = `${leftTry >= 8 ? leftTry : leftFallback}px`;
+  }
+}
+
+function setActiveGmQuickPanel(panelKey) {
+  const key = String(panelKey || '').trim();
+  const rightPanel = document.getElementById('right-panel');
+  const pairs = [
+    { key: 'phase', btn: gmQuickPhaseBtn, panel: gmPanelPhase },
+    { key: 'tools', btn: gmQuickToolsBtn, panel: gmPanelTools },
+    { key: 'map', btn: gmQuickMapBtn, panel: gmPanelMap },
+    { key: 'music', btn: gmQuickMusicBtn, panel: gmPanelMusic },
+    { key: 'save', btn: gmQuickSaveBtn, panel: gmPanelSave }
+  ];
+
+  let hasOpen = false;
+  pairs.forEach(({ key: itemKey, btn, panel }) => {
+    const active = !!key && itemKey === key;
+    if (btn) btn.classList.toggle('is-active', active);
+    if (panel) panel.classList.toggle('is-open', active);
+    if (active) hasOpen = true;
+  });
+
+  if (rightPanel) {
+    rightPanel.style.display = hasOpen ? 'block' : 'none';
+    rightPanel.classList.toggle('is-open', hasOpen);
+  }
+  if (gmQuickToolbar) gmQuickToolbar.classList.toggle('is-panel-open', hasOpen);
+}
+
+if (gmQuickPhaseBtn) {
+  gmQuickPhaseBtn.addEventListener('click', () => {
+    const active = gmQuickPhaseBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'phase');
+  });
+}
+
+if (gmQuickMapBtn) {
+  gmQuickMapBtn.addEventListener('click', () => {
+    const active = gmQuickMapBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'map');
+  });
+}
+
+if (gmQuickToolsBtn) {
+  gmQuickToolsBtn.addEventListener('click', () => {
+    const active = gmQuickToolsBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'tools');
+  });
+}
+
+if (gmQuickMusicBtn) {
+  gmQuickMusicBtn.addEventListener('click', () => {
+    const active = gmQuickMusicBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'music');
+  });
+}
+
+if (gmQuickSaveBtn) {
+  gmQuickSaveBtn.addEventListener('click', () => {
+    const active = gmQuickSaveBtn.classList.contains('is-active');
+    setActiveGmQuickPanel(active ? '' : 'save');
+  });
+}
+
+window.addEventListener('resize', refreshGmQuickToolbarTop);
+window.addEventListener('scroll', refreshGmQuickToolbarTop, { passive: true });
+setTimeout(refreshGmQuickToolbarTop, 0);
 
 // ================== SRD MONSTERS LIBRARY (GM) ==================
 let monstersLibInited = false;
