@@ -35,6 +35,13 @@
   min-width:0;
 }
 
+.room-details-btn{
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
 /* строка: цвет + размер */
 .pm-row{ display:flex; align-items:center; gap: 10px; }
 

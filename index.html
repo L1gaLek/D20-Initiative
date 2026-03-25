@@ -243,10 +243,7 @@
   <!-- Верхняя строка -->
   <div id="status-bar">
     <div class="status-bar__meta">
-      <span>Вы: <strong id="myName">-</strong></span> |
-      <span>Роль: <strong id="myRole">-</strong></span> |
-      <span>Комната: <strong id="myRoom">-</strong></span> |
-      <span>Сценарий: <strong id="myScenario">-</strong></span>
+      <button id="room-details-open" class="room-details-btn" type="button">Подробно о комнате</button>
     </div>
 
     <div id="room-top-actions" class="room-top-actions" aria-label="Действия комнаты">
@@ -268,6 +265,26 @@
   <button id="gm-quick-map" class="gm-quick-toolbar__btn" type="button" title="Редактирование карты" aria-label="Редактирование карты" data-gm-panel="map">🗺️</button>
   <button id="gm-quick-music" class="gm-quick-toolbar__btn" type="button" title="Музыка" aria-label="Музыка" data-gm-panel="music">🎵</button>
   <button id="gm-quick-save" class="gm-quick-toolbar__btn" type="button" title="Сохранение игры" aria-label="Сохранение игры" data-gm-panel="save">💾</button>
+</div>
+
+<!-- ===== Room details modal ===== -->
+<div id="roomDetailsModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal room-details-modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Подробно о комнате</div>
+      </div>
+      <button id="roomDetailsClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="sheet-card room-entry-card" style="display:flex; flex-direction:column; gap:10px;">
+        <div><strong>Вы:</strong> <span id="myName">-</span></div>
+        <div><strong>Роль:</strong> <span id="myRole">-</span></div>
+        <div><strong>Комната:</strong> <span id="myRoom">-</span></div>
+        <div><strong>Сценарий:</strong> <span id="myScenario">-</span></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Левая панель -->

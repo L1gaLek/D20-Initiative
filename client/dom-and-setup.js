@@ -56,6 +56,9 @@ const roomChatBadgeGlobal = document.getElementById('room-chat-badge-global');
 const roomChatBadgeDirect = document.getElementById('room-chat-badge-direct');
 const roomChatOpenBtn = document.getElementById('room-chat-open');
 const roomReturnTavernBtn = document.getElementById('room-return-tavern');
+const roomDetailsOpenBtn = document.getElementById('room-details-open');
+const roomDetailsModal = document.getElementById('roomDetailsModal');
+const roomDetailsCloseBtn = document.getElementById('roomDetailsClose');
 
 const createRoomBtn = document.getElementById('createRoomBtn');
 const createRoomModal = document.getElementById('createRoomModal');
@@ -191,6 +194,25 @@ function initBoardSteppers() {
 }
 
 initBoardSteppers();
+
+function openRoomDetailsModal() {
+  if (!roomDetailsModal) return;
+  roomDetailsModal.classList.remove('hidden');
+}
+
+function closeRoomDetailsModal() {
+  if (!roomDetailsModal) return;
+  roomDetailsModal.classList.add('hidden');
+}
+
+if (roomDetailsOpenBtn) roomDetailsOpenBtn.addEventListener('click', openRoomDetailsModal);
+if (roomDetailsCloseBtn) roomDetailsCloseBtn.addEventListener('click', closeRoomDetailsModal);
+if (roomDetailsModal) {
+  roomDetailsModal.addEventListener('click', (e) => {
+    if (e.target === roomDetailsModal) closeRoomDetailsModal();
+  });
+}
+
 const startCombatBtn = document.getElementById("start-combat");
 const startExplorationBtn = document.getElementById("start-exploration");
 
