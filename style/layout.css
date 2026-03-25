@@ -1853,17 +1853,16 @@
 }
 
 #right-panel{
-  position: relative;
-  width: 0;
-  flex: 0 0 0;
-  overflow: visible;
+  position: fixed;
+  top: var(--gm-quick-toolbar-top, 160px);
+  right: 70px;
+  width: min(280px, calc(100vw - 120px));
+  z-index: 10031;
   display: none;
 }
 
 .is-open#right-panel,
 #right-panel.is-open{
-  width: min(280px, calc(100vw - 120px));
-  flex-basis: min(280px, calc(100vw - 120px));
   display: block;
 }
 
@@ -1919,23 +1918,56 @@
 .gm-map-size-settings{
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 8px 0;
+  gap: 6px;
+  margin: 6px 0;
 }
 
 #gm-panel-map .board-settings-box{
   width: 100%;
   flex-wrap: wrap;
   justify-content: flex-start;
+  padding: 4px 6px;
+  border-radius: 8px;
+  gap: 4px;
+  font-size: 11px;
 }
 
 #gm-panel-map .board-settings-box label{
   width: 100%;
   justify-content: space-between;
+  gap: 4px;
+  font-size: 11px;
+}
+
+#gm-panel-map .board-stepper{
+  gap: 3px;
+}
+
+#gm-panel-map .board-stepper__btn{
+  width: 18px;
+  min-height: 20px;
+  border-radius: 6px;
+}
+
+#gm-panel-map .board-settings-box input[type="number"]{
+  width: 48px;
+  min-width: 48px;
+  height: 22px;
+  padding: 2px 4px;
+  font-size: 11px;
+}
+
+#gm-panel-map .board-settings-box button{
+  min-height: 24px !important;
+  padding: 3px 6px !important;
+  border-radius: 7px !important;
+  font-size: 10px !important;
+  width: 100%;
 }
 
 #gm-panel-map #cell-feet-player-wrap{
-  margin: 6px 0;
+  margin: 4px 0;
+  font-size: 11px;
 }
 
 #right-panel .side-box h3{
@@ -1952,12 +1984,7 @@
 
 @media (max-width: 1320px){
   #right-panel{
-    width: 0;
-    flex-basis: 0;
-  }
-  #right-panel.is-open{
     width: min(280px, calc(100vw - 84px));
-    flex-basis: min(280px, calc(100vw - 84px));
   }
   .gm-quick-toolbar{
     right: 8px;

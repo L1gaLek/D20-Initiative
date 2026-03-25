@@ -462,9 +462,14 @@ function applyRoleToUI() {
     worldPhasesBox.style.display = gm ? '' : 'none';
   }
   if (typeof envEditorBox !== "undefined" && envEditorBox) {
-    envEditorBox.style.display = gm ? '' : 'none';
+    envEditorBox.style.display = '';
   }
-  if (gmQuickToolbar) gmQuickToolbar.style.display = gm ? 'flex' : 'none';
+  if (gmQuickToolbar) gmQuickToolbar.style.display = spectator ? 'none' : 'flex';
+  if (gmQuickPhaseBtn) gmQuickPhaseBtn.style.display = gm ? '' : 'none';
+  if (gmQuickToolsBtn) gmQuickToolsBtn.style.display = gm ? '' : 'none';
+  if (gmQuickMusicBtn) gmQuickMusicBtn.style.display = gm ? '' : 'none';
+  if (gmQuickSaveBtn) gmQuickSaveBtn.style.display = gm ? '' : 'none';
+  if (gmQuickMapBtn) gmQuickMapBtn.style.display = spectator ? 'none' : '';
   if (!gm) setActiveGmQuickPanel('');
 
   // "Управление игроками" используется всеми, кроме зрителей
@@ -517,8 +522,14 @@ function refreshGmQuickToolbarTop() {
   const rect = anchor.getBoundingClientRect();
   const top = Math.max(90, Math.round(rect.top));
   gmQuickToolbar.style.setProperty('--gm-quick-toolbar-top', `${top}px`);
+
+  const toolbarRect = gmQuickToolbar.getBoundingClientRect();
   const rightPanel = document.getElementById('right-panel');
-  if (rightPanel) rightPanel.style.setProperty('--gm-quick-toolbar-top', `${top}px`);
+  if (rightPanel) {
+    rightPanel.style.setProperty('--gm-quick-toolbar-top', `${Math.round(toolbarRect.top)}px`);
+    const panelRight = Math.max(60, Math.round(window.innerWidth - toolbarRect.left + 8));
+    rightPanel.style.right = `${panelRight}px`;
+  }
 }
 
 function setActiveGmQuickPanel(panelKey) {
