@@ -366,11 +366,38 @@
 
 
   async function materializePlayableUrl(track) {
-    // Важно: не пересобирать URL в blob на каждом клиентском апдейте.
-    // Из-за этого у remote-клиентов трек мог на пару секунд стартовать,
-    // затем src/audio pipeline пересоздавался и звук снова пропадал.
-    // Для стабильного непрерывного воспроизведения используем прямой storage URL.
-    return await resolveTrackUrl(track);
+    const t = track || {};
+    const key = String(t.id || t.path || t.url || '').trim();
+    const resolvedUrl = String(await resolveTrackUrl(t) || '').trim();
+    if (!resolvedUrl) return '';
+
+    const cached = key ? trackBlobUrlCache.get(key) : null;
+    if (cached?.objectUrl && cached?.sourceUrl === resolvedUrl) {
+      return cached.objectUrl;
+    }
+
+    // На ряде браузеров потоковый playback по signed URL может "играть" без звука.
+    // Стараемся материализовать файл в blob/object URL (кэшируем по track key).
+    try {
+      const resp = await fetch(resolvedUrl, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'force-cache'
+      });
+      if (!resp.ok) throw new Error(`audio fetch failed: ${resp.status}`);
+      const blob = await resp.blob();
+      if (!blob || !(blob.size > 0)) throw new Error('empty audio blob');
+      const objectUrl = URL.createObjectURL(blob);
+      if (cached?.objectUrl && cached.objectUrl !== objectUrl) {
+        try { URL.revokeObjectURL(cached.objectUrl); } catch {}
+      }
+      if (key) trackBlobUrlCache.set(key, { objectUrl, sourceUrl: resolvedUrl });
+      return objectUrl;
+    } catch {
+      // Fallback: прямой URL, если fetch/blob недоступен (CORS/политики окружения).
+      return resolvedUrl;
+    }
   }
 
   function cleanupBlobUrls(keepKey = '') {
