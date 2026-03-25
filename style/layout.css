@@ -1822,7 +1822,8 @@
 .gm-quick-toolbar{
   position: fixed;
   top: var(--gm-quick-toolbar-top, 160px);
-  left: 0;
+  right: 8px;
+  left: auto;
   z-index: 10032;
   display: none;
   flex-direction: column;
@@ -1944,13 +1945,22 @@
 }
 
 #gm-panel-map .board-stepper{
+  display: inline-flex;
+  align-items: center;
   gap: 3px;
 }
 
 #gm-panel-map .board-stepper__btn{
   width: 18px;
-  min-height: 20px;
+  min-height: 22px;
+  height: 22px;
   border-radius: 6px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  margin: 0;
 }
 
 #gm-panel-map .board-settings-box input[type="number"]{
@@ -1991,7 +2001,8 @@
     width: min(280px, calc(100vw - 84px));
   }
   .gm-quick-toolbar{
-    left: 8px;
+    right: 8px;
+    left: auto;
   }
 }
 

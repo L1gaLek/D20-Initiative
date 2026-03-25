@@ -520,14 +520,12 @@ function applyRoleToUI() {
 function refreshGmQuickToolbarTop() {
   if (!gmQuickToolbar) return;
   const anchor = document.getElementById('action-log-container');
-  const boardCol = document.getElementById('board-col');
   if (!anchor) return;
   const rect = anchor.getBoundingClientRect();
-  const boardRect = boardCol?.getBoundingClientRect?.();
   const top = Math.max(90, Math.round(rect.top));
   gmQuickToolbar.style.setProperty('--gm-quick-toolbar-top', `${top}px`);
-  const baseLeft = Number.isFinite(boardRect?.right) ? Math.round(boardRect.right + 8) : 8;
-  gmQuickToolbar.style.left = `${Math.max(8, baseLeft)}px`;
+  gmQuickToolbar.style.left = 'auto';
+  gmQuickToolbar.style.right = '8px';
 
   const toolbarRect = gmQuickToolbar.getBoundingClientRect();
   const rightPanel = document.getElementById('right-panel');
