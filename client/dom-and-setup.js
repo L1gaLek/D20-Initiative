@@ -196,6 +196,11 @@ const startExplorationBtn = document.getElementById("start-exploration");
 
 const worldPhasesBox = document.getElementById('world-phases');
 const envEditorBox = document.getElementById('env-editor');
+const gmQuickToolbar = document.getElementById('gm-quick-toolbar');
+const gmQuickToolbarToggleBtn = document.getElementById('gm-quick-toolbar-toggle');
+const gmQuickPhaseBtn = document.getElementById('gm-quick-phase');
+const gmQuickMapBtn = document.getElementById('gm-quick-map');
+const gmQuickSaveBtn = document.getElementById('gm-quick-save');
 
 // ===== Подложка карты (ГМ) =====
 const boardBgEl = document.getElementById('board-bg');
@@ -453,6 +458,7 @@ function applyRoleToUI() {
   if (typeof envEditorBox !== "undefined" && envEditorBox) {
     envEditorBox.style.display = gm ? '' : 'none';
   }
+  if (gmQuickToolbar) gmQuickToolbar.style.display = gm ? 'flex' : 'none';
 
   // "Управление игроками" используется всеми, кроме зрителей
   const pm = document.getElementById('player-management');
@@ -496,6 +502,53 @@ function applyRoleToUI() {
   const monstersBtn = document.getElementById('open-monsters');
   if (monstersBtn) monstersBtn.style.display = gm ? '' : 'none';
 }
+
+function refreshGmQuickToolbarTop() {
+  if (!gmQuickToolbar) return;
+  const anchor = document.getElementById('action-log-container');
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  const top = Math.max(90, Math.round(rect.top));
+  gmQuickToolbar.style.setProperty('--gm-quick-toolbar-top', `${top}px`);
+}
+
+function scrollToBlock(block) {
+  if (!block || typeof block.scrollIntoView !== 'function') return;
+  block.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+}
+
+if (gmQuickToolbarToggleBtn && gmQuickToolbar) {
+  gmQuickToolbarToggleBtn.addEventListener('click', () => {
+    const nextOpen = !gmQuickToolbar.classList.contains('is-open');
+    gmQuickToolbar.classList.toggle('is-open', nextOpen);
+    gmQuickToolbarToggleBtn.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+  });
+}
+
+if (gmQuickPhaseBtn) {
+  gmQuickPhaseBtn.addEventListener('click', () => {
+    scrollToBlock(worldPhasesBox);
+  });
+}
+
+if (gmQuickMapBtn) {
+  gmQuickMapBtn.addEventListener('click', () => {
+    scrollToBlock(envEditorBox);
+  });
+}
+
+if (gmQuickSaveBtn) {
+  gmQuickSaveBtn.addEventListener('click', () => {
+    if (saveCampaignBtn && !saveCampaignBtn.disabled) {
+      saveCampaignBtn.click();
+    }
+    scrollToBlock(envEditorBox);
+  });
+}
+
+window.addEventListener('resize', refreshGmQuickToolbarTop);
+window.addEventListener('scroll', refreshGmQuickToolbarTop, { passive: true });
+setTimeout(refreshGmQuickToolbarTop, 0);
 
 // ================== SRD MONSTERS LIBRARY (GM) ==================
 let monstersLibInited = false;
