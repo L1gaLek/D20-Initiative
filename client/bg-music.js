@@ -124,7 +124,9 @@
   function loadLocalVol() {
     const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(LS_VOL) : localStorage.getItem(LS_VOL));
     const n = Number(raw);
-    return Number.isFinite(n) ? clamp01(n) : 0.4;
+    // Если пользователь еще не трогал локальную громкость, не занижаем её по умолчанию.
+    // Иначе при room volume=40% итоговая громкость становилась слишком тихой.
+    return Number.isFinite(n) ? clamp01(n) : 1;
   }
   function saveLocalVol(v) {
     try { (typeof setAppStorageItem === "function" ? setAppStorageItem(LS_VOL, String(clamp01(v))) : localStorage.setItem(LS_VOL, String(clamp01(v)))); } catch {}
