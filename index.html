@@ -262,6 +262,12 @@
   <!-- Контент: 2 колонки -->
   <div id="content-row">
 
+<div id="gm-quick-toolbar" class="gm-quick-toolbar" aria-label="Быстрые действия ГМ">
+  <button id="gm-quick-phase" class="gm-quick-toolbar__btn" type="button" title="Фазы мира" aria-label="Фазы мира" data-gm-panel="phase">🌍</button>
+  <button id="gm-quick-map" class="gm-quick-toolbar__btn" type="button" title="Редактирование карты" aria-label="Редактирование карты" data-gm-panel="map">🗺️</button>
+  <button id="gm-quick-save" class="gm-quick-toolbar__btn" type="button" title="Сохранение игры" aria-label="Сохранение игры" data-gm-panel="save">💾</button>
+</div>
+
 <!-- Левая панель -->
 <div id="action-log-container">
 
@@ -435,33 +441,33 @@
 
         <!-- Правая колонка (только для GM, управляется в client.js) -->
         <div id="right-panel">
-
-          <div id="world-phases" class="side-box">
-            <h3>Фазы мира</h3>
-            <button id="start-exploration">Фаза исследования</button>
-            <button id="start-initiative">Фаза инициативы</button>
-            <button id="start-combat">Фаза бой</button>
-
-          <div id="bg-music-box" class="side-box">
-            <h3>Фоновая музыка</h3>
-            <button id="bg-music-open" type="button">Список</button>
-            <div id="bg-music-now" style="margin-top:8px; font-size:12px; opacity:.9;">Трек: —</div>
-            <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
-              <button id="bg-music-toggle" type="button" disabled>▶/⏸</button>
-              <button id="bg-music-stop" type="button" disabled>⏹</button>
+          <div id="gm-panel-phase" class="gm-flyout-panel">
+            <div id="world-phases" class="side-box gm-side-box">
+              <h3>Фазы мира</h3>
+              <button id="start-exploration">Фаза исследования</button>
+              <button id="start-initiative">Фаза инициативы</button>
+              <button id="start-combat">Фаза бой</button>
             </div>
-            <div style="margin-top:8px;">
-              <label style="display:flex; align-items:center; gap:8px;">
-                <span style="min-width:64px; font-size:12px; opacity:.9;">Громк.</span>
-                <input id="bg-music-volume" type="range" min="0" max="100" value="40" />
-              </label>
+            <div id="bg-music-box" class="side-box gm-side-box">
+              <h3>Фоновая музыка</h3>
+              <button id="bg-music-open" type="button">Список</button>
+              <div id="bg-music-now" style="margin-top:8px; font-size:12px; opacity:.9;">Трек: —</div>
+              <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
+                <button id="bg-music-toggle" type="button" disabled>▶/⏸</button>
+                <button id="bg-music-stop" type="button" disabled>⏹</button>
+              </div>
+              <div style="margin-top:8px;">
+                <label style="display:flex; align-items:center; gap:8px;">
+                  <span style="min-width:64px; font-size:12px; opacity:.9;">Громк.</span>
+                  <input id="bg-music-volume" type="range" min="0" max="100" value="40" />
+                </label>
+              </div>
             </div>
           </div>
 
-          </div>
-
-          <div id="env-editor" class="side-box">
-            <h3>Редактирования окружения</h3>
+          <div id="gm-panel-map" class="gm-flyout-panel">
+            <div id="env-editor" class="side-box gm-side-box">
+              <h3>Редактирование карты</h3>
             <button id="edit-environment">Редактирование окружения: ВЫКЛ</button>
             <div class="env-wall-tools">
               <div class="env-wall-row">
@@ -602,7 +608,13 @@
               <button id="board-bg-clear" type="button">Убрать подложку</button>
             </div>
 
-            <div class="campaign-maps-controls">
+            </div>
+          </div>
+
+          <div id="gm-panel-save" class="gm-flyout-panel">
+            <div class="side-box gm-side-box">
+              <h3>Сохранение</h3>
+              <div class="campaign-maps-controls">
               <div class="campaign-maps-title">Карты кампании</div>
               <div class="campaign-maps-row">
                 <div class="campaign-active-map" title="Текущая выбранная карта">
@@ -613,12 +625,11 @@
               <!-- Старые элементы оставлены для совместимости, но скрыты (управление в окне «Параметры») -->
               <select id="campaign-maps-select" title="Выбор карты" style="display:none"></select>
               <button id="create-campaign-map" type="button" style="display:none">Создать карту</button>
+              </div>
+              <button id="save-campaign" type="button">Сохранить кампанию</button>
+              <button id="load-campaign" type="button">Загрузить кампанию</button>
+              <button id="reset-game">Сбросить игру полностью</button>
             </div>
-
-            <button id="save-campaign" type="button">Сохранить кампанию</button>
-            <button id="load-campaign" type="button">Загрузить кампанию</button>
-
-            <button id="reset-game">Сбросить игру полностью</button>
           </div>
 
         </div>
