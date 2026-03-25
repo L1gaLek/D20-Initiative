@@ -1853,17 +1853,23 @@
 }
 
 #right-panel{
-  position: fixed;
-  top: var(--gm-quick-toolbar-top, 160px);
-  right: 68px;
-  width: min(420px, calc(100vw - 110px));
-  z-index: 10031;
+  position: relative;
+  width: 0;
+  flex: 0 0 0;
+  overflow: visible;
   display: none;
+}
+
+.is-open#right-panel,
+#right-panel.is-open{
+  width: min(280px, calc(100vw - 120px));
+  flex-basis: min(280px, calc(100vw - 120px));
+  display: block;
 }
 
 .gm-flyout-panel{
   display: none;
-  max-height: min(78vh, 760px);
+  max-height: min(76vh, 720px);
   overflow: auto;
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 14px;
@@ -1894,8 +1900,12 @@
 
 @media (max-width: 1320px){
   #right-panel{
-    width: min(420px, calc(100vw - 84px));
-    right: 54px;
+    width: 0;
+    flex-basis: 0;
+  }
+  #right-panel.is-open{
+    width: min(280px, calc(100vw - 84px));
+    flex-basis: min(280px, calc(100vw - 84px));
   }
   .gm-quick-toolbar{
     right: 8px;

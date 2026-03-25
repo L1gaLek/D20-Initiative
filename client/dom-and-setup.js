@@ -534,7 +534,10 @@ function setActiveGmQuickPanel(panelKey) {
     if (active) hasOpen = true;
   });
 
-  if (rightPanel) rightPanel.style.display = hasOpen ? 'block' : 'none';
+  if (rightPanel) {
+    rightPanel.style.display = hasOpen ? 'block' : 'none';
+    rightPanel.classList.toggle('is-open', hasOpen);
+  }
 }
 
 if (gmQuickPhaseBtn) {
@@ -557,14 +560,6 @@ if (gmQuickSaveBtn) {
     setActiveGmQuickPanel(active ? '' : 'save');
   });
 }
-
-document.addEventListener('click', (event) => {
-  const target = event?.target;
-  if (!(target instanceof Element)) return;
-  const insideToolbar = !!target.closest('#gm-quick-toolbar');
-  const insidePanel = !!target.closest('#right-panel');
-  if (!insideToolbar && !insidePanel) setActiveGmQuickPanel('');
-});
 
 window.addEventListener('resize', refreshGmQuickToolbarTop);
 window.addEventListener('scroll', refreshGmQuickToolbarTop, { passive: true });
