@@ -463,6 +463,8 @@ function applyRoleToUI() {
   }
   if (typeof envEditorBox !== "undefined" && envEditorBox) {
     envEditorBox.style.display = '';
+    const mapBgControls = envEditorBox.querySelector('#map-bg-controls');
+    if (mapBgControls) mapBgControls.style.display = gm ? '' : 'none';
   }
   if (gmQuickToolbar) gmQuickToolbar.style.display = spectator ? 'none' : 'flex';
   if (gmQuickPhaseBtn) gmQuickPhaseBtn.style.display = gm ? '' : 'none';
@@ -518,17 +520,23 @@ function applyRoleToUI() {
 function refreshGmQuickToolbarTop() {
   if (!gmQuickToolbar) return;
   const anchor = document.getElementById('action-log-container');
+  const boardCol = document.getElementById('board-col');
   if (!anchor) return;
   const rect = anchor.getBoundingClientRect();
+  const boardRect = boardCol?.getBoundingClientRect?.();
   const top = Math.max(90, Math.round(rect.top));
   gmQuickToolbar.style.setProperty('--gm-quick-toolbar-top', `${top}px`);
+  const baseLeft = Number.isFinite(boardRect?.right) ? Math.round(boardRect.right + 8) : 8;
+  gmQuickToolbar.style.left = `${Math.max(8, baseLeft)}px`;
 
   const toolbarRect = gmQuickToolbar.getBoundingClientRect();
   const rightPanel = document.getElementById('right-panel');
   if (rightPanel) {
     rightPanel.style.setProperty('--gm-quick-toolbar-top', `${Math.round(toolbarRect.top)}px`);
-    const panelRight = Math.max(60, Math.round(window.innerWidth - toolbarRect.left + 8));
-    rightPanel.style.right = `${panelRight}px`;
+    const panelWidth = Math.max(220, Math.round(rightPanel.getBoundingClientRect().width || 280));
+    const leftTry = Math.round(toolbarRect.left - panelWidth - 10);
+    const leftFallback = Math.round(toolbarRect.right + 10);
+    rightPanel.style.left = `${leftTry >= 8 ? leftTry : leftFallback}px`;
   }
 }
 
@@ -555,6 +563,7 @@ function setActiveGmQuickPanel(panelKey) {
     rightPanel.style.display = hasOpen ? 'block' : 'none';
     rightPanel.classList.toggle('is-open', hasOpen);
   }
+  if (gmQuickToolbar) gmQuickToolbar.classList.toggle('is-panel-open', hasOpen);
 }
 
 if (gmQuickPhaseBtn) {

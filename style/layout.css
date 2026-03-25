@@ -1822,7 +1822,7 @@
 .gm-quick-toolbar{
   position: fixed;
   top: var(--gm-quick-toolbar-top, 160px);
-  right: 14px;
+  left: 0;
   z-index: 10032;
   display: none;
   flex-direction: column;
@@ -1834,6 +1834,10 @@
   background: rgba(22,20,18,0.92);
   box-shadow: 0 10px 22px rgba(0,0,0,0.32);
   padding: 8px 6px;
+}
+
+.gm-quick-toolbar.is-panel-open{
+  transform: translateX(14px);
 }
 
 .gm-quick-toolbar__btn{
@@ -1855,7 +1859,7 @@
 #right-panel{
   position: fixed;
   top: var(--gm-quick-toolbar-top, 160px);
-  right: 70px;
+  left: 0;
   width: min(280px, calc(100vw - 120px));
   z-index: 10031;
   display: none;
@@ -1987,7 +1991,7 @@
     width: min(280px, calc(100vw - 84px));
   }
   .gm-quick-toolbar{
-    right: 8px;
+    left: 8px;
   }
 }
 
