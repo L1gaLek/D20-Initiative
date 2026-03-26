@@ -72,48 +72,42 @@
   }
 
   function getRoomId() {
-    const pick = (raw) => {
-      const roomId = normalizeRoomId(raw);
-      return roomId ? rememberKnownRoomId(roomId) : '';
-    };
+  try {
+    if (typeof currentRoomId !== "undefined" && String(currentRoomId || "").trim()) {
+      return String(currentRoomId).trim();
+    }
+  } catch {}
 
-    try {
-      const direct = (typeof currentRoomId !== "undefined") ? currentRoomId : '';
-      const roomId = pick(direct);
-      if (roomId) return roomId;
-    } catch {}
+  try {
+    if (String(window.currentRoomId || "").trim()) {
+      return String(window.currentRoomId).trim();
+    }
+  } catch {}
 
-    try {
-      const roomId = pick(window.currentRoomId);
-      if (roomId) return roomId;
-    } catch {}
+  try {
+    const join = window.getLastJoinAttempt?.();
+    if (String(join?.roomId || "").trim()) {
+      return String(join.roomId).trim();
+    }
+  } catch {}
 
-    try {
-      const roomId = pick(window.__roomStateShadowRoomId);
-      if (roomId) return roomId;
-    } catch {}
+  try {
+    const shadowRoomId = String(window.__shadowRoomState?.roomId || "").trim();
+    if (shadowRoomId) return shadowRoomId;
+  } catch {}
 
-    try {
-      const attempt = (typeof window.getLastJoinAttempt === 'function') ? window.getLastJoinAttempt() : null;
-      const roomId = pick(attempt?.roomId);
-      if (roomId) return roomId;
-    } catch {}
+  try {
+    const fromPath = String(window.location?.pathname || "")
+      .split("/")
+      .filter(Boolean)
+      .pop() || "";
+    if (fromPath && fromPath !== "taverna" && fromPath !== "index.html") {
+      return fromPath.trim();
+    }
+  } catch {}
 
-    try {
-      const cached = pick(localStorage.getItem('dnd_last_room_id'));
-      if (cached) return cached;
-    } catch {}
-
-    try {
-      const path = String(window.location?.pathname || '');
-      const parts = path.split('/').filter(Boolean);
-      const tail = parts.length ? parts[parts.length - 1] : '';
-      const roomId = pick(tail);
-      if (roomId && !/\.(html?)$/i.test(roomId)) return roomId;
-    } catch {}
-
-    return "";
-  }
+  return "";
+}
 
   function isVpsTrack(track) {
     const source = String(track?.source || '').trim().toLowerCase();
@@ -154,6 +148,10 @@
     const url = new URL(endpoint, window.location.origin);
     const path = String(track?.storageKey || track?.deleteKey || track?.path || '').trim();
     const roomId = getRoomId();
+    if (!roomId) {
+  alert("Не удалось определить ID комнаты. Перезайди в комнату и попробуй снова.");
+  return;
+}
     const fileName = String(track?.fileName || track?.serverFileName || track?.name || '').trim();
     const trackId = String(track?.id || '').trim();
     if (path) url.searchParams.set('path', path);
