@@ -1713,6 +1713,12 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
       window.__equipUi.open = openEquipOverlay;
     } catch {}
 
+    const setDescToggleLabel = (btn, collapsed) => {
+      if (!btn) return;
+      btn.textContent = collapsed ? 'Показать' : 'Скрыть';
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    };
+
     root.addEventListener('click', (e) => {
       const { player: curPlayer, canEdit: curCanEdit } = getState();
       if (!curPlayer) return;
@@ -1725,11 +1731,12 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
         const idx = safeInt(toggleDescBtn.getAttribute('data-idx'), -1);
 
         const card = toggleDescBtn.closest('[data-inv-item]');
-        const descEl = card?.querySelector?.('.equip-desc, .equip-descedit');
-        if (descEl) {
-          descEl.classList.toggle('collapsed');
-          const collapsed = descEl.classList.contains('collapsed');
-          toggleDescBtn.textContent = collapsed ? 'Показать' : 'Скрыть';
+        const descEls = Array.from(card?.querySelectorAll?.('.equip-desc, .equip-descedit') || []);
+        if (descEls.length) {
+          const shouldOpen = descEls.every((node) => node.classList.contains('collapsed'));
+          descEls.forEach((node) => node.classList.toggle('collapsed', !shouldOpen));
+          const collapsed = !shouldOpen;
+          setDescToggleLabel(toggleDescBtn, collapsed);
 
           // persist state for editable sheets
           if (curCanEdit) {

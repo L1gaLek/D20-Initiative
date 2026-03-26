@@ -842,7 +842,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   `;
 
   const descToggleBtn = `
-    <button class="weapon-btn" type="button" data-inv-toggle-desc data-tab="${escapeHtml(tabId)}" data-idx="${idx}" title="Свернуть/развернуть описание">
+    <button class="weapon-btn" type="button" data-inv-toggle-desc data-tab="${escapeHtml(tabId)}" data-idx="${idx}" aria-expanded="${descCollapsed ? "false" : "true"}" title="Свернуть/развернуть описание">
       ${descCollapsed ? "Показать" : "Скрыть"}
     </button>
   `;
