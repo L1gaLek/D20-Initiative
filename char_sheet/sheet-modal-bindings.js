@@ -1713,6 +1713,12 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
       window.__equipUi.open = openEquipOverlay;
     } catch {}
 
+    const setDescToggleLabel = (btn, collapsed) => {
+      if (!btn) return;
+      btn.textContent = collapsed ? 'Показать' : 'Скрыть';
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    };
+
     root.addEventListener('click', (e) => {
       const { player: curPlayer, canEdit: curCanEdit } = getState();
       if (!curPlayer) return;
@@ -1725,11 +1731,12 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
         const idx = safeInt(toggleDescBtn.getAttribute('data-idx'), -1);
 
         const card = toggleDescBtn.closest('[data-inv-item]');
-        const descEl = card?.querySelector?.('.equip-desc, .equip-descedit');
-        if (descEl) {
-          descEl.classList.toggle('collapsed');
-          const collapsed = descEl.classList.contains('collapsed');
-          toggleDescBtn.textContent = collapsed ? 'Показать' : 'Скрыть';
+        const descEls = Array.from(card?.querySelectorAll?.('.equip-descbox, .equip-desc, .equip-descedit') || []);
+        if (descEls.length) {
+          const shouldOpen = descEls.every((node) => node.classList.contains('collapsed'));
+          descEls.forEach((node) => node.classList.toggle('collapsed', !shouldOpen));
+          const collapsed = !shouldOpen;
+          setDescToggleLabel(toggleDescBtn, collapsed);
 
           // persist state for editable sheets
           if (curCanEdit) {
@@ -2393,6 +2400,17 @@ function bindSpellAddAndDesc(root, player, canEdit) {
 
   // ручное редактирование бонуса атаки
   root.addEventListener("input", (e) => {
+    const legacyTa = e.target?.closest?.('textarea[data-legacy-inv-notes][data-sheet-path]');
+    if (legacyTa) {
+      const { player: curPlayer, canEdit: curCanEdit } = getState();
+      if (!curCanEdit || !curPlayer?.sheet?.parsed) return;
+      const path = String(legacyTa.getAttribute('data-sheet-path') || '').trim();
+      if (!path) return;
+      setByPath(curPlayer.sheet.parsed, path, String(legacyTa.value || ''));
+      scheduleSheetSave(curPlayer);
+      return;
+    }
+
     const tpFeet = e.target?.closest?.('[data-spell-teleport-feet]');
     if (tpFeet) {
       const { player: curPlayer, canEdit: curCanEdit } = getState();
