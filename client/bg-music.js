@@ -56,9 +56,62 @@
     return DEFAULT_UPLOAD_ENDPOINT;
   }
 
+  function normalizeRoomId(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    if (value === 'room' || value === 'taverna' || value === 'index.html') return '';
+    return value;
+  }
+
+  function rememberKnownRoomId(raw) {
+    const roomId = normalizeRoomId(raw);
+    if (!roomId) return '';
+    try { window.__bgMusicLastRoomId = roomId; } catch {}
+    try { localStorage.setItem('dnd_last_room_id', roomId); } catch {}
+    return roomId;
+  }
+
   function getRoomId() {
-    try { if (typeof currentRoomId !== "undefined" && currentRoomId) return String(currentRoomId); } catch {}
-    try { if (window.currentRoomId) return String(window.currentRoomId); } catch {}
+    const pick = (raw) => {
+      const roomId = normalizeRoomId(raw);
+      return roomId ? rememberKnownRoomId(roomId) : '';
+    };
+
+    try {
+      const direct = (typeof currentRoomId !== "undefined") ? currentRoomId : '';
+      const roomId = pick(direct);
+      if (roomId) return roomId;
+    } catch {}
+
+    try {
+      const roomId = pick(window.currentRoomId);
+      if (roomId) return roomId;
+    } catch {}
+
+    try {
+      const roomId = pick(window.__roomStateShadowRoomId);
+      if (roomId) return roomId;
+    } catch {}
+
+    try {
+      const attempt = (typeof window.getLastJoinAttempt === 'function') ? window.getLastJoinAttempt() : null;
+      const roomId = pick(attempt?.roomId);
+      if (roomId) return roomId;
+    } catch {}
+
+    try {
+      const cached = pick(localStorage.getItem('dnd_last_room_id'));
+      if (cached) return cached;
+    } catch {}
+
+    try {
+      const path = String(window.location?.pathname || '');
+      const parts = path.split('/').filter(Boolean);
+      const tail = parts.length ? parts[parts.length - 1] : '';
+      const roomId = pick(tail);
+      if (roomId && !/\.(html?)$/i.test(roomId)) return roomId;
+    } catch {}
+
     return "";
   }
 
@@ -890,6 +943,19 @@
     const bg = ensureBgMusic(currentState || {});
     if (safeArr(bg.tracks).length >= MAX_TRACKS) return;
 
+    if (!roomId) {
+      bgmDiag('uploadTrack: roomId missing', {
+        currentRoomIdType: (() => { try { return typeof currentRoomId; } catch { return 'unavailable'; } })(),
+        windowCurrentRoomId: (() => { try { return String(window.currentRoomId || ''); } catch { return ''; } })(),
+        roomShadowId: (() => { try { return String(window.__roomStateShadowRoomId || ''); } catch { return ''; } })(),
+        lastJoinAttempt: (() => { try { return window.getLastJoinAttempt?.() || null; } catch { return null; } })()
+      });
+      alert('Не удалось определить ID комнаты. Перезайдите в комнату и попробуйте снова.');
+      return;
+    }
+
+    rememberKnownRoomId(roomId);
+
     const id = uuid();
     const safeName = String(file.name || "track").replaceAll("/", "_").replaceAll("\\", "_");
     const form = new FormData();
@@ -916,8 +982,13 @@
       return;
     }
 
-    const url = String(payload?.url || '').trim();
-    const path = String(payload?.path || '').trim();
+    const url = pickFirstNonEmpty(payload, ['url', 'fileUrl', 'src', 'location']);
+    const path = pickFirstNonEmpty(payload, ['path', 'storageKey', 'deleteKey']);
+    const fileName = pickFirstNonEmpty(payload, ['fileName', 'serverFileName']) || safeName;
+    const storageKey = pickFirstNonEmpty(payload, ['storageKey', 'deleteKey', 'path']);
+    const deleteKey = pickFirstNonEmpty(payload, ['deleteKey', 'storageKey', 'path']);
+    const source = pickFirstNonEmpty(payload, ['source']) || 'vps';
+
     if (!url) {
       alert('Сервер не вернул URL загруженного трека.');
       return;
@@ -925,11 +996,16 @@
 
     bg.tracks.push({
       id,
-      name: String(payload?.fileName || safeName),
+      name: String(fileName || safeName),
       desc: "",
       description: "",
       url,
       path: path || '',
+      source,
+      fileName: String(fileName || safeName),
+      serverFileName: String(fileName || safeName),
+      storageKey: storageKey || path || '',
+      deleteKey: deleteKey || storageKey || path || '',
       createdAt: new Date().toISOString()
     });
 
@@ -1088,6 +1164,7 @@
   // ---------- Apply state (called from message-ui on each snapshot) ----------
   async function applyState(state) {
     currentState = state || currentState || {};
+    try { rememberKnownRoomId(getRoomId()); } catch {}
     const applyToken = ++_applyToken;
 
     try { ensureMainUiLayout(); } catch {}
