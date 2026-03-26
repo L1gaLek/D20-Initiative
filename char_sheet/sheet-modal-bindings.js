@@ -1713,6 +1713,12 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
       window.__equipUi.open = openEquipOverlay;
     } catch {}
 
+    const setDescToggleLabel = (btn, collapsed) => {
+      if (!btn) return;
+      btn.textContent = collapsed ? 'Показать' : 'Скрыть';
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    };
+    
     root.addEventListener('click', (e) => {
       const { player: curPlayer, canEdit: curCanEdit } = getState();
       if (!curPlayer) return;
