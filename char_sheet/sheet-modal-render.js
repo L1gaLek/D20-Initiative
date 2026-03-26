@@ -758,7 +758,7 @@ function renderCombatTab(vm) {
     { id: "adventuring_gear", label: "Снаряжение", icon: "🎒" },
     { id: "tools", label: "Инструменты", icon: "🧰" },
     { id: "mounts_animals", label: "Животные", icon: "🐎" },
-    { id: "tack_vehicles", label: "Упряжь/Повозки", icon: "🛒" },
+    { id: "tack_vehicles", label: "Упряжь/Повозки", icon: "🚃" },
     { id: "water_vehicles", label: "Водный транспорт", icon: "⛵" },
     { id: "trade_goods", label: "Товары", icon: "📦" },
     { id: "lifestyle_expenses", label: "Образ жизни", icon: "🏕️" },
@@ -854,9 +854,17 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   ` : "";
 
   const descBlock = canEdit
-    ? `<textarea class="sheet-textarea equip-descedit ${descCollapsed ? "collapsed" : ""}" rows="3" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.description_ru"
-         placeholder="Описание...">${escapeHtml(desc)}</textarea>`
-    : `<div class="equip-desc ${descCollapsed ? "collapsed" : ""}">${desc ? escapeHtml(desc) : `<span class="equip-desc--empty">—</span>`}</div>`;
+    ? `
+      <div class="equip-descbox ${descCollapsed ? "collapsed" : ""}">
+        <textarea class="sheet-textarea equip-descedit" rows="3" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.description_ru"
+          placeholder="Описание...">${escapeHtml(desc)}</textarea>
+      </div>
+    `
+    : `
+      <div class="equip-descbox ${descCollapsed ? "collapsed" : ""}">
+        <div class="equip-desc">${desc ? escapeHtml(desc) : `<span class="equip-desc--empty">—</span>`}</div>
+      </div>
+    `;
 
 
   const detailsBlock = (details && !fromDb)
@@ -894,6 +902,8 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
 
   function renderInventoryTab(vm, canEdit) {
     const denom = String(vm?.coinsViewDenom || "gp").toLowerCase();
+    const legacyItems = escapeHtml(String(vm?.text?.inventoryItems?.value || ""));
+    const legacyTreasures = escapeHtml(String(vm?.text?.inventoryTreasures?.value || ""));
 
     const exchangeTooltip = `
       <div class="exchange-tooltip" role="tooltip">
@@ -1059,8 +1069,8 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
             Legacy-поля ниже оставлены для совместимости старых сохранений (можно не использовать).
           </div>
           <div class="equip-legacy">
-            <div class="kv" style="margin-top:8px"><div class="k">Предметы (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="text.inventoryItems.value" placeholder="Список предметов..."></textarea></div></div>
-            <div class="kv" style="margin-top:8px"><div class="k">Сокровища (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="text.inventoryTreasures.value" placeholder="Сокровища..."></textarea></div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Предметы (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-legacy-inv-notes="items" data-sheet-path="text.inventoryItems.value" placeholder="Список предметов...">${legacyItems}</textarea></div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Сокровища (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-legacy-inv-notes="treasures" data-sheet-path="text.inventoryTreasures.value" placeholder="Сокровища...">${legacyTreasures}</textarea></div></div>
           </div>
         </div>
       </div>
