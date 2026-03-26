@@ -553,10 +553,9 @@ function refreshGmQuickToolbarTop() {
   const rightPanel = document.getElementById('right-panel');
   if (rightPanel) {
     rightPanel.style.setProperty('--gm-quick-toolbar-top', `${Math.round(toolbarRect.top)}px`);
-    const panelWidth = Math.max(220, Math.round(rightPanel.getBoundingClientRect().width || 280));
-    const leftTry = Math.round(toolbarRect.left - panelWidth - 10);
-    const leftFallback = Math.round(toolbarRect.right + 10);
-    rightPanel.style.left = `${leftTry >= 8 ? leftTry : leftFallback}px`;
+    const rightOffset = Math.max(8, Math.round(window.innerWidth - toolbarRect.left + 10));
+    rightPanel.style.left = 'auto';
+    rightPanel.style.right = `${rightOffset}px`;
   }
 }
 
@@ -580,6 +579,7 @@ function setActiveGmQuickPanel(panelKey) {
   });
 
   if (rightPanel) {
+    if (hasOpen) refreshGmQuickToolbarTop();
     rightPanel.style.display = hasOpen ? 'block' : 'none';
     rightPanel.classList.toggle('is-open', hasOpen);
   }
