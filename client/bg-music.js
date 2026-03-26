@@ -13,7 +13,7 @@
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
   const BUCKET = "room-audio"; // legacy fallback для старых path-треков
   const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h (legacy fallback)
-  const DEFAULT_UPLOAD_ENDPOINT = "/api/uploads/room-audio";
+  const DEFAULT_UPLOAD_ENDPOINT = "https://ws.d20-initiative.fun/api/uploads/room-audio";
   const DIAG_KEY = "int_bg_music_diag";
 
   function isDiagEnabled() {
@@ -45,6 +45,13 @@
     try {
       const raw = String(window.BGM_UPLOAD_ENDPOINT || '').trim();
       if (raw) return raw;
+    } catch {}
+    try {
+      // GitHub Pages не может обрабатывать backend POST/DELETE на том же origin.
+      // Для него используем VPS API как безопасный fallback по умолчанию.
+      if (/\.github\.io$/i.test(String(window.location?.hostname || ''))) {
+        return DEFAULT_UPLOAD_ENDPOINT;
+      }
     } catch {}
     return DEFAULT_UPLOAD_ENDPOINT;
   }
@@ -877,7 +884,8 @@
       const resp = await fetch(endpoint, {
         method: 'POST',
         body: form,
-        credentials: 'include'
+        credentials: 'omit',
+        mode: 'cors'
       });
       payload = await resp.json().catch(() => null);
       if (!resp.ok) {
@@ -919,7 +927,8 @@
       try {
         const resp = await fetch(buildTrackDeleteUrl(track), {
           method: 'DELETE',
-          credentials: 'include'
+          credentials: 'omit',
+          mode: 'cors'
         });
         if (!resp.ok && resp.status !== 404) {
           const payload = await resp.json().catch(() => null);
