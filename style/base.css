@@ -2609,17 +2609,40 @@ textarea[data-sheet-path="text.profPlain.value"]{
 /* ===== Equipment / Shop / Inventory Tabs ===== */
 .equip-topline{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .equip-top-actions{ display:flex; gap:8px; flex-wrap:wrap; }
-.equip-subtabs{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.equip-subtabs-frame{
+  margin-top:10px;
+  border:1px solid rgba(224, 177, 90, 0.30);
+  border-radius: 14px;
+  padding: 8px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01)),
+    rgba(17, 13, 10, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07);
+}
+.equip-subtabs{ display:flex; flex-wrap:wrap; gap:7px; }
 .equip-subtab{
-  border:1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.06);
+  border:1px solid rgba(224,177,90,0.26);
+  background: rgba(255,255,255,0.045);
   color:#fff;
   border-radius: 10px;
-  padding: 6px 10px;
+  min-width: 112px;
+  padding: 6px 8px 5px;
   font-weight: 800;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  align-items:center;
+  gap:4px;
+  text-align:center;
   cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
-.equip-subtab.active{ background: rgba(255,255,255,0.16); }
+.equip-subtab__label{ font-size:12px; line-height:1.15; }
+.equip-subtab__icon{ font-size:15px; line-height:1; opacity:.95; }
+.equip-subtab.active{
+  background: linear-gradient(180deg, rgba(255,213,128,0.25), rgba(255,213,128,0.08));
+  border-color: rgba(255,213,128,0.56);
+  box-shadow: 0 0 0 1px rgba(255,213,128,0.22) inset;
+}
 .equip-list{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
 .equip-card{
   position: relative;

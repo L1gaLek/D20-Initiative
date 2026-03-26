@@ -753,16 +753,16 @@ function renderCombatTab(vm) {
 }
 
   const EQUIP_TAB_DEFS = [
-    { id: "weapons", label: "Оружие" },
-    { id: "armor", label: "Доспехи" },
-    { id: "adventuring_gear", label: "Снаряжение" },
-    { id: "tools", label: "Инструменты" },
-    { id: "mounts_animals", label: "Животные" },
-    { id: "tack_vehicles", label: "Упряжь/Повозки" },
-    { id: "water_vehicles", label: "Водный транспорт" },
-    { id: "trade_goods", label: "Товары" },
-    { id: "lifestyle_expenses", label: "Образ жизни" },
-    { id: "other", label: "Другое" }
+    { id: "weapons", label: "Оружие", icon: "⚔️" },
+    { id: "armor", label: "Доспехи", icon: "🛡️" },
+    { id: "adventuring_gear", label: "Снаряжение", icon: "🎒" },
+    { id: "tools", label: "Инструменты", icon: "🧰" },
+    { id: "mounts_animals", label: "Животные", icon: "🐎" },
+    { id: "tack_vehicles", label: "Упряжь/Повозки", icon: "🛒" },
+    { id: "water_vehicles", label: "Водный транспорт", icon: "⛵" },
+    { id: "trade_goods", label: "Товары", icon: "📦" },
+    { id: "lifestyle_expenses", label: "Образ жизни", icon: "🏕️" },
+    { id: "other", label: "Другое", icon: "✨" }
   ];
 
   function fmtCost(cost) {
@@ -1031,11 +1031,18 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
             </div>
           </div>
 
-          <div class="equip-subtabs" role="tablist">
-            ${(EQUIP_TAB_DEFS).map(t => {
-              const active = String(vm?.inventory?.activeTab || "weapons") === t.id;
-              return `<button class="equip-subtab ${active ? "active" : ""}" type="button" data-inv-subtab="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`;
-            }).join("")}
+          <div class="equip-subtabs-frame">
+            <div class="equip-subtabs" role="tablist">
+              ${(EQUIP_TAB_DEFS).map(t => {
+                const active = String(vm?.inventory?.activeTab || "weapons") === t.id;
+                return `
+                  <button class="equip-subtab ${active ? "active" : ""}" type="button" data-inv-subtab="${escapeHtml(t.id)}" title="${escapeHtml(t.label)}">
+                    <span class="equip-subtab__label">${escapeHtml(t.label)}</span>
+                    <span class="equip-subtab__icon" aria-hidden="true">${escapeHtml(t.icon || "•")}</span>
+                  </button>
+                `;
+              }).join("")}
+            </div>
           </div>
 
           <div class="equip-list" data-inv-list>
