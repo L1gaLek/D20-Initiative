@@ -596,7 +596,9 @@
       slots.push({ level: lvlN, total, filled });
     }
 
-    const text = (sheet?.text && typeof sheet.text === "object") ? sheet.text : {};
+    const text = (sheet?.text && typeof sheet.text === "object")
+      ? sheet.text
+      : { inventoryItems: { value: "" }, inventoryTreasures: { value: "" } };
 
     // Всегда показываем уровни 0..9 даже без .json.
     // Поддерживаем 2 источника:
@@ -772,7 +774,6 @@ const weapons = weaponsRaw
 
     const inv = (sheet?.inventory && typeof sheet.inventory === "object") ? sheet.inventory : null;
     const shop = (sheet?.shop && typeof sheet.shop === "object") ? sheet.shop : null;
-
     return {
       name, cls, lvl, race,
       gender,
@@ -789,6 +790,7 @@ const weapons = weaponsRaw
       combatPowersDefs, combatPowersActions,
       coins, coinsViewDenom,
       inventory: inv,
+      text,
       shop
     };
   }
