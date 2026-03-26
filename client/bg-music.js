@@ -59,7 +59,22 @@
   function getRoomId() {
     try { if (typeof currentRoomId !== "undefined" && currentRoomId) return String(currentRoomId); } catch {}
     try { if (window.currentRoomId) return String(window.currentRoomId); } catch {}
-    return "room";
+    return "";
+  }
+
+  function isVpsTrack(track) {
+    const source = String(track?.source || '').trim().toLowerCase();
+    if (source === 'vps') return true;
+    if (source === 'supabase-legacy') return false;
+    return !!String(track?.url || '').trim() && !String(track?.path || '').trim().startsWith('music/');
+  }
+
+  function pickFirstNonEmpty(obj, keys) {
+    for (const key of keys) {
+      const value = String(obj?.[key] || '').trim();
+      if (value) return value;
+    }
+    return '';
   }
 
   function isGM() {
@@ -84,12 +99,14 @@
   function buildTrackDeleteUrl(track) {
     const endpoint = getMusicUploadEndpoint();
     const url = new URL(endpoint, window.location.origin);
-    const path = String(track?.path || '').trim();
+    const path = String(track?.storageKey || track?.deleteKey || track?.path || '').trim();
     const roomId = getRoomId();
-    const fileName = String(track?.name || '').trim();
+    const fileName = String(track?.fileName || track?.serverFileName || track?.name || '').trim();
+    const trackId = String(track?.id || '').trim();
     if (path) url.searchParams.set('path', path);
     if (roomId) url.searchParams.set('roomId', roomId);
     if (fileName) url.searchParams.set('fileName', fileName);
+    if (trackId) url.searchParams.set('trackId', trackId);
     return url.toString();
   }
 
@@ -112,6 +129,9 @@
         if (!t || typeof t !== 'object') return;
         if (typeof t.desc === 'undefined' && typeof t.description !== 'undefined') t.desc = t.description;
         if (typeof t.description === 'undefined' && typeof t.desc !== 'undefined') t.description = t.desc;
+        if (!t.source) t.source = isVpsTrack(t) ? 'vps' : 'supabase-legacy';
+        if (!t.fileName) t.fileName = String(t.serverFileName || t.name || '');
+        if (!t.storageKey) t.storageKey = String(t.deleteKey || t.path || '');
       });
     } catch {}
 
@@ -922,8 +942,7 @@
     const id = String(track?.id || "");
     if (!id) return;
 
-    const hasVpsUrl = String(track?.url || '').trim().length > 0;
-    if (hasVpsUrl) {
+    if (isVpsTrack(track)) {
       try {
         const resp = await fetch(buildTrackDeleteUrl(track), {
           method: 'DELETE',
@@ -940,7 +959,7 @@
     } else {
       // Legacy Supabase track without direct URL.
       const sb = getSb();
-      const p = String(track?.path || "");
+      const p = String(track?.storageKey || track?.deleteKey || track?.path || "");
       if (sb?.storage && p) {
         const rm = await sb.storage.from(BUCKET).remove([p]);
         if (rm?.error) console.warn("bg-music: remove failed", rm.error);
