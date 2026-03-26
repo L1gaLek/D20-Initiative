@@ -1,19 +1,19 @@
 // client/bg-music.js
-// Фоновая музыка (Supabase Storage + синхронизация состояния комнаты)
+// Фоновая музыка (VPS uploads + синхронизация состояния комнаты)
 // - 1 трек одновременно
 // - список/описания треков хранится в room_state.bgMusic
-// - загрузка в Supabase Storage bucket: "room-audio"
+// - загрузка на VPS upload endpoint (multipart/form-data)
 // - максимум 10 треков; размер файла <= 50MB
 // - фильтра расширений НЕТ (можно любые), но проигрывание зависит от браузера.
 //
-// Supabase client в проекте: sbClient, доступ через window.getSbClient() (см. dom-and-setup.js)
+// Для обратной совместимости старых треков (с path) оставлен fallback через Supabase signed/public URL.
 
 (function () {
   const MAX_TRACKS = 10;
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
-  const BUCKET = "room-audio";
-  const STORAGE_PREFIX = "music"; // path: music/<roomId>/<trackId>_<name>
-  const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h
+  const BUCKET = "room-audio"; // legacy fallback для старых path-треков
+  const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h (legacy fallback)
+  const DEFAULT_UPLOAD_ENDPOINT = "https://ws.d20-initiative.fun/api/uploads/room-audio";
   const DIAG_KEY = "int_bg_music_diag";
 
   function isDiagEnabled() {
@@ -41,6 +41,21 @@
     return window.sbClient || window.supabase || null;
   }
 
+  function getMusicUploadEndpoint() {
+    try {
+      const raw = String(window.BGM_UPLOAD_ENDPOINT || '').trim();
+      if (raw) return raw;
+    } catch {}
+    try {
+      // GitHub Pages не может обрабатывать backend POST/DELETE на том же origin.
+      // Для него используем VPS API как безопасный fallback по умолчанию.
+      if (/\.github\.io$/i.test(String(window.location?.hostname || ''))) {
+        return DEFAULT_UPLOAD_ENDPOINT;
+      }
+    } catch {}
+    return DEFAULT_UPLOAD_ENDPOINT;
+  }
+
   function getRoomId() {
     try { if (typeof currentRoomId !== "undefined" && currentRoomId) return String(currentRoomId); } catch {}
     try { if (window.currentRoomId) return String(window.currentRoomId); } catch {}
@@ -63,6 +78,19 @@
   function safeNum(x, fb = 0) {
     const n = Number(x);
     return Number.isFinite(n) ? n : fb;
+  }
+
+
+  function buildTrackDeleteUrl(track) {
+    const endpoint = getMusicUploadEndpoint();
+    const url = new URL(endpoint, window.location.origin);
+    const path = String(track?.path || '').trim();
+    const roomId = getRoomId();
+    const fileName = String(track?.name || '').trim();
+    if (path) url.searchParams.set('path', path);
+    if (roomId) url.searchParams.set('roomId', roomId);
+    if (fileName) url.searchParams.set('fileName', fileName);
+    return url.toString();
   }
 
   function ensureBgMusic(state) {
@@ -838,40 +866,50 @@
 
   // ---------- Storage ops ----------
   async function uploadTrack(file) {
-    const sb = getSb();
-    if (!sb || !sb.storage) {
-      alert("Supabase client не инициализирован (sbClient отсутствует).");
-      return;
-    }
-
     const roomId = getRoomId();
     const bg = ensureBgMusic(currentState || {});
     if (safeArr(bg.tracks).length >= MAX_TRACKS) return;
 
     const id = uuid();
     const safeName = String(file.name || "track").replaceAll("/", "_").replaceAll("\\", "_");
-    const path = `${STORAGE_PREFIX}/${roomId}/${id}_${safeName}`;
+    const form = new FormData();
+    form.append('file', file, safeName);
+    form.append('roomId', roomId);
+    form.append('trackId', id);
 
-    const up = await sb.storage.from(BUCKET).upload(path, file, {
-      cacheControl: "3600",
-      upsert: false
-    });
+    const endpoint = getMusicUploadEndpoint();
 
-    if (up?.error) {
-      alert("Ошибка загрузки: " + (up.error.message || up.error));
+    let payload = null;
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        body: form,
+        credentials: 'omit',
+        mode: 'cors'
+      });
+      payload = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        throw new Error(String(payload?.error || payload?.message || `HTTP ${resp.status}`));
+      }
+    } catch (e) {
+      alert('Ошибка загрузки на VPS: ' + (e?.message || e));
       return;
     }
 
-    let bestUrl = '';
-    try { bestUrl = await resolveTrackUrl({ id, path }); } catch {}
+    const url = String(payload?.url || '').trim();
+    const path = String(payload?.path || '').trim();
+    if (!url) {
+      alert('Сервер не вернул URL загруженного трека.');
+      return;
+    }
 
     bg.tracks.push({
       id,
-      name: safeName,
+      name: String(payload?.fileName || safeName),
       desc: "",
       description: "",
-      url: bestUrl || '',
-      path,
+      url,
+      path: path || '',
       createdAt: new Date().toISOString()
     });
 
@@ -880,20 +918,33 @@
   }
 
   async function deleteTrack(track) {
-    const sb = getSb();
-    if (!sb || !sb.storage) {
-      alert("Supabase client не инициализирован.");
-      return;
-    }
-
     const bg = ensureBgMusic(currentState || {});
     const id = String(track?.id || "");
     if (!id) return;
 
-    const p = String(track?.path || "");
-    if (p) {
-      const rm = await sb.storage.from(BUCKET).remove([p]);
-      if (rm?.error) console.warn("bg-music: remove failed", rm.error);
+    const hasVpsUrl = String(track?.url || '').trim().length > 0;
+    if (hasVpsUrl) {
+      try {
+        const resp = await fetch(buildTrackDeleteUrl(track), {
+          method: 'DELETE',
+          credentials: 'omit',
+          mode: 'cors'
+        });
+        if (!resp.ok && resp.status !== 404) {
+          const payload = await resp.json().catch(() => null);
+          console.warn('bg-music: VPS delete failed', payload || resp.status);
+        }
+      } catch (e) {
+        console.warn('bg-music: VPS delete failed', e);
+      }
+    } else {
+      // Legacy Supabase track without direct URL.
+      const sb = getSb();
+      const p = String(track?.path || "");
+      if (sb?.storage && p) {
+        const rm = await sb.storage.from(BUCKET).remove([p]);
+        if (rm?.error) console.warn("bg-music: remove failed", rm.error);
+      }
     }
 
     bg.tracks = safeArr(bg.tracks).filter(t => String(t?.id || "") !== id);
