@@ -758,7 +758,7 @@ function renderCombatTab(vm) {
     { id: "adventuring_gear", label: "Снаряжение", icon: "🎒" },
     { id: "tools", label: "Инструменты", icon: "🧰" },
     { id: "mounts_animals", label: "Животные", icon: "🐎" },
-    { id: "tack_vehicles", label: "Упряжь/Повозки", icon: "🪵🚃" },
+    { id: "tack_vehicles", label: "Упряжь/Повозки", icon: "🪵🛺" },
     { id: "water_vehicles", label: "Водный транспорт", icon: "⛵" },
     { id: "trade_goods", label: "Товары", icon: "📦" },
     { id: "lifestyle_expenses", label: "Образ жизни", icon: "🏕️" },
