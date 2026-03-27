@@ -3813,6 +3813,18 @@ body{
   background: rgba(255,255,255,.045);
   color: #fff2d5;
   border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#sheet-modal .sheet-tab__icon{
+  font-size: 14px;
+  line-height: 1;
+}
+
+#sheet-modal .sheet-tab__label{
+  line-height: 1.1;
 }
 
 #sheet-modal .sheet-tab:hover{
