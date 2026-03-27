@@ -3780,3 +3780,82 @@ body{
   outline: none;
   box-shadow: 0 0 0 3px rgba(255, 176, 81, 0.18), 0 0 0 1px rgba(255, 203, 114, 0.16);
 }
+
+/* ===== Character Sheet ("Основа"): unified inventory-like visual theme ===== */
+#sheet-modal .sheet-section h3{
+  color: #ffe7bf;
+  letter-spacing: .2px;
+  text-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+
+#sheet-modal .sheet-card{
+  border: 1px solid rgba(224, 177, 90, 0.30);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01)),
+    rgba(17, 13, 10, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 10px 22px rgba(0,0,0,0.24);
+}
+
+#sheet-modal .sheet-card h4{
+  color: #ffe1ad;
+}
+
+#sheet-modal .sheet-main{
+  border-left: 1px solid rgba(224,177,90,.18);
+  padding-left: 12px;
+}
+
+#sheet-modal .sheet-tab{
+  border: 1px solid rgba(224,177,90,.26);
+  background: rgba(255,255,255,.045);
+  color: #fff2d5;
+  border-radius: 10px;
+}
+
+#sheet-modal .sheet-tab:hover{
+  border-color: rgba(255,213,128,.45);
+  background: rgba(255,255,255,.08);
+}
+
+#sheet-modal .sheet-tab.active{
+  border-color: rgba(255,213,128,.58);
+  background: linear-gradient(180deg, rgba(255,213,128,.24), rgba(255,213,128,.07));
+  box-shadow: 0 0 0 1px rgba(255,213,128,.20) inset;
+}
+
+#sheet-modal .sheet-chip{
+  border-color: rgba(224,177,90,.28);
+  background: rgba(255,255,255,.05);
+}
+
+#sheet-modal .kv{
+  border-bottom-color: rgba(224,177,90,.20);
+}
+
+#sheet-modal input[type="text"],
+#sheet-modal input[type="number"],
+#sheet-modal select,
+#sheet-modal textarea.sheet-textarea{
+  border: 1px solid rgba(224,177,90,.24);
+  background: rgba(20,15,12,.82);
+  color: #fff3d8;
+  border-radius: 10px;
+}
+
+#sheet-modal textarea.sheet-textarea{
+  line-height: 1.35;
+}
+
+#sheet-modal .weapon-btn{
+  border-color: rgba(224,177,90,.30);
+  background: rgba(255,255,255,.05);
+  color: #ffe9c5;
+}
+
+#sheet-modal .weapon-btn:hover:not(:disabled){
+  border-color: rgba(255,213,128,.48);
+  background: rgba(255,255,255,.09);
+}
