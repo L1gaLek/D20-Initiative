@@ -7714,13 +7714,13 @@
     },
     {
       "id": "cloud-giant",
-      "name_ru": "Клоуд Гиант",
+      "name_ru": "Облачный великан",
       "size_ru": "Огромный",
       "type_ru": "великан",
-      "alignment_ru": "neutral good (50%) or neutral evil (50%)",
-      "ac": "14 (natural armor)",
+      "alignment_ru": "нейтрально-добрый (50%) или нейтрально-злой (50%)",
+      "ac": "14 (природная броня)",
       "hp": "200 (16d12 + 96)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 27,
@@ -7747,38 +7747,38 @@
           "mod": 3
         }
       },
-      "saving_throws": "Con +10, Wis +7, Cha +7",
-      "skills": "Insight +7, Perception +7",
+      "saving_throws": "Тел +10, Мдр +7, Хар +7",
+      "skills": "Проницательность +7, Восприятие +7",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "passive Perception 17",
-      "languages": "Common, Giant",
+      "senses": "пассивное Восприятие 17",
+      "languages": "Общий, Великанский",
       "cr": "9",
       "xp": 5000,
       "traits": [
         {
           "name_ru": "Keen Smell",
-          "text_ru": "The giant has преимущество on Wisdom (Perception) checks that rely on smell."
+          "text_ru": "giant has преимущество on Мдрdom (Восприятие) checks that rely on smell."
         },
         {
           "name_ru": "Innate Spellcasting",
-          "text_ru": "The giant’s innate spellcasting ability is Charisma. It can innately cast the following spells, requiring no material components: At will: detect magic, fog cloud, light 3/day each: feather fall, fly, misty step, telekinesis 1/day each: control weather, gaseous form"
+          "text_ru": "giant’s innate spellcasting ability is Харrisma. It can innately cast the following spells, requiring no material components: At will: detect magic, fog cloud, light 3/day each: feather fall, fly, misty step, telekinesis 1/day each: control weather, gaseous form"
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The giant makes two morningstar attacks."
+          "text_ru": "giant makes two morningstar attacks."
         },
         {
           "name_ru": "Morningstar",
-          "text_ru": "Атака оружием ближнего боя: +12 to hit, reach 10 ft., one target. Попадание: 21 (3d8 + 8) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +12 к попаданию, досягаемость 10 фт., одна цель. Попадание: 21 (3d8 + 8) колющего урона."
         },
         {
           "name_ru": "Rock",
-          "text_ru": "Атака оружием дальнего боя: +12 to hit, range 60/240 ft., one target. Попадание: 30 (4d10 + 8) дробящего урона."
+          "text_ru": "Атака оружием дальнего боя: +12 к попаданию, range 60/240 фт., одна цель. Попадание: 30 (4d10 + 8) дробящего урона."
         }
       ],
       "reactions": [],
@@ -7787,13 +7787,13 @@
     },
     {
       "id": "fire-giant",
-      "name_ru": "Фире Гиант",
+      "name_ru": "Огненный великан",
       "size_ru": "Огромный",
       "type_ru": "великан",
       "alignment_ru": "законно-злой",
-      "ac": "18 (plate)",
+      "ac": "18 (латы)",
       "hp": "162 (13d12 + 78)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 25,
@@ -7820,29 +7820,29 @@
           "mod": 1
         }
       },
-      "saving_throws": "Dex +3, Con +10, Cha +5",
-      "skills": "Athletics +11, Perception +6",
+      "saving_throws": "Лов +3, Тел +10, Хар +5",
+      "skills": "Атлетика +11, Восприятие +6",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "passive Perception 16",
-      "languages": "Giant",
+      "senses": "пассивное Восприятие 16",
+      "languages": "Великанский",
       "cr": "9",
       "xp": 5000,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The giant makes two greatsword attacks. 312 System Reference Document 5.1"
+          "text_ru": "giant makes two двуручный меч attacks. 312 System Reference Document 5.1"
         },
         {
           "name_ru": "Greatsword",
-          "text_ru": "Атака оружием ближнего боя: +11 to hit, reach 10 ft., one target. Попадание: 28 (6d6 + 7) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +11 к попаданию, досягаемость 10 фт., одна цель. Попадание: 28 (6d6 + 7) рубящего урона."
         },
         {
           "name_ru": "Rock",
-          "text_ru": "Атака оружием дальнего боя: +11 to hit, range 60/240 ft., one target. Попадание: 29 (4d10 + 7) дробящего урона."
+          "text_ru": "Атака оружием дальнего боя: +11 к попаданию, range 60/240 фт., одна цель. Попадание: 29 (4d10 + 7) дробящего урона."
         }
       ],
       "reactions": [],
@@ -7851,13 +7851,13 @@
     },
     {
       "id": "frost-giant",
-      "name_ru": "Фрост Гиант",
+      "name_ru": "Морозный великан",
       "size_ru": "Огромный",
       "type_ru": "великан",
       "alignment_ru": "нейтрально-злой",
-      "ac": "15 (patchwork armor)",
+      "ac": "15 (лоскутный доспех)",
       "hp": "138 (12d12 + 60)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 23,
@@ -7884,29 +7884,29 @@
           "mod": 1
         }
       },
-      "saving_throws": "Con +8, Wis +3, Cha +4",
-      "skills": "Athletics +9, Perception +3",
+      "saving_throws": "Тел +8, Мдр +3, Хар +4",
+      "skills": "Атлетика +9, Восприятие +3",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "cold",
+      "damage_immunities": "холод",
       "condition_immunities": null,
-      "senses": "passive Perception 13",
-      "languages": "Giant",
+      "senses": "пассивное Восприятие 13",
+      "languages": "Великанский",
       "cr": "8",
       "xp": 3900,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The giant makes two greataxe attacks."
+          "text_ru": "giant makes two секира attacks."
         },
         {
           "name_ru": "Greataxe",
-          "text_ru": "Атака оружием ближнего боя: +9 to hit, reach 10 ft., one target. Попадание: 25 (3d12 + 6) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, досягаемость 10 фт., одна цель. Попадание: 25 (3d12 + 6) рубящего урона."
         },
         {
           "name_ru": "Rock",
-          "text_ru": "Атака оружием дальнего боя: +9 to hit, range 60/240 ft., one target. Попадание: 28 (4d10 + 6) дробящего урона."
+          "text_ru": "Атака оружием дальнего боя: +9 к попаданию, range 60/240 фт., одна цель. Попадание: 28 (4d10 + 6) дробящего урона."
         }
       ],
       "reactions": [],
@@ -7915,13 +7915,13 @@
     },
     {
       "id": "hill-giant",
-      "name_ru": "Хилл Гиант",
+      "name_ru": "Холмовой великан",
       "size_ru": "Огромный",
       "type_ru": "великан",
       "alignment_ru": "хаотично-злой",
-      "ac": "13 (natural armor)",
+      "ac": "13 (природная броня)",
       "hp": "105 (10d12 + 40)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 21,
@@ -7949,28 +7949,28 @@
         }
       },
       "saving_throws": null,
-      "skills": "Perception +2",
+      "skills": "Восприятие +2",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "passive Perception 12",
-      "languages": "Giant",
+      "senses": "пассивное Восприятие 12",
+      "languages": "Великанский",
       "cr": "5",
       "xp": 1800,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The giant makes two greatclub attacks."
+          "text_ru": "Великан совершает две атаки большой дубиной."
         },
         {
           "name_ru": "Greatclub",
-          "text_ru": "Атака оружием ближнего боя: +8 to hit, reach 10 ft., one target. Попадание: 18 (3d8 + 5) дробящего урона."
+          "text_ru": "Атака оружием ближнего боя: +8 к попаданию, досягаемость 10 фт., одна цель. Попадание: 18 (3d8 + 5) дробящего урона."
         },
         {
           "name_ru": "Rock",
-          "text_ru": "Атака оружием дальнего боя: +8 to hit, range 60/240 ft., one target. Попадание: 21 (3d10 + 5) дробящего урона."
+          "text_ru": "Атака оружием дальнего боя: +8 к попаданию, range 60/240 фт., одна цель. Попадание: 21 (3d10 + 5) дробящего урона."
         }
       ],
       "reactions": [],
@@ -7979,13 +7979,13 @@
     },
     {
       "id": "stone-giant",
-      "name_ru": "Стоне Гиант",
+      "name_ru": "Каменный великан",
       "size_ru": "Огромный",
       "type_ru": "великан",
       "alignment_ru": "нейтральный",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "126 (11d12 + 55)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 23,
@@ -8012,40 +8012,40 @@
           "mod": -1
         }
       },
-      "saving_throws": "Dex +5, Con +8, Wis +4",
-      "skills": "Athletics +12, Perception +4",
+      "saving_throws": "Лов +5, Тел +8, Мдр +4",
+      "skills": "Атлетика +12, Восприятие +4",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 14",
-      "languages": "Giant",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 14",
+      "languages": "Великанский",
       "cr": "7",
       "xp": 2900,
       "traits": [
         {
-          "name_ru": "Stone Camouflage",
-          "text_ru": "The giant has преимущество on Dexterity (Stealth) checks made to hide in rocky terrain."
+          "name_ru": "Камуфляж в камне",
+          "text_ru": "giant has преимущество on Ловterity (Скрытность) checks made to hide in каменьy terrain."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The giant makes two greatclub attacks."
+          "text_ru": "Великан совершает две атаки большой дубиной."
         },
         {
           "name_ru": "Greatclub",
-          "text_ru": "Атака оружием ближнего боя: +9 to hit, reach 15 ft., one target. Попадание: 19 (3d8 + 6) дробящего урона."
+          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, досягаемость 15 фт., одна цель. Попадание: 19 (3d8 + 6) дробящего урона."
         },
         {
           "name_ru": "Rock",
-          "text_ru": "Атака оружием дальнего боя: +9 to hit, range 60/240 ft., one target. Попадание: 28 (4d10 + 6) дробящего урона. If the target is a creature, it must succeed on a СЛ 17 Strength спасбросок or be knocked prone."
+          "text_ru": "Атака оружием дальнего боя: +9 к попаданию, range 60/240 фт., одна цель. Попадание: 28 (4d10 + 6) дробящего урона. If the target is a creature, it must succeed on a СЛ 17 Силength спасбросок or be knocked prone."
         }
       ],
       "reactions": [
         {
           "name_ru": "Rock Catching",
-          "text_ru": "If a rock or similar object is hurled at the giant, the giant can, with a successful СЛ 10 Dexterity спасбросок, catch the missile and take no дробящего урона from it."
+          "text_ru": "If a камень or similar object is hurled at the giant, the giant can, with a successful СЛ 10 Ловterity спасбросок, catch the missile and take no дробящего урона from it."
         }
       ],
       "legendary_actions": [],
@@ -8053,13 +8053,13 @@
     },
     {
       "id": "storm-giant",
-      "name_ru": "Сторм Гиант",
+      "name_ru": "Штормовой великан",
       "size_ru": "Огромный",
       "type_ru": "великан",
       "alignment_ru": "хаотично-добрый",
-      "ac": "16 (scale mail)",
+      "ac": "16 (чешуйчатый доспех)",
       "hp": "230 (20d12 + 100)",
-      "speed": "50 ft., swim 50 ft.",
+      "speed": "50 фт., плавание 50 фт.",
       "abilities": {
         "str": {
           "score": 29,
@@ -8086,38 +8086,38 @@
           "mod": 4
         }
       },
-      "saving_throws": "Str +14, Con +10, Wis +9, Cha +9",
-      "skills": "Arcana +8, Athletics +14, History +8, Perception",
+      "saving_throws": "Сил +14, Тел +10, Мдр +9, Хар +9",
+      "skills": "Arcana +8, Атлетика +14, History +8, Восприятие",
       "damage_vulnerabilities": null,
-      "damage_resistances": "cold",
-      "damage_immunities": "lightning, thunder",
+      "damage_resistances": "холод",
+      "damage_immunities": "электричество, thunder",
       "condition_immunities": null,
-      "senses": "passive Perception 19",
-      "languages": "Common, Giant",
+      "senses": "пассивное Восприятие 19",
+      "languages": "Общий, Великанский",
       "cr": "13",
       "xp": 10000,
       "traits": [
         {
           "name_ru": "Amphibious",
-          "text_ru": "The giant can breathe air and water."
+          "text_ru": "giant can breathe air and water."
         },
         {
           "name_ru": "Innate Spellcasting",
-          "text_ru": "The giant’s innate spellcasting ability is Charisma (spell save СЛ 17). It can innately cast the following spells, requiring no material components: At will: detect magic, feather fall, levitate, light 3/day each: control weather, water breathing"
+          "text_ru": "giant’s innate spellcasting ability is Харrisma (spell save СЛ 17). It can innately cast the following spells, requiring no material components: At will: detect magic, feather fall, levitate, light 3/day each: control weather, water breathing"
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The giant makes two greatsword attacks."
+          "text_ru": "giant makes two двуручный меч attacks."
         },
         {
           "name_ru": "Greatsword",
-          "text_ru": "Атака оружием ближнего боя: +14 to hit, reach 10 ft., one target. Попадание: 30 (6d6 + 9) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 10 фт., одна цель. Попадание: 30 (6d6 + 9) рубящего урона."
         },
         {
           "name_ru": "Rock",
-          "text_ru": "Атака оружием дальнего боя: +14 to hit, range 60/240 ft., one target. Попадание: 35 (4d12 + 9) дробящего урона. Lightning Strike (Recharge 5–6). The giant hurls a magical lightning bolt at a point it can see within 500 feet of it. Each creature within 10 feet of that point must make a СЛ 17 Dexterity спасбросок, taking 54 (12d8) урона электричеством on a failed save, or half as much damage on a successful one."
+          "text_ru": "Атака оружием дальнего боя: +14 к попаданию, range 60/240 фт., одна цель. Попадание: 35 (4d12 + 9) дробящего урона. Lightning Силike (Recharge 5–6). giant hurls a magical электричество bolt at a point it can see within 500 feet of it. Каждое существо within 10 feet of that point must make a СЛ 17 Ловterity спасбросок, taking 54 (12d8) урона электричеством при провале, or half as much damage on a successful one."
         }
       ],
       "reactions": [],
@@ -8126,13 +8126,13 @@
     },
     {
       "id": "gibbering-mouther",
-      "name_ru": "Гибберинг Моутер",
+      "name_ru": "Бормочущая пасть",
       "size_ru": "Средний",
       "type_ru": "аберрация",
       "alignment_ru": "нейтральный",
       "ac": "9",
       "hp": "67 (9d8 + 27)",
-      "speed": "10 ft., swim 10 ft.",
+      "speed": "10 фт., плавание 10 фт.",
       "abilities": {
         "str": {
           "score": 10,
@@ -8165,28 +8165,28 @@
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": "prone",
-      "senses": "darkvision 60 ft., passive Perception 10",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 10",
       "languages": "—",
       "cr": "2",
       "xp": 450,
       "traits": [
         {
           "name_ru": "Aberrant Ground",
-          "text_ru": "The ground in a 10-­‐foot radius around the mouther is doughlike difficult terrain. Each creature that starts its turn in that area must succeed on a СЛ 10 Strength спасбросок or have its speed reduced to 0 until the start of its next turn."
+          "text_ru": "ground in a 10-­‐foot radius around the mouther is doughlike difficult terrain. Каждое существо that starts its turn in that area must succeed on a СЛ 10 Силength спасбросок or have its speed reduced to 0 until the start of its next turn."
         },
         {
           "name_ru": "Gibbering",
-          "text_ru": "The mouther babbles incoherently while it can see any creature and isn’t incapacitated. Each creature that starts its turn within 20 feet of the mouther and can hear the gibbering must succeed on a СЛ 10 Wisdom спасбросок. On a failure, the creature can’t take reactions until the start of its next turn and rolls a d8 to determine what it does during its turn. On a 1 to 4, the creature does nothing. On a 5 or 6, the creature takes no action or бонусное действие and uses all its movement to move in a randomly determined direction. On a 7 or 8, the creature makes a melee attack against a randomly determined creature within its reach or does nothing if it can’t make such an attack."
+          "text_ru": "mouther babbles incoherently while it can see any creature and isn’t incapacitated. Каждое существо that starts its turn within 20 feet of the mouther and can hear the gibbering must succeed on a СЛ 10 Мдрdom спасбросок. On a failure, the creature can’t take reactions until the start of its next turn and rolls a d8 to determine what it does during its turn. On a 1 to 4, the creature does nothing. On a 5 or 6, the creature takes no action or бонусное действие and uses all its movement to move in a randomly determined direction. On a 7 or 8, the creature makes a melee attack against a randomly determined creature within its досягаемость or does nothing if it can’t make such an attack."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The gibbering mouther makes one bite attack and, if it can, uses its Blinding Spittle."
+          "text_ru": "gibbering mouther makes one bite attack and, if it can, uses its Blinding Spittle."
         },
         {
-          "name_ru": "Bites",
-          "text_ru": "Атака оружием ближнего боя: +2 to hit, reach 5 ft., one creature. Попадание: 17 (5d6) колющего урона. If the target is Medium or smaller, it must succeed on a СЛ 10 Strength спасбросок or be knocked prone. If the target is killed by this damage, it is absorbed into the mouther. Blinding Spittle (Recharge 5–6). The mouther spits a chemical glob at a point it can see within 15 feet of it. The glob explodes in a blinding flash of light on impact. Each creature within 5 feet of the flash must succeed on a СЛ 13 Dexterity спасбросок or be blinded until the end of the mouther’s next turn."
+          "name_ru": "Укусs",
+          "text_ru": "Атака оружием ближнего боя: +2 к попаданию, досягаемость 5 фт., one creature. Попадание: 17 (5d6) колющего урона. If the target is Medium or smaller, it must succeed on a СЛ 10 Силength спасбросок or be knocked prone. If the target is killed by this damage, it is absorbed into the mouther. Blinding Spittle (Recharge 5–6). mouther spits a chemical glob at a point it can see within 15 feet of it. glob explodes in a blinding flash of light on impact. Каждое существо within 5 feet of the flash must succeed on a СЛ 13 Ловterity спасбросок or be blinded until the end of the mouther’s next turn."
         }
       ],
       "reactions": [],
@@ -8199,9 +8199,9 @@
       "size_ru": "Средний",
       "type_ru": "гуманоид",
       "alignment_ru": "хаотично-злой",
-      "ac": "15 (chain shirt)",
+      "ac": "15 (кольчужная рубаха)",
       "hp": "16 (3d6 + 6)",
-      "speed": "20 ft.",
+      "speed": "20 фт.",
       "abilities": {
         "str": {
           "score": 15,
@@ -8229,12 +8229,12 @@
         }
       },
       "saving_throws": null,
-      "skills": "Investigation +3, Perception +2, Stealth +4",
+      "skills": "Investigation +3, Восприятие +2, Скрытность +4",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 120 ft., passive Perception 12",
+      "senses": "тёмное зрение 120 фт., пассивное Восприятие 12",
       "languages": "Gnomish, Terran, Undercommon",
       "cr": "1/2",
       "xp": 100,
@@ -8247,43 +8247,43 @@
       "actions": [
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one creature. Попадание: 4 (1d4 + 2) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., one creature. Попадание: 4 (1d4 + 2) колющего урона."
         },
         {
           "name_ru": "Spear",
-          "text_ru": "Melee or Атака оружием дальнего боя: +4 to hit, reach 5 ft. or range 20/60 ft., one target. Попадание: 5 (1d6 + 2) колющего урона, or 6 (1d8 + 2) колющего урона if used with two hands to make a melee attack."
+          "text_ru": "Melee or Атака оружием дальнего боя: +4 к попаданию, досягаемость 5 фт. or range 20/60 фт., одна цель. Попадание: 5 (1d6 + 2) колющего урона, or 6 (1d8 + 2) колющего урона if used with two hands to make a melee attack."
         },
         {
           "name_ru": "Longbow",
-          "text_ru": "Атака оружием дальнего боя: +3 to hit, range 150/600 ft., one target. Попадание: 5 (1d8 + 1) колющего урона. Gnome, Deep (Svirfneblin) Small humanoid (gnome), neutral good Armor Class 15 (chain shirt) Hit Points 16 (3d6 + 6)"
+          "text_ru": "Атака оружием дальнего боя: +3 к попаданию, range 150/600 фт., одна цель. Попадание: 5 (1d8 + 1) колющего урона. Gnome, Deep (Svirfneblin) Small humanoid (gnome), neutral good Armor Class 15 (кольчужная рубаха) Hit Points 16 (3d6 + 6)"
         },
         {
-          "name_ru": "Speed 20 ft",
-          "text_ru": "STR DEX CON INT WIS CHA 15 (+2) 14 (+2) 14 (+2) 12 (+1) 10 (+0) 9 (−1) Skills Investigation +3, Perception +2, Stealth +4"
+          "name_ru": "Speed 20 фт",
+          "text_ru": "STR DEX CON INT WIS CHA 15 (+2) 14 (+2) 14 (+2) 12 (+1) 10 (+0) 9 (−1) Skills Investigation +3, Восприятие +2, Скрытность +4"
         },
         {
-          "name_ru": "Senses darkvision 120 ft",
-          "text_ru": ", passive Perception 12 Languages Gnomish, Terran, Undercommon Challenge 1/2 (100 XP)"
+          "name_ru": "Senses тёмное зрение 120 фт",
+          "text_ru": ", пассивное Восприятие 12 Languages Gnomish, Terran, Undercommon Харllenge 1/2 (100 XP)"
         },
         {
-          "name_ru": "Stone Camouflage",
-          "text_ru": "The gnome has преимущество on Dexterity (Stealth) checks made to hide in rocky terrain."
+          "name_ru": "Камуфляж в камне",
+          "text_ru": "gnome has преимущество on Ловterity (Скрытность) checks made to hide in каменьy terrain."
         },
         {
           "name_ru": "Gnome Cunning",
-          "text_ru": "The gnome has преимущество on Intelligence, Wisdom, and Charisma спасбросокs against magic."
+          "text_ru": "gnome has преимущество on Интelligence, Мдрdom, and Харrisma спасбросокs against magic."
         },
         {
           "name_ru": "Innate Spellcasting",
-          "text_ru": "The gnome’s innate spellcasting ability is Intelligence (spell save СЛ 11). It can innately cast the following spells, requiring no material components: At will: nondetection (self only) 1/day each: blindness/deafness, blur, disguise self"
+          "text_ru": "gnome’s innate spellcasting ability is Интelligence (spell save СЛ 11). It can innately cast the following spells, requiring no material components: At will: nondetection (self only) 1/day each: blindness/deafness, blur, disguise self"
         },
         {
           "name_ru": "War Pick",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one target. Попадание: 6 (1d8 + 2) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 6 (1d8 + 2) колющего урона."
         },
         {
           "name_ru": "Poisoned Dart",
-          "text_ru": "Атака оружием дальнего боя: +4 to hit, range 30/120 ft., one creature. Попадание: 4 (1d4 + 2) колющего урона, and the target must succeed on a СЛ 12 Constitution спасбросок or be poisoned for 1 minute. The target can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
+          "text_ru": "Атака оружием дальнего боя: +4 к попаданию, range 30/120 фт., one creature. Попадание: 4 (1d4 + 2) колющего урона, and the target must succeed on a СЛ 12 Телstitution спасбросок or be ядed for 1 minute. target can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
         }
       ],
       "reactions": [],
@@ -8298,7 +8298,7 @@
       "alignment_ru": "нейтрально-злой",
       "ac": "15 (leather armor, shield)",
       "hp": "7 (2d6)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 8,
@@ -8326,29 +8326,29 @@
         }
       },
       "saving_throws": null,
-      "skills": "Stealth +6",
+      "skills": "Скрытность +6",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 9",
-      "languages": "Common, Goblin",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 9",
+      "languages": "Общий, Гоблинский",
       "cr": "1/4",
       "xp": 50,
       "traits": [
         {
           "name_ru": "Nimble Escape",
-          "text_ru": "The goblin can take the Disengage or Hide action as a бонусное действие on each of its turns."
+          "text_ru": "goblin can take the Disengage or Hide action as a бонусное действие on each of its turns."
         }
       ],
       "actions": [
         {
           "name_ru": "Scimitar",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one target. Попадание: 5 (1d6 + 2) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 5 (1d6 + 2) рубящего урона."
         },
         {
           "name_ru": "Shortbow",
-          "text_ru": "Атака оружием дальнего боя: +4 to hit, range 80/320 ft., one target. Попадание: 5 (1d6 + 2) колющего урона. Golems"
+          "text_ru": "Атака оружием дальнего боя: +4 к попаданию, range 80/320 фт., одна цель. Попадание: 5 (1d6 + 2) колющего урона. Golems"
         }
       ],
       "reactions": [],
@@ -8357,13 +8357,13 @@
     },
     {
       "id": "clay-golem",
-      "name_ru": "Клай Голем",
+      "name_ru": "Глиняный голем",
       "size_ru": "Большой",
       "type_ru": "конструкт",
       "alignment_ru": "без мировоззрения",
-      "ac": "14 (natural armor)",
+      "ac": "14 (природная броня)",
       "hp": "133 (14d10 + 56)",
-      "speed": "20 ft.",
+      "speed": "20 фт.",
       "abilities": {
         "str": {
           "score": 20,
@@ -8394,16 +8394,16 @@
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "acid, poison, psychic; bludgeoning,",
-      "condition_immunities": "charmed, exhaustion, frightened,",
-      "senses": "darkvision 60 ft., passive Perception 9",
+      "damage_immunities": "кислота, яд, психическая энергия; bludgeoning,",
+      "condition_immunities": "очарование, истощение, испуг,",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 9",
       "languages": "understands the languages of its creator but",
       "cr": "9",
       "xp": 5000,
       "traits": [
         {
           "name_ru": "Acid Absorption",
-          "text_ru": "Whenever the golem is subjected to acid damage, it takes no damage and instead regains a number of hit points equal to the acid damage dealt."
+          "text_ru": "Whenever the golem is subjected to кислота damage, it takes no damage and instead regains a number of hit points equal to the кислота damage dealt."
         },
         {
           "name_ru": "Berserk",
@@ -8411,25 +8411,25 @@
         },
         {
           "name_ru": "Immutable Form",
-          "text_ru": "The golem is immune to any spell or effect that would alter its form."
+          "text_ru": "golem is immune to any spell or effect that would alter its form."
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The golem has преимущество on спасбросокs against spells and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "golem has преимущество on спасбросокs against spells and other magical effects."
         },
         {
-          "name_ru": "Magic Weapons",
-          "text_ru": "The golem’s weapon attacks are magical."
+          "name_ru": "Магическое оружие",
+          "text_ru": "golem’s weapon attacks are magical."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The golem makes two slam attacks."
+          "text_ru": "golem makes two slam attacks."
         },
         {
-          "name_ru": "Slam",
-          "text_ru": "Атака оружием ближнего боя: +8 to hit, reach 5 ft., one target. Попадание: 16 (2d10 + 5) дробящего урона. If the target is a creature, it must succeed on a СЛ 15 Constitution спасбросок or have its hit point maximum reduced by an amount equal to the damage taken. The target dies if this attack reduces its hit point maximum to 0. The reduction lasts until removed by the greater restoration spell or other magic. Haste (Recharge 5–6). Until the end of its next turn, the golem magically gains a +2 bonus to its AC, has преимущество on Dexterity спасбросокs, and can use its slam attack as a бонусное действие."
+          "name_ru": "Удар",
+          "text_ru": "Атака оружием ближнего боя: +8 к попаданию, досягаемость 5 фт., одна цель. Попадание: 16 (2d10 + 5) дробящего урона. If the target is a creature, it must succeed on a СЛ 15 Телstitution спасбросок or have its hit point maximum reduced by an amount equal to the damage taken. target dies if this attack reduces its hit point maximum to 0. reduction lasts until removed by the greater restoration spell or other magic. Haste (Recharge 5–6). Until the end of its next turn, the golem magically gains a +2 bonus to its AC, has преимущество on Ловterity спасбросокs, and can use its slam attack as a бонусное действие."
         }
       ],
       "reactions": [],
@@ -8438,13 +8438,13 @@
     },
     {
       "id": "flesh-golem",
-      "name_ru": "Флеш Голем",
+      "name_ru": "Голем из плоти",
       "size_ru": "Средний",
       "type_ru": "конструкт",
       "alignment_ru": "нейтральный",
       "ac": "9",
       "hp": "93 (11d8 + 44)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 19,
@@ -8475,19 +8475,19 @@
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "lightning, poison; bludgeoning,",
-      "condition_immunities": "charmed, exhaustion, frightened,",
-      "senses": "darkvision 60 ft., passive Perception 10",
+      "damage_immunities": "электричество, яд; bludgeoning,",
+      "condition_immunities": "очарование, истощение, испуг,",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 10",
       "languages": "understands the languages of its creator but",
       "cr": "5",
       "xp": 1800,
       "traits": [
         {
           "name_ru": "Berserk",
-          "text_ru": "Whenever the golem starts its turn with 40 hit points or fewer, roll a d6. On a 6, the golem goes berserk. On each of its turns while berserk, the golem attacks the nearest creature it can see. If no creature is near enough to move to and attack, the golem attacks an object, with preference for an object smaller than itself. Once the golem goes berserk, it continues to do so until it is destroyed or regains all its hit points. The golem’s creator, if within 60 feet of the berserk golem, can try to calm it by speaking firmly and persuasively. The golem must be able to hear its creator, who must take an action to make a СЛ 15"
+          "text_ru": "Whenever the golem starts its turn with 40 hit points or fewer, roll a d6. On a 6, the golem goes berserk. On each of its turns while berserk, the golem attacks the nearest creature it can see. If no creature is near enough to move to and attack, the golem attacks an object, with preference for an object smaller than itself. Once the golem goes berserk, it continues to do so until it is destroyed or regains all its hit points. golem’s creator, if within 60 feet of the berserk golem, can try to calm it by speaking firmly and persuasively. golem must be able to hear its creator, who must take an action to make a СЛ 15"
         },
         {
-          "name_ru": "Charisma (Persuasion) check",
+          "name_ru": "Харrisma (Persuasion) check",
           "text_ru": "If the check succeeds, the golem ceases being berserk. If it takes damage while still at 40 hit points or fewer, the golem might go berserk again."
         },
         {
@@ -8496,29 +8496,29 @@
         },
         {
           "name_ru": "Immutable Form",
-          "text_ru": "The golem is immune to any spell or effect that would alter its form."
+          "text_ru": "golem is immune to any spell or effect that would alter its form."
         },
         {
           "name_ru": "Lightning Absorption",
           "text_ru": "Whenever the golem is subjected to урона электричеством, it takes no damage and instead regains a number of hit points equal to the урона электричеством dealt."
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The golem has преимущество on спасбросокs against spells and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "golem has преимущество on спасбросокs against spells and other magical effects."
         },
         {
-          "name_ru": "Magic Weapons",
-          "text_ru": "The golem’s weapon attacks are magical."
+          "name_ru": "Магическое оружие",
+          "text_ru": "golem’s weapon attacks are magical."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The golem makes two slam attacks."
+          "text_ru": "golem makes two slam attacks."
         },
         {
-          "name_ru": "Slam",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 5 ft., one target. Попадание: 13 (2d8 + 4) дробящего урона. 316 System Reference Document 5.1"
+          "name_ru": "Удар",
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d8 + 4) дробящего урона. 316 System Reference Document 5.1"
         }
       ],
       "reactions": [],
@@ -8527,13 +8527,13 @@
     },
     {
       "id": "iron-golem",
-      "name_ru": "Ирон Голем",
+      "name_ru": "Железный голем",
       "size_ru": "Большой",
       "type_ru": "конструкт",
       "alignment_ru": "без мировоззрения",
-      "ac": "20 (natural armor)",
+      "ac": "20 (природная броня)",
       "hp": "210 (20d10 + 100)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 24,
@@ -8564,9 +8564,9 @@
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire, poison, psychic; bludgeoning,",
-      "condition_immunities": "charmed, exhaustion, frightened,",
-      "senses": "darkvision 120 ft., passive Perception 10",
+      "damage_immunities": "огонь, яд, психическая энергия; bludgeoning,",
+      "condition_immunities": "очарование, истощение, испуг,",
+      "senses": "тёмное зрение 120 фт., пассивное Восприятие 10",
       "languages": "understands the languages of its creator but",
       "cr": "16",
       "xp": 15000,
@@ -8577,33 +8577,33 @@
         },
         {
           "name_ru": "Immutable Form",
-          "text_ru": "The golem is immune to any spell or effect that would alter its form."
+          "text_ru": "golem is immune to any spell or effect that would alter its form."
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The golem has преимущество on спасбросокs against spells and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "golem has преимущество on спасбросокs against spells and other magical effects."
         },
         {
-          "name_ru": "Magic Weapons",
-          "text_ru": "The golem’s weapon attacks are magical."
+          "name_ru": "Магическое оружие",
+          "text_ru": "golem’s weapon attacks are magical."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The golem makes two melee attacks."
+          "text_ru": "golem makes two melee attacks."
         },
         {
-          "name_ru": "Slam",
-          "text_ru": "Атака оружием ближнего боя: +13 to hit, reach 5 ft., one target. Попадание: 20 (3d8 + 7) дробящего урона."
+          "name_ru": "Удар",
+          "text_ru": "Атака оружием ближнего боя: +13 к попаданию, досягаемость 5 фт., одна цель. Попадание: 20 (3d8 + 7) дробящего урона."
         },
         {
           "name_ru": "Sword",
-          "text_ru": "Атака оружием ближнего боя: +13 to hit, reach 10 ft., one target. Попадание: 23 (3d10 + 7) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +13 к попаданию, досягаемость 10 фт., одна цель. Попадание: 23 (3d10 + 7) рубящего урона."
         },
         {
           "name_ru": "Poison Breath (Recharge 6)",
-          "text_ru": "The golem exhales poisonous gas in a 15-­‐foot cone. Each creature in that area must make a СЛ 19 Constitution спасбросок, taking 45 (10d8) урона ядом on a failed save, or half as much damage on a successful one."
+          "text_ru": "golem exhales ядous gas in a 15-­‐foot cone. Каждое существо in that area must make a СЛ 19 Телstitution спасбросок, taking 45 (10d8) урона ядом при провале, or half as much damage on a successful one."
         }
       ],
       "reactions": [],
@@ -8612,13 +8612,13 @@
     },
     {
       "id": "stone-golem",
-      "name_ru": "Стоне Голем",
+      "name_ru": "Каменный голем",
       "size_ru": "Большой",
       "type_ru": "конструкт",
       "alignment_ru": "без мировоззрения",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "178 (17d10 + 85)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 22,
@@ -8649,34 +8649,34 @@
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "poison, psychic; bludgeoning,",
-      "condition_immunities": "charmed, exhaustion, frightened,",
-      "senses": "darkvision 120 ft., passive Perception 10",
+      "damage_immunities": "яд, психическая энергия; bludgeoning,",
+      "condition_immunities": "очарование, истощение, испуг,",
+      "senses": "тёмное зрение 120 фт., пассивное Восприятие 10",
       "languages": "understands the languages of its creator but",
       "cr": "10",
       "xp": 5900,
       "traits": [
         {
           "name_ru": "Immutable Form",
-          "text_ru": "The golem is immune to any spell or effect that would alter its form."
+          "text_ru": "golem is immune to any spell or effect that would alter its form."
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The golem has преимущество on спасбросокs against spells and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "golem has преимущество on спасбросокs against spells and other magical effects."
         },
         {
-          "name_ru": "Magic Weapons",
-          "text_ru": "The golem’s weapon attacks are magical."
+          "name_ru": "Магическое оружие",
+          "text_ru": "golem’s weapon attacks are magical."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The golem makes two slam attacks."
+          "text_ru": "golem makes two slam attacks."
         },
         {
-          "name_ru": "Slam",
-          "text_ru": "Атака оружием ближнего боя: +10 to hit, reach 5 ft., one target. Попадание: 19 (3d8 + 6) дробящего урона. Slow (Recharge 5–6). The golem targets one or more creatures it can see within 10 feet of it. Each target must make a СЛ 17 Wisdom спасбросок against this magic. On a failed save, a target can’t use reactions, its speed is halved, and it can’t make more than one attack on its turn. In addition, the target can take either an action or a бонусное действие on its turn, not both."
+          "name_ru": "Удар",
+          "text_ru": "Атака оружием ближнего боя: +10 к попаданию, досягаемость 5 фт., одна цель. Попадание: 19 (3d8 + 6) дробящего урона. Slow (Recharge 5–6). golem targets one or more creatures it can see within 10 feet of it. Each target must make a СЛ 17 Мдрdom спасбросок against this magic. On a failed save, a target can’t use reactions, its speed is halved, and it can’t make more than one attack on its turn. In addition, the target can take either an action or a бонусное действие on its turn, not both."
         },
         {
           "name_ru": "These effects last for 1 minute",
@@ -8693,9 +8693,9 @@
       "size_ru": "Большой",
       "type_ru": "чудовище",
       "alignment_ru": "без мировоззрения",
-      "ac": "19 (natural armor)",
+      "ac": "19 (природная броня)",
       "hp": "114 (12d10 + 48)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 20,
@@ -8723,29 +8723,29 @@
         }
       },
       "saving_throws": null,
-      "skills": "Perception +4",
+      "skills": "Восприятие +4",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
-      "condition_immunities": "petrified",
-      "senses": "darkvision 60 ft., passive Perception 14",
+      "condition_immunities": "окаменение",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 14",
       "languages": "—",
       "cr": "5",
       "xp": 1800,
       "traits": [
         {
-          "name_ru": "Trampling Charge",
-          "text_ru": "If the gorgon moves at least 20 feet straight toward a creature and then hits it with a gore attack on the same turn, that target must succeed on a СЛ 16 Strength спасбросок or be knocked prone. If the target is prone, the gorgon can make one attack with its hooves against it as a бонусное действие."
+          "name_ru": "Trampling Харrge",
+          "text_ru": "If the gorgon moves at least 20 feet straight toward a creature and then hits it with a gore attack on the same turn, that target must succeed on a СЛ 16 Силength спасбросок or be knocked prone. If the target is prone, the gorgon can make one attack with its hooves against it as a бонусное действие."
         }
       ],
       "actions": [
         {
           "name_ru": "Gore",
-          "text_ru": "Атака оружием ближнего боя: +8 to hit, reach 5 ft., one target. Попадание: 18 (2d12 + 5) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +8 к попаданию, досягаемость 5 фт., одна цель. Попадание: 18 (2d12 + 5) колющего урона."
         },
         {
           "name_ru": "Hooves",
-          "text_ru": "Атака оружием ближнего боя: +8 to hit, reach 5 ft., one target. Попадание: 16 (2d10 + 5) дробящего урона. Petrifying Breath (Recharge 5–6). The gorgon exhales petrifying gas in a 30-­‐foot cone. Each creature in that area must succeed on a СЛ 13 Constitution спасбросок. On a failed save, a target begins to turn to stone and is restrained. The restrained target must repeat the спасбросок at the end of its next turn. On a success, the effect ends on the target. On a failure, the target is petrified until freed by the greater restoration spell or other magic."
+          "text_ru": "Атака оружием ближнего боя: +8 к попаданию, досягаемость 5 фт., одна цель. Попадание: 16 (2d10 + 5) дробящего урона. Petrifying Breath (Recharge 5–6). gorgon exhales petrifying gas in a 30-­‐foot cone. Каждое существо in that area must succeed on a СЛ 13 Телstitution спасбросок. On a failed save, a target begins to turn to stone and is restrained. restrained target must repeat the спасбросок at the end of its next turn. On a success, the effect ends on the target. On a failure, the target is окаменение until freed by the greater restoration spell or other magic."
         }
       ],
       "reactions": [],
@@ -8758,9 +8758,9 @@
       "size_ru": "Средний",
       "type_ru": "чудовище",
       "alignment_ru": "нейтральный",
-      "ac": "14 (natural armor)",
+      "ac": "14 (природная броня)",
       "hp": "27 (6d8)",
-      "speed": "30 ft., climb 30 ft.",
+      "speed": "30 фт., climb 30 фт.",
       "abilities": {
         "str": {
           "score": 14,
@@ -8793,28 +8793,28 @@
       "damage_resistances": "bludgeoning, piercing, and",
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 12",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 12",
       "languages": "—",
       "cr": "2",
       "xp": 450,
       "traits": [
         {
-          "name_ru": "Stone Camouflage",
-          "text_ru": "The grick has преимущество on Dexterity (Stealth) checks made to hide in rocky terrain."
+          "name_ru": "Камуфляж в камне",
+          "text_ru": "grick has преимущество on Ловterity (Скрытность) checks made to hide in каменьy terrain."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The grick makes one attack with its tentacles. If that attack hits, the grick can make one beak attack against the same target."
+          "text_ru": "grick makes one attack with its tentacles. If that attack hits, the grick can make one beak attack against the same target."
         },
         {
           "name_ru": "Tentacles",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one target. Попадание: 9 (2d6 + 2) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 9 (2d6 + 2) рубящего урона."
         },
         {
           "name_ru": "Beak",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one target. Попадание: 5 (1d6 + 2) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 5 (1d6 + 2) колющего урона."
         }
       ],
       "reactions": [],
@@ -8823,13 +8823,13 @@
     },
     {
       "id": "griffon",
-      "name_ru": "Гриффон",
+      "name_ru": "Грифон",
       "size_ru": "Большой",
       "type_ru": "чудовище",
       "alignment_ru": "без мировоззрения",
       "ac": "12",
       "hp": "59 (7d10 + 21)",
-      "speed": "30 ft., fly 80 ft.",
+      "speed": "30 фт., fly 80 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -8857,33 +8857,33 @@
         }
       },
       "saving_throws": null,
-      "skills": "Perception +5",
+      "skills": "Восприятие +5",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 15",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 15",
       "languages": "—",
       "cr": "2",
       "xp": 450,
       "traits": [
         {
           "name_ru": "Keen Sight",
-          "text_ru": "The griffon has преимущество on Wisdom (Perception) checks that rely on sight."
+          "text_ru": "griffon has преимущество on Мдрdom (Восприятие) checks that rely on sight."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The griffon makes two attacks: one with its beak and one with its claws."
+          "text_ru": "griffon makes two attacks: one with its beak and one with its claws."
         },
         {
           "name_ru": "Beak",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 8 (1d8 + 4) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 8 (1d8 + 4) колющего урона."
         },
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 11 (2d6 + 4) рубящего урона."
+          "name_ru": "Коготьs",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 11 (2d6 + 4) рубящего урона."
         }
       ],
       "reactions": [],
@@ -8898,7 +8898,7 @@
       "alignment_ru": "нейтрально-злой",
       "ac": "11",
       "hp": "11 (2d8 + 2)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 16,
@@ -8926,33 +8926,33 @@
         }
       },
       "saving_throws": null,
-      "skills": "Athletics +5, Perception +3, Stealth +3",
+      "skills": "Атлетика +5, Восприятие +3, Скрытность +3",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": "blinded",
-      "senses": "blindsight 30 ft. or 10 ft. while deafened (blind",
+      "senses": "слепое зрение 30 фт. or 10 фт. while deafened (blind",
       "languages": "Undercommon",
       "cr": "1/4",
       "xp": 50,
       "traits": [
         {
           "name_ru": "Blind Senses",
-          "text_ru": "The grimlock can’t use its blindsight while deafened and unable to smell."
+          "text_ru": "grimlock can’t use its слепое зрение while deafened and unable to smell."
         },
         {
           "name_ru": "Keen Hearing and Smell",
-          "text_ru": "The grimlock has преимущество on Wisdom (Perception) checks that rely on hearing or smell."
+          "text_ru": "grimlock has преимущество on Мдрdom (Восприятие) checks that rely on hearing or smell."
         },
         {
-          "name_ru": "Stone Camouflage",
-          "text_ru": "The grimlock has преимущество on Dexterity (Stealth) checks made to hide in rocky terrain."
+          "name_ru": "Камуфляж в камне",
+          "text_ru": "grimlock has преимущество on Ловterity (Скрытность) checks made to hide in каменьy terrain."
         }
       ],
       "actions": [
         {
           "name_ru": "Spiked Bone Club",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one target. Попадание: 5 (1d4 + 3) дробящего урона plus 2 (1d4) колющего урона. Monsters (H) Hags"
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одна цель. Попадание: 5 (1d4 + 3) дробящего урона плюс 2 (1d4) колющего урона. Monsters (H) Hags"
         }
       ],
       "reactions": [],
@@ -8961,13 +8961,13 @@
     },
     {
       "id": "green-hag",
-      "name_ru": "Греен Хаг",
+      "name_ru": "Зелёная карга",
       "size_ru": "Средний",
       "type_ru": "фея",
       "alignment_ru": "нейтрально-злой",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "82 (11d8 + 33)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -8995,41 +8995,41 @@
         }
       },
       "saving_throws": null,
-      "skills": "Arcana +3, Deception +4, Perception +4, Stealth",
+      "skills": "Arcana +3, Обман +4, Восприятие +4, Скрытность",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 14",
-      "languages": "Common, Draconic, Sylvan",
+      "senses": "тёмное зрение 60 фт., пассивное Восприятие 14",
+      "languages": "Общий, Драконий, Sylvan",
       "cr": "3",
       "xp": 700,
       "traits": [
         {
           "name_ru": "Amphibious",
-          "text_ru": "The hag can breathe air and water."
+          "text_ru": "hag can breathe air and water."
         },
         {
           "name_ru": "Innate Spellcasting",
-          "text_ru": "The hag’s innate spellcasting ability is Charisma (spell save СЛ 12). She can innately cast the following spells, requiring no material components: At will: dancing lights, minor illusion, vicious mockery"
+          "text_ru": "hag’s innate spellcasting ability is Харrisma (spell save СЛ 12). She can innately cast the following spells, requiring no material components: At will: dancing lights, minor illusion, vicious mockery"
         },
         {
-          "name_ru": "Mimicry",
-          "text_ru": "The hag can mimic animal sounds and humanoid voices. A creature that hears the sounds can tell they are imitations with a successful СЛ 14 Wisdom (Insight) check."
+          "name_ru": "Подражание",
+          "text_ru": "hag can mimic animal sounds and humanoid voices. A creature that hears the sounds can tell they are imitations with a successful СЛ 14 Мдрdom (Проницательность) check."
         }
       ],
       "actions": [
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 13 (2d8 + 4) рубящего урона."
+          "name_ru": "Коготьs",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d8 + 4) рубящего урона."
         },
         {
-          "name_ru": "Illusory Appearance",
-          "text_ru": "The hag covers herself and anything she is wearing or carrying with a magical illusion that makes her look like another creature of her general size and humanoid shape. The illusion ends if the hag takes a бонусное действие to end it or if she dies. The changes wrought by this effect fail to hold up to physical inspection. For example, the hag could appear to have smooth skin, but someone touching her would feel her rough flesh. Otherwise, a creature must take an action to visually inspect the illusion and succeed on a СЛ 20 Intelligence (Investigation) check to discern that the hag is disguised."
+          "name_ru": "Иллюзорный облик",
+          "text_ru": "hag covers herself and anything she is wearing or carrying with a magical illusion that makes her look like another creature of her general size and humanoid shape. illusion ends if the hag takes a бонусное действие to end it or if she dies. changes wrought by this effect fail to hold up to physical inspection. For example, the hag could appear to have smooth skin, but someone touching her would feel her rough flesh. Otherwise, a creature must take an action to visually inspect the illusion and succeed on a СЛ 20 Интelligence (Investigation) check to discern that the hag is disguised."
         },
         {
           "name_ru": "Invisible Passage",
-          "text_ru": "The hag magically turns invisible until she attacks or casts a spell, or until her concentration ends (as if concentrating on a spell). While invisible, she leaves no physical evidence of her passage, so she can be tracked only by magic. Any equipment she wears or carries is invisible with her."
+          "text_ru": "hag magically turns invisible until she attacks or casts a spell, or until her concentration ends (as if concentrating on a spell). While invisible, she leaves no physical evidence of her passage, so she can be tracked only by magic. Any equipment she wears or carries is invisible with her."
         }
       ],
       "reactions": [],
@@ -9038,13 +9038,13 @@
     },
     {
       "id": "night-hag",
-      "name_ru": "Нигхт Хаг",
+      "name_ru": "Ночная карга",
       "size_ru": "Средний",
       "type_ru": "исчадие",
       "alignment_ru": "нейтрально-злой",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "112 (15d8 + 45)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -9072,33 +9072,33 @@
         }
       },
       "saving_throws": null,
-      "skills": "Deception +7, Insight +6, Perception +6, Stealth",
+      "skills": "Обман +7, Проницательность +6, Восприятие +6, Скрытность",
       "damage_vulnerabilities": null,
-      "damage_resistances": "cold, fire; bludgeoning, piercing,",
+      "damage_resistances": "холод, огонь; bludgeoning, piercing,",
       "damage_immunities": null,
-      "condition_immunities": "charmed",
-      "senses": "darkvision 120 ft., passive Perception 16",
-      "languages": "Abyssal, Common, Infernal, Primordial",
+      "condition_immunities": "очарование",
+      "senses": "тёмное зрение 120 фт., пассивное Восприятие 16",
+      "languages": "Бездонная речь, Общий, Инфернальный, Primordial",
       "cr": "5",
       "xp": 1800,
       "traits": [
         {
           "name_ru": "Innate Spellcasting",
-          "text_ru": "The hag’s innate spellcasting ability is Charisma (spell save СЛ 14, +6 to hit with spell attacks). She can innately cast the following spells, requiring no material components: At will: detect magic, magic missile 319 System Reference Document 5.1 2/day each: plane shift (self only), ray of enfeeblement, sleep"
+          "text_ru": "hag’s innate spellcasting ability is Харrisma (spell save СЛ 14, +6 к попаданию with spell attacks). She can innately cast the following spells, requiring no material components: At will: detect magic, magic missile 319 System Reference Document 5.1 2/day each: plane shift (self only), ray of enfeeblement, sleep"
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The hag has преимущество on спасбросокs against spells and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "hag has преимущество on спасбросокs against spells and other magical effects."
         }
       ],
       "actions": [
         {
-          "name_ru": "Claws (Hag Form Only)",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 5 ft., one target. Попадание: 13 (2d8 + 4) рубящего урона."
+          "name_ru": "Коготьs (Hag Form Only)",
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d8 + 4) рубящего урона."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The hag magically polymorphs into a Small or Medium female humanoid, or back into her true form. Her statistics are the same in each form. Any equipment she is wearing or carrying isn’t transformed."
+          "name_ru": "Харnge Shape",
+          "text_ru": "hag magically polymorphs into a Small or Medium female humanoid, or back into her true form. Her statistics are the same in each form. Any equipment she is wearing or carrying isn’t transformed."
         },
         {
           "name_ru": "She reverts to her true form if she dies",
@@ -9106,11 +9106,11 @@
         },
         {
           "name_ru": "Etherealness",
-          "text_ru": "The hag magically enters the Ethereal"
+          "text_ru": "hag magically enters the Ethereal"
         },
         {
           "name_ru": "Plane from the Material Plane, or vice versa",
-          "text_ru": "To do so, the hag must have a heartstone in her possession. Nightmare Haunting (1/Day). While on the Ethereal Plane, the hag magically touches a sleeping humanoid on the Material Plane. A protection from evil and good spell cast on the target prevents this contact, as does a magic circle. As long as the contact persists, the target has dreadful visions. If these visions last for at least 1 hour, the target gains no benefit from its rest, and its hit point maximum is reduced by 5 (1d10). If this effect reduces the target’s hit point maximum to 0, the target dies, and if the target was evil, its soul is trapped in the hag’s soul bag. The reduction to the target’s hit point maximum lasts until removed by the greater restoration spell or similar magic."
+          "text_ru": "To do so, the hag must have a heartstone in her possession. Nightmare Haunting (1/Day). While on the Ethereal Plane, the hag magically touches a sleeping humanoid on the Material Plane. A protection from evil and good spell cast on the target prevents this contact, as does a magic circle. As long as the contact persists, the target has dreadful visions. If these visions last for at least 1 hour, the target gains no benefit from its rest, and its hit point maximum is reduced by 5 (1d10). If this effect reduces the target’s hit point maximum to 0, the target dies, and if the target was evil, its soul is trapped in the hag’s soul bag. reduction to the target’s hit point maximum lasts until removed by the greater restoration spell or similar magic."
         }
       ],
       "reactions": [],
@@ -9119,13 +9119,13 @@
     },
     {
       "id": "sea-hag",
-      "name_ru": "Сеа Хаг",
+      "name_ru": "Морская карга",
       "size_ru": "Средний",
       "type_ru": "фея",
       "alignment_ru": "хаотично-злой",
-      "ac": "14 (natural armor)",
+      "ac": "14 (природная броня)",
       "hp": "52 (7d8 + 21)",
-      "speed": "30 ft., swim 40 ft.",
+      "speed": "30 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 16,
@@ -9158,18 +9158,18 @@
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": ". The half-­‐‑dragon gains blindsight with a",
-      "languages": ". The half-­‐‑dragon speaks Draconic in",
+      "senses": ". half-­‐‑dragon gains слепое зрение with a",
+      "languages": ". half-­‐‑dragon speaks Драконий in",
       "cr": ". To avoid recalculating the creature’s",
       "xp": 450,
       "traits": [
         {
           "name_ru": "Amphibious",
-          "text_ru": "The hag can breathe air and water."
+          "text_ru": "hag can breathe air and water."
         },
         {
-          "name_ru": "Horrific Appearance",
-          "text_ru": "Any humanoid that starts its turn within 30 feet of the hag and can see the hag’s true form must make a СЛ 11 Wisdom спасбросок. On a failed save, the creature is frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, with disпреимущество if the hag is within line of sight, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the hag’s Horrific"
+          "name_ru": "Ужасный облик",
+          "text_ru": "Any humanoid that starts its turn within 30 feet of the hag and can see the hag’s true form must make a СЛ 11 Мдрdom спасбросок. On a failed save, the creature is испуг for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, with disпреимущество if the hag is within line of sight, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the hag’s Horrific"
         },
         {
           "name_ru": "Appearance for the next 24 hours",
@@ -9178,36 +9178,36 @@
       ],
       "actions": [
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one target. Попадание: 10 (2d6 + 3) рубящего урона."
+          "name_ru": "Коготьs",
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одна цель. Попадание: 10 (2d6 + 3) рубящего урона."
         },
         {
           "name_ru": "Death Glare",
-          "text_ru": "The hag targets one frightened creature she can see within 30 feet of her. If the target can see the hag, it must succeed on a СЛ 11 Wisdom спасбросок against this magic or drop to 0 hit points."
+          "text_ru": "hag targets one испуг creature she can see within 30 feet of her. If the target can see the hag, it must succeed on a СЛ 11 Мдрdom спасбросок against this magic or drop to 0 hit points."
         },
         {
-          "name_ru": "Illusory Appearance",
-          "text_ru": "The hag covers herself and anything she is wearing or carrying with a magical illusion that makes her look like an ugly creature of her general size and humanoid shape. The effect ends if the hag takes a бонусное действие to end it or if she dies. The changes wrought by this effect fail to hold up to physical inspection. For example, the hag could appear to have no claws, but someone touching her hand might feel the claws. Otherwise, a creature must take an action to visually inspect the illusion and succeed on a СЛ 16 Intelligence (Investigation) check to discern that the hag is disguised. Half-Dragon Template A beast, humanoid, giant, or monstrosity can become a half-­‐‑dragon. It keeps its statistics, except as follows."
+          "name_ru": "Иллюзорный облик",
+          "text_ru": "hag covers herself and anything she is wearing or carrying with a magical illusion that makes her look like an ugly creature of her general size and humanoid shape. effect ends if the hag takes a бонусное действие to end it or if she dies. changes wrought by this effect fail to hold up to physical inspection. For example, the hag could appear to have no claws, but someone touching her hand might feel the claws. Otherwise, a creature must take an action to visually inspect the illusion and succeed on a СЛ 16 Интelligence (Investigation) check to discern that the hag is disguised. Half-Dragon Temлаты A beast, humanoid, giant, or monstrosity can become a half-­‐‑dragon. It keeps its statistics, except as follows."
         },
         {
-          "name_ru": "Challenge",
-          "text_ru": "To avoid recalculating the creature’s challenge rating, apply the template only to a creature that meets the optional prerequisite in the"
+          "name_ru": "Харllenge",
+          "text_ru": "To avoid recalculating the creature’s challenge rating, apply the temлаты only to a creature that meets the optional prerequisite in the"
         },
         {
           "name_ru": "Breath Weapon table below",
-          "text_ru": "Otherwise, recalculate the rating after you apply the template."
+          "text_ru": "Otherwise, recalculate the rating after you apply the temлаты."
         },
         {
           "name_ru": "Senses",
-          "text_ru": "The half-­‐‑dragon gains blindsight with a radius of 10 feet and darkvision with a radius of 60 feet."
+          "text_ru": "half-­‐‑dragon gains слепое зрение with a radius of 10 feet and тёмное зрение with a radius of 60 feet."
         },
         {
           "name_ru": "Resistances",
-          "text_ru": "The half-­‐‑dragon gains resistance to a type of damage based on its color. Color Damage Resistance Black or copper Acid Blue or bronze Lightning 320 System Reference Document 5.1 Brass, gold, or red Fire Green Poison Silver or white Cold"
+          "text_ru": "half-­‐‑dragon gains resistance to a type of damage based on its color. Color Damage Resistance Black or copper Acid Blue or bronze Lightning 320 System Reference Document 5.1 Brass, gold, or red Fire Green Poison Silver or white Cold"
         },
         {
           "name_ru": "Languages",
-          "text_ru": "The half-­‐‑dragon speaks Draconic in addition to any other languages it knows. New Action: Breath Weapon. The half-­‐‑dragon has the breath weapon of its dragon half. The half-­‐‑ dragon’s size determines how this action functions. Optional"
+          "text_ru": "half-­‐‑dragon speaks Драконий in addition to any other languages it knows. New Action: Breath Weapon. half-­‐‑dragon has the breath weapon of its dragon half. half-­‐‑ dragon’s size determines how this action functions. Optional"
         }
       ],
       "reactions": [],
