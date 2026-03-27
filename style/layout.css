@@ -1867,7 +1867,8 @@
 #right-panel{
   position: fixed;
   top: var(--gm-quick-toolbar-top, 160px);
-  left: 0;
+  left: auto;
+  right: calc(8px + 46px + 10px);
   width: min(280px, calc(100vw - 120px));
   z-index: 10031;
   display: none;

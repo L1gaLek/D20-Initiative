@@ -1309,6 +1309,7 @@ function openTokenMini(playerId) {
     try {
       if (typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(p)) return;
     } catch {}
+    closeTokenMini();
     window.InfoModal?.open?.(p);
   });
 
