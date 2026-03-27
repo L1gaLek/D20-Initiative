@@ -1499,43 +1499,43 @@
       "damage_immunities": "огонь, яд",
       "condition_immunities": "отравление",
       "senses": "истинное зрение 120 фт., пассивное Восприятие 13",
-      "languages": "Abyssal, телепатия 120 фт.",
+      "languages": "Бездонная речь, телепатия 120 фт.",
       "cr": "19",
       "xp": 22000,
       "traits": [
         {
-          "name_ru": "Death Throes",
-          "text_ru": "When the balor dies, it explodes, and each существо within 30 feet of it must make a СЛ 20 Dexterity спасбросок, taking 70 (20d6) огненного урона on a failed save, or half as much урона on a successful one. The explosion ignites flammable objects in that area that aren’t being worn or carried, and it destroys the balor’s weapons."
+          "name_ru": "Смертный взрыв",
+          "text_ru": "Когда балор умирает, он взрывается. Каждое существо в пределах 30 футов должно совершить спасбросок Ловкости СЛ 20, получая 70 (20d6) урона огнём при провале или половину этого урона при успехе. Взрыв поджигает горючие предметы, которые не носят и не несут."
         },
         {
-          "name_ru": "Fire Aura",
-          "text_ru": "At the start of each of the balor’s turns, each существо within 5 feet of it takes 10 (3d6) огненного урона, and flammable objects in the aura that aren’t being worn or carried ignite. A существо that touches the balor or hits it with a melee attack while within 5 feet of it takes 10 (3d6) огненного урона."
+          "name_ru": "Аура огня",
+          "text_ru": "В начале каждого хода балора каждое существо в пределах 5 футов от него получает 10 (3d6) урона огнём, а горючие предметы, которые существо носит или несёт и которые не являются магическими, воспламеняются. Существо также получает этот урон, когда касается балора или попадает по нему атакой ближнего боя, находясь в пределах 5 футов."
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The balor has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Балор совершает спасброски от заклинаний и других магических эффектов с преимуществом."
         },
         {
-          "name_ru": "Magic Weapons",
-          "text_ru": "The balor’s weapon attacks are magical."
+          "name_ru": "Магическое оружие",
+          "text_ru": "Атаки оружием балора являются магическими."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The balor makes two attacks: one with its longsword and one with its whip."
+          "text_ru": "Балор совершает две атаки: одну длинным мечом и одну кнутом."
         },
         {
-          "name_ru": "Longsword",
-          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, reach 10 фт., one цель. Попадание: 21 (3d8 + 8) рубящего урона plus 13 (3d8) урона электричеством. If the balor scores a critical hit, it rolls урона dice three times, instead of twice."
+          "name_ru": "Длинный меч",
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 10 фт., одна цель. Попадание: 21 (3d8 + 8) рубящего урона плюс 13 (3d8) урона молнией."
         },
         {
-          "name_ru": "Whip",
-          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, reach 30 фт., one цель. Попадание: 15 (2d6 + 8) рубящего урона plus 10 (3d6) огненного урона, and the цель must succeed on a СЛ 20 Strength спасбросок or be pulled up to 25 feet toward the balor."
+          "name_ru": "Кнут",
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 30 фт., одна цель. Попадание: 15 (2d6 + 8) рубящего урона плюс 10 (3d6) урона огнём, и цель должна преуспеть в спасброске Силы СЛ 20, иначе будет притянута к балору на расстояние до 25 футов."
         },
         {
           "name_ru": "Телепортация",
-          "text_ru": "The balor magically teleports, along with any equipment it is wearing or carrying, up to 120 feet to an unoccupied space it can see."
+          "text_ru": "Балор магически телепортируется вместе со всем снаряжением, которое несёт или носит, на расстояние до 120 футов в незанятое пространство, которое видит."
         }
       ],
       "reactions": [],
@@ -1584,22 +1584,26 @@
       "damage_immunities": "яд",
       "condition_immunities": "отравление",
       "senses": "тёмное зрение 60 фт., пассивное Восприятие 9",
-      "languages": "Abyssal, телепатия 60 фт. (works only with",
+      "languages": "Бездонная речь, телепатия 60 фт. (только с существами, понимающими Бездонную речь)",
       "cr": "1/4",
       "xp": 50,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dretch makes two attacks: one with its bite and one with its claws."
+          "text_ru": "Дретч совершает две атаки: одну укусом и одну когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +2 к попаданию, reach 5 фт., one цель. Попадание: 3 (1d6) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +2 к попаданию, досягаемость 5 фт., одна цель. Попадание: 3 (1d6) колющего урона."
         },
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +2 к попаданию, reach 5 фт., one цель. Попадание: 5 (2d4) рубящего урона. Fetid Cloud (1/Day). A 10-­‐foot radius of disgusting green gas extends out from the dretch. The gas spreads around corners, and its area is lightly obscured. It lasts for 1 minute or until a strong wind disperses it. Any существо that starts its turn in that area must succeed on a СЛ 11 Constitution спасбросок or be poisoned until the start of its next turn. While poisoned in this way, the цель can take either an action or a бонусное действие on its turn, not both, and can’t take reactions."
+          "name_ru": "Когти",
+          "text_ru": "Атака оружием ближнего боя: +2 к попаданию, досягаемость 5 фт., одна цель. Попадание: 5 (2d4) рубящего урона."
+        },
+        {
+          "name_ru": "Зловонное облако (1/день)",
+          "text_ru": "Из дретча вырывается облако отвратительного газа радиусом 10 футов. Облако огибает углы, и область считается сильно заслонённой. Оно держится 1 минуту или до сильного ветра. Любое существо, начинающее ход в облаке, должно преуспеть в спасброске Телосложения СЛ 11, иначе будет отравлено до начала своего следующего хода. При успехе существо невосприимчиво к зловонному облаку всех дретчей в течение 24 часов."
         }
       ],
       "reactions": [],
@@ -1648,31 +1652,31 @@
       "damage_immunities": "яд",
       "condition_immunities": "отравление",
       "senses": "истинное зрение 120 фт., пассивное Восприятие 13",
-      "languages": "Abyssal, телепатия 120 фт.",
+      "languages": "Бездонная речь, телепатия 120 фт.",
       "cr": "9",
       "xp": 5000,
       "traits": [
         {
-          "name_ru": "Innate Spellcasting",
-          "text_ru": "The glabrezu’s заклинаниеcasting ability is Intelligence (заклинание save СЛ 16). The glabrezu can innately cast the following заклинаниеs, requiring no material components: At will: darkness, detect magic, dispel magic 1/day each: confusion, fly, power word stun"
+          "name_ru": "Врождённое колдовство",
+          "text_ru": "Характеристика заклинаний глабрезу — Интеллект (СЛ спасброска от заклинаний 16). Он может врождённо накладывать следующие заклинания: \nПо желанию: «Обнаружение магии», «Рассеивание магии», «Тьма»\n1/день каждое: «Смятение», «Корона безумия», «Телекинез»"
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The glabrezu has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Глабрезу совершает спасброски от заклинаний и других магических эффектов с преимуществом."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The glabrezu makes four attacks: two with its pincers and two with its fists. Alternatively, it makes two attacks with its pincers and casts one заклинание."
+          "text_ru": "Глабрезу совершает четыре атаки: две клешнями и две кулаками. Либо совершает две атаки клешнями и использует «Творение тьмы»."
         },
         {
-          "name_ru": "Pincer",
-          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, reach 10 фт., one цель. Попадание: 16 (2d10 + 5) дробящего урона. If the цель is a Medium or smaller существо, it is grappled (escape СЛ 15). The glabrezu has two pincers, each of which can grapple only one цель."
+          "name_ru": "Клешня",
+          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, досягаемость 10 фт., одна цель. Попадание: 16 (2d10 + 5) дробящего урона. Если цель — существо Среднего размера или меньше, она становится схваченной (СЛ высвобождения 15). У глабрезу две клешни, каждая может удерживать только одну цель."
         },
         {
-          "name_ru": "Fist",
-          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, reach 5 фт., one цель. Попадание: 7 (2d4 + 2) дробящего урона."
+          "name_ru": "Кулак",
+          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, досягаемость 5 фт., одна цель. Попадание: 7 (2d4 + 2) дробящего урона."
         }
       ],
       "reactions": [],
@@ -1721,31 +1725,31 @@
       "damage_immunities": "яд",
       "condition_immunities": "отравление",
       "senses": "тёмное зрение 120 фт., пассивное Восприятие 11",
-      "languages": "Abyssal, телепатия 120 фт.",
+      "languages": "Бездонная речь, телепатия 120 фт.",
       "cr": "8",
       "xp": 3900,
       "traits": [
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The hezrou has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Хезроу совершает спасброски от заклинаний и других магических эффектов с преимуществом."
         },
         {
-          "name_ru": "Stench",
-          "text_ru": "Any существо that starts its turn within 10 feet of the hezrou must succeed on a СЛ 14 Constitution спасбросок or be poisoned until the start of its next turn. On a successful спасбросок, the существо is immune to the hezrou’s stench for 24 hours. 271 System Reference Document 5.1"
+          "name_ru": "Зловоние",
+          "text_ru": "Любое существо, начинающее ход в пределах 10 футов от хезроу, должно преуспеть в спасброске Телосложения СЛ 14, иначе будет отравлено до начала своего следующего хода. При успешном спасброске существо невосприимчиво к зловонию всех хезроу на 24 часа."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The hezrou makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Хезроу совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, reach 5 фт., one цель. Попадание: 15 (2d10 + 4) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 5 фт., одна цель. Попадание: 15 (2d10 + 4) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, reach 5 фт., one цель. Попадание: 11 (2d6 + 4) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 5 фт., одна цель. Попадание: 11 (2d6 + 4) рубящего урона."
         }
       ],
       "reactions": [],
@@ -1794,45 +1798,45 @@
       "damage_immunities": "яд",
       "condition_immunities": "отравление",
       "senses": "истинное зрение 120 фт., пассивное Восприятие 13",
-      "languages": "Abyssal, телепатия 120 фт.",
+      "languages": "Бездонная речь, телепатия 120 фт.",
       "cr": "16",
       "xp": 15000,
       "traits": [
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The marilith has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Марилит совершает спасброски от заклинаний и других магических эффектов с преимуществом."
         },
         {
-          "name_ru": "Magic Weapons",
-          "text_ru": "The marilith’s weapon attacks are magical."
+          "name_ru": "Магическое оружие",
+          "text_ru": "Атаки оружием марилит являются магическими."
         },
         {
-          "name_ru": "Reactive",
-          "text_ru": "The marilith can take one reaction on every turn in a combat."
+          "name_ru": "Реактивность",
+          "text_ru": "Марилит может совершать одну реакцию в каждом ходу боя."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The marilith makes seven attacks: six with its longswords and one with its tail."
+          "text_ru": "Марилит совершает семь атак: шесть длинными мечами и одну хвостом."
         },
         {
-          "name_ru": "Longsword",
-          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, reach 5 фт., one цель. Попадание: 13 (2d8 + 4) рубящего урона."
+          "name_ru": "Длинный меч",
+          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d8 + 4) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, reach 10 фт., one существо. Попадание: 15 (2d10 + 4) дробящего урона. If the цель is Medium or smaller, it is grappled (escape СЛ 19). Until this grapple ends, the цель is restrained, the marilith can automatically hit the цель with its tail, and the marilith can’t make tail attacks against other цельs."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, досягаемость 10 фт., одно существо. Попадание: 15 (2d10 + 4) дробящего урона. Если цель Большого размера или меньше, она схвачена (СЛ высвобождения 19). Пока цель схвачена, она опутана, марилит может автоматически попадать по ней хвостом и не может атаковать хвостом другую цель."
         },
         {
           "name_ru": "Телепортация",
-          "text_ru": "The marilith magically teleports, along with any equipment it is wearing or carrying, up to 120 feet to an unoccupied space it can see."
+          "text_ru": "Марилит магически телепортируется вместе со всем снаряжением, которое несёт или носит, на расстояние до 120 футов в незанятое пространство, которое видит."
         }
       ],
       "reactions": [
         {
-          "name_ru": "Parry",
-          "text_ru": "The marilith adds 5 to its AC against one melee attack that would hit it. To do so, the marilith must see the attacker and be wielding a melee weapon."
+          "name_ru": "Парирование",
+          "text_ru": "Марилит добавляет 5 к КД против одной атаки ближнего боя, которая должна по ней попасть. Чтобы использовать эту реакцию, марилит должна видеть атакующего и владеть оружием ближнего боя."
         }
       ],
       "legendary_actions": [],
@@ -1880,31 +1884,35 @@
       "damage_immunities": "яд",
       "condition_immunities": "отравление",
       "senses": "истинное зрение 120 фт., пассивное Восприятие 11",
-      "languages": "Abyssal, телепатия 120 фт.",
+      "languages": "Бездонная речь, телепатия 120 фт.",
       "cr": "13",
       "xp": 10000,
       "traits": [
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The nalfeshnee has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Налфешни совершает спасброски от заклинаний и других магических эффектов с преимуществом."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The nalfeshnee uses Horror Nimbus if it can. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Налфешни использует «Нимб ужаса», если может. Затем совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +10 к попаданию, reach 5 фт., one цель. Попадание: 32 (5d10 + 5) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +10 к попаданию, досягаемость 5 фт., одна цель. Попадание: 32 (5d10 + 5) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +10 к попаданию, reach 10 фт., one цель. Попадание: 15 (3d6 + 5) рубящего урона. Horror Nimbus (Recharge 5–6). The nalfeshnee magically emits scintillating, multicolored light. Each существо within 15 feet of the nalfeshnee that can see the light must succeed on a СЛ 15 Wisdom спасбросок or be frightened for 1 minute. A существо can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a существо’s спасбросок is successful or the effect ends for it, the 272 System Reference Document 5.1 существо is immune to the nalfeshnee’s Horror Nimbus for the next 24 hours."
+          "text_ru": "Атака оружием ближнего боя: +10 к попаданию, досягаемость 10 фт., одна цель. Попадание: 15 (3d6 + 5) рубящего урона."
+        },
+        {
+          "name_ru": "Нимб ужаса (перезарядка 5–6)",
+          "text_ru": "Налфешни излучает магический многоцветный свет. Каждое существо в пределах 15 футов, которое видит свет, должно преуспеть в спасброске Мудрости СЛ 15, иначе будет испугано на 1 минуту. Испуганная цель может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе."
         },
         {
           "name_ru": "Телепортация",
-          "text_ru": "The nalfeshnee magically teleports, along with any equipment it is wearing or carrying, up to 120 feet to an unoccupied space it can see."
+          "text_ru": "Налфешни магически телепортируется вместе со всем снаряжением, которое несёт или носит, на расстояние до 120 футов в незанятое пространство, которое видит."
         }
       ],
       "reactions": [],
@@ -1916,7 +1924,7 @@
       "name_ru": "Квасит",
       "size_ru": "Крошечный",
       "type_ru": "исчадие",
-      "alignment_ru": "shapechanger), chaotic evil",
+      "alignment_ru": "хаотично-злой",
       "ac": "13",
       "hp": "7 (3d4)",
       "speed": "40 фт.",
@@ -1953,27 +1961,35 @@
       "damage_immunities": "яд",
       "condition_immunities": "отравление",
       "senses": "тёмное зрение 120 фт., пассивное Восприятие 10",
-      "languages": "Abyssal, Общий",
+      "languages": "Бездонная речь, Общий",
       "cr": "1",
       "xp": 200,
       "traits": [
         {
-          "name_ru": "Shapechanger",
-          "text_ru": "The quasit can use its action to polymorph into a beast form that resembles a bat (speed 10 фт. fly 40 фт.), a centipede (40 фт., climb 40 фт.), or a toad (40 фт., swim 40 фт.), or back into its true form. Its statistics are the same in each form, except for the speed changes noted. Any equipment it is wearing or carrying isn’t transformed. It reverts to its true form if it dies."
+          "name_ru": "Смена облика",
+          "text_ru": "Квасит может действием магически превратиться в форму зверя, похожую на летучую мышь (скорость 10 фт., полёт 40 фт.), многоножку (40 фт., лазание 40 фт.) или жабу (40 фт., плавание 40 фт.), либо принять истинный облик обратно. Его характеристики остаются теми же во всех формах, кроме указанной скорости. Любое снаряжение, которое он носит или несёт, не преобразуется. В случае смерти квасит возвращается в истинный облик."
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The quasit has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Квасит совершает спасброски от заклинаний и других магических эффектов с преимуществом."
+        },
+        {
+          "name_ru": "Невидимость",
+          "text_ru": "Квасит магически становится невидимым, пока не атакует, не использует «Ужас» или пока его концентрация не закончится (как при концентрации на заклинании). Любое снаряжение, которое квасит носит или несёт, становится невидимым вместе с ним."
         }
       ],
       "actions": [
         {
-          "name_ru": "Claws (Bite in Beast Form)",
-          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, reach 5 фт., one цель. Попадание: 5 (1d4 + 3) колющего урона, and the цель must succeed on a СЛ 10 Constitution спасбросок or take 5 (2d4) урона ядом and become poisoned for 1 minute. The цель can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. Scare (1/Day). One существо of the quasit’s choice within 20 feet of it must succeed on a СЛ 10 Wisdom спасбросок or be frightened for 1 minute. The цель can repeat the спасбросок at the end of each of its turns, with disпреимущество if the quasit is within line of sight, ending the effect on itself on a success."
+          "name_ru": "Когти (или Укус в облике зверя)",
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 5 (1d4 + 3) колющего урона, и цель должна преуспеть в спасброске Телосложения СЛ 10, иначе получит 5 (2d4) урона ядом и будет отравлена на 1 минуту. Цель может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе."
         },
         {
-          "name_ru": "Invisibility",
-          "text_ru": "The quasit magically turns invisible until it attacks or uses Scare, or until its concentration ends (as if concentrating on a заклинание). Any equipment the quasit wears or carries is invisible with it."
+          "name_ru": "Невидимость",
+          "text_ru": "Квасит магически становится невидимым, пока не атакует или не использует «Ужас», либо пока не закончится концентрация (как при концентрации на заклинании). Любое снаряжение, которое квасит носит или несёт, становится невидимым вместе с ним."
+        },
+        {
+          "name_ru": "Ужас (1/день)",
+          "text_ru": "Одно существо в пределах 20 футов от квасита должно преуспеть в спасброске Мудрости СЛ 10, иначе будет испугано на 1 минуту. Цель может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе."
         }
       ],
       "reactions": [],
@@ -2022,31 +2038,35 @@
       "damage_immunities": "яд",
       "condition_immunities": "отравление",
       "senses": "тёмное зрение 120 фт., пассивное Восприятие 11",
-      "languages": "Abyssal, телепатия 120 фт.",
+      "languages": "Бездонная речь, телепатия 120 фт.",
       "cr": "6",
       "xp": 2300,
       "traits": [
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The vrock has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Врок совершает спасброски от заклинаний и других магических эффектов с преимуществом."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The vrock makes two attacks: one with its beak and one with its talons."
+          "text_ru": "Врок совершает две атаки: одну клювом и одну когтями."
         },
         {
-          "name_ru": "Beak",
-          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, reach 5 фт., one цель. Попадание: 10 (2d6 + 3) колющего урона."
+          "name_ru": "Клюв",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 10 (2d6 + 3) колющего урона."
         },
         {
-          "name_ru": "Talons",
-          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, reach 5 фт., one цель. Попадание: 14 (2d10 + 3) рубящего урона."
+          "name_ru": "Когти",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 14 (2d10 + 3) рубящего урона."
         },
         {
-          "name_ru": "Spores (Recharge 6)",
-          "text_ru": "A 15-­‐foot-­‐radius cloud of toxic spores extends out from the vrock. The spores spread around corners. Each существо in that area must succeed on a СЛ 14 Constitution спасбросок or become poisoned. While poisoned in this way, a цель takes 5 (1d10) урона ядом at the start of each of its turns. A цель can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. Emptying a vial of holy water on the цель also ends the effect on it. 273 System Reference Document 5.1 Stunning Screech (1/Day). The vrock emits a horrific screech. Each существо within 20 feet of it that can hear it and that isn’t a demon must succeed on a СЛ 14 Constitution спасбросок or be stunned until the end of the vrock’s next turn."
+          "name_ru": "Споры (перезарядка 6)",
+          "text_ru": "Врок испускает токсичные споры во все стороны. Каждое существо в пределах 15 футов должно преуспеть в спасброске Телосложения СЛ 14, иначе будет отравлено на 1 минуту. Пока существо отравлено таким образом, оно получает 5 (1d10) урона ядом в начале каждого своего хода. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе."
+        },
+        {
+          "name_ru": "Оглушающий визг (1/день)",
+          "text_ru": "Врок издаёт ужасный визг. Каждое существо в пределах 20 футов, которое слышит визг и не является демоном, должно преуспеть в спасброске Телосложения СЛ 14, иначе будет оглушено до конца следующего хода врока."
         }
       ],
       "reactions": [],
@@ -2055,7 +2075,7 @@
     },
     {
       "id": "barbed-devil",
-      "name_ru": "Барбед Девил",
+      "name_ru": "Шипастый дьявол",
       "size_ru": "Средний",
       "type_ru": "исчадие",
       "alignment_ru": "законно-злой",
@@ -2091,7 +2111,7 @@
       "saving_throws": "Сил +6, Тел +7, Мдр +5, Хар +5",
       "skills": "Обман +5, Проницательность +5, Восприятие +8",
       "damage_vulnerabilities": null,
-      "damage_resistances": "холод; дробящий урон, колющий урон, and",
+      "damage_resistances": "холод; дробящий, колющий и рубящий урон от немагических атак без серебряного оружия",
       "damage_immunities": "огонь, яд",
       "condition_immunities": "отравление",
       "senses": "тёмное зрение 120 фт., пассивное Восприятие 18",
@@ -2100,34 +2120,34 @@
       "xp": 1800,
       "traits": [
         {
-          "name_ru": "Barbed Hide",
-          "text_ru": "At the start of each of its turns, the barbed devil deals 5 (1d10) колющего урона to any существо grappling it."
+          "name_ru": "Шипастая шкура",
+          "text_ru": "В начале каждого своего хода шипастый дьявол наносит 5 (1d10) колющего урона любому существу, удерживающему его в захвате."
         },
         {
-          "name_ru": "Devil’s Sight",
-          "text_ru": "Magical darkness doesn’t impede the devil’s darkvision."
+          "name_ru": "Зрение дьявола",
+          "text_ru": "Магическая тьма не мешает тёмному зрению дьявола."
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The devil has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Дьявол совершает спасброски от заклинаний и других магических эффектов с преимуществом."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The devil makes three melee attacks: one with its tail and two with its claws. Alternatively, it can use Hurl Flame twice."
+          "text_ru": "Дьявол совершает три атаки ближнего боя: одну хвостом и две когтями. Либо использует «Метнуть пламя» два раза."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, reach 5 фт., one цель. Попадание: 6 (1d6 + 3) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 6 (1d6 + 3) колющего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, reach 5 фт., one цель. Попадание: 10 (2d6 + 3) колющего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 10 фт., одна цель. Попадание: 10 (2d6 + 3) колющего урона."
         },
         {
-          "name_ru": "Hurl Flame",
-          "text_ru": "Ranged Spell Attack: +5 к попаданию, range 150 фт., one цель. Попадание: 10 (3d6) огненного урона. If the цель is a flammable object that isn’t being worn or carried, it also catches fire."
+          "name_ru": "Метнуть пламя",
+          "text_ru": "Атака заклинанием дальнего боя: +5 к попаданию, дистанция 150 фт., одна цель. Попадание: 10 (3d6) урона огнём. Если цель — воспламеняемый предмет, который никто не носит и не несёт, он загорается."
         }
       ],
       "reactions": [],
@@ -2136,7 +2156,7 @@
     },
     {
       "id": "bearded-devil",
-      "name_ru": "Беардед Девил",
+      "name_ru": "Бородатый дьявол",
       "size_ru": "Средний",
       "type_ru": "исчадие",
       "alignment_ru": "законно-злой",
@@ -2172,7 +2192,7 @@
       "saving_throws": "Сил +5, Тел +4, Мдр +2",
       "skills": null,
       "damage_vulnerabilities": null,
-      "damage_resistances": "холод; дробящий урон, колющий урон, and",
+      "damage_resistances": "холод; дробящий, колющий и рубящий урон от немагических атак без серебряного оружия",
       "damage_immunities": "огонь, яд",
       "condition_immunities": "отравление",
       "senses": "тёмное зрение 120 фт., пассивное Восприятие 10",
@@ -2181,30 +2201,30 @@
       "xp": 700,
       "traits": [
         {
-          "name_ru": "Devil’s Sight",
-          "text_ru": "Magical darkness doesn’t impede the devil’s darkvision."
+          "name_ru": "Зрение дьявола",
+          "text_ru": "Магическая тьма не мешает тёмному зрению дьявола."
         },
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The devil has преимущество on спасбросокs against заклинаниеs and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Дьявол совершает спасброски от заклинаний и других магических эффектов с преимуществом."
         },
         {
-          "name_ru": "Steadfast",
-          "text_ru": "The devil can’t be frightened while it can see an allied существо within 30 feet of it."
+          "name_ru": "Непоколебимость",
+          "text_ru": "Бородатый дьявол получает преимущество на спасброски от эффектов, которые могут сбить его с ног."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The devil makes two attacks: one with its beard and one with its glaive."
+          "text_ru": "Дьявол совершает две атаки: одну бородой и одну глефой."
         },
         {
-          "name_ru": "Beard",
-          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, reach 5 фт., one существо. Попадание: 6 (1d8 + 2) колющего урона, and the цель must succeed on a СЛ 12 Constitution спасбросок or be poisoned for 1 minute. While poisoned in this way, the цель can’t regain hit points. The цель can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
+          "name_ru": "Борода",
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одно существо. Попадание: 6 (1d8 + 2) колющего урона, и цель должна преуспеть в спасброске Телосложения СЛ 12, иначе будет отравлена на 1 минуту. Пока цель отравлена таким образом, она не может восстанавливать хиты. Цель может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе."
         },
         {
-          "name_ru": "Glaive",
-          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, reach 10 фт., one цель. Попадание: 8 (1d10 + 3) рубящего урона. If the цель is a существо other than an undead or a construct, it must succeed on a СЛ 12 Constitution спасбросок or lose 5 (1d10) hit points at the start of each of its turns due to an infernal wound. Each time the devil hits the wounded цель with this attack, the урона dealt by the wound increases by 5 (1d10). Any существо can take an action to stanch the wound with a 274 System Reference Document 5.1 successful СЛ 12 Wisdom (Medicine) check. The wound also closes if the цель receives magical healing."
+          "name_ru": "Глефа",
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 10 фт., одна цель. Попадание: 8 (1d10 + 3) рубящего урона. Если целью является существо, а не нежить или конструкция, оно должно преуспеть в спасброске Телосложения СЛ 12, иначе начнёт кровоточить и в начале каждого своего хода будет получать 5 (1d10) рубящего урона. Кровотечение прекращается, если цель получает магическое лечение или любым существом действием ей оказана успешная первая помощь (проверка Мудрости (Медицина) СЛ 12)."
         }
       ],
       "reactions": [],
@@ -2364,7 +2384,7 @@
       "size_ru": "Средний",
       "type_ru": "исчадие",
       "alignment_ru": "законно-злой",
-      "ac": "18 (plate)",
+      "ac": "18 (латы)",
       "hp": "153 (18d8 + 72)",
       "speed": "30 фт., полёт 60 фт.",
       "abilities": {
@@ -2603,7 +2623,7 @@
       "name_ru": "Имп",
       "size_ru": "Крошечный",
       "type_ru": "исчадие",
-      "alignment_ru": "shapechanger), lawful evil",
+      "alignment_ru": "законно-злой",
       "ac": "13",
       "hp": "10 (3d4 + 3)",
       "speed": "20 фт., полёт 40 фт.",
