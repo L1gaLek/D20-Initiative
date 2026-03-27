@@ -753,16 +753,16 @@ function renderCombatTab(vm) {
 }
 
   const EQUIP_TAB_DEFS = [
-    { id: "weapons", label: "Оружие" },
-    { id: "armor", label: "Доспехи" },
-    { id: "adventuring_gear", label: "Снаряжение" },
-    { id: "tools", label: "Инструменты" },
-    { id: "mounts_animals", label: "Животные" },
-    { id: "tack_vehicles", label: "Упряжь/Повозки" },
-    { id: "water_vehicles", label: "Водный транспорт" },
-    { id: "trade_goods", label: "Товары" },
-    { id: "lifestyle_expenses", label: "Образ жизни" },
-    { id: "other", label: "Другое" }
+    { id: "weapons", label: "Оружие", icon: "⚔️" },
+    { id: "armor", label: "Доспехи", icon: "🛡️" },
+    { id: "adventuring_gear", label: "Снаряжение", icon: "🎒" },
+    { id: "tools", label: "Инструменты", icon: "🧰" },
+    { id: "mounts_animals", label: "Животные", icon: "🐎" },
+    { id: "tack_vehicles", label: "Упряжь/Повозки", icon: "🛷" },
+    { id: "water_vehicles", label: "Водный транспорт", icon: "⛵" },
+    { id: "trade_goods", label: "Товары", icon: "📦" },
+    { id: "lifestyle_expenses", label: "Образ жизни", icon: "🏕️" },
+    { id: "other", label: "Другое", icon: "✨" }
   ];
 
   function fmtCost(cost) {
@@ -842,7 +842,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   `;
 
   const descToggleBtn = `
-    <button class="weapon-btn" type="button" data-inv-toggle-desc data-tab="${escapeHtml(tabId)}" data-idx="${idx}" title="Свернуть/развернуть описание">
+    <button class="weapon-btn" type="button" data-inv-toggle-desc data-tab="${escapeHtml(tabId)}" data-idx="${idx}" aria-expanded="${descCollapsed ? "false" : "true"}" title="Свернуть/развернуть описание">
       ${descCollapsed ? "Показать" : "Скрыть"}
     </button>
   `;
@@ -854,9 +854,17 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
   ` : "";
 
   const descBlock = canEdit
-    ? `<textarea class="sheet-textarea equip-descedit ${descCollapsed ? "collapsed" : ""}" rows="3" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.description_ru"
-         placeholder="Описание...">${escapeHtml(desc)}</textarea>`
-    : `<div class="equip-desc ${descCollapsed ? "collapsed" : ""}">${desc ? escapeHtml(desc) : `<span class="equip-desc--empty">—</span>`}</div>`;
+    ? `
+      <div class="equip-descbox ${descCollapsed ? "collapsed" : ""}">
+        <textarea class="sheet-textarea equip-descedit" rows="3" data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.description_ru"
+          placeholder="Описание...">${escapeHtml(desc)}</textarea>
+      </div>
+    `
+    : `
+      <div class="equip-descbox ${descCollapsed ? "collapsed" : ""}">
+        <div class="equip-desc">${desc ? escapeHtml(desc) : `<span class="equip-desc--empty">—</span>`}</div>
+      </div>
+    `;
 
 
   const detailsBlock = (details && !fromDb)
@@ -894,6 +902,8 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
 
   function renderInventoryTab(vm, canEdit) {
     const denom = String(vm?.coinsViewDenom || "gp").toLowerCase();
+    const legacyItems = escapeHtml(String(vm?.text?.inventoryItems?.value || ""));
+    const legacyTreasures = escapeHtml(String(vm?.text?.inventoryTreasures?.value || ""));
 
     const exchangeTooltip = `
       <div class="exchange-tooltip" role="tooltip">
@@ -1026,16 +1036,23 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
           <div class="equip-topline">
             <h4 style="margin:0">Инвентарь</h4>
             <div class="equip-top-actions">
-              <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-open-db>База предметов</button>
+              <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-open-db>📚 База предметов</button>
               <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-add-manual>Добавить вручную</button>
             </div>
           </div>
 
-          <div class="equip-subtabs" role="tablist">
-            ${(EQUIP_TAB_DEFS).map(t => {
-              const active = String(vm?.inventory?.activeTab || "weapons") === t.id;
-              return `<button class="equip-subtab ${active ? "active" : ""}" type="button" data-inv-subtab="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`;
-            }).join("")}
+          <div class="equip-subtabs-frame">
+            <div class="equip-subtabs" role="tablist">
+              ${(EQUIP_TAB_DEFS).map(t => {
+                const active = String(vm?.inventory?.activeTab || "weapons") === t.id;
+                return `
+                  <button class="equip-subtab ${active ? "active" : ""}" type="button" data-inv-subtab="${escapeHtml(t.id)}" title="${escapeHtml(t.label)}">
+                    <span class="equip-subtab__label">${escapeHtml(t.label)}</span>
+                    <span class="equip-subtab__icon" aria-hidden="true">${escapeHtml(t.icon || "•")}</span>
+                  </button>
+                `;
+              }).join("")}
+            </div>
           </div>
 
           <div class="equip-list" data-inv-list>
@@ -1052,8 +1069,8 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
             Legacy-поля ниже оставлены для совместимости старых сохранений (можно не использовать).
           </div>
           <div class="equip-legacy">
-            <div class="kv" style="margin-top:8px"><div class="k">Предметы (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="text.inventoryItems.value" placeholder="Список предметов..."></textarea></div></div>
-            <div class="kv" style="margin-top:8px"><div class="k">Сокровища (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="text.inventoryTreasures.value" placeholder="Сокровища..."></textarea></div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Предметы (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-legacy-inv-notes="items" data-sheet-path="text.inventoryItems.value" placeholder="Список предметов...">${legacyItems}</textarea></div></div>
+            <div class="kv" style="margin-top:8px"><div class="k">Сокровища (legacy)</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-legacy-inv-notes="treasures" data-sheet-path="text.inventoryTreasures.value" placeholder="Сокровища...">${legacyTreasures}</textarea></div></div>
           </div>
         </div>
       </div>
@@ -1511,14 +1528,14 @@ function renderShopTab(vm, canEdit) {
     const vm = toViewModel(sheet, player.name);
 
     const tabs = [
-      { id: "basic", label: "Основное" },
-      { id: "spells", label: "Заклинания" },
-      { id: "combat", label: "Бой" },
-      { id: "inventory", label: "Инвентарь" },
-      { id: "shop", label: "Магазин" },
-      { id: "personality", label: "Личность" },
-      { id: "appearance", label: "Персонаж" },
-      { id: "notes", label: "Заметки" }
+      { id: "basic", label: "Основное", icon: "🧾" },
+      { id: "spells", label: "Заклинания", icon: "✨" },
+      { id: "combat", label: "Бой", icon: "⚔️" },
+      { id: "inventory", label: "Инвентарь", icon: "🎒" },
+      { id: "shop", label: "Магазин", icon: "🏪" },
+      { id: "personality", label: "Личность", icon: "🎭" },
+      { id: "appearance", label: "Персонаж", icon: "👤" },
+      { id: "notes", label: "Заметки", icon: "📝" }
     ];
 
     // восстановление вкладки (если была)
@@ -1611,7 +1628,8 @@ function renderShopTab(vm, canEdit) {
       <div class="sheet-sidebar">
         ${mainTabs.map(t => `
           <button class="sheet-tab ${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">
-            ${escapeHtml(t.label)}
+            <span class="sheet-tab__icon" aria-hidden="true">${escapeHtml(t.icon || "•")}</span>
+            <span class="sheet-tab__label">${escapeHtml(t.label)}</span>
           </button>
         `).join("")}
 
@@ -1619,7 +1637,8 @@ function renderShopTab(vm, canEdit) {
 
         ${shopTab ? `
           <button class="sheet-tab sheet-tab--shop ${shopTab.id === activeTab ? "active" : ""}" data-tab="${shopTab.id}">
-            ${escapeHtml(shopTab.label)}
+            <span class="sheet-tab__icon" aria-hidden="true">${escapeHtml(shopTab.icon || "•")}</span>
+            <span class="sheet-tab__label">${escapeHtml(shopTab.label)}</span>
           </button>
         ` : ""}
       </div>
