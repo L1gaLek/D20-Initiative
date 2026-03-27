@@ -695,13 +695,25 @@
       <option value="100">d100</option>
     </select>
 
-    <input id="dice-count"
-           class="dice-viz-count"
-           type="number"
-           min="1"
-           max="20"
-           value="1"
-           title="Количество кубиков">
+    <span class="board-stepper">
+      <button type="button"
+              class="board-stepper__btn"
+              data-step-target="dice-count"
+              data-step-dir="-1"
+              aria-label="Уменьшить количество кубиков">◀</button>
+      <input id="dice-count"
+             class="dice-viz-count"
+             type="number"
+             min="1"
+             max="20"
+             value="1"
+             title="Количество кубиков">
+      <button type="button"
+              class="board-stepper__btn"
+              data-step-target="dice-count"
+              data-step-dir="1"
+              aria-label="Увеличить количество кубиков">▶</button>
+    </span>
 
     <button id="roll" class="dice-viz-btn dice-viz-btn--roll" type="button">Бросить</button>
   </div>
