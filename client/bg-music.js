@@ -1,19 +1,19 @@
 // client/bg-music.js
-// Фоновая музыка (Supabase Storage + синхронизация состояния комнаты)
+// Фоновая музыка (VPS uploads + синхронизация состояния комнаты)
 // - 1 трек одновременно
 // - список/описания треков хранится в room_state.bgMusic
-// - загрузка в Supabase Storage bucket: "room-audio"
+// - загрузка на VPS upload endpoint (multipart/form-data)
 // - максимум 10 треков; размер файла <= 50MB
 // - фильтра расширений НЕТ (можно любые), но проигрывание зависит от браузера.
 //
-// Supabase client в проекте: sbClient, доступ через window.getSbClient() (см. dom-and-setup.js)
+// Для обратной совместимости старых треков (с path) оставлен fallback через Supabase signed/public URL.
 
 (function () {
   const MAX_TRACKS = 10;
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
-  const BUCKET = "room-audio";
-  const STORAGE_PREFIX = "music"; // path: music/<roomId>/<trackId>_<name>
-  const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h
+  const BUCKET = "room-audio"; // legacy fallback для старых path-треков
+  const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h (legacy fallback)
+  const DEFAULT_UPLOAD_ENDPOINT = "https://ws.d20-initiative.fun/api/uploads/room-audio";
   const DIAG_KEY = "int_bg_music_diag";
 
   function isDiagEnabled() {
@@ -41,10 +41,87 @@
     return window.sbClient || window.supabase || null;
   }
 
+  function getMusicUploadEndpoint() {
+    try {
+      const raw = String(window.BGM_UPLOAD_ENDPOINT || '').trim();
+      if (raw) return raw;
+    } catch {}
+    try {
+      // GitHub Pages не может обрабатывать backend POST/DELETE на том же origin.
+      // Для него используем VPS API как безопасный fallback по умолчанию.
+      if (/\.github\.io$/i.test(String(window.location?.hostname || ''))) {
+        return DEFAULT_UPLOAD_ENDPOINT;
+      }
+    } catch {}
+    return DEFAULT_UPLOAD_ENDPOINT;
+  }
+
+  function normalizeRoomId(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    if (value === 'room' || value === 'taverna' || value === 'index.html') return '';
+    return value;
+  }
+
+  function rememberKnownRoomId(raw) {
+    const roomId = normalizeRoomId(raw);
+    if (!roomId) return '';
+    try { window.__bgMusicLastRoomId = roomId; } catch {}
+    try { localStorage.setItem('dnd_last_room_id', roomId); } catch {}
+    return roomId;
+  }
+
   function getRoomId() {
-    try { if (typeof currentRoomId !== "undefined" && currentRoomId) return String(currentRoomId); } catch {}
-    try { if (window.currentRoomId) return String(window.currentRoomId); } catch {}
-    return "room";
+  try {
+    if (typeof currentRoomId !== "undefined" && String(currentRoomId || "").trim()) {
+      return String(currentRoomId).trim();
+    }
+  } catch {}
+
+  try {
+    if (String(window.currentRoomId || "").trim()) {
+      return String(window.currentRoomId).trim();
+    }
+  } catch {}
+
+  try {
+    const join = window.getLastJoinAttempt?.();
+    if (String(join?.roomId || "").trim()) {
+      return String(join.roomId).trim();
+    }
+  } catch {}
+
+  try {
+    const shadowRoomId = String(window.__shadowRoomState?.roomId || "").trim();
+    if (shadowRoomId) return shadowRoomId;
+  } catch {}
+
+  try {
+    const fromPath = String(window.location?.pathname || "")
+      .split("/")
+      .filter(Boolean)
+      .pop() || "";
+    if (fromPath && fromPath !== "taverna" && fromPath !== "index.html") {
+      return fromPath.trim();
+    }
+  } catch {}
+
+  return "";
+}
+
+  function isVpsTrack(track) {
+    const source = String(track?.source || '').trim().toLowerCase();
+    if (source === 'vps') return true;
+    if (source === 'supabase-legacy') return false;
+    return !!String(track?.url || '').trim() && !String(track?.path || '').trim().startsWith('music/');
+  }
+
+  function pickFirstNonEmpty(obj, keys) {
+    for (const key of keys) {
+      const value = String(obj?.[key] || '').trim();
+      if (value) return value;
+    }
+    return '';
   }
 
   function isGM() {
@@ -63,6 +140,25 @@
   function safeNum(x, fb = 0) {
     const n = Number(x);
     return Number.isFinite(n) ? n : fb;
+  }
+
+
+  function buildTrackDeleteUrl(track) {
+    const endpoint = getMusicUploadEndpoint();
+    const url = new URL(endpoint, window.location.origin);
+    const path = String(track?.storageKey || track?.deleteKey || track?.path || '').trim();
+    const roomId = getRoomId();
+    if (!roomId) {
+  alert("Не удалось определить ID комнаты. Перезайди в комнату и попробуй снова.");
+  return;
+}
+    const fileName = String(track?.fileName || track?.serverFileName || track?.name || '').trim();
+    const trackId = String(track?.id || '').trim();
+    if (path) url.searchParams.set('path', path);
+    if (roomId) url.searchParams.set('roomId', roomId);
+    if (fileName) url.searchParams.set('fileName', fileName);
+    if (trackId) url.searchParams.set('trackId', trackId);
+    return url.toString();
   }
 
   function ensureBgMusic(state) {
@@ -84,6 +180,9 @@
         if (!t || typeof t !== 'object') return;
         if (typeof t.desc === 'undefined' && typeof t.description !== 'undefined') t.desc = t.description;
         if (typeof t.description === 'undefined' && typeof t.desc !== 'undefined') t.description = t.desc;
+        if (!t.source) t.source = isVpsTrack(t) ? 'vps' : 'supabase-legacy';
+        if (!t.fileName) t.fileName = String(t.serverFileName || t.name || '');
+        if (!t.storageKey) t.storageKey = String(t.deleteKey || t.path || '');
       });
     } catch {}
 
@@ -838,40 +937,109 @@
 
   // ---------- Storage ops ----------
   async function uploadTrack(file) {
-    const sb = getSb();
-    if (!sb || !sb.storage) {
-      alert("Supabase client не инициализирован (sbClient отсутствует).");
-      return;
-    }
-
     const roomId = getRoomId();
     const bg = ensureBgMusic(currentState || {});
     if (safeArr(bg.tracks).length >= MAX_TRACKS) return;
 
-    const id = uuid();
-    const safeName = String(file.name || "track").replaceAll("/", "_").replaceAll("\\", "_");
-    const path = `${STORAGE_PREFIX}/${roomId}/${id}_${safeName}`;
-
-    const up = await sb.storage.from(BUCKET).upload(path, file, {
-      cacheControl: "3600",
-      upsert: false
-    });
-
-    if (up?.error) {
-      alert("Ошибка загрузки: " + (up.error.message || up.error));
+    if (!roomId) {
+      bgmDiag('uploadTrack: roomId missing', {
+        currentRoomIdType: (() => { try { return typeof currentRoomId; } catch { return 'unavailable'; } })(),
+        windowCurrentRoomId: (() => { try { return String(window.currentRoomId || ''); } catch { return ''; } })(),
+        roomShadowId: (() => { try { return String(window.__roomStateShadowRoomId || ''); } catch { return ''; } })(),
+        lastJoinAttempt: (() => { try { return window.getLastJoinAttempt?.() || null; } catch { return null; } })()
+      });
+      alert('Не удалось определить ID комнаты. Перезайдите в комнату и попробуйте снова.');
       return;
     }
 
-    let bestUrl = '';
-    try { bestUrl = await resolveTrackUrl({ id, path }); } catch {}
+    rememberKnownRoomId(roomId);
+
+    const id = uuid();
+    const safeName = String(file.name || "track").replaceAll("/", "_").replaceAll("\\", "_");
+    const endpoint = getMusicUploadEndpoint();
+
+    const formVariants = [
+      // Основной контракт (текущий клиент).
+      () => {
+        const form = new FormData();
+        form.append('file', file, safeName);
+        form.append('roomId', roomId);
+        form.append('trackId', id);
+        return form;
+      },
+      // Частый backend-контракт (snake_case + поле audio).
+      () => {
+        const form = new FormData();
+        form.append('audio', file, safeName);
+        form.append('room_id', roomId);
+        form.append('track_id', id);
+        return form;
+      },
+      // Гибридный fallback для multer/single с разными именами полей.
+      () => {
+        const form = new FormData();
+        form.append('file', file, safeName);
+        form.append('audio', file, safeName);
+        form.append('roomId', roomId);
+        form.append('room_id', roomId);
+        form.append('trackId', id);
+        form.append('track_id', id);
+        return form;
+      }
+    ];
+
+    let payload = null;
+    let lastError = null;
+    try {
+      for (let i = 0; i < formVariants.length; i++) {
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          body: formVariants[i](),
+          credentials: 'omit',
+          mode: 'cors'
+        });
+        payload = await resp.json().catch(() => null);
+        if (resp.ok) {
+          lastError = null;
+          break;
+        }
+        lastError = new Error(String(payload?.error || payload?.message || `HTTP ${resp.status}`));
+        bgmDiag('uploadTrack: upload attempt failed', {
+          attempt: i + 1,
+          status: resp.status,
+          payload
+        });
+      }
+      if (lastError) throw lastError;
+    } catch (e) {
+      alert('Ошибка загрузки на VPS: ' + (e?.message || e));
+      return;
+    }
+
+    const url = pickFirstNonEmpty(payload, ['url', 'fileUrl', 'src', 'location']);
+    const path = pickFirstNonEmpty(payload, ['path', 'storageKey', 'deleteKey']);
+    const fileName = pickFirstNonEmpty(payload, ['fileName', 'serverFileName']) || safeName;
+    const storageKey = pickFirstNonEmpty(payload, ['storageKey', 'deleteKey', 'path']);
+    const deleteKey = pickFirstNonEmpty(payload, ['deleteKey', 'storageKey', 'path']);
+    const source = pickFirstNonEmpty(payload, ['source']) || 'vps';
+
+    if (!url) {
+      alert('Сервер не вернул URL загруженного трека.');
+      return;
+    }
 
     bg.tracks.push({
       id,
-      name: safeName,
+      name: String(fileName || safeName),
       desc: "",
       description: "",
-      url: bestUrl || '',
-      path,
+      url,
+      path: path || '',
+      source,
+      fileName: String(fileName || safeName),
+      serverFileName: String(fileName || safeName),
+      storageKey: storageKey || path || '',
+      deleteKey: deleteKey || storageKey || path || '',
       createdAt: new Date().toISOString()
     });
 
@@ -880,20 +1048,32 @@
   }
 
   async function deleteTrack(track) {
-    const sb = getSb();
-    if (!sb || !sb.storage) {
-      alert("Supabase client не инициализирован.");
-      return;
-    }
-
     const bg = ensureBgMusic(currentState || {});
     const id = String(track?.id || "");
     if (!id) return;
 
-    const p = String(track?.path || "");
-    if (p) {
-      const rm = await sb.storage.from(BUCKET).remove([p]);
-      if (rm?.error) console.warn("bg-music: remove failed", rm.error);
+    if (isVpsTrack(track)) {
+      try {
+        const resp = await fetch(buildTrackDeleteUrl(track), {
+          method: 'DELETE',
+          credentials: 'omit',
+          mode: 'cors'
+        });
+        if (!resp.ok && resp.status !== 404) {
+          const payload = await resp.json().catch(() => null);
+          console.warn('bg-music: VPS delete failed', payload || resp.status);
+        }
+      } catch (e) {
+        console.warn('bg-music: VPS delete failed', e);
+      }
+    } else {
+      // Legacy Supabase track without direct URL.
+      const sb = getSb();
+      const p = String(track?.storageKey || track?.deleteKey || track?.path || "");
+      if (sb?.storage && p) {
+        const rm = await sb.storage.from(BUCKET).remove([p]);
+        if (rm?.error) console.warn("bg-music: remove failed", rm.error);
+      }
     }
 
     bg.tracks = safeArr(bg.tracks).filter(t => String(t?.id || "") !== id);
@@ -1018,6 +1198,7 @@
   // ---------- Apply state (called from message-ui on each snapshot) ----------
   async function applyState(state) {
     currentState = state || currentState || {};
+    try { rememberKnownRoomId(getRoomId()); } catch {}
     const applyToken = ++_applyToken;
 
     try { ensureMainUiLayout(); } catch {}

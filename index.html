@@ -761,6 +761,9 @@
   // Optional: Edge Function URL for CORS proxy ( spell pages)
   // Example: https://<project-ref>.functions.supabase.co/fetch
   window.SUPABASE_FETCH_FN = "fetch";
+  // Optional: VPS endpoint for room audio uploads/deletes (multipart POST / DELETE)
+  // Важно для GitHub Pages: здесь должен быть URL backend/VPS, а не относительный путь.
+  window.BGM_UPLOAD_ENDPOINT = "https://ws.d20-initiative.fun/api/uploads/room-audio";
 </script>
 
   <script src="controlbox.js"></script>
