@@ -956,25 +956,61 @@
 
     const id = uuid();
     const safeName = String(file.name || "track").replaceAll("/", "_").replaceAll("\\", "_");
-    const form = new FormData();
-    form.append('file', file, safeName);
-    form.append('roomId', roomId);
-    form.append('trackId', id);
-
     const endpoint = getMusicUploadEndpoint();
 
-    let payload = null;
-    try {
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        body: form,
-        credentials: 'omit',
-        mode: 'cors'
-      });
-      payload = await resp.json().catch(() => null);
-      if (!resp.ok) {
-        throw new Error(String(payload?.error || payload?.message || `HTTP ${resp.status}`));
+    const formVariants = [
+      // Основной контракт (текущий клиент).
+      () => {
+        const form = new FormData();
+        form.append('file', file, safeName);
+        form.append('roomId', roomId);
+        form.append('trackId', id);
+        return form;
+      },
+      // Частый backend-контракт (snake_case + поле audio).
+      () => {
+        const form = new FormData();
+        form.append('audio', file, safeName);
+        form.append('room_id', roomId);
+        form.append('track_id', id);
+        return form;
+      },
+      // Гибридный fallback для multer/single с разными именами полей.
+      () => {
+        const form = new FormData();
+        form.append('file', file, safeName);
+        form.append('audio', file, safeName);
+        form.append('roomId', roomId);
+        form.append('room_id', roomId);
+        form.append('trackId', id);
+        form.append('track_id', id);
+        return form;
       }
+    ];
+
+    let payload = null;
+    let lastError = null;
+    try {
+      for (let i = 0; i < formVariants.length; i++) {
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          body: formVariants[i](),
+          credentials: 'omit',
+          mode: 'cors'
+        });
+        payload = await resp.json().catch(() => null);
+        if (resp.ok) {
+          lastError = null;
+          break;
+        }
+        lastError = new Error(String(payload?.error || payload?.message || `HTTP ${resp.status}`));
+        bgmDiag('uploadTrack: upload attempt failed', {
+          attempt: i + 1,
+          status: resp.status,
+          payload
+        });
+      }
+      if (lastError) throw lastError;
     } catch (e) {
       alert('Ошибка загрузки на VPS: ' + (e?.message || e));
       return;
