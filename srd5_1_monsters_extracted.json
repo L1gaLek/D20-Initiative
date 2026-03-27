@@ -4578,13 +4578,13 @@
     },
     {
       "id": "young-white-dragon",
-      "name_ru": "Ёунг Вхите Драгон",
+      "name_ru": "Молодой белый дракон",
       "size_ru": "Большой",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-злой",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "133 (14d10 + 56)",
-      "speed": "40 ft., burrow 20 ft., fly 80 ft., swim 40 ft.",
+      "speed": "40 фт., рытьё 20 фт., полёт 80 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -4611,34 +4611,38 @@
           "mod": 1
         }
       },
-      "saving_throws": "Dex +3, Con +7, Wis +3, Cha +4",
-      "skills": "Perception +6, Stealth +3",
+      "saving_throws": "Лов +3, Тел +7, Мдр +3, Хар +4",
+      "skills": "Восприятие +6, Скрытность +3",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "cold",
+      "damage_immunities": "холод",
       "condition_immunities": null,
-      "senses": "blindsight 30 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 30 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "6",
       "xp": 2300,
       "traits": [
         {
-          "name_ru": "Ice Walk",
-          "text_ru": "The dragon can move across and climb icy surfaces without needing to make an ability check. Additionally, difficult terrain composed of ice or snow doesn’t cost it extra moment."
+          "name_ru": "Ледяная поступь",
+          "text_ru": "Дракон может перемещаться по ледяным поверхностям и лазать по ним без проверок характеристик. Труднопроходимая местность из снега и льда не требует от него дополнительных затрат перемещения."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 10 ft., one target. Попадание: 15 (2d10 + 4) колющего урона plus 4 (1d8) холодного урона."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 10 фт., одна цель. Попадание: 15 (2d10 + 4) колющего урона плюс 4 (1d8) урона холодом."
         },
         {
-          "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 5 ft., one target. Попадание: 11 (2d6 + 4) рубящего урона. Cold Breath (Recharge 5–6). The dragon exhales an icy blast in a 30-­‐foot cone. Each creature in that area must make a СЛ 15 Constitution спасбросок, taking 45 (10d8) холодного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Коготь",
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 5 фт., одна цель. Попадание: 11 (2d6 + 4) рубящего урона."
+        },
+        {
+          "name_ru": "Ледяное дыхание (перезарядка 5–6)",
+          "text_ru": "Дракон выдыхает ледяной ветер 30-футовым конусом. Каждое существо в области должно совершить спасбросок Телосложения СЛ 15, получая 45 (10d8) урона холодом при провале или половину этого урона при успехе."
         }
       ],
       "reactions": [],
@@ -4647,13 +4651,13 @@
     },
     {
       "id": "white-dragon-wyrmling",
-      "name_ru": "Вхите Драгон Вйрмлинг",
+      "name_ru": "Детёныш белого дракона",
       "size_ru": "Средний",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-злой",
-      "ac": "16 (natural armor)",
+      "ac": "16 (природная броня)",
       "hp": "32 (5d8 + 10)",
-      "speed": "30 ft., burrow 15 ft., fly 60 ft., swim 30 ft.",
+      "speed": "30 фт., рытьё 15 фт., полёт 60 фт., плавание 30 фт.",
       "abilities": {
         "str": {
           "score": 14,
@@ -4680,21 +4684,25 @@
           "mod": 0
         }
       },
-      "saving_throws": "Dex +2, Con +4, Wis +2, Cha +2",
-      "skills": "Perception +4, Stealth +2",
+      "saving_throws": "Лов +2, Тел +4, Мдр +2, Хар +2",
+      "skills": "Восприятие +4, Скрытность +2",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "cold",
+      "damage_immunities": "холод",
       "condition_immunities": null,
-      "senses": "blindsight 10 ft., darkvision 60 ft., passive",
-      "languages": "Draconic",
+      "senses": "слепое зрение 10 фт., тёмное зрение 60 фт., пассивное",
+      "languages": "Драконий",
       "cr": "2",
       "xp": 450,
       "traits": [],
       "actions": [
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one target. Попадание: 7 (1d10 + 2) колющего урона plus 2 (1d4) холодного урона. Cold Breath (Recharge 5–6). The dragon exhales an icy blast of hail in a 15-­‐foot cone. Each creature in that area must make a СЛ 12 Constitution спасбросок, taking 22 (5d8) холодного урона on a failed save, or half as much damage on a successful one. Dragons, Metallic Brass Dragon"
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 7 (1d10 + 2) колющего урона плюс 2 (1d4) урона холодом."
+        },
+        {
+          "name_ru": "Ледяное дыхание (перезарядка 5–6)",
+          "text_ru": "Дракон выдыхает ледяной ветер 15-футовым конусом. Каждое существо в области должно совершить спасбросок Телосложения СЛ 12, получая 22 (5d8) урона холодом при провале или половину этого урона при успехе."
         }
       ],
       "reactions": [],
@@ -4703,13 +4711,13 @@
     },
     {
       "id": "ancient-brass-dragon",
-      "name_ru": "Анкиент Брасс Драгон",
+      "name_ru": "Древний латунный дракон",
       "size_ru": "Гигантский",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-добрый",
-      "ac": "20 (natural armor)",
+      "ac": "20 (природная броня)",
       "hp": "297 (17d20 + 119)",
-      "speed": "40 ft., burrow 40 ft., fly 80 ft.",
+      "speed": "40 фт., рытьё 40 фт., полёт 80 фт.",
       "abilities": {
         "str": {
           "score": 27,
@@ -4736,77 +4744,77 @@
           "mod": 4
         }
       },
-      "saving_throws": "Dex +6, Con +13, Wis +8, Cha +10",
-      "skills": "History +9, Perception +14, Persuasion +10,",
+      "saving_throws": "Лов +6, Тел +13, Мдр +8, Хар +10",
+      "skills": "История +9, Восприятие +14, Убеждение +10,",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "20",
       "xp": 25000,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +14 to hit, reach 15 ft., one target. Попадание: 19 (2d10 + 8) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 15 фт., одна цель. Попадание: 19 (2d10 + 8) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +14 to hit, reach 10 ft., one target. Попадание: 15 (2d6 + 8) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 10 фт., одна цель. Попадание: 15 (2d6 + 8) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +14 to hit, reach 20 ft., one target. Попадание: 17 (2d8 + 8) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 20 фт., одна цель. Попадание: 17 (2d8 + 8) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 18 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons:"
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 18 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания:"
         },
         {
-          "name_ru": "Fire Breath",
-          "text_ru": "The dragon exhales fire in an 90-­‐foot line that is 10 feet wide. Each creature in that line must make a СЛ 21 Dexterity спасбросок, taking 56 (16d6) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Огненное дыхание",
+          "text_ru": "Дракон выдыхает огонь линией 90 футов длиной и 10 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 21, получая 56 (16d6) урона огнём при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Sleep Breath",
-          "text_ru": "The dragon exhales sleep gas in a 90-­‐foot cone. Each creature in that area must succeed on a СЛ 21 Constitution спасбросок or fall unconscious for 10 minutes. This effect ends for a creature if the creature takes damage or someone uses an action to wake it."
+          "name_ru": "Усыпляющее дыхание",
+          "text_ru": "Дракон выдыхает усыпляющий газ 90-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 21, иначе теряет сознание на 10 минут. Эффект заканчивается для существа, если оно получает урон или если другое существо будит его действием."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The dragon magically polymorphs into a humanoid or beast that has a challenge rating no higher than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the dragon’s choice). In a new form, the dragon retains its alignment, hit points, Hit Dice, ability to speak, proficiencies, Legendary Resistance, lair actions, and Intelligence, Wisdom, and Charisma scores, as well as this action. Its statistics and capabilities are otherwise replaced by those of the new form, except any class features or legendary actions of that form."
+          "name_ru": "Смена облика",
+          "text_ru": "Дракон магически превращается в гуманоида или зверя с показателем опасности не выше своего либо принимает истинный облик обратно. Он сохраняет свои значения характеристик, хиты и способность говорить. Снаряжение может сливаться с новой формой или носиться ею (по выбору дракона)."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 15 feet of the dragon must succeed on a СЛ 22 Dexterity спасбросок or take 15 (2d6 + 8) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "adult-brass-dragon",
-      "name_ru": "Адулт Брасс Драгон",
+      "name_ru": "Взрослый латунный дракон",
       "size_ru": "Огромный",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-добрый",
-      "ac": "18 (natural armor)",
+      "ac": "18 (природная броня)",
       "hp": "172 (15d12 + 75)",
-      "speed": "40 ft., burrow 30 ft., fly 80 ft.",
+      "speed": "40 фт., рытьё 30 фт., полёт 80 фт.",
       "abilities": {
         "str": {
           "score": 23,
@@ -4833,73 +4841,73 @@
           "mod": 3
         }
       },
-      "saving_throws": "Dex +5, Con +10, Wis +6, Cha +8",
-      "skills": "History +7, Perception +11, Persuasion +8, Stealth",
+      "saving_throws": "Лов +5, Тел +10, Мдр +6, Хар +8",
+      "skills": "История +7, Восприятие +11, Убеждение +8, Скрытность",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "13",
       "xp": 10000,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +11 to hit, reach 10 ft., one target. Попадание: 17 (2d10 + 6) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +11 к попаданию, досягаемость 10 фт., одна цель. Попадание: 17 (2d10 + 6) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +11 to hit, reach 5 ft., one target. Попадание: 13 (2d6 + 6) рубящего урона. 291 System Reference Document 5.1"
+          "text_ru": "Атака оружием ближнего боя: +11 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d6 + 6) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +11 to hit, reach 15 ft., one target. Попадание: 15 (2d8 + 6) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +11 к попаданию, досягаемость 15 фт., одна цель. Попадание: 15 (2d8 + 6) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 16 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 16 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Fire Breath",
-          "text_ru": "The dragon exhales fire in an 60-­‐foot line that is 5 feet wide. Each creature in that line must make a СЛ 18 Dexterity спасбросок, taking 45 (13d6) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Огненное дыхание",
+          "text_ru": "Дракон выдыхает огонь линией 60 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 18, получая 50 (14d6) урона огнём при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Sleep Breath",
-          "text_ru": "The dragon exhales sleep gas in a 60-­‐foot cone. Each creature in that area must succeed on a СЛ 18 Constitution спасбросок or fall unconscious for 10 minutes. This effect ends for a creature if the creature takes damage or someone uses an action to wake it."
+          "name_ru": "Усыпляющее дыхание",
+          "text_ru": "Дракон выдыхает усыпляющий газ 60--фут конусом. Каждое существо в этой области должно преуспеть в спасброске Телосложения СЛ 18 Телосложения спасбросок или теряет сознание на 10 минут. Эффект заканчивается для существа, если оно получает урон или если другое существо будит его действием."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 10 feet of the dragon must succeed on a СЛ 19 Dexterity спасбросок or take 13 (2d6 + 6) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "young-brass-dragon",
-      "name_ru": "Ёунг Брасс Драгон",
+      "name_ru": "Молодой латунный дракон",
       "size_ru": "Большой",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-добрый",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "110 (13d10 + 39)",
-      "speed": "40 ft., burrow 20 ft., fly 80 ft.",
+      "speed": "40 фт., рытьё 20 фт., полёт 80 фт.",
       "abilities": {
         "str": {
           "score": 19,
@@ -4926,37 +4934,37 @@
           "mod": 2
         }
       },
-      "saving_throws": "Dex +3, Con +6, Wis +3, Cha +5",
-      "skills": "Perception +6, Persuasion +5, Stealth +3",
+      "saving_throws": "Лов +3, Тел +6, Мдр +3, Хар +5",
+      "skills": "Восприятие +6, Убеждение +5, Скрытность +3",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "blindsight 30 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 30 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "6",
       "xp": 2300,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 10 ft., one target. Попадание: 15 (2d10 + 4) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 10 фт., одна цель. Попадание: 15 (2d10 + 4) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 5 ft., one target. Попадание: 11 (2d6 + 4) рубящего урона. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 5 фт., одна цель. Попадание: 11 (2d6 + 4) рубящего урона.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Fire Breath",
-          "text_ru": "The dragon exhales fire in a 40-­‐foot line that is 5 feet wide. Each creature in that line must make a СЛ 14 Dexterity спасбросок, taking 42 (12d6) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Огненное дыхание",
+          "text_ru": "Дракон выдыхает огонь линией 40 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 14, получая 42 (12d6) урона огнём при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Sleep Breath",
-          "text_ru": "The dragon exhales sleep gas in a 30-­‐foot cone. Each creature in that area must succeed on a СЛ 14 Constitution спасбросок or fall unconscious for 5 minutes. This effect ends for a creature if the creature takes damage or someone uses an action to wake it."
+          "name_ru": "Усыпляющее дыхание",
+          "text_ru": "Дракон выдыхает усыпляющий газ 30-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 14, иначе теряет сознание на 5 минут. Эффект заканчивается для существа, если оно получает урон или если другое существо будит его действием."
         }
       ],
       "reactions": [],
@@ -4965,13 +4973,13 @@
     },
     {
       "id": "brass-dragon-wyrmling",
-      "name_ru": "Брасс Драгон Вйрмлинг",
+      "name_ru": "Детёныш латунного дракона",
       "size_ru": "Средний",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-добрый",
-      "ac": "16 (natural armor)",
+      "ac": "16 (природная броня)",
       "hp": "16 (3d8 + 3)",
-      "speed": "30 ft., burrow 15 ft., fly 60 ft.",
+      "speed": "30 фт., рытьё 15 фт., полёт 60 фт.",
       "abilities": {
         "str": {
           "score": 15,
@@ -4998,29 +5006,29 @@
           "mod": 1
         }
       },
-      "saving_throws": "Dex +2, Con +3, Wis +2, Cha +3",
-      "skills": "Perception +4, Stealth +2",
+      "saving_throws": "Лов +2, Тел +3, Мдр +2, Хар +3",
+      "skills": "Восприятие +4, Скрытность +2",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "blindsight 10 ft., darkvision 60 ft., passive",
-      "languages": "Draconic",
+      "senses": "слепое зрение 10 фт., тёмное зрение 60 фт., пассивное",
+      "languages": "Драконий",
       "cr": "1",
       "xp": 200,
       "traits": [],
       "actions": [
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one target. Попадание: 7 (1d10 + 2) колющего урона. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 7 (1d10 + 2) колющего урона.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Fire Breath",
-          "text_ru": "The dragon exhales fire in an 20-­‐foot line that is 5 feet wide. Each creature in that line must make a СЛ 11 Dexterity спасбросок, taking 14 (4d6) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Огненное дыхание",
+          "text_ru": "Дракон выдыхает огонь линией 20 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 11, получая 14 (4d6) урона огнём при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Sleep Breath",
-          "text_ru": "The dragon exhales sleep gas in a 15-­‐foot cone. Each creature in that area must succeed on a СЛ 11 Constitution спасбросок or fall unconscious for 1 minute. This effect ends for a creature if the creature takes damage or someone uses an action to wake it. Bronze Dragon"
+          "name_ru": "Усыпляющее дыхание",
+          "text_ru": "Дракон выдыхает усыпляющий газ 15-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 11, иначе теряет сознание на 1 минуту. Эффект заканчивается, если существо получает урон или если другое существо будит его действием."
         }
       ],
       "reactions": [],
@@ -5029,13 +5037,13 @@
     },
     {
       "id": "ancient-bronze-dragon",
-      "name_ru": "Анкиент Бронзе Драгон",
+      "name_ru": "Древний бронзовый дракон",
       "size_ru": "Гигантский",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "22 (natural armor)",
+      "ac": "22 (природная броня)",
       "hp": "444 (24d20 + 192)",
-      "speed": "40 ft., fly 80 ft., swim 40 ft.",
+      "speed": "40 фт., полёт 80 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 29,
@@ -5062,82 +5070,82 @@
           "mod": 5
         }
       },
-      "saving_throws": "Dex +7, Con +15, Wis +10, Cha +12",
-      "skills": "Insight +10, Perception +17, Stealth +7",
+      "saving_throws": "Лов +7, Тел +15, Мдр +10, Хар +12",
+      "skills": "Проницательность +10, Восприятие +17, Скрытность +7",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "lightning",
+      "damage_immunities": "электричество",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "22",
       "xp": 41000,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The dragon can breathe air and water. Legendary Resistance (3/Day). If the dragon fails a спасбросок, it can choose to succeed instead."
+          "name_ru": "Амфибия",
+          "text_ru": "Дракон может дышать как воздухом, так и водой. Легендарное сопротивление (3/день): если дракон проваливает спасбросок, он может считать, что преуспел."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +16 to hit, reach 15 ft., one target. Попадание: 20 (2d10 + 9) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +16 к попаданию, досягаемость 15 фт., одна цель. Попадание: 20 (2d10 + 9) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +16 to hit, reach 10 ft., one target. Попадание: 16 (2d6 + 9) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +16 к попаданию, досягаемость 10 фт., одна цель. Попадание: 16 (2d6 + 9) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +16 to hit, reach 20 ft., one target. Попадание: 18 (2d8 + 9) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +16 к попаданию, досягаемость 20 фт., одна цель. Попадание: 18 (2d8 + 9) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 20 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 20 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Lightning Breath",
-          "text_ru": "The dragon exhales lightning in a 120-­‐foot line that is 10 feet wide. Each creature in that line must make a СЛ 23 Dexterity спасбросок, taking 88 (16d10) урона электричеством on a failed save, or half as much damage on a successful one."
+          "name_ru": "Дыхание молнией",
+          "text_ru": "Дракон выдыхает молнию линией 120 футов длиной и 10 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 23, получая 66 (12d10) урона электричеством при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Repulsion Breath",
-          "text_ru": "The dragon exhales repulsion energy in a 30-­‐foot cone. Each creature in that area must succeed on a СЛ 23 Strength спасбросок. On a failed save, the creature is pushed 60 feet away from the dragon."
+          "name_ru": "Отталкивающее дыхание",
+          "text_ru": "Дракон выдыхает отталкивающую энергию 30-футовым конусом. Каждое существо в области должно преуспеть в спасброске Силы СЛ 20, иначе будет оттолкнуто от дракона на 60 футов."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The dragon magically polymorphs into a humanoid or beast that has a challenge rating no higher than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the dragon’s choice). In a new form, the dragon retains its alignment, hit points, Hit Dice, ability to speak, proficiencies, Legendary Resistance, lair actions, and Intelligence, Wisdom, and Charisma scores, as well as this action. Its statistics and capabilities are otherwise replaced by those of the new form, except any class features or legendary actions of that form."
+          "name_ru": "Смена облика",
+          "text_ru": "Дракон магически превращается в гуманоида или зверя с показателем опасности не выше своего либо принимает истинный облик обратно. Он сохраняет свои значения характеристик, хиты и способность говорить. Снаряжение может сливаться с новой формой или носиться ею (по выбору дракона)."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 15 feet of the dragon must succeed on a СЛ 24 Dexterity спасбросок or take 16 (2d6 + 9) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "adult-bronze-dragon",
-      "name_ru": "Адулт Бронзе Драгон",
+      "name_ru": "Взрослый бронзовый дракон",
       "size_ru": "Огромный",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "19 (natural armor)",
+      "ac": "19 (природная броня)",
       "hp": "212 (17d12 + 102)",
-      "speed": "40 ft., fly 80 ft., swim 40 ft.",
+      "speed": "40 фт., полёт 80 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 25,
@@ -5164,82 +5172,82 @@
           "mod": 4
         }
       },
-      "saving_throws": "Dex +5, Con +11, Wis +7, Cha +9",
-      "skills": "Insight +7, Perception +12, Stealth +5",
+      "saving_throws": "Лов +5, Тел +11, Мдр +7, Хар +9",
+      "skills": "Проницательность +7, Восприятие +12, Скрытность +5",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "lightning",
+      "damage_immunities": "электричество",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "15",
       "xp": 13000,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The dragon can breathe air and water. Legendary Resistance (3/Day). If the dragon fails a спасбросок, it can choose to succeed instead."
+          "name_ru": "Амфибия",
+          "text_ru": "Дракон может дышать как воздухом, так и водой. Легендарное сопротивление (3/день): если дракон проваливает спасбросок, он может считать, что преуспел."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +12 to hit, reach 10 ft., one target. Попадание: 18 (2d10 + 7) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +12 к попаданию, досягаемость 10 фт., одна цель. Попадание: 18 (2d10 + 7) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +12 to hit, reach 5 ft., one target. Попадание: 14 (2d6 + 7) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +12 к попаданию, досягаемость 5 фт., одна цель. Попадание: 14 (2d6 + 7) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +12 to hit, reach 15 ft., one target. Попадание: 16 (2d8 + 7) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +12 к попаданию, досягаемость 15 фт., одна цель. Попадание: 16 (2d8 + 7) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 17 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 17 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Lightning Breath",
-          "text_ru": "The dragon exhales lightning in a 90-­‐ foot line that is 5 feet wide. Each creature in that line must make a СЛ 19 Dexterity спасбросок, taking 66 (12d10) урона электричеством on a failed save, or half as much damage on a successful one."
+          "name_ru": "Дыхание молнией",
+          "text_ru": "Дракон выдыхает молнию линией 90 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 19, получая 55 (10d10) урона электричеством при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Repulsion Breath",
-          "text_ru": "The dragon exhales repulsion energy in a 30-­‐foot cone. Each creature in that area must succeed on a СЛ 19 Strength спасбросок. On a failed save, the creature is pushed 60 feet away from the dragon."
+          "name_ru": "Отталкивающее дыхание",
+          "text_ru": "Дракон выдыхает отталкивающую энергию 30-футовым конусом. Каждое существо в области должно преуспеть в спасброске Силы СЛ 16, иначе будет оттолкнуто от дракона на 60 футов."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The dragon magically polymorphs into a humanoid or beast that has a challenge rating no higher than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the dragon’s choice). In a new form, the dragon retains its alignment, hit points, Hit Dice, ability to speak, proficiencies, Legendary Resistance, lair actions, and Intelligence, Wisdom, and Charisma scores, as well as this action. Its statistics and capabilities are otherwise replaced by those of the new form, except any class features or legendary actions of that form."
+          "name_ru": "Смена облика",
+          "text_ru": "Дракон магически превращается в гуманоида или зверя с показателем опасности не выше своего либо принимает истинный облик обратно. Он сохраняет свои значения характеристик, хиты и способность говорить. Снаряжение может сливаться с новой формой или носиться ею (по выбору дракона)."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 10 feet of the dragon must succeed on a СЛ 20 Dexterity спасбросок or take 14 (2d6 + 7) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed. 294 System Reference Document 5.1"
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "young-bronze-dragon",
-      "name_ru": "Ёунг Бронзе Драгон",
+      "name_ru": "Молодой бронзовый дракон",
       "size_ru": "Большой",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "18 (natural armor)",
+      "ac": "18 (природная броня)",
       "hp": "142 (15d10 + 60)",
-      "speed": "40 ft., fly 80 ft., swim 40 ft.",
+      "speed": "40 фт., полёт 80 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 21,
@@ -5266,42 +5274,42 @@
           "mod": 3
         }
       },
-      "saving_throws": "Dex +3, Con +7, Wis +4, Cha +6",
-      "skills": "Insight +4, Perception +7, Stealth +3",
+      "saving_throws": "Лов +3, Тел +7, Мдр +4, Хар +6",
+      "skills": "Проницательность +4, Восприятие +7, Скрытность +3",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "lightning",
+      "damage_immunities": "электричество",
       "condition_immunities": null,
-      "senses": "blindsight 30 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 30 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "8",
       "xp": 3900,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The dragon can breathe air and water."
+          "name_ru": "Амфибия",
+          "text_ru": "Дракон может дышать как воздухом, так и водой."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +8 to hit, reach 10 ft., one target. Попадание: 16 (2d10 + 5) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +8 к попаданию, досягаемость 10 фт., одна цель. Попадание: 16 (2d10 + 5) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +8 to hit, reach 5 ft., one target. Попадание: 12 (2d6 + 5) рубящего урона. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "text_ru": "Атака оружием ближнего боя: +8 к попаданию, досягаемость 5 фт., одна цель. Попадание: 12 (2d6 + 5) рубящего урона.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Lightning Breath",
-          "text_ru": "The dragon exhales lightning in a 60-­‐ foot line that is 5 feet wide. Each creature in that line must make a СЛ 15 Dexterity спасбросок, taking 55 (10d10) урона электричеством on a failed save, or half as much damage on a successful one."
+          "name_ru": "Дыхание молнией",
+          "text_ru": "Дракон выдыхает молнию линией 60 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 15, получая 55 (10d10) урона электричеством при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Repulsion Breath",
-          "text_ru": "The dragon exhales repulsion energy in a 30-­‐foot cone. Each creature in that area must succeed on a СЛ 15 Strength спасбросок. On a failed save, the creature is pushed 40 feet away from the dragon."
+          "name_ru": "Отталкивающее дыхание",
+          "text_ru": "Дракон выдыхает отталкивающую энергию 30-футовым конусом. Каждое существо в области должно преуспеть в спасброске Силы СЛ 13, иначе будет оттолкнуто от дракона на 60 футов."
         }
       ],
       "reactions": [],
@@ -5310,13 +5318,13 @@
     },
     {
       "id": "bronze-dragon-wyrmling",
-      "name_ru": "Бронзе Драгон Вйрмлинг",
+      "name_ru": "Детёныш бронзового дракона",
       "size_ru": "Средний",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "32 (5d8 + 10)",
-      "speed": "30 ft., fly 60 ft., swim 30 ft.",
+      "speed": "30 фт., полёт 60 фт., плавание 30 фт.",
       "abilities": {
         "str": {
           "score": 17,
@@ -5343,34 +5351,34 @@
           "mod": 2
         }
       },
-      "saving_throws": "Dex +2, Con +4, Wis +2, Cha +4",
-      "skills": "Perception +4, Stealth +2",
+      "saving_throws": "Лов +2, Тел +4, Мдр +2, Хар +4",
+      "skills": "Восприятие +4, Скрытность +2",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "lightning",
+      "damage_immunities": "электричество",
       "condition_immunities": null,
-      "senses": "blindsight 10 ft., darkvision 60 ft., passive",
-      "languages": "Draconic",
+      "senses": "слепое зрение 10 фт., тёмное зрение 60 фт., пассивное",
+      "languages": "Драконий",
       "cr": "2",
       "xp": 450,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The dragon can breathe air and water."
+          "name_ru": "Амфибия",
+          "text_ru": "Дракон может дышать как воздухом, так и водой."
         }
       ],
       "actions": [
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one target. Попадание: 8 (1d10 + 3) колющего урона. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одна цель. Попадание: 8 (1d10 + 3) колющего урона.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Lightning Breath",
-          "text_ru": "The dragon exhales lightning in a 40-­‐ foot line that is 5 feet wide. Each creature in that line must make a СЛ 12 Dexterity спасбросок, taking 16 (3d10) урона электричеством on a failed save, or half as much damage on a successful one."
+          "name_ru": "Дыхание молнией",
+          "text_ru": "Дракон выдыхает молнию линией 40 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 12, получая 16 (3d10) урона электричеством при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Repulsion Breath",
-          "text_ru": "The dragon exhales repulsion energy in a 30-­‐foot cone. Each creature in that area must succeed on a СЛ 12 Strength спасбросок. On a failed save, the creature is pushed 30 feet away from the dragon. Copper Dragon"
+          "name_ru": "Отталкивающее дыхание",
+          "text_ru": "Дракон выдыхает отталкивающую энергию 30-футовым конусом. Каждое существо в области должно преуспеть в спасброске Силы СЛ 12, иначе будет оттолкнуто от дракона на 60 футов."
         }
       ],
       "reactions": [],
@@ -5379,13 +5387,13 @@
     },
     {
       "id": "ancient-copper-dragon",
-      "name_ru": "Анкиент Коппер Драгон",
+      "name_ru": "Древний медный дракон",
       "size_ru": "Гигантский",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-добрый",
-      "ac": "21 (natural armor)",
+      "ac": "21 (природная броня)",
       "hp": "350 (20d20 + 140)",
-      "speed": "40 ft., climb 40 ft., fly 80 ft.",
+      "speed": "40 фт., лазание 40 фт., полёт 80 фт.",
       "abilities": {
         "str": {
           "score": 27,
@@ -5412,77 +5420,77 @@
           "mod": 4
         }
       },
-      "saving_throws": "Dex +8, Con +14, Wis +10, Cha +11",
-      "skills": "Deception +11, Perception +17, Stealth +8",
+      "saving_throws": "Лов +8, Тел +14, Мдр +10, Хар +11",
+      "skills": "Обман +11, Восприятие +17, Скрытность +8",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "acid",
+      "damage_immunities": "кислота",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "21",
       "xp": 33000,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +15 to hit, reach 15 ft., one target. Попадание: 19 (2d10 + 8) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +15 к попаданию, досягаемость 15 фт., одна цель. Попадание: 19 (2d10 + 8) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +15 to hit, reach 10 ft., one target. Попадание: 15 (2d6 + 8) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +15 к попаданию, досягаемость 10 фт., одна цель. Попадание: 15 (2d6 + 8) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +15 to hit, reach 20 ft., one target. Попадание: 17 (2d8 + 8) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +15 к попаданию, досягаемость 20 фт., одна цель. Попадание: 17 (2d8 + 8) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 19 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 19 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Acid Breath",
-          "text_ru": "The dragon exhales acid in an 90-­‐foot line that is 10 feet wide. Each creature in that line must make a СЛ 22 Dexterity спасбросок, taking 63 (14d8) acid damage on a failed save, or half as much damage on a successful one."
+          "name_ru": "Кислотное дыхание",
+          "text_ru": "Дракон выдыхает кислоту линией 90 футов длиной и 10 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 23, получая 63 (14d8) урона кислотой при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Slowing Breath",
-          "text_ru": "The dragon exhales gas in a 90-­‐foot cone. Each creature in that area must succeed on a СЛ 22 Constitution спасбросок. On a failed save, the creature can’t use reactions, its speed is halved, and it can’t make more than one attack on its turn. In addition, the creature can use either an action or a бонусное действие on its turn, but not both. These effects last for 1 minute. The creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself with a successful save."
+          "name_ru": "Замедляющее дыхание",
+          "text_ru": "Дракон выдыхает замедляющий газ 90-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 22. При провале существо не может совершать реакции, его скорость уменьшается вдвое, и оно не может совершать более одной атаки в свой ход. Кроме того, существо может совершить либо действие, либо бонусное действие, но не оба. Эффект длится 1 минуту; цель может повторять спасбросок в конце каждого своего хода."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The dragon magically polymorphs into a humanoid or beast that has a challenge rating no higher than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the dragon’s choice). In a new form, the dragon retains its alignment, hit points, Hit Dice, ability to speak, proficiencies, Legendary Resistance, lair actions, and Intelligence, Wisdom, and Charisma scores, as well as this action. Its statistics and capabilities are otherwise replaced by those of the new form, except any class features or legendary actions of that form."
+          "name_ru": "Смена облика",
+          "text_ru": "Дракон магически превращается в гуманоида или зверя с показателем опасности не выше своего либо принимает истинный облик обратно. Он сохраняет свои значения характеристик, хиты и способность говорить. Снаряжение может сливаться с новой формой или носиться ею (по выбору дракона)."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 15 feet of the dragon must succeed on a СЛ 23 Dexterity спасбросок or take 15 (2d6 + 8) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "adult-copper-dragon",
-      "name_ru": "Адулт Коппер Драгон",
+      "name_ru": "Взрослый медный дракон",
       "size_ru": "Огромный",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-добрый",
-      "ac": "18 (natural armor)",
+      "ac": "18 (природная броня)",
       "hp": "184 (16d12 + 80)",
-      "speed": "40 ft., climb 40 ft., fly 80 ft.",
+      "speed": "40 фт., лазание 40 фт., полёт 80 фт.",
       "abilities": {
         "str": {
           "score": 23,
@@ -5509,73 +5517,73 @@
           "mod": 3
         }
       },
-      "saving_throws": "Dex +6, Con +10, Wis +7, Cha +8",
-      "skills": "Deception +8, Perception +12, Stealth +6",
+      "saving_throws": "Лов +6, Тел +10, Мдр +7, Хар +8",
+      "skills": "Обман +8, Восприятие +12, Скрытность +6",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "acid",
+      "damage_immunities": "кислота",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "14",
       "xp": 11500,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +11 to hit, reach 10 ft., one target. Попадание: 17 (2d10 + 6) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +11 к попаданию, досягаемость 10 фт., одна цель. Попадание: 17 (2d10 + 6) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +11 to hit, reach 5 ft., one target. Попадание: 13 (2d6 + 6) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +11 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d6 + 6) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +11 to hit, reach 15 ft., one target. Попадание: 15 (2d8 + 6) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +11 к попаданию, досягаемость 15 фт., одна цель. Попадание: 15 (2d8 + 6) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 16 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 16 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Acid Breath",
-          "text_ru": "The dragon exhales acid in an 60-­‐foot line that is 5 feet wide. Each creature in that line must make a СЛ 18 Dexterity спасбросок, taking 54 (12d8) acid damage on a failed save, or half as much damage on a successful one."
+          "name_ru": "Кислотное дыхание",
+          "text_ru": "Дракон выдыхает кислоту линией 60 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 18, получая 54 (12d8) урона кислотой при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Slowing Breath",
-          "text_ru": "The dragon exhales gas in a 60-­‐foot cone. Each creature in that area must succeed on a СЛ 18 Constitution спасбросок. On a failed save, the creature can’t use reactions, its speed is halved, and it can’t make more than one attack on its turn. In addition, the creature can use either an action or a бонусное действие on its turn, but not both. These effects last for 1 minute. The creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself with a successful save."
+          "name_ru": "Замедляющее дыхание",
+          "text_ru": "Дракон выдыхает замедляющий газ 60-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 18. При провале существо не может совершать реакции, его скорость уменьшается вдвое, и оно не может совершать более одной атаки в свой ход. Кроме того, существо может совершить либо действие, либо бонусное действие, но не оба. Эффект длится 1 минуту; цель может повторять спасбросок в конце каждого своего хода."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 10 feet of the dragon must succeed on a СЛ 19 Dexterity спасбросок or take 13 (2d6 + 6) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "young-copper-dragon",
-      "name_ru": "Ёунг Коппер Драгон",
+      "name_ru": "Молодой медный дракон",
       "size_ru": "Большой",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-добрый",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "119 (14d10 + 42)",
-      "speed": "40 ft., climb 40 ft., fly 80 ft.",
+      "speed": "40 фт., лазание 40 фт., полёт 80 фт.",
       "abilities": {
         "str": {
           "score": 19,
@@ -5602,37 +5610,37 @@
           "mod": 2
         }
       },
-      "saving_throws": "Dex +4, Con +6, Wis +4, Cha +5",
-      "skills": "Deception +5, Perception +7, Stealth +4",
+      "saving_throws": "Лов +4, Тел +6, Мдр +4, Хар +5",
+      "skills": "Обман +5, Восприятие +7, Скрытность +4",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "acid",
+      "damage_immunities": "кислота",
       "condition_immunities": null,
-      "senses": "blindsight 30 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 30 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "7",
       "xp": 2900,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 10 ft., one target. Попадание: 15 (2d10 + 4) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 10 фт., одна цель. Попадание: 15 (2d10 + 4) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 5 ft., one target. Попадание: 11 (2d6 + 4) рубящего урона. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 5 фт., одна цель. Попадание: 11 (2d6 + 4) рубящего урона.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Acid Breath",
-          "text_ru": "The dragon exhales acid in an 40-­‐foot line that is 5 feet wide. Each creature in that line must make a СЛ 14 Dexterity спасбросок, taking 40 (9d8) acid damage on a failed save, or half as much damage on a successful one. 297 System Reference Document 5.1"
+          "name_ru": "Кислотное дыхание",
+          "text_ru": "Дракон выдыхает кислоту линией 40 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 14, получая 54 (12d8) урона кислотой при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Slowing Breath",
-          "text_ru": "The dragon exhales gas in a 30-­‐foot cone. Each creature in that area must succeed on a СЛ 14 Constitution спасбросок. On a failed save, the creature can’t use reactions, its speed is halved, and it can’t make more than one attack on its turn. In addition, the creature can use either an action or a бонусное действие on its turn, but not both. These effects last for 1 minute. The creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself with a successful save."
+          "name_ru": "Замедляющее дыхание",
+          "text_ru": "Дракон выдыхает замедляющий газ 30-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 14. При провале существо не может совершать реакции, его скорость уменьшается вдвое, и оно не может совершать более одной атаки в свой ход. Кроме того, существо может совершить либо действие, либо бонусное действие, но не оба. Эффект длится 1 минуту; цель может повторять спасбросок в конце каждого своего хода."
         }
       ],
       "reactions": [],
@@ -5641,13 +5649,13 @@
     },
     {
       "id": "copper-dragon-wyrmling",
-      "name_ru": "Коппер Драгон Вйрмлинг",
+      "name_ru": "Детёныш медного дракона",
       "size_ru": "Средний",
       "type_ru": "дракон",
       "alignment_ru": "хаотично-добрый",
-      "ac": "16 (natural armor)",
+      "ac": "16 (природная броня)",
       "hp": "22 (4d8 + 4)",
-      "speed": "30 ft., climb 30 ft., fly 60 ft.",
+      "speed": "30 фт., лазание 30 фт., полёт 60 фт.",
       "abilities": {
         "str": {
           "score": 15,
@@ -5674,29 +5682,29 @@
           "mod": 1
         }
       },
-      "saving_throws": "Dex +3, Con +3, Wis +2, Cha +3",
-      "skills": "Perception +4, Stealth +3",
+      "saving_throws": "Лов +3, Тел +3, Мдр +2, Хар +3",
+      "skills": "Восприятие +4, Скрытность +3",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "acid",
+      "damage_immunities": "кислота",
       "condition_immunities": null,
-      "senses": "blindsight 10 ft., darkvision 60 ft., passive",
-      "languages": "Draconic",
+      "senses": "слепое зрение 10 фт., тёмное зрение 60 фт., пассивное",
+      "languages": "Драконий",
       "cr": "1",
       "xp": 200,
       "traits": [],
       "actions": [
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one target. Попадание: 7 (1d10 + 2) колющего урона. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 7 (1d10 + 2) колющего урона.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Acid Breath",
-          "text_ru": "The dragon exhales acid in an 20-­‐foot line that is 5 feet wide. Each creature in that line must make a СЛ 11 Dexterity спасбросок, taking 18 (4d8) acid damage on a failed save, or half as much damage on a successful one."
+          "name_ru": "Кислотное дыхание",
+          "text_ru": "Дракон выдыхает кислоту линией 20 футов длиной и 5 футов шириной. Каждое существо в линии должно совершить спасбросок Ловкости СЛ 11, получая 22 (4d10) урона кислотой при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Slowing Breath",
-          "text_ru": "The dragon exhales gas in a 15-­‐foot cone. Each creature in that area must succeed on a СЛ 11 Constitution спасбросок. On a failed save, the creature can’t use reactions, its speed is halved, and it can’t make more than one attack on its turn. In addition, the creature can use either an action or a бонусное действие on its turn, but not both. These effects last for 1 minute. The creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself with a successful save. Gold Dragon"
+          "name_ru": "Замедляющее дыхание",
+          "text_ru": "Дракон выдыхает замедляющий газ 15-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 11. При провале существо не может совершать реакции, его скорость уменьшается вдвое, и оно не может совершать более одной атаки в свой ход. Кроме того, существо может совершить либо действие, либо бонусное действие, но не оба. Эффект длится 1 минуту; цель может повторять спасбросок в конце каждого своего хода."
         }
       ],
       "reactions": [],
@@ -5705,13 +5713,13 @@
     },
     {
       "id": "ancient-gold-dragon",
-      "name_ru": "Анкиент Голд Драгон",
+      "name_ru": "Древний золотой дракон",
       "size_ru": "Гигантский",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "22 (natural armor)",
+      "ac": "22 (природная броня)",
       "hp": "546 (28d20 + 252)",
-      "speed": "40 ft., fly 80 ft., swim 40 ft.",
+      "speed": "40 фт., полёт 80 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 30,
@@ -5738,82 +5746,82 @@
           "mod": 9
         }
       },
-      "saving_throws": "Dex +9, Con +16, Wis +10, Cha +16",
-      "skills": "Insight +10, Perception +17, Persuasion +16,",
+      "saving_throws": "Лов +9, Тел +16, Мдр +10, Хар +16",
+      "skills": "Проницательность +10, Восприятие +17, Убеждение +16,",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "24",
       "xp": 62000,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The dragon can breathe air and water. Legendary Resistance (3/Day). If the dragon fails a спасбросок, it can choose to succeed instead."
+          "name_ru": "Амфибия",
+          "text_ru": "Дракон может дышать как воздухом, так и водой. Легендарное сопротивление (3/день): если дракон проваливает спасбросок, он может считать, что преуспел."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +17 to hit, reach 15 ft., one target. Попадание: 21 (2d10 + 10) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +17 к попаданию, досягаемость 15 фт., одна цель. Попадание: 21 (2d10 + 10) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +17 to hit, reach 10 ft., one target. Попадание: 17 (2d6 + 10) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +17 к попаданию, досягаемость 10 фт., одна цель. Попадание: 17 (2d6 + 10) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +17 to hit, reach 20 ft., one target. Попадание: 19 (2d8 + 10) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +17 к попаданию, досягаемость 20 фт., одна цель. Попадание: 19 (2d8 + 10) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 24 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. 298 System Reference Document 5.1 Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 24 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа."
         },
         {
-          "name_ru": "Fire Breath",
-          "text_ru": "The dragon exhales fire in a 90-­‐foot cone. Each creature in that area must make a СЛ 24 Dexterity спасбросок, taking 71 (13d10) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Огненное дыхание",
+          "text_ru": "Дракон выдыхает огонь 90-футовым конусом. Каждое существо в области должно совершить спасбросок Ловкости СЛ 24, получая 91 (26d6) урона огнём при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Weakening Breath",
-          "text_ru": "The dragon exhales gas in a 90-­‐foot cone. Each creature in that area must succeed on a СЛ 24 Strength спасбросок or have disпреимущество on Strength-­‐based attack rolls, Strength checks, and Strength спасбросокs for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
+          "name_ru": "Ослабляющее дыхание",
+          "text_ru": "Дракон выдыхает ослабляющий газ 90-футовым конусом. Каждое существо в области должно преуспеть в спасброске Силы СЛ 24. При провале цель получает помеху на броски атаки, проверки Силы и спасброски Силы на 1 минуту. Цель может повторять спасбросок в конце каждого своего хода."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The dragon magically polymorphs into a humanoid or beast that has a challenge rating no higher than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the dragon’s choice). In a new form, the dragon retains its alignment, hit points, Hit Dice, ability to speak, proficiencies, Legendary Resistance, lair actions, and Intelligence, Wisdom, and Charisma scores, as well as this action. Its statistics and capabilities are otherwise replaced by those of the new form, except any class features or legendary actions of that form."
+          "name_ru": "Смена облика",
+          "text_ru": "Дракон магически превращается в гуманоида или зверя с показателем опасности не выше своего либо принимает истинный облик обратно. Он сохраняет свои значения характеристик, хиты и способность говорить. Снаряжение может сливаться с новой формой или носиться ею (по выбору дракона)."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 15 feet of the dragon must succeed on a СЛ 25 Dexterity спасбросок or take 17 (2d6 + 10) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "adult-gold-dragon",
-      "name_ru": "Адулт Голд Драгон",
+      "name_ru": "Взрослый золотой дракон",
       "size_ru": "Огромный",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "19 (natural armor)",
+      "ac": "19 (природная броня)",
       "hp": "256 (19d12 + 133)",
-      "speed": "40 ft., fly 80 ft., swim 40 ft.",
+      "speed": "40 фт., полёт 80 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 27,
@@ -5840,82 +5848,82 @@
           "mod": 7
         }
       },
-      "saving_throws": "Dex +8, Con +13, Wis +8, Cha +13",
-      "skills": "Insight +8, Perception +14, Persuasion +13,",
+      "saving_throws": "Лов +8, Тел +13, Мдр +8, Хар +13",
+      "skills": "Проницательность +8, Восприятие +14, Убеждение +13,",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "17",
       "xp": 18000,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The dragon can breathe air and water. Legendary Resistance (3/Day). If the dragon fails a спасбросок, it can choose to succeed instead."
+          "name_ru": "Амфибия",
+          "text_ru": "Дракон может дышать как воздухом, так и водой. Легендарное сопротивление (3/день): если дракон проваливает спасбросок, он может считать, что преуспел."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +14 to hit, reach 10 ft., one target. Попадание: 19 (2d10 + 8) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 10 фт., одна цель. Попадание: 19 (2d10 + 8) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +14 to hit, reach 5 ft., one target. Попадание: 15 (2d6 + 8) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 5 фт., одна цель. Попадание: 15 (2d6 + 8) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +14 to hit, reach 15 ft., one target. Попадание: 17 (2d8 + 8) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +14 к попаданию, досягаемость 15 фт., одна цель. Попадание: 17 (2d8 + 8) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 21 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 21 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Fire Breath",
-          "text_ru": "The dragon exhales fire in a 60-­‐foot cone. Each creature in that area must make a СЛ 21 Dexterity спасбросок, taking 66 (12d10) огненного урона on a failed save, or half as much damage on a successful one. 299 System Reference Document 5.1"
+          "name_ru": "Огненное дыхание",
+          "text_ru": "Дракон выдыхает огонь 60-футовым конусом. Каждое существо в области должно совершить спасбросок Ловкости СЛ 21, получая 66 (19d6) урона огнём при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Weakening Breath",
-          "text_ru": "The dragon exhales gas in a 60-­‐foot cone. Each creature in that area must succeed on a СЛ 21 Strength спасбросок or have disпреимущество on Strength-­‐based attack rolls, Strength checks, and Strength спасбросокs for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
+          "name_ru": "Ослабляющее дыхание",
+          "text_ru": "Дракон выдыхает ослабляющий газ 60-футовым конусом. Каждое существо в области должно преуспеть в спасброске Силы СЛ 21. При провале цель получает помеху на броски атаки, проверки Силы и спасброски Силы на 1 минуту. Цель может повторять спасбросок в конце каждого своего хода."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The dragon magically polymorphs into a humanoid or beast that has a challenge rating no higher than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the dragon’s choice). In a new form, the dragon retains its alignment, hit points, Hit Dice, ability to speak, proficiencies, Legendary Resistance, lair actions, and Intelligence, Wisdom, and Charisma scores, as well as this action. Its statistics and capabilities are otherwise replaced by those of the new form, except any class features or legendary actions of that form."
+          "name_ru": "Смена облика",
+          "text_ru": "Дракон магически превращается в гуманоида или зверя с показателем опасности не выше своего либо принимает истинный облик обратно. Он сохраняет свои значения характеристик, хиты и способность говорить. Снаряжение может сливаться с новой формой или носиться ею (по выбору дракона)."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 10 feet of the dragon must succeed on a СЛ 22 Dexterity спасбросок or take 15 (2d6 + 8) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "young-gold-dragon",
-      "name_ru": "Ёунг Голд Драгон",
+      "name_ru": "Молодой золотой дракон",
       "size_ru": "Большой",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "18 (natural armor)",
+      "ac": "18 (природная броня)",
       "hp": "178 (17d10 + 85)",
-      "speed": "40 ft., fly 80 ft., swim 40 ft.",
+      "speed": "40 фт., полёт 80 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 23,
@@ -5942,42 +5950,42 @@
           "mod": 5
         }
       },
-      "saving_throws": "Dex +6, Con +9, Wis +5, Cha +9",
-      "skills": "Insight +5, Perception +9, Persuasion +9, Stealth",
+      "saving_throws": "Лов +6, Тел +9, Мдр +5, Хар +9",
+      "skills": "Проницательность +5, Восприятие +9, Убеждение +9, Скрытность",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "blindsight 30 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 30 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "10",
       "xp": 5900,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The dragon can breathe air and water."
+          "name_ru": "Амфибия",
+          "text_ru": "Дракон может дышать как воздухом, так и водой."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +10 to hit, reach 10 ft., one target. Попадание: 17 (2d10 + 6) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +10 к попаданию, досягаемость 10 фт., одна цель. Попадание: 17 (2d10 + 6) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +10 to hit, reach 5 ft., one target. Попадание: 13 (2d6 + 6) рубящего урона. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "text_ru": "Атака оружием ближнего боя: +10 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d6 + 6) рубящего урона.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Fire Breath",
-          "text_ru": "The dragon exhales fire in a 30-­‐foot cone. Each creature in that area must make a СЛ 17 Dexterity спасбросок, taking 55 (10d10) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Огненное дыхание",
+          "text_ru": "Дракон выдыхает огонь 30-футовым конусом. Каждое существо в области должно совершить спасбросок Ловкости СЛ 17, получая 56 (16d6) урона огнём при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Weakening Breath",
-          "text_ru": "The dragon exhales gas in a 30-­‐foot cone. Each creature in that area must succeed on a СЛ 17 Strength спасбросок or have disпреимущество on Strength-­‐based attack rolls, Strength checks, and Strength спасбросокs for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
+          "name_ru": "Ослабляющее дыхание",
+          "text_ru": "Дракон выдыхает ослабляющий газ 30-футовым конусом. Каждое существо в области должно преуспеть в спасброске Силы СЛ 17. При провале цель получает помеху на броски атаки, проверки Силы и спасброски Силы на 1 минуту. Цель может повторять спасбросок в конце каждого своего хода."
         }
       ],
       "reactions": [],
@@ -5986,13 +5994,13 @@
     },
     {
       "id": "gold-dragon-wyrmling",
-      "name_ru": "Голд Драгон Вйрмлинг",
+      "name_ru": "Детёныш золотого дракона",
       "size_ru": "Средний",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "60 (8d8 + 24)",
-      "speed": "30 ft., fly 60 ft., swim 30 ft.",
+      "speed": "30 фт., полёт 60 фт., плавание 30 фт.",
       "abilities": {
         "str": {
           "score": 19,
@@ -6019,34 +6027,34 @@
           "mod": 3
         }
       },
-      "saving_throws": "Dex +4, Con +5, Wis +2, Cha +5",
-      "skills": "Perception +4, Stealth +4",
+      "saving_throws": "Лов +4, Тел +5, Мдр +2, Хар +5",
+      "skills": "Восприятие +4, Скрытность +4",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "blindsight 10 ft., darkvision 60 ft., passive",
-      "languages": "Draconic",
+      "senses": "слепое зрение 10 фт., тёмное зрение 60 фт., пассивное",
+      "languages": "Драконий",
       "cr": "3",
       "xp": 700,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The dragon can breathe air and water."
+          "name_ru": "Амфибия",
+          "text_ru": "Дракон может дышать как воздухом, так и водой."
         }
       ],
       "actions": [
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 9 (1d10 + 4) колющего урона. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 9 (1d10 + 4) колющего урона.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Fire Breath",
-          "text_ru": "The dragon exhales fire in a 15-­‐foot cone. Each creature in that area must make a СЛ 13 Dexterity спасбросок, taking 22 (4d10) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Огненное дыхание",
+          "text_ru": "Дракон выдыхает огонь 15-футовым конусом. Каждое существо в области должно совершить спасбросок Ловкости СЛ 13, получая 22 (4d10) урона огнём при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Weakening Breath",
-          "text_ru": "The dragon exhales gas in a 15-­‐foot cone. Each creature in that area must succeed on a СЛ 13 Strength спасбросок or have disпреимущество on Strength-­‐based attack rolls, Strength checks, and Strength спасбросокs for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. Silver Dragon"
+          "name_ru": "Ослабляющее дыхание",
+          "text_ru": "Дракон выдыхает ослабляющий газ 15-футовым конусом. Каждое существо в области должно преуспеть в спасброске Силы СЛ 13. При провале цель получает помеху на броски атаки, проверки Силы и спасброски Силы на 1 минуту. Цель может повторять спасбросок в конце каждого своего хода."
         }
       ],
       "reactions": [],
@@ -6055,13 +6063,13 @@
     },
     {
       "id": "ancient-silver-dragon",
-      "name_ru": "Анкиент Силвер Драгон",
+      "name_ru": "Древний серебряный дракон",
       "size_ru": "Гигантский",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "22 (natural armor)",
+      "ac": "22 (природная броня)",
       "hp": "487 (25d20 + 225)",
-      "speed": "40 ft., fly 80 ft.",
+      "speed": "40 фт., полёт 80 фт.",
       "abilities": {
         "str": {
           "score": 30,
@@ -6088,77 +6096,77 @@
           "mod": 6
         }
       },
-      "saving_throws": "Dex +7, Con +16, Wis +9, Cha +13",
-      "skills": "Arcana +11, History +11, Perception +16, Stealth",
+      "saving_throws": "Лов +7, Тел +16, Мдр +9, Хар +13",
+      "skills": "Магия +11, История +11, Восприятие +16, Скрытность",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "cold",
+      "damage_immunities": "холод",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "23",
       "xp": 50000,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +17 to hit, reach 15 ft., one target. Попадание: 21 (2d10 + 10) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +17 к попаданию, досягаемость 15 фт., одна цель. Попадание: 21 (2d10 + 10) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +17 to hit, reach 10 ft., one target. Попадание: 17 (2d6 + 10) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +17 к попаданию, досягаемость 10 фт., одна цель. Попадание: 17 (2d6 + 10) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +17 to hit, reach 20 ft., one target. Попадание: 19 (2d8 + 10) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +17 к попаданию, досягаемость 20 фт., одна цель. Попадание: 19 (2d8 + 10) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 21 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 21 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Cold Breath",
-          "text_ru": "The dragon exhales an icy blast in a 90-­‐ foot cone. Each creature in that area must make a СЛ 24 Constitution спасбросок, taking 67 (15d8) холодного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Ледяное дыхание",
+          "text_ru": "Дракон выдыхает ледяной вихрь 90-футовым конусом. Каждое существо в области должно совершить спасбросок Телосложения СЛ 24, получая 67 (15d8) урона холодом при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Paralyzing Breath",
-          "text_ru": "The dragon exhales paralyzing gas in a 90-­‐foot cone. Each creature in that area must succeed on a СЛ 24 Constitution спасбросок or be paralyzed for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
+          "name_ru": "Парализующее дыхание",
+          "text_ru": "Дракон выдыхает парализующий газ 90-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 24, иначе будет парализовано на 1 минуту. Цель может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The dragon magically polymorphs into a humanoid or beast that has a challenge rating no higher than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the dragon’s choice). In a new form, the dragon retains its alignment, hit points, Hit Dice, ability to speak, proficiencies, Legendary Resistance, lair actions, and Intelligence, Wisdom, and Charisma scores, as well as this action. Its statistics and capabilities are otherwise replaced by those of the new form, except any class features or legendary actions of that form. 301 System Reference Document 5.1"
+          "name_ru": "Смена облика",
+          "text_ru": "Дракон магически превращается в гуманоида или зверя с показателем опасности не выше своего либо принимает истинный облик обратно. Он сохраняет свои значения характеристик, хиты и способность говорить. Снаряжение может сливаться с новой формой или носиться ею (по выбору дракона)."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack."
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 15 feet of the dragon must succeed on a СЛ 25 Dexterity спасбросок or take 17 (2d6 + 10) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "adult-silver-dragon",
-      "name_ru": "Адулт Силвер Драгон",
+      "name_ru": "Взрослый серебряный дракон",
       "size_ru": "Огромный",
       "type_ru": "дракон",
       "alignment_ru": "законно-добрый",
-      "ac": "19 (natural armor)",
+      "ac": "19 (природная броня)",
       "hp": "243 (18d12 + 126)",
-      "speed": "40 ft., fly 80 ft.",
+      "speed": "40 фт., полёт 80 фт.",
       "abilities": {
         "str": {
           "score": 27,
@@ -6185,64 +6193,64 @@
           "mod": 5
         }
       },
-      "saving_throws": "Dex +5, Con +12, Wis +6, Cha +10",
-      "skills": "Arcana +8, History +8, Perception +11, Stealth +5",
+      "saving_throws": "Лов +5, Тел +12, Мдр +6, Хар +10",
+      "skills": "Магия +8, История +8, Восприятие +11, Скрытность +5",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "cold",
+      "damage_immunities": "холод",
       "condition_immunities": null,
-      "senses": "blindsight 60 ft., darkvision 120 ft., passive",
-      "languages": "Common, Draconic",
+      "senses": "слепое зрение 60 фт., тёмное зрение 120 фт., пассивное",
+      "languages": "Общий, Драконий",
       "cr": "16",
       "xp": 15000,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws."
+          "text_ru": "Дракон может использовать «Ужасающее присутствие». Затем он совершает три атаки: одну укусом и две когтями."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +13 to hit, reach 10 ft., one target. Попадание: 19 (2d10 + 8) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +13 к попаданию, досягаемость 10 фт., одна цель. Попадание: 19 (2d10 + 8) колющего урона."
         },
         {
           "name_ru": "Когти",
-          "text_ru": "Атака оружием ближнего боя: +13 to hit, reach 5 ft., one target. Попадание: 15 (2d6 + 8) рубящего урона."
+          "text_ru": "Атака оружием ближнего боя: +13 к попаданию, досягаемость 5 фт., одна цель. Попадание: 15 (2d6 + 8) рубящего урона."
         },
         {
-          "name_ru": "Tail",
-          "text_ru": "Атака оружием ближнего боя: +13 to hit, reach 15 ft., one target. Попадание: 17 (2d8 + 8) дробящего урона."
+          "name_ru": "Хвост",
+          "text_ru": "Атака оружием ближнего боя: +13 к попаданию, досягаемость 15 фт., одна цель. Попадание: 17 (2d8 + 8) дробящего урона."
         },
         {
-          "name_ru": "Frightful Presence",
-          "text_ru": "Each creature of the dragon’s choice that is within 120 feet of the dragon and aware of it must succeed on a СЛ 18 Wisdom спасбросок or become frightened for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success. If a creature’s спасбросок is successful or the effect ends for it, the creature is immune to the dragon’s Frightful Presence for the next 24 hours. Breath Weapons (Recharge 5–6). The dragon uses one of the following breath weapons."
+          "name_ru": "Ужасающее присутствие",
+          "text_ru": "Каждое существо на выбор дракона, находящееся в пределах 120 футов и осознающее дракона, должно преуспеть в спасброске Мудрости СЛ 18 или стать испуганным на 1 минуту. Существо может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе. Если существо успешно проходит спасбросок или эффект для него заканчивается, оно становится невосприимчиво к Ужасающему присутствию этого дракона на 24 часа.  Дракон использует одно из следующих оружий дыхания."
         },
         {
-          "name_ru": "Cold Breath",
-          "text_ru": "The dragon exhales an icy blast in a 60-­‐ foot cone. Each creature in that area must make a СЛ 20 Constitution спасбросок, taking 58 (13d8) холодного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Ледяное дыхание",
+          "text_ru": "Дракон выдыхает ледяной вихрь 60-футовым конусом. Каждое существо в области должно совершить спасбросок Телосложения СЛ 20, получая 54 (12d8) урона холодом при провале или половину этого урона при успехе."
         },
         {
-          "name_ru": "Paralyzing Breath",
-          "text_ru": "The dragon exhales paralyzing gas in a 60-­‐foot cone. Each creature in that area must succeed on a СЛ 20 Constitution спасбросок or be paralyzed for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
+          "name_ru": "Парализующее дыхание",
+          "text_ru": "Дракон выдыхает парализующий газ 60-футовым конусом. Каждое существо в области должно преуспеть в спасброске Телосложения СЛ 20, иначе будет парализовано на 1 минуту. Цель может повторять спасбросок в конце каждого своего хода, завершая эффект при успехе."
         },
         {
-          "name_ru": "Change Shape",
-          "text_ru": "The dragon magically polymorphs into a humanoid or beast that has a challenge rating no higher than its own, or back into its true form. It reverts to its true form if it dies. Any equipment it is wearing or carrying is absorbed or borne by the new form (the dragon’s choice). In a new form, the dragon retains its alignment, hit points, Hit Dice, ability to speak, proficiencies, Legendary Resistance, lair actions, and Intelligence, Wisdom, and Charisma scores, as well as this action. Its statistics and capabilities are otherwise replaced by those of the new form, except any class features or legendary actions of that form."
+          "name_ru": "Смена облика",
+          "text_ru": "Дракон магически превращается в гуманоида или зверя с показателем опасности не выше своего либо принимает истинный облик обратно. Он сохраняет свои значения характеристик, хиты и способность говорить. Снаряжение может сливаться с новой формой или носиться ею (по выбору дракона)."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
-          "name_ru": "Detect",
-          "text_ru": "The dragon makes a Wisdom (Perception) check."
+          "name_ru": "Обнаружение",
+          "text_ru": "Дракон совершает проверку Мудрости (Восприятие)."
         },
         {
-          "name_ru": "Tail Attack",
-          "text_ru": "The dragon makes a tail attack. 302 System Reference Document 5.1"
+          "name_ru": "Атака хвостом",
+          "text_ru": "Дракон совершает одну атаку хвостом."
         },
         {
-          "name_ru": "Wing Attack (Costs 2 Actions)",
-          "text_ru": "The dragon beats its wings. Each creature within 10 feet of the dragon must succeed on a СЛ 21 Dexterity спасбросок or take 15 (2d6 + 8) дробящего урона and be knocked prone. The dragon can then fly up to half its flying speed."
+          "name_ru": "Взмах крыльями (стоит 2 действия)",
+          "text_ru": "Дракон взмахивает крыльями. Каждое существо в пределах 15 футов должно преуспеть в спасброске Ловкости или получить дробящий урон и быть сбитым с ног. Затем дракон может пролететь до половины своей скорости."
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
