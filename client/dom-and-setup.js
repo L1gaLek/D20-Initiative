@@ -629,13 +629,15 @@ setTimeout(refreshGmQuickToolbarTop, 0);
 let monstersLibInited = false;
 
 function monsterSizeToTokenSize(mon) {
-  const s = String(mon?.size_en || mon?.size_ru || '').toLowerCase();
+  const s = String(mon?.size_en || mon?.size_ru || '').toLowerCase().trim();
+  // Правило размеров токена на поле:
+  // средний (и меньше) = 1x1, большой = 2x2, огромный = 3x3, гигантский = 4x4.
   if (s.includes('tiny') || s.includes('крош')) return 1;
   if (s.includes('small') || s.includes('мал')) return 1;
   if (s.includes('medium') || s.includes('сред')) return 1;
   if (s.includes('large') || s.includes('бол')) return 2;
-  if (s.includes('huge') || s.includes('огр')) return 3;
-  if (s.includes('gargantuan') || s.includes('испол') || s.includes('гиган')) return 4;
+  if (s.includes('huge') || s.includes('огром') || s.includes('огр')) return 3;
+  if (s.includes('gargantuan') || s.includes('гиган') || s.includes('испол') || s.includes('громад')) return 4;
   return 1;
 }
 
@@ -668,6 +670,15 @@ function buildMonsterSheetPayload(name, mon) {
   return {
     parsed: {
       name: { value: name },
+      appearance: {
+        // Чтобы токен монстра из SRD сразу отображался картинкой на поле,
+        // без необходимости открывать лист и вкладку "Токен".
+        baseUrl: 'token/sheet/monstr.png',
+        token: {
+          mode: 'full',
+          crop: { x: 50, y: 35, zoom: 140 }
+        }
+      },
       monster: mon,
       vitality: {
         'hp-max': { value: hpRoll.total },
