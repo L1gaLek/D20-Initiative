@@ -10700,13 +10700,13 @@
     },
     {
       "id": "medusa",
-      "name_ru": "Медуса",
+      "name_ru": "Медуза",
       "size_ru": "Средний",
       "type_ru": "чудовище",
       "alignment_ru": "законно-злой",
-      "ac": "15 (natural armor)",
+      "ac": "15 (природная броня)",
       "hp": "127 (17d8 + 51)",
-      "speed": "30 ft.",
+      "speed": "30 фт.",
       "abilities": {
         "str": {
           "score": 10,
@@ -10734,37 +10734,37 @@
         }
       },
       "saving_throws": null,
-      "skills": "Deception +5, Insight +4, Perception +4, Stealth",
+      "skills": "Обман +5, Проницательность +4, Внимательность +4, Скрытность",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 14",
-      "languages": "Common",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 14",
+      "languages": "Всеобщий",
       "cr": "6",
       "xp": 2300,
       "traits": [
         {
-          "name_ru": "Petrifying Gaze",
-          "text_ru": "When a creature that can see the medusa’s eyes starts its turn within 30 feet of the medusa, the medusa can force it to make a СЛ 14 Constitution спасбросок if the medusa isn’t incapacitated and can see the creature. If the спасбросок fails by 5 or more, the creature is instantly petrified. Otherwise, a creature that fails the save begins to turn to stone and is restrained. The restrained creature must repeat the спасбросок at the end of its next turn, becoming petrified on a failure or ending the effect on a success. The petrification lasts until the creature is freed by the greater restoration spell or other magic. Unless surprised, a creature can avert its eyes to avoid the спасбросок at the start of its turn. If the creature does so, it can’t see the medusa until the start of its next turn, when it can avert its eyes again. If the creature looks at the medusa in the meantime, it must immediately make the save. If the medusa sees itself reflected on a polished surface within 30 feet of it and in an area of bright light, the medusa is, due to its curse, affected by its own gaze."
+          "name_ru": "Окаменяющий взгляд",
+          "text_ru": "Когда существо, видящее глаза медузы, начинает свой ход в пределах 30 фт. от неё, медуза может заставить его совершить спасбросок Телосложения СЛ 14. При провале существо начинает окаменевать и становится обездвиженным; оно повторяет спасбросок в конце своего следующего хода. При повторном провале существо окаменевает до снятия эффектом высшей магии."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The medusa makes either three melee attacks—one with its snake hair and two with its shortsword—or two ranged attacks with its longbow."
+          "text_ru": "Медуза совершает либо три рукопашные атаки (одну змеиными волосами и две коротким мечом), либо две дальнобойные атаки длинным луком."
         },
         {
-          "name_ru": "Snake Hair",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one creature. Попадание: 4 (1d4 + 2) колющего урона plus 14 (4d6) урона ядом."
+          "name_ru": "Змеиные волосы",
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одно существо. Попадание: 4 (1d4 + 2) колющего урона плюс 14 (4d6) урона ядом."
         },
         {
-          "name_ru": "Shortsword",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one target. Попадание: 5 (1d6 + 2) колющего урона."
+          "name_ru": "Короткий меч",
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одна цель. Попадание: 5 (1d6 + 2) колющего урона."
         },
         {
-          "name_ru": "Longbow",
-          "text_ru": "Атака оружием дальнего боя: +5 to hit, range 150/600 ft., one target. Попадание: 6 (1d8 + 2) колющего урона plus 7 (2d6) урона ядом. Mephits"
+          "name_ru": "Длинный лук",
+          "text_ru": "Атака оружием дальнего боя: +5 к попаданию, дистанция 150/600 фт., одна цель. Попадание: 6 (1d8 + 2) колющего урона плюс 7 (2d6) урона ядом. Mephits"
         }
       ],
       "reactions": [],
@@ -10773,13 +10773,13 @@
     },
     {
       "id": "dust-mephit",
-      "name_ru": "Дуст Мефит",
+      "name_ru": "Пылевой мефит",
       "size_ru": "Маленький",
       "type_ru": "элементаль",
       "alignment_ru": "нейтрально-злой",
       "ac": "12",
       "hp": "17 (5d6)",
-      "speed": "30 ft., fly 30 ft.",
+      "speed": "30 фт., полёт 30 фт.",
       "abilities": {
         "str": {
           "score": 5,
@@ -10807,29 +10807,29 @@
         }
       },
       "saving_throws": null,
-      "skills": "Perception +2, Stealth +4",
-      "damage_vulnerabilities": "fire",
+      "skills": "Внимательность +2, Скрытность +4",
+      "damage_vulnerabilities": "огонь",
       "damage_resistances": null,
-      "damage_immunities": "poison",
-      "condition_immunities": "poisoned",
-      "senses": "darkvision 60 ft., passive Perception 12",
-      "languages": "Auran, Terran",
+      "damage_immunities": "яд",
+      "condition_immunities": "отравление",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 12",
+      "languages": "Ауран, Терран",
       "cr": "1/2",
       "xp": 100,
       "traits": [
         {
-          "name_ru": "Death Burst",
-          "text_ru": "When the mephit dies, it explodes in a burst of dust. Each creature within 5 feet of it must then succeed on a СЛ 10 Constitution спасбросок or be blinded for 1 minute. A blinded creature can repeat the спасбросок on each of its turns, ending the effect on itself on a success. Innate Spellcasting (1/Day). The mephit can innately cast sleep, requiring no material components. Its innate spellcasting ability is Charisma. 330 System Reference Document 5.1"
+          "name_ru": "Предсмертный взрыв",
+          "text_ru": "Когда мефит умирает, он взрывается. Каждое существо в пределах 5 фт. должно преуспеть в спасброске Ловкости СЛ 10, иначе получает 5 (2d4) дробящего урона."
         }
       ],
       "actions": [
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one creature. Попадание: 4 (1d4 + 2) рубящего урона."
+          "name_ru": "Когти",
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одно существо. Попадание: 4 (1d4 + 2) рубящего урона."
         },
         {
-          "name_ru": "Blinding Breath (Recharge 6)",
-          "text_ru": "The mephit exhales a 15-­‐ foot cone of blinding dust. Each creature in that area must succeed on a СЛ 10 Dexterity спасбросок or be blinded for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
+          "name_ru": "Ослепляющее дыхание (перезарядка 6)",
+          "text_ru": "Мефит exhales a 15-­‐ фт. cone of blinding dust. Each creature in that area должна преуспеть в СЛ 10 Ловкости спасбросок или be ослепление for 1 minute. A creature can repeat the спасбросок at the end of each of its turns, ending the effect on itself on a success."
         }
       ],
       "reactions": [],
@@ -10838,13 +10838,13 @@
     },
     {
       "id": "ice-mephit",
-      "name_ru": "Ике Мефит",
+      "name_ru": "Ледяной мефит",
       "size_ru": "Маленький",
       "type_ru": "элементаль",
       "alignment_ru": "нейтрально-злой",
       "ac": "11",
       "hp": "21 (6d6)",
-      "speed": "30 ft., fly 30 ft.",
+      "speed": "30 фт., полёт 30 фт.",
       "abilities": {
         "str": {
           "score": 7,
@@ -10872,33 +10872,33 @@
         }
       },
       "saving_throws": null,
-      "skills": "Perception +2, Stealth +3",
-      "damage_vulnerabilities": "bludgeoning, fire",
+      "skills": "Внимательность +2, Скрытность +3",
+      "damage_vulnerabilities": "дробящий, огонь",
       "damage_resistances": null,
-      "damage_immunities": "cold, poison",
-      "condition_immunities": "poisoned",
-      "senses": "darkvision 60 ft., passive Perception 12",
-      "languages": "Aquan, Auran",
+      "damage_immunities": "холод, яд",
+      "condition_immunities": "отравление",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 12",
+      "languages": "Акван, Ауран",
       "cr": "1/2",
       "xp": 100,
       "traits": [
         {
-          "name_ru": "Death Burst",
-          "text_ru": "When the mephit dies, it explodes in a burst of jagged ice. Each creature within 5 feet of it must make a СЛ 10 Dexterity спасбросок, taking 4 (1d8) рубящего урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Предсмертный взрыв",
+          "text_ru": "Когда мефит умирает, он взрывается. Каждое существо в пределах 5 фт. должно преуспеть в спасброске Ловкости СЛ 10, иначе получает 4 (1d8) рубящего урона."
         },
         {
-          "name_ru": "False Appearance",
-          "text_ru": "While the mephit remains motionless, it is indistinguishable from an ordinary shard of ice. Innate Spellcasting (1/Day). The mephit can innately cast fog cloud, requiring no material components. Its innate spellcasting ability is Charisma."
+          "name_ru": "Ложный облик",
+          "text_ru": "While the mephit remains motionless, it is indistinguishable from an ordinary shard of ice. Innate Колдовство (1/Day). Мефит can innately cast fog cloud, requiring no material components. Its innate spellcasting ability is Харизмы."
         }
       ],
       "actions": [
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +3 to hit, reach 5 ft., one creature. Попадание: 3 (1d4 + 1) рубящего урона plus 2 (1d4) холодного урона."
+          "name_ru": "Когти",
+          "text_ru": "Атака оружием ближнего боя: +3 к попаданию, досягаемость 5 фт., одно существо. Попадание: 3 (1d4 + 1) рубящего урона плюс 2 (1d4) холодного урона."
         },
         {
           "name_ru": "Frost Breath (Recharge 6)",
-          "text_ru": "The mephit exhales a 15-­‐ foot cone of cold air. Each creature in that area must succeed on a СЛ 10 Dexterity спасбросок, taking 5 (2d4) холодного урона on a failed save, or half as much damage on a successful one."
+          "text_ru": "Мефит exhales a 15-­‐ фт. cone of холод air. Each creature in that area должна преуспеть в СЛ 10 Ловкости спасбросок, taking 5 (2d4) холодного урона on a failed save, или half as much damage on a successful one."
         }
       ],
       "reactions": [],
@@ -10907,13 +10907,13 @@
     },
     {
       "id": "magma-mephit",
-      "name_ru": "Магма Мефит",
+      "name_ru": "Магмовый мефит",
       "size_ru": "Маленький",
       "type_ru": "элементаль",
       "alignment_ru": "нейтрально-злой",
       "ac": "11",
       "hp": "22 (5d6 + 5)",
-      "speed": "30 ft., fly 30 ft.",
+      "speed": "30 фт., полёт 30 фт.",
       "abilities": {
         "str": {
           "score": 8,
@@ -10941,37 +10941,37 @@
         }
       },
       "saving_throws": null,
-      "skills": "Stealth +3",
-      "damage_vulnerabilities": "cold",
+      "skills": "Скрытность +3",
+      "damage_vulnerabilities": "холод",
       "damage_resistances": null,
-      "damage_immunities": "fire, poison",
-      "condition_immunities": "poisoned",
-      "senses": "darkvision 60 ft., passive Perception 10",
-      "languages": "Ignan, Terran",
+      "damage_immunities": "огонь, яд",
+      "condition_immunities": "отравление",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 10",
+      "languages": "Игнан, Терран",
       "cr": "1/2",
       "xp": 100,
       "traits": [
         {
-          "name_ru": "Death Burst",
-          "text_ru": "When the mephit dies, it explodes in a burst of lava. Each creature within 5 feet of it must make a СЛ 11 Dexterity спасбросок, taking 7 (2d6) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Предсмертный взрыв",
+          "text_ru": "Когда мефит умирает, он взрывается. Каждое существо в пределах 5 фт. должно преуспеть в спасброске Ловкости СЛ 11, иначе получает 7 (2d6) огненного урона."
         },
         {
-          "name_ru": "False Appearance",
-          "text_ru": "While the mephit remains motionless, it is indistinguishable from an ordinary mound of magma. Innate Spellcasting (1/Day). The mephit can innately cast heat metal (spell save СЛ 10), requiring no material components. Its innate spellcasting ability is"
+          "name_ru": "Ложный облик",
+          "text_ru": "While the mephit remains motionless, it is indistinguishable from an ordinary mound of magma. Innate Колдовство (1/Day). Мефит can innately cast heat metal (spell save СЛ 10), requiring no material components. Its innate spellcasting ability is"
         },
         {
-          "name_ru": "Charisma",
+          "name_ru": "Харизмы",
           "text_ru": ""
         }
       ],
       "actions": [
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +3 to hit, reach 5 ft., one creature. Попадание: 3 (1d4 + 1) рубящего урона plus 2 (1d4) огненного урона."
+          "name_ru": "Когти",
+          "text_ru": "Атака оружием ближнего боя: +3 к попаданию, досягаемость 5 фт., одно существо. Попадание: 3 (1d4 + 1) рубящего урона плюс 2 (1d4) огненного урона."
         },
         {
           "name_ru": "Fire Breath (Recharge 6)",
-          "text_ru": "The mephit exhales a 15-­‐foot cone of fire. Each creature in that area must make a СЛ 11 Dexterity спасбросок, taking 7 (2d6) огненного урона on a failed save, or half as much damage on a successful one."
+          "text_ru": "Мефит exhales a 15-­‐фт. cone of огонь. Each creature in that area должна совершить СЛ 11 Ловкости спасбросок, taking 7 (2d6) огненного урона on a failed save, или half as much damage on a successful one."
         }
       ],
       "reactions": [],
@@ -10980,13 +10980,13 @@
     },
     {
       "id": "steam-mephit",
-      "name_ru": "Стеам Мефит",
+      "name_ru": "Паровой мефит",
       "size_ru": "Маленький",
       "type_ru": "элементаль",
       "alignment_ru": "нейтрально-злой",
       "ac": "10",
       "hp": "21 (6d6)",
-      "speed": "30 ft., fly 30 ft.",
+      "speed": "30 фт., полёт 30 фт.",
       "abilities": {
         "str": {
           "score": 5,
@@ -11017,26 +11017,26 @@
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire, poison",
-      "condition_immunities": "poisoned",
-      "senses": "darkvision 60 ft., passive Perception 10",
-      "languages": "Aquan, Ignan",
+      "damage_immunities": "огонь, яд",
+      "condition_immunities": "отравление",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 10",
+      "languages": "Акван, Игнан",
       "cr": "1/4",
       "xp": 50,
       "traits": [
         {
-          "name_ru": "Death Burst",
-          "text_ru": "When the mephit dies, it explodes in a cloud of steam. Each creature within 5 feet of the mephit must succeed on a СЛ 10 Dexterity спасбросок or take 4 (1d8) огненного урона. Innate Spellcasting (1/Day). The mephit can innately cast blur, requiring no material components. Its innate spellcasting ability is Charisma."
+          "name_ru": "Предсмертный взрыв",
+          "text_ru": "Когда мефит умирает, он взрывается. Каждое существо в пределах 5 фт. должно преуспеть в спасброске Ловкости СЛ 10, иначе получает 4 (1d8) огненного урона."
         }
       ],
       "actions": [
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +2 to hit, reach 5 ft., one creature. Попадание: 2 (1d4) рубящего урона plus 2 (1d4) огненного урона."
+          "name_ru": "Когти",
+          "text_ru": "Атака оружием ближнего боя: +2 к попаданию, досягаемость 5 фт., одно существо. Попадание: 2 (1d4) рубящего урона плюс 2 (1d4) огненного урона."
         },
         {
-          "name_ru": "Steam Breath (Recharge 6)",
-          "text_ru": "The mephit exhales a 15-­‐ foot cone of scalding steam. Each creature in that area must succeed on a СЛ 10 Dexterity спасбросок, taking 4 (1d8) огненного урона on a failed save, or half as much damage on a successful one."
+          "name_ru": "Паровое дыхание (перезарядка 6)",
+          "text_ru": "Мефит exhales a 15-­‐ фт. cone of scalding steam. Each creature in that area должна преуспеть в СЛ 10 Ловкости спасбросок, taking 4 (1d8) огненного урона on a failed save, или half as much damage on a successful one."
         }
       ],
       "reactions": [],
@@ -11051,7 +11051,7 @@
       "alignment_ru": "нейтральный",
       "ac": "11",
       "hp": "11 (2d8 + 2)",
-      "speed": "10 ft., swim 40 ft.",
+      "speed": "10 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 10,
@@ -11079,25 +11079,25 @@
         }
       },
       "saving_throws": null,
-      "skills": "Perception +2",
+      "skills": "Внимательность +2",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "passive Perception 12",
-      "languages": "Aquan, Common",
+      "senses": "пассивная Внимательность 12",
+      "languages": "Акван, Всеобщий",
       "cr": "1/8",
       "xp": 25,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The merfolk can breathe air and water."
+          "name_ru": "Амфибия",
+          "text_ru": "Мерфолк может дышать воздухом и водой."
         }
       ],
       "actions": [
         {
-          "name_ru": "Spear",
-          "text_ru": "Melee or Атака оружием дальнего боя: +2 to hit, reach 5 ft. or range 20/60 ft., one target. Попадание: 3 (1d6) колющего урона, or 4 (1d8) колющего урона if used with two hands to make a melee attack."
+          "name_ru": "Копьё",
+          "text_ru": "Рукопашная или дальнобойная атака оружием: +2 к попаданию, досягаемость 5 фт. или дистанция 20/60 фт., одна цель. Попадание: 3 (1d6) колющего урона."
         }
       ],
       "reactions": [],
@@ -11106,13 +11106,13 @@
     },
     {
       "id": "merrow",
-      "name_ru": "Мерров",
+      "name_ru": "Мерроу",
       "size_ru": "Большой",
       "type_ru": "чудовище",
       "alignment_ru": "хаотично-злой",
-      "ac": "13 (natural armor)",
+      "ac": "13 (природная броня)",
       "hp": "45 (6d10 + 12)",
-      "speed": "10 ft., swim 40 ft.",
+      "speed": "10 фт., плавание 40 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -11145,32 +11145,32 @@
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 10",
-      "languages": "Abyssal, Aquan",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 10",
+      "languages": "Бездны, Акван",
       "cr": "2",
       "xp": 450,
       "traits": [
         {
-          "name_ru": "Amphibious",
-          "text_ru": "The merrow can breathe air and water."
+          "name_ru": "Амфибия",
+          "text_ru": "Мерроу может дышать воздухом и водой."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The merrow makes two attacks: one with its bite and one with its claws or harpoon."
+          "text_ru": "Мерроу совершает две атаки: одну укусом и одну когтями или гарпуном."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 8 (1d8 + 4) колющего урона."
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 8 (1d8 + 4) колющего урона."
         },
         {
-          "name_ru": "Claws",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 9 (2d4 + 4) рубящего урона."
+          "name_ru": "Когти",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 9 (2d4 + 4) рубящего урона."
         },
         {
           "name_ru": "Harpoon",
-          "text_ru": "Melee or Атака оружием дальнего боя: +6 to hit, reach 5 ft. or range 20/60 ft., one target. Попадание: 11 (2d6 + 4) колющего урона. If the target is a Huge or smaller creature, it must succeed on a Strength contest against the merrow or be pulled up to 20 feet toward the merrow."
+          "text_ru": "Melee или Атака оружием дальнего боя: +6 к попаданию, досягаемость 5 фт. или дистанция 20/60 фт., одна цель. Попадание: 11 (2d6 + 4) колющего урона. If цель is a Huge или smaller creature, it должна преуспеть в Силы contest against the merrow или be pulled up to 20 фт. toward the merrow."
         }
       ],
       "reactions": [],
@@ -11183,9 +11183,9 @@
       "size_ru": "Средний",
       "type_ru": "чудовище",
       "alignment_ru": "нейтральный",
-      "ac": "12 (natural armor)",
+      "ac": "12 (природная броня)",
       "hp": "58 (9d8 + 18)",
-      "speed": "15 ft.",
+      "speed": "15 фт.",
       "abilities": {
         "str": {
           "score": 17,
@@ -11213,41 +11213,41 @@
         }
       },
       "saving_throws": null,
-      "skills": "Stealth +5",
+      "skills": "Скрытность +5",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "acid",
-      "condition_immunities": "prone",
-      "senses": "darkvision 60 ft., passive Perception 11",
+      "damage_immunities": "кислота",
+      "condition_immunities": "опрокидывание",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 11",
       "languages": "—",
       "cr": "2",
       "xp": 450,
       "traits": [
         {
-          "name_ru": "Shapechanger",
-          "text_ru": "The mimic can use its action to polymorph into an object or back into its true, amorphous form. Its statistics are the same in each form. Any equipment it is wearing or carrying isn’t transformed. It reverts to its true form if it dies."
+          "name_ru": "Перевёртыш",
+          "text_ru": "Мимик может действием превращаться в предмет или обратно в истинную аморфную форму. Его характеристики остаются прежними, кроме размера."
         },
         {
-          "name_ru": "Adhesive (Object Form Only)",
-          "text_ru": "The mimic adheres to anything that touches it. A Huge or smaller creature adhered to the mimic is also grappled by it (escape СЛ 13). Ability checks made to escape this grapple have disпреимущество."
+          "name_ru": "Клейкость (только в форме предмета)",
+          "text_ru": "Мимик прилипает к любому существу или предмету, коснувшемуся его в форме предмета. Существо, схваченное мимиком, обездвижено (СЛ высвобождения 13)."
         },
         {
-          "name_ru": "False Appearance (Object Form Only)",
-          "text_ru": "While the mimic remains motionless, it is indistinguishable from an ordinary object."
+          "name_ru": "Ложный облик (только в форме предмета)",
+          "text_ru": "Пока мимик остаётся неподвижным, его невозможно отличить от обычного предмета."
         },
         {
           "name_ru": "Grappler",
-          "text_ru": "The mimic has преимущество on attack rolls against any creature grappled by it."
+          "text_ru": "Мимик has преимущество on attack rolls against any creature захват by it."
         }
       ],
       "actions": [
         {
-          "name_ru": "Pseudopod",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one target. Попадание: 7 (1d8 + 3) дробящего урона. If the mimic is in object form, the target is subjected to its Adhesive trait."
+          "name_ru": "Ложноножка",
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одна цель. Попадание: 7 (1d8 + 3) дробящего урона. If the mimic is in object form, цель is subjected to its Adhesive trait."
         },
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one target. Попадание: 7 (1d8 + 3) колющего урона plus 4 (1d8) acid damage."
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одна цель. Попадание: 7 (1d8 + 3) колющего урона плюс 4 (1d8) кислота damage."
         }
       ],
       "reactions": [],
@@ -11256,13 +11256,13 @@
     },
     {
       "id": "minotaur",
-      "name_ru": "Минотаур",
+      "name_ru": "Минотавр",
       "size_ru": "Большой",
       "type_ru": "чудовище",
       "alignment_ru": "хаотично-злой",
-      "ac": "14 (natural armor)",
+      "ac": "14 (природная броня)",
       "hp": "76 (9d10 + 27)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -11290,23 +11290,23 @@
         }
       },
       "saving_throws": null,
-      "skills": "Perception +7",
+      "skills": "Внимательность +7",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 17",
-      "languages": "Abyssal",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 17",
+      "languages": "Бездны",
       "cr": "3",
       "xp": 700,
       "traits": [
         {
-          "name_ru": "Charge",
-          "text_ru": "If the minotaur moves at least 10 feet straight toward a target and then hits it with a gore attack on the same turn, the target takes an extra 9 (2d8) колющего урона. If the target is a creature, it must succeed on a СЛ 14 Strength спасбросок or be pushed up to 10 feet away and knocked prone."
+          "name_ru": "Наскок",
+          "text_ru": "Если минотавр переместился по прямой не менее чем на 10 фт. к цели и в этот же ход попал боданием, цель получает дополнительный 9 (2d8) колющий урон."
         },
         {
-          "name_ru": "Labyrinthine Recall",
-          "text_ru": "The minotaur can perfectly recall any path it has traveled."
+          "name_ru": "Память лабиринта",
+          "text_ru": "Минотавр идеально помнит любой путь, по которому проходил."
         },
         {
           "name_ru": "Reckless",
@@ -11315,12 +11315,12 @@
       ],
       "actions": [
         {
-          "name_ru": "Greataxe",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 17 (2d12 + 4) рубящего урона."
+          "name_ru": "Секира",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 17 (2d12 + 4) рубящего урона."
         },
         {
           "name_ru": "Gore",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 13 (2d8 + 4) колющего урона. Mummies"
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d8 + 4) колющего урона. Mummies"
         }
       ],
       "reactions": [],
@@ -11329,13 +11329,13 @@
     },
     {
       "id": "mummy",
-      "name_ru": "Муммй",
+      "name_ru": "Мумия",
       "size_ru": "Средний",
       "type_ru": "нежить",
       "alignment_ru": "законно-злой",
-      "ac": "11 (natural armor)",
+      "ac": "11 (природная броня)",
       "hp": "58 (9d8 + 18)",
-      "speed": "20 ft.",
+      "speed": "20 фт.",
       "abilities": {
         "str": {
           "score": 16,
@@ -11362,29 +11362,29 @@
           "mod": 1
         }
       },
-      "saving_throws": "Wis +2",
+      "saving_throws": "Мдр +2",
       "skills": null,
-      "damage_vulnerabilities": "fire",
-      "damage_resistances": "bludgeoning, piercing, and",
-      "damage_immunities": "necrotic, poison",
-      "condition_immunities": "charmed, exhaustion, frightened,",
-      "senses": "darkvision 60 ft., passive Perception 10",
-      "languages": "the languages it knew in life",
+      "damage_vulnerabilities": "огонь",
+      "damage_resistances": "дробящий, колющий и рубящий урон от немагических атак",
+      "damage_immunities": "некротическая энергия, яд",
+      "condition_immunities": "очарование, истощение, испуг,",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 10",
+      "languages": "языки, которые знала при жизни",
       "cr": "3",
       "xp": 700,
       "traits": [],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The mummy can use its Dreadful Glare and makes one attack with its rotting fist."
+          "text_ru": "Мумия может использовать «Ужасающий взгляд» и совершает одну атаку гниющим кулаком."
         },
         {
-          "name_ru": "Rotting Fist",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one target. Попадание: 10 (2d6 + 3) дробящего урона plus 10 (3d6) некротического урона. If the target is a creature, it must succeed on a СЛ 12 Constitution спасбросок or be cursed with mummy rot. The cursed 333 System Reference Document 5.1 target can’t regain hit points, and its hit point maximum decreases by 10 (3d6) for every 24 hours that elapse. If the curse reduces the target’s hit point maximum to 0, the target dies, and its body turns to dust. The curse lasts until removed by the remove curse spell or other magic."
+          "name_ru": "Гниющий кулак",
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одна цель. Попадание: 10 (2d6 + 3) дробящего урона плюс 10 (3d6) некротического урона."
         },
         {
-          "name_ru": "Dreadful Glare",
-          "text_ru": "The mummy targets one creature it can see within 60 feet of it. If the target can see the mummy, it must succeed on a СЛ 11 Wisdom спасбросок against this magic or become frightened until the end of the mummy’s next turn. If the target fails the спасбросок by 5 or more, it is also paralyzed for the same duration. A target that succeeds on the спасбросок is immune to the Dreadful Glare of all mummies (but not mummy lords) for the next 24 hours."
+          "name_ru": "Ужасающий взгляд",
+          "text_ru": "Мумия targets одно существо it can see в пределах 60 фт. of it. If цель can see the mummy, it должна преуспеть в СЛ 11 Мудрости спасбросок against this magic или become испуг until the end of the mummy’s next turn. If цель fails the спасбросок by 5 или more, it is also паралич for the same duration. A target that succeeds on the спасбросок is immune to the Ужасающий взгляд of all mummies (but not mummy lords) for the next 24 hours."
         }
       ],
       "reactions": [],
@@ -11393,13 +11393,13 @@
     },
     {
       "id": "mummy-lord",
-      "name_ru": "Муммй Лорд",
+      "name_ru": "Повелитель мумий",
       "size_ru": "Средний",
       "type_ru": "нежить",
       "alignment_ru": "законно-злой",
-      "ac": "17 (natural armor)",
+      "ac": "17 (природная броня)",
       "hp": "97 (13d8 + 39)",
-      "speed": "20 ft.",
+      "speed": "20 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -11426,78 +11426,78 @@
           "mod": 3
         }
       },
-      "saving_throws": "Con +8, Int +5, Wis +9, Cha +8",
-      "skills": "History +5, Religion +5",
-      "damage_vulnerabilities": "fire",
+      "saving_throws": "Тел +8, Инт +5, Мдр +9, Хар +8",
+      "skills": "История +5, Религия +5",
+      "damage_vulnerabilities": "огонь",
       "damage_resistances": null,
-      "damage_immunities": "necrotic, poison; bludgeoning,",
-      "condition_immunities": "charmed, exhaustion, frightened,",
-      "senses": "darkvision 60 ft., passive Perception 14",
-      "languages": "the languages it knew in life",
+      "damage_immunities": "некротическая энергия, яд; дробящий,",
+      "condition_immunities": "очарование, истощение, испуг,",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 14",
+      "languages": "языки, которые знала при жизни",
       "cr": "15",
       "xp": 13000,
       "traits": [
         {
-          "name_ru": "Magic Resistance",
-          "text_ru": "The mummy lord has преимущество on спасбросокs against spells and other magical effects."
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Повелитель мумий совершает с преимуществом спасброски против заклинаний и других магических эффектов."
         },
         {
-          "name_ru": "Rejuvenation",
-          "text_ru": "A destroyed mummy lord gains a new body in 24 hours if its heart is intact, regaining all its hit points and becoming active again. The new body appears within 5 feet of the mummy lord’s heart."
+          "name_ru": "Возрождение",
+          "text_ru": "Уничтоженный повелитель мумий получает новое тело через 24 часа, если его сердце цело, восстанавливая все хиты и вновь становясь активным."
         },
         {
-          "name_ru": "Spellcasting",
-          "text_ru": "The mummy lord is a 10th-­‐level spellcaster. Its spellcasting ability is Wisdom (spell save СЛ 17, +9 to hit with spell attacks). The mummy lord has the following cleric spells prepared: Cantrips (at will): sacred flame, thaumaturgy 1st level (4 slots): command, guiding bolt, shield of faith 2nd level (3 slots): hold person, silence, spiritual weapon 3rd level (3 slots): animate dead, dispel magic 4th level (3 slots): divination, guardian of faith 5th level (2 slots): contagion, insect plague 6th level (1 slot): harm"
+          "name_ru": "Колдовство",
+          "text_ru": "Мумия lord is a 10th-­‐level spellcaster. Its spellcasting ability is Мудрости (spell save СЛ 17, +9 к попаданию with spell attacks). Мумия lord has the following cleric spells prepared: Cantrips (at will): sacred flame, thaumaturgy 1st level (4 slots): command, guiding bolt, shield of faith 2nd level (3 slots): hold person, silence, spiritual weapon 3rd level (3 slots): animate dead, dispel magic 4th level (3 slots): divination, guardian of faith 5th level (2 slots): contagion, insect plague 6th level (1 slot): harm"
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The mummy can use its Dreadful Glare and makes one attack with its rotting fist."
+          "text_ru": "Мумия can use its Ужасающий взгляд и makes one attack with its rotting fist."
         },
         {
-          "name_ru": "Rotting Fist",
-          "text_ru": "Атака оружием ближнего боя: +9 to hit, reach 5 ft., one target. Попадание: 14 (3d6 + 4) дробящего урона plus 21 (6d6) некротического урона. If the target is a creature, it must succeed on a СЛ 16 Constitution спасбросок or be cursed with mummy rot. The cursed target can’t regain hit points, and its hit point maximum decreases by 10 (3d6) for every 24 hours that elapse. If the curse reduces the target’s hit point maximum to 0, the target dies, and its body turns to dust. The curse lasts until removed by the remove curse spell or other magic."
+          "name_ru": "Гниющий кулак",
+          "text_ru": "Атака оружием ближнего боя: +9 к попаданию, досягаемость 5 фт., одна цель. Попадание: 14 (3d6 + 4) дробящего урона плюс 21 (6d6) некротического урона. If цель is a creature, it должна преуспеть в СЛ 16 Телосложения спасбросок или be cursed with mummy rot. The cursed target can’t regain hit points, и its hit point maximum decreases by 10 (3d6) for every 24 hours that elapse. If the curse reduces цель’s hit point maximum to 0, цель dies, и its body turns to dust. The curse lasts until removed by the remove curse spell или other magic."
         },
         {
-          "name_ru": "Dreadful Glare",
-          "text_ru": "The mummy lord targets one creature it can see within 60 feet of it. If the target can see the mummy lord, it must succeed on a СЛ 16 Wisdom спасбросок against this magic or become frightened until the end of the mummy’s next turn. If the target fails the спасбросок by 5 or more, it is also paralyzed for the same duration. A target that succeeds on the спасбросок is immune to the Dreadful Glare of all mummies and mummy lords for the next 24 hours."
+          "name_ru": "Ужасающий взгляд",
+          "text_ru": "Мумия lord targets одно существо it can see в пределах 60 фт. of it. If цель can see the mummy lord, it должна преуспеть в СЛ 16 Мудрости спасбросок against this magic или become испуг until the end of the mummy’s next turn. If цель fails the спасбросок by 5 или more, it is also паралич for the same duration. A target that succeeds on the спасбросок is immune to the Ужасающий взгляд of all mummies и mummy lords for the next 24 hours."
         }
       ],
       "reactions": [],
       "legendary_actions": [
         {
           "name_ru": "Attack",
-          "text_ru": "The mummy lord makes one attack with its rotting fist or uses its Dreadful Glare."
+          "text_ru": "Мумия lord makes one attack with its rotting fist или uses its Ужасающий взгляд."
         },
         {
           "name_ru": "Blinding Dust",
-          "text_ru": "Blinding dust and sand swirls magically around the mummy lord. Each creature within 5 feet of the mummy lord must succeed on a СЛ 16 Constitution спасбросок or be blinded until the end of the creature’s next turn. 334 System Reference Document 5.1"
+          "text_ru": "Blinding dust и sи swirls magically around the mummy lord. Each creature в пределах 5 фт. of the mummy lord должна преуспеть в СЛ 16 Телосложения спасбросок или be ослепление until the end of the creature’s next turn. 334 System Reference Document 5.1"
         },
         {
           "name_ru": "Blasphemous Word (Costs 2 Actions)",
-          "text_ru": "The mummy lord utters a blasphemous word. Each non-­‐undead creature within 10 feet of the mummy lord that can hear the magical utterance must succeed on a СЛ 16 Constitution спасбросок or be stunned until the end of the mummy lord’s next turn."
+          "text_ru": "Мумия lord utters a blasphemous word. Each non-­‐undead creature в пределах 10 фт. of the mummy lord that can hear the magical utterance должна преуспеть в СЛ 16 Телосложения спасбросок или be ошеломление until the end of the mummy lord’s next turn."
         },
         {
           "name_ru": "Channel Negative Energy (Costs 2 Actions)",
-          "text_ru": "The mummy lord magically unleashes negative energy. Creatures within 60 feet of the mummy lord, including ones behind barriers and around corners, can’t regain hit points until the end of the mummy lord’s next turn."
+          "text_ru": "Мумия lord magically unleashes negative energy. Creatures в пределах 60 фт. of the mummy lord, including ones behind barriers и around corners, can’t regain hit points until the end of the mummy lord’s next turn."
         },
         {
-          "name_ru": "Whirlwind of Sand (Costs 2 Actions)",
-          "text_ru": "The mummy lord magically transforms into a whirlwind of sand, moves up to 60 feet, and reverts to its normal form. While in whirlwind form, the mummy lord is immune to all damage, and it can’t be grappled, petrified, knocked prone, restrained, or stunned. Equipment worn or carried by the mummy lord remain in its possession. Monsters (N) Nagas"
+          "name_ru": "Whirlwind of Sи (Costs 2 Actions)",
+          "text_ru": "Мумия lord magically transforms into a whirlwind of sand, moves up to 60 фт., и reverts to its normal form. While in whirlwind form, the mummy lord is immune to all damage, и it can’t be захват, окаменение, knocked опрокидывание, обездвиживание, или ошеломление. Equipment worn или carried by the mummy lord remain in its possession. Monsters (N) Nagas"
         }
       ],
       "source": "SRD 5.1 (CC BY 4.0)"
     },
     {
       "id": "guardian-naga",
-      "name_ru": "Гуардиан Нага",
+      "name_ru": "Нага-хранитель",
       "size_ru": "Большой",
       "type_ru": "чудовище",
       "alignment_ru": "законно-добрый",
-      "ac": "18 (natural armor)",
+      "ac": "18 (природная броня)",
       "hp": "127 (15d10 + 45)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 19,
@@ -11524,34 +11524,34 @@
           "mod": 4
         }
       },
-      "saving_throws": "Dex +8, Con +7, Int +7, Wis +8, Cha +8",
+      "saving_throws": "Лов +8, Тел +7, Инт +7, Мдр +8, Хар +8",
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "poison",
-      "condition_immunities": "charmed, poisoned",
-      "senses": "darkvision 60 ft., passive Perception 14",
-      "languages": "Celestial, Common",
+      "damage_immunities": "яд",
+      "condition_immunities": "очарование, отравление",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 14",
+      "languages": "Небесный, Всеобщий",
       "cr": "10",
       "xp": 5900,
       "traits": [
         {
-          "name_ru": "Rejuvenation",
-          "text_ru": "If it dies, the naga returns to life in 1d6 days and regains all its hit points. Only a wish spell can prevent this trait from functioning."
+          "name_ru": "Возрождение",
+          "text_ru": "Если нага умирает, она возвращается к жизни через 1d6 дней и восстанавливает все хиты. Лишь заклинание «исполнение желаний» может этому помешать."
         },
         {
-          "name_ru": "Spellcasting",
-          "text_ru": "The naga is an 11th-­‐level spellcaster. Its spellcasting ability is Wisdom (spell save СЛ 16, +8 to hit with spell attacks), and it needs only verbal components to cast its spells. It has the following cleric spells prepared: Cantrips (at will): mending, sacred flame, thaumaturgy 1st level (4 slots): command, cure wounds, shield of faith 2nd level (3 slots): calm emotions, hold person 3rd level (3 slots): bestow curse, clairvoyance 4th level (3 slots): banishment, freedom of movement 5th level (2 slots): flame strike, geas 6th level (1 slot): true seeing"
+          "name_ru": "Колдовство",
+          "text_ru": "Нага — заклинатель 11-го уровня. Базовая характеристика колдовства — Мудрость (СЛ спасброска 16, +8 к попаданию атаками заклинаниями)."
         }
       ],
       "actions": [
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +8 to hit, reach 10 ft., one creature. Попадание: 8 (1d8 + 4) колющего урона, and the target must make a СЛ 15 Constitution спасбросок, taking 45 (10d8) урона ядом on a failed save, or half as much damage on a successful one."
+          "text_ru": "Атака оружием ближнего боя: +8 к попаданию, досягаемость 10 фт., одно существо. Попадание: 8 (1d8 + 4) колющего урона, и цель должна совершить СЛ 15 Телосложения спасбросок, taking 45 (10d8) урона ядом on a failed save, или half as much damage on a successful one."
         },
         {
           "name_ru": "Spit Poison",
-          "text_ru": "Атака оружием дальнего боя: +8 to hit, range 15/30 ft., one creature. Попадание: The target must make a СЛ 15 Constitution спасбросок, taking 45 (10d8) урона ядом on a failed save, or half as much damage on a successful one."
+          "text_ru": "Атака оружием дальнего боя: +8 к попаданию, дистанция 15/30 фт., одно существо. Попадание: The target должна совершить СЛ 15 Телосложения спасбросок, taking 45 (10d8) урона ядом on a failed save, или half as much damage on a successful one."
         }
       ],
       "reactions": [],
@@ -11560,13 +11560,13 @@
     },
     {
       "id": "spirit-naga",
-      "name_ru": "Спирит Нага",
+      "name_ru": "Духовная нага",
       "size_ru": "Большой",
       "type_ru": "чудовище",
       "alignment_ru": "хаотично-злой",
-      "ac": "15 (natural armor)",
+      "ac": "15 (природная броня)",
       "hp": "75 (10d10 + 20)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -11593,30 +11593,30 @@
           "mod": 3
         }
       },
-      "saving_throws": "Dex +6, Con +5, Wis +5, Cha +6",
+      "saving_throws": "Лов +6, Тел +5, Мдр +5, Хар +6",
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "poison",
-      "condition_immunities": "charmed, poisoned",
-      "senses": "darkvision 60 ft., passive Perception 12",
-      "languages": "Abyssal, Common",
+      "damage_immunities": "яд",
+      "condition_immunities": "очарование, отравление",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 12",
+      "languages": "Бездны, Всеобщий",
       "cr": "8",
       "xp": 3900,
       "traits": [
         {
-          "name_ru": "Rejuvenation",
-          "text_ru": "If it dies, the naga returns to life in 1d6 days and regains all its hit points. Only a wish spell can prevent this trait from functioning."
+          "name_ru": "Возрождение",
+          "text_ru": "Если нага умирает, она возвращается к жизни через 1d6 дней и восстанавливает все хиты. Лишь заклинание «исполнение желаний» может этому помешать."
         },
         {
-          "name_ru": "Spellcasting",
-          "text_ru": "The naga is a 10th-­‐level spellcaster. Its spellcasting ability is Intelligence (spell save СЛ 14, +6 to hit with spell attacks), and it needs only verbal 335 System Reference Document 5.1 components to cast its spells. It has the following wizard spells prepared: Cantrips (at will): mage hand, minor illusion, ray of frost 1st level (4 slots): charm person, detect magic, sleep 2nd level (3 slots): detect thoughts, hold person 3rd level (3 slots): lightning bolt, water breathing 4th level (3 slots): blight, dimension door 5th level (2 slots): dominate person"
+          "name_ru": "Колдовство",
+          "text_ru": "Нага — заклинатель 10-го уровня. Базовая характеристика колдовства — Интеллект (СЛ спасброска 14, +6 к попаданию атаками заклинаниями)."
         }
       ],
       "actions": [
         {
           "name_ru": "Укус",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 10 ft., one creature. Попадание: 7 (1d6 + 4) колющего урона, and the target must make a СЛ 13 Constitution спасбросок, taking 31 (7d8) урона ядом on a failed save, or half as much damage on a successful one."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 10 фт., одно существо. Попадание: 7 (1d6 + 4) колющего урона, и цель должна совершить СЛ 13 Телосложения спасбросок, taking 31 (7d8) урона ядом on a failed save, или half as much damage on a successful one."
         }
       ],
       "reactions": [],
@@ -11625,13 +11625,13 @@
     },
     {
       "id": "nightmare",
-      "name_ru": "Нигхтмаре",
+      "name_ru": "Кошмар",
       "size_ru": "Большой",
       "type_ru": "исчадие",
       "alignment_ru": "нейтрально-злой",
-      "ac": "13 (natural armor)",
+      "ac": "13 (природная броня)",
       "hp": "68 (8d10 + 24)",
-      "speed": "60 ft., fly 90 ft.",
+      "speed": "60 фт., полёт 90 фт.",
       "abilities": {
         "str": {
           "score": 18,
@@ -11662,30 +11662,30 @@
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "fire",
+      "damage_immunities": "огонь",
       "condition_immunities": null,
-      "senses": "passive Perception 11",
-      "languages": "understands Abyssal, Common, and Infernal",
+      "senses": "пассивная Внимательность 11",
+      "languages": "понимает Бездны, Всеобщий и Инфернальный",
       "cr": "3",
       "xp": 700,
       "traits": [
         {
-          "name_ru": "Confer Fire Resistance",
-          "text_ru": "The nightmare can grant resistance to огненного урона to anyone riding it."
+          "name_ru": "Дарует сопротивление огню",
+          "text_ru": "Кошмар может даровать сопротивление урону огнём существу, которое едет на нём."
         },
         {
-          "name_ru": "Illumination",
-          "text_ru": "The nightmare sheds bright light in a 10-­‐ foot radius and dim light for an additional 10 feet."
+          "name_ru": "Свечение",
+          "text_ru": "Кошмар испускает яркий свет в радиусе 10 фт. и тусклый свет ещё на 10 фт."
         }
       ],
       "actions": [
         {
-          "name_ru": "Hooves",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 13 (2d8 + 4) дробящего урона plus 7 (2d6) огненного урона."
+          "name_ru": "Копыта",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d8 + 4) дробящего урона плюс 7 (2d6) огненного урона."
         },
         {
           "name_ru": "Ethereal Stride",
-          "text_ru": "The nightmare and up to three willing creatures within 5 feet of it magically enter the Ethereal Plane from the Material Plane, or vice versa. Monsters (O)"
+          "text_ru": "Кошмар и up to three willing creatures в пределах 5 фт. of it magically enter the Ethereal Plane from the Material Plane, или vice versa. Monsters (O)"
         }
       ],
       "reactions": [],
@@ -11694,13 +11694,13 @@
     },
     {
       "id": "ogre",
-      "name_ru": "Огре",
+      "name_ru": "Огр",
       "size_ru": "Большой",
       "type_ru": "великан",
       "alignment_ru": "хаотично-злой",
-      "ac": "11 (hide armor)",
+      "ac": "11 (шкурный доспех)",
       "hp": "59 (7d10 + 21)",
-      "speed": "40 ft.",
+      "speed": "40 фт.",
       "abilities": {
         "str": {
           "score": 19,
@@ -11733,19 +11733,19 @@
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 8",
-      "languages": "Common, Giant",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 8",
+      "languages": "Всеобщий, Великаний",
       "cr": "2",
       "xp": 450,
       "traits": [],
       "actions": [
         {
-          "name_ru": "Greatclub",
-          "text_ru": "Атака оружием ближнего боя: +6 to hit, reach 5 ft., one target. Попадание: 13 (2d8 + 4) дробящего урона."
+          "name_ru": "Большая дубина",
+          "text_ru": "Атака оружием ближнего боя: +6 к попаданию, досягаемость 5 фт., одна цель. Попадание: 13 (2d8 + 4) дробящего урона."
         },
         {
-          "name_ru": "Javelin",
-          "text_ru": "Melee or Атака оружием дальнего боя: +6 to hit, reach 5 ft. or range 30/120 ft., one target. Попадание: 11 (2d6 + 4) колющего урона."
+          "name_ru": "Дротик",
+          "text_ru": "Рукопашная или дальнобойная атака оружием: +6 к попаданию, досягаемость 5 фт. или дистанция 30/120 фт., одна цель. Попадание: 11 (2d8 + 2) колющего урона."
         }
       ],
       "reactions": [],
@@ -11758,9 +11758,9 @@
       "size_ru": "Большой",
       "type_ru": "великан",
       "alignment_ru": "законно-злой",
-      "ac": "16 (chain mail)",
+      "ac": "16 (кольчуга)",
       "hp": "110 (13d10 + 39)",
-      "speed": "30 ft., fly 30 ft.",
+      "speed": "30 фт., полёт 30 фт.",
       "abilities": {
         "str": {
           "score": 19,
@@ -11787,46 +11787,46 @@
           "mod": 2
         }
       },
-      "saving_throws": "Dex +3, Con +6, Wis +4, Cha +5",
-      "skills": "Arcana +5, Deception +8, Perception +4",
+      "saving_throws": "Лов +3, Тел +6, Мдр +4, Хар +5",
+      "skills": "Магия +5, Обман +8, Внимательность +4",
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
       "condition_immunities": null,
-      "senses": "darkvision 60 ft., passive Perception 14",
-      "languages": "Common, Giant",
+      "senses": "тёмное зрение 60 фт., пассивная Внимательность 14",
+      "languages": "Всеобщий, Великаний",
       "cr": "7",
       "xp": 2900,
       "traits": [
         {
-          "name_ru": "Innate Spellcasting",
-          "text_ru": "The oni’s innate spellcasting ability is Charisma (spell save СЛ 13). The oni can innately cast the following spells, requiring no material components: At will: darkness, invisibility 1/day each: charm person, cone of cold, gaseous form, sleep"
+          "name_ru": "Врожденное колдовство",
+          "text_ru": "Базовая характеристика врождённого колдовства они — Харизма (СЛ спасброска 13). Они может накладывать врождённые заклинания без материальных компонентов."
         },
         {
           "name_ru": "Magic Weapons",
-          "text_ru": "The oni’s weapon attacks are magical. 336 System Reference Document 5.1"
+          "text_ru": "Они’s weapon attacks are magical. 336 System Reference Document 5.1"
         },
         {
           "name_ru": "Regeneration",
-          "text_ru": "The oni regains 10 hit points at the start of its turn if it has at least 1 hit point."
+          "text_ru": "Они regains 10 hit points at the start of its turn if it has at least 1 hit point."
         }
       ],
       "actions": [
         {
           "name_ru": "Мультиатака",
-          "text_ru": "The oni makes two attacks, either with its claws or its glaive."
+          "text_ru": "Они makes two attacks, either with its claws или its glaive."
         },
         {
-          "name_ru": "Claw (Oni Form Only)",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 5 ft., one target. Попадание: 8 (1d8 + 4) рубящего урона."
+          "name_ru": "Коготь (Oni Form Only)",
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 5 фт., одна цель. Попадание: 8 (1d8 + 4) рубящего урона."
         },
         {
           "name_ru": "Glaive",
-          "text_ru": "Атака оружием ближнего боя: +7 to hit, reach 10 ft., one target. Попадание: 15 (2d10 + 4) рубящего урона, or 9 (1d10 + 4) рубящего урона in Small or Medium form."
+          "text_ru": "Атака оружием ближнего боя: +7 к попаданию, досягаемость 10 фт., одна цель. Попадание: 15 (2d10 + 4) рубящего урона, или 9 (1d10 + 4) рубящего урона in Small или Medium form."
         },
         {
           "name_ru": "Change Shape",
-          "text_ru": "The oni magically polymorphs into a Small or Medium humanoid, into a Large giant, or back into its true form. Other than its size, its statistics are the same in each form. The only equipment that is transformed is its glaive, which shrinks so that it can be wielded in humanoid form. If the oni dies, it reverts to its true form, and its glaive reverts to its normal size."
+          "text_ru": "Они magically polymorphs into a Small или Medium humanoid, into a Large giant, или back into its true form. Other than its size, its statistics are the same in each form. The only equipment that is transformed is its glaive, which shrinks so that it can be wielded in humanoid form. If the oni dies, it reverts to its true form, и its glaive reverts to its normal size."
         }
       ],
       "reactions": [],
@@ -11835,13 +11835,13 @@
     },
     {
       "id": "black-pudding",
-      "name_ru": "Блак Пуддинг",
+      "name_ru": "Чёрный студень",
       "size_ru": "Большой",
       "type_ru": "слизь",
       "alignment_ru": "без мировоззрения",
       "ac": "7",
       "hp": "85 (10d10 + 30)",
-      "speed": "20 ft., climb 20 ft.",
+      "speed": "20 фт., лазание 20 фт.",
       "abilities": {
         "str": {
           "score": 16,
@@ -11872,30 +11872,30 @@
       "skills": null,
       "damage_vulnerabilities": null,
       "damage_resistances": null,
-      "damage_immunities": "acid, cold, lightning, slashing",
-      "condition_immunities": "blinded, charmed, deafened,",
-      "senses": "blindsight 60 ft. (blind beyond this radius),",
+      "damage_immunities": "кислота, холод, электричество, рубящий",
+      "condition_immunities": "ослепление, очарование, оглушение,",
+      "senses": "слепое зрение 60 фт. (слеп за пределами этого радиуса),",
       "languages": "—",
       "cr": "4",
       "xp": 1100,
       "traits": [
         {
-          "name_ru": "Amorphous",
-          "text_ru": "The pudding can move through a space as narrow as 1 inch wide without squeezing."
+          "name_ru": "Аморфный",
+          "text_ru": "Существо может проходить через пространство шириной 1 дюйм без протискивания."
         },
         {
-          "name_ru": "Corrosive Form",
-          "text_ru": "A creature that touches the pudding or hits it with a melee attack while within 5 feet of it takes 4 (1d8) acid damage. Any nonmagical weapon made of metal or wood that hits the pudding corrodes. After dealing damage, the weapon takes a permanent and cumulative −1 penalty to damage rolls. If its penalty drops to −5, the weapon is destroyed. Nonmagical ammunition made of metal or wood that hits the pudding is destroyed after dealing damage. The pudding can eat through 2-­‐inch-­‐thick, nonmagical wood or metal in 1 round."
+          "name_ru": "Едкая форма",
+          "text_ru": "A creature that touches the pudding или hits it with a melee attack while в пределах 5 фт. of it takes 4 (1d8) кислота damage. Any nonmagical weapon made of metal или wood that hits the pudding corrodes. After dealing damage, the weapon takes a permanent и cumulative −1 penalty to damage rolls. If its penalty drops to −5, the weapon is destroyed. Nonmagical ammunition made of metal или wood that hits the pudding is destroyed after dealing damage. Студень can eat through 2-­‐inch-­‐thick, nonmagical wood или metal in 1 round."
         },
         {
           "name_ru": "Spider Climb",
-          "text_ru": "The pudding can climb difficult surfaces, including upside down on ceilings, without needing to make an ability check."
+          "text_ru": "Студень can лазание difficult surfaces, including upside down on ceilings, without needing to make an ability check."
         }
       ],
       "actions": [
         {
-          "name_ru": "Pseudopod",
-          "text_ru": "Атака оружием ближнего боя: +5 to hit, reach 5 ft., one target. Попадание: 6 (1d6 + 3) дробящего урона plus 18 (4d8) acid damage. In addition, nonmagical armor worn by the target is partly dissolved and takes a permanent and cumulative −1 penalty to the AC it offers. The armor is destroyed if the penalty reduces its"
+          "name_ru": "Ложноножка",
+          "text_ru": "Атака оружием ближнего боя: +5 к попаданию, досягаемость 5 фт., одна цель. Попадание: 6 (1d6 + 3) дробящего урона плюс 18 (4d8) кислота damage. In addition, nonmagical armor worn by цель is partly dissolved и takes a permanent и cumulative −1 penalty to the AC it offers. The armor is destroyed if the penalty reduces its"
         },
         {
           "name_ru": "AC to 10",
@@ -11905,7 +11905,7 @@
       "reactions": [
         {
           "name_ru": "Split",
-          "text_ru": "When a pudding that is Medium or larger is subjected to lightning or рубящего урона, it splits into two new puddings if it has at least 10 hit points. Each new pudding has hit points equal to half the original pudding’s, rounded down. New puddings are one size smaller than the original pudding."
+          "text_ru": "When a pudding that is Medium или larger is subjected to электричество или рубящего урона, it splits into two new puddings if it has at least 10 hit points. Each new pudding has hit points equal to half the original pudding’s, rounded down. New puddings are one size smaller than the original pudding."
         }
       ],
       "legendary_actions": [],
@@ -11913,13 +11913,13 @@
     },
     {
       "id": "gelatinous-cube",
-      "name_ru": "Гелатиноус Кубе",
+      "name_ru": "Студенистый куб",
       "size_ru": "Большой",
       "type_ru": "слизь",
       "alignment_ru": "без мировоззрения",
       "ac": "6",
       "hp": "84 (8d10 + 40)",
-      "speed": "15 ft.",
+      "speed": "15 фт.",
       "abilities": {
         "str": {
           "score": 14,
@@ -11951,29 +11951,29 @@
       "damage_vulnerabilities": null,
       "damage_resistances": null,
       "damage_immunities": null,
-      "condition_immunities": "blinded, charmed, deafened,",
-      "senses": "blindsight 60 ft. (blind beyond this radius),",
+      "condition_immunities": "ослепление, очарование, оглушение,",
+      "senses": "слепое зрение 60 фт. (слеп за пределами этого радиуса),",
       "languages": "—",
       "cr": "2",
       "xp": 450,
       "traits": [
         {
-          "name_ru": "Ooze Cube",
-          "text_ru": "The cube takes up its entire space. Other creatures can enter the space, but a creature that does so is subjected to the cube’s Engulf and has disпреимущество on the спасбросок. Creatures inside the cube can be seen but have total cover. A creature within 5 feet of the cube can take an 337 System Reference Document 5.1 action to pull a creature or object out of the cube. Doing so requires a successful СЛ 12 Strength check, and the creature making the attempt takes 10 (3d6) acid damage. The cube can hold only one Large creature or up to four Medium or smaller creatures inside it at a time."
+          "name_ru": "Куб-слизь",
+          "text_ru": "Куб занимает всё своё пространство. Другие существа могут входить в него, но при этом подвергаются эффекту «Поглощение»."
         },
         {
-          "name_ru": "Transparent",
-          "text_ru": "Even when the cube is in plain sight, it takes a successful СЛ 15 Wisdom (Perception) check to spot a cube that has neither moved nor attacked. A creature that tries to enter the cube’s space while unaware of the cube is surprised by the cube."
+          "name_ru": "Прозрачный",
+          "text_ru": "Даже полностью прозрачный куб сложно заметить; существо должно преуспеть в проверке Мудрости (Внимательность) СЛ 15, чтобы различить его."
         }
       ],
       "actions": [
         {
-          "name_ru": "Pseudopod",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one creature. Попадание: 10 (3d6) acid damage."
+          "name_ru": "Ложноножка",
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одно существо. Попадание: 10 (3d6) урона кислотой."
         },
         {
           "name_ru": "Engulf",
-          "text_ru": "The cube moves up to its speed. While doing so, it can enter Large or smaller creatures’ spaces. Whenever the cube enters a creature’s space, the creature must make a СЛ 12 Dexterity спасбросок. On a successful save, the creature can choose to be pushed 5 feet back or to the side of the cube. A creature that chooses not to be pushed suffers the consequences of a failed спасбросок. On a failed save, the cube enters the creature’s space, and the creature takes 10 (3d6) acid damage and is engulfed. The engulfed creature can’t breathe, is restrained, and takes 21 (6d6) acid damage at the start of each of the cube’s turns. When the cube moves, the engulfed creature moves with it. An engulfed creature can try to escape by taking an action to make a СЛ 12 Strength check. On a success, the creature escapes and enters a space of its choice within 5 feet of the cube."
+          "text_ru": "Куб moves up to its speed. While doing so, it can enter Large или smaller creatures’ spaces. Whenever the cube enters a creature’s space, the creature должна совершить СЛ 12 Ловкости спасбросок. On a successful save, the creature can choose to be pushed 5 фт. back или to the side of the cube. A creature that chooses not to be pushed suffers the consequences of a failed спасбросок. On a failed save, the cube enters the creature’s space, и the creature takes 10 (3d6) кислота damage и is engulfed. The engulfed creature can’t breathe, is обездвиживание, и takes 21 (6d6) кислота damage at the start of each of the cube’s turns. When the cube moves, the engulfed creature moves with it. An engulfed creature can try to escape by taking an action to make a СЛ 12 Силы check. On a success, the creature escapes и enters a space of its choice в пределах 5 фт. of the cube."
         }
       ],
       "reactions": [],
@@ -11982,13 +11982,13 @@
     },
     {
       "id": "gray-ooze",
-      "name_ru": "Грай Оозе",
+      "name_ru": "Серая слизь",
       "size_ru": "Средний",
       "type_ru": "слизь",
       "alignment_ru": "без мировоззрения",
       "ac": "8",
       "hp": "22 (3d8 + 9)",
-      "speed": "10 ft., climb 10 ft.",
+      "speed": "10 фт., лазание 10 фт.",
       "abilities": {
         "str": {
           "score": 12,
@@ -12016,33 +12016,33 @@
         }
       },
       "saving_throws": null,
-      "skills": "Stealth +2",
+      "skills": "Скрытность +2",
       "damage_vulnerabilities": null,
-      "damage_resistances": "acid, cold, fire",
+      "damage_resistances": "кислота, холод, огонь",
       "damage_immunities": null,
-      "condition_immunities": "blinded, charmed, deafened,",
-      "senses": "blindsight 60 ft. (blind beyond this radius),",
+      "condition_immunities": "ослепление, очарование, оглушение,",
+      "senses": "слепое зрение 60 фт. (слеп за пределами этого радиуса),",
       "languages": "—",
       "cr": "1/2",
       "xp": 100,
       "traits": [
         {
-          "name_ru": "Amorphous",
-          "text_ru": "The ooze can move through a space as narrow as 1 inch wide without squeezing."
+          "name_ru": "Аморфный",
+          "text_ru": "Существо может проходить через пространство шириной 1 дюйм без протискивания."
         },
         {
-          "name_ru": "Corrode Metal",
-          "text_ru": "Any nonmagical weapon made of metal that hits the ooze corrodes. After dealing damage, the weapon takes a permanent and cumulative −1 penalty to damage rolls. If its penalty drops to −5, the weapon is destroyed. Nonmagical ammunition made of metal that hits the ooze is destroyed after dealing damage. The ooze can eat through 2-­‐inch-­‐thick, nonmagical metal in 1 round."
+          "name_ru": "Разъедает металл",
+          "text_ru": "Any nonmagical weapon made of metal that hits the ooze corrodes. After dealing damage, the weapon takes a permanent и cumulative −1 penalty to damage rolls. If its penalty drops to −5, the weapon is destroyed. Nonmagical ammunition made of metal that hits the ooze is destroyed after dealing damage. Слизь can eat through 2-­‐inch-­‐thick, nonmagical metal in 1 round."
         },
         {
           "name_ru": "False Appearance",
-          "text_ru": "While the ooze remains motionless, it is indistinguishable from an oily pool or wet rock."
+          "text_ru": "While the ooze remains motionless, it is indistinguishable from an oily pool или wet rock."
         }
       ],
       "actions": [
         {
-          "name_ru": "Pseudopod",
-          "text_ru": "Атака оружием ближнего боя: +3 to hit, reach 5 ft., one target. Попадание: 4 (1d6 + 1) дробящего урона plus 7 (2d6) acid damage, and if the target is wearing nonmagical metal armor, its armor is partly corroded and takes a permanent and cumulative −1 penalty to the AC it offers. The armor is destroyed if the penalty reduces its AC to 10."
+          "name_ru": "Ложноножка",
+          "text_ru": "Атака оружием ближнего боя: +3 к попаданию, досягаемость 5 фт., одна цель. Попадание: 4 (1d6 + 1) дробящего урона плюс 7 (2d6) кислота damage, и if цель is wearing nonmagical metal armor, its armor is partly corroded и takes a permanent и cumulative −1 penalty to the AC it offers. The armor is destroyed if the penalty reduces its AC to 10."
         }
       ],
       "reactions": [],
@@ -12051,13 +12051,13 @@
     },
     {
       "id": "ochre-jelly",
-      "name_ru": "Очре Джеллй",
+      "name_ru": "Охристый студень",
       "size_ru": "Большой",
       "type_ru": "слизь",
       "alignment_ru": "без мировоззрения",
       "ac": "8",
       "hp": "45 (6d10 + 12)",
-      "speed": "10 ft., climb 10 ft.",
+      "speed": "10 фт., лазание 10 фт.",
       "abilities": {
         "str": {
           "score": 15,
@@ -12087,33 +12087,33 @@
       "saving_throws": null,
       "skills": null,
       "damage_vulnerabilities": null,
-      "damage_resistances": "acid",
-      "damage_immunities": "lightning, slashing",
-      "condition_immunities": "blinded, charmed, deafened,",
-      "senses": "blindsight 60 ft. (blind beyond this radius),",
+      "damage_resistances": "кислота",
+      "damage_immunities": "электричество, рубящий",
+      "condition_immunities": "ослепление, очарование, оглушение,",
+      "senses": "слепое зрение 60 фт. (слеп за пределами этого радиуса),",
       "languages": "—",
       "cr": "2",
       "xp": 450,
       "traits": [
         {
-          "name_ru": "Amorphous",
-          "text_ru": "The jelly can move through a space as narrow as 1 inch wide without squeezing."
+          "name_ru": "Аморфный",
+          "text_ru": "Существо может проходить через пространство шириной 1 дюйм без протискивания."
         },
         {
-          "name_ru": "Spider Climb",
-          "text_ru": "The jelly can climb difficult surfaces, including upside down on ceilings, without needing to make an ability check."
+          "name_ru": "Паучье лазание",
+          "text_ru": "Студень can лазание difficult surfaces, including upside down on ceilings, without needing to make an ability check."
         }
       ],
       "actions": [
         {
-          "name_ru": "Pseudopod",
-          "text_ru": "Атака оружием ближнего боя: +4 to hit, reach 5 ft., one target. Попадание: 9 (2d6 + 2) дробящего урона plus 3 (1d6) acid damage."
+          "name_ru": "Ложноножка",
+          "text_ru": "Атака оружием ближнего боя: +4 к попаданию, досягаемость 5 фт., одна цель. Попадание: 9 (2d6 + 2) дробящего урона плюс 3 (1d6) кислота damage."
         }
       ],
       "reactions": [
         {
           "name_ru": "Split",
-          "text_ru": "When a jelly that is Medium or larger is subjected to lightning or рубящего урона, it splits into two new jellies if it has at least 10 hit points. Each new jelly has hit points equal to half the original jelly’s, rounded down. New jellies are one size smaller than the original jelly."
+          "text_ru": "When a jelly that is Medium или larger is subjected to электричество или рубящего урона, it splits into two new jellies if it has at least 10 hit points. Each new jelly has hit points equal to half the original jelly’s, rounded down. New jellies are one size smaller than the original jelly."
         }
       ],
       "legendary_actions": [],
