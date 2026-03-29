@@ -51,6 +51,40 @@
     return `${n >= 0 ? '+' : ''}${n}`;
   }
 
+  function renderD20Svg(size = 18) {
+    return `
+      <svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">
+        <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor" opacity="0.95"></path>
+        <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(0,0,0,0.38)" stroke-width="1.2"></path>
+      </svg>
+    `;
+  }
+
+  function parseMonsterSavingThrows(raw) {
+    const text = String(raw || '');
+    const out = new Map();
+    if (!text.trim()) return out;
+    const mapKey = (label) => {
+      const v = String(label || '').trim().toLowerCase();
+      if (['сил', 'str', 'strength'].includes(v)) return 'str';
+      if (['лов', 'dex', 'dexterity'].includes(v)) return 'dex';
+      if (['тел', 'con', 'constitution'].includes(v)) return 'con';
+      if (['инт', 'int', 'intelligence'].includes(v)) return 'int';
+      if (['мдр', 'муд', 'wis', 'wisdom'].includes(v)) return 'wis';
+      if (['хар', 'cha', 'charisma'].includes(v)) return 'cha';
+      return '';
+    };
+    const rx = /(Сил|Лов|Тел|Инт|Мдр|Муд|Хар|Str|Dex|Con|Int|Wis|Cha)\s*([+\-−]\s*\d+)/gi;
+    let m;
+    while ((m = rx.exec(text))) {
+      const key = mapKey(m[1]);
+      if (!key) continue;
+      const val = toInt(String(m[2] || '').replace(/\s+/g, '').replace('−', '-'), 0);
+      out.set(key, val);
+    }
+    return out;
+  }
+
   function isMonsterStyleAlly(player) {
     return !!player && !!player?.isAlly && !player?.isEnemy && !player?.isBase;
   }
@@ -93,6 +127,7 @@
     const count = formulaMatch ? Math.max(0, toInt(formulaMatch[1], 0)) : 0;
     const sides = formulaMatch ? Math.max(0, toInt(formulaMatch[2], 0)) : 0;
     const bonusRaw = formulaMatch ? String(formulaMatch[3] || '').replace(/\s+/g, '').replace('−', '-') : '';
+
     return {
       value: averageMatch ? Math.max(0, toInt(averageMatch[1], 0)) : 0,
       text,
@@ -833,6 +868,13 @@
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
       .monster-stat__mod{margin-top:4px;font-size:12px;color:#ffd5a0}
       .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 6px;font-size:18px;font-weight:800;text-align:center}
+      .monster-stat__rolls{margin-top:8px;display:grid;gap:6px}
+      .monster-stat__roll{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,228,204,.1)}
+      .monster-stat__roll-label{font-size:10px;letter-spacing:.04em;color:rgba(255,236,219,.76)}
+      .monster-stat__roll-val{font-size:12px;font-weight:800;color:#ffe0b5;text-align:right;min-width:30px}
+      .monster-stat__roll-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,226,197,.18);background:linear-gradient(180deg,#b53424,#6f130c);color:#fff;cursor:pointer;box-shadow:0 6px 14px rgba(0,0,0,.26)}
+      .monster-stat__roll-btn:hover{filter:brightness(1.07)}
+      .monster-stat__roll-btn:disabled{opacity:.5;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default;filter:none}
       .monster-list{display:grid;gap:10px}
       .monster-list-item{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,226,197,.08)}
       .monster-list-item b{color:#fff2db}
@@ -971,6 +1013,7 @@
     const acValue = Math.max(0, toInt(get(sheet, 'vitality.ac.value', acInfo.value || vm.ac || 0), acInfo.value || vm.ac || 0));
     const speedFeet = Math.max(0, toInt(get(sheet, 'vitality.speed.value', speedInfo.value || vm.spd || 0), speedInfo.value || vm.spd || 0));
     const proficiencyBonus = toInt(get(sheet, 'proficiency', parseSignedPrimaryNumber(monster?.proficiency_bonus, 0)), parseSignedPrimaryNumber(monster?.proficiency_bonus, 0));
+    const parsedSaves = parseMonsterSavingThrows(monster?.saving_throws || '');
 
     return {
       playerName: String(get(sheet, 'name.value', '') || player?.name || vm.name || 'Враг').trim() || 'Враг',
@@ -1006,7 +1049,9 @@
         const monsterStat = abilities?.[key] || null;
         const score = toInt(get(sheet, `stats.${key}.score`, monsterStat?.score), toInt(monsterStat?.score, 10));
         const modifier = toInt(get(sheet, `stats.${key}.modifier`, Math.floor((score - 10) / 2)), Math.floor((score - 10) / 2));
-        return { key, label, score, modifier };
+        const hasExplicitSave = parsedSaves.has(key);
+        const saveBonus = hasExplicitSave ? toInt(parsedSaves.get(key), modifier) : modifier;
+        return { key, label, score, modifier, checkBonus: modifier, saveBonus, hasExplicitSave };
       })
     };
   }
@@ -1252,6 +1297,18 @@
           set(sheet, `stats.${statKey}.modifier`, mod);
           const modEl = root.querySelector(`[data-monster-stat-mod="${statKey}"]`);
           if (modEl) modEl.textContent = signed(mod);
+          const checkBtn = root.querySelector(`[data-monster-roll-kind="check"][data-monster-roll-stat="${statKey}"]`);
+          const checkValEl = root.querySelector(`[data-monster-roll-val="check:${statKey}"]`);
+          if (checkBtn) checkBtn.setAttribute('data-monster-roll-bonus', String(mod));
+          if (checkValEl) checkValEl.textContent = signed(mod);
+
+          const saveBtn = root.querySelector(`[data-monster-roll-kind="save"][data-monster-roll-stat="${statKey}"]`);
+          const saveValEl = root.querySelector(`[data-monster-roll-val="save:${statKey}"]`);
+          const isExplicitSave = String(saveBtn?.getAttribute('data-monster-save-explicit') || '0') === '1';
+          if (!isExplicitSave) {
+            if (saveBtn) saveBtn.setAttribute('data-monster-roll-bonus', String(mod));
+            if (saveValEl) saveValEl.textContent = signed(mod);
+          }
         }
 
         const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', get(sheet, 'monsterHpRoll.lastTotal', next)), get(sheet, 'monsterHpRoll.lastTotal', next)));
@@ -1269,6 +1326,32 @@
 
         markModalInteracted(player.id);
         scheduleSave(player);
+      });
+    });
+  }
+
+  function bindMonsterStatRollControls(root, player) {
+    root.querySelectorAll('[data-monster-roll-kind]').forEach((btn) => {
+      if (btn.__monsterRollBound) return;
+      btn.__monsterRollBound = true;
+      btn.addEventListener('click', async () => {
+        const kind = String(btn.getAttribute('data-monster-roll-kind') || '').trim();
+        const statKey = String(btn.getAttribute('data-monster-roll-stat') || '').trim();
+        const statLabel = String(root.querySelector(`[data-monster-roll-kind="${kind}"][data-monster-roll-stat="${statKey}"]`)?.title || statKey || 'характеристика');
+        const bonus = toInt(btn.getAttribute('data-monster-roll-bonus') || '0', 0);
+        const actorName = String(player?.name || get(player, 'sheet.parsed.name.value', '') || 'Персонаж').trim() || 'Персонаж';
+        const rollKindLabel = (kind === 'save') ? 'Спасбросок' : 'Проверка';
+        const kindText = `${actorName}: ${rollKindLabel} (${statLabel})`;
+        try {
+          if (window.DicePanel?.roll) {
+            await window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText });
+            return;
+          }
+        } catch (err) {
+          console.warn('MonsterSheetModal: stat roll failed', err);
+        }
+        const fallback = 1 + Math.floor(Math.random() * 20) + bonus;
+        alert(`${kindText}\nРезультат: ${fallback}`);
       });
     });
   }
@@ -1392,6 +1475,7 @@
       main.innerHTML = renderMonsterTabContent('monster-manual', player, vm, canEdit);
       bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
+      bindMonsterStatRollControls(root, player);
       bindMonsterHpRollControls(root, player, canEdit);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
@@ -1468,6 +1552,7 @@
     const bindCurrentTab = () => {
       bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
+      bindMonsterStatRollControls(root, player);
       bindMonsterHpRollControls(root, player, canEdit);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
@@ -1650,6 +1735,33 @@
                     <div class="monster-stat__label">${esc(stat.label)}</div>
                     <input class="monster-stat__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="stats.${esc(stat.key)}.score" value="${esc(String(stat.score))}">
                     <div class="monster-stat__mod" data-monster-stat-mod="${esc(stat.key)}">${esc(signed(stat.modifier))}</div>
+                    <div class="monster-stat__rolls">
+                      <div class="monster-stat__roll">
+                        <button
+                          type="button"
+                          class="monster-stat__roll-btn"
+                          data-monster-roll-kind="check"
+                          data-monster-roll-stat="${esc(stat.key)}"
+                          data-monster-roll-bonus="${esc(String(stat.checkBonus))}"
+                          title="Проверка ${esc(stat.label)}"
+                        >${renderD20Svg(16)}</button>
+                        <div class="monster-stat__roll-label">Проверка</div>
+                        <div class="monster-stat__roll-val" data-monster-roll-val="check:${esc(stat.key)}">${esc(signed(stat.checkBonus))}</div>
+                      </div>
+                      <div class="monster-stat__roll">
+                        <button
+                          type="button"
+                          class="monster-stat__roll-btn"
+                          data-monster-roll-kind="save"
+                          data-monster-roll-stat="${esc(stat.key)}"
+                          data-monster-roll-bonus="${esc(String(stat.saveBonus))}"
+                          data-monster-save-explicit="${stat.hasExplicitSave ? '1' : '0'}"
+                          title="Спасбросок ${esc(stat.label)}"
+                        >${renderD20Svg(16)}</button>
+                        <div class="monster-stat__roll-label">Спасбросок</div>
+                        <div class="monster-stat__roll-val" data-monster-roll-val="save:${esc(stat.key)}">${esc(signed(stat.saveBonus))}</div>
+                      </div>
+                    </div>
                   </div>
                 `).join('')}
               </div>
