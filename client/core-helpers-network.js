@@ -430,6 +430,53 @@ function handleDetachedWsMessage(msg) {
       _refreshDetachedRoomView();
       return true;
     }
+    if (type === 'moveToken') {
+      try {
+        const tokenId = String(msg.tokenId || msg.token_id || '').trim();
+        if (!tokenId) return true;
+        const row = {
+          token_id: tokenId,
+          map_id: String(msg.mapId || msg.map_id || lastState?.currentMapId || '').trim(),
+          x: (msg.x === null || typeof msg.x === 'undefined') ? null : Number(msg.x),
+          y: (msg.y === null || typeof msg.y === 'undefined') ? null : Number(msg.y),
+          size: Number(msg.size) || null,
+          is_public: (typeof msg.isPublic === 'undefined') ? undefined : !!msg.isPublic,
+          updated_at: new Date().toISOString()
+        };
+        handleMessage({ type: 'tokenRow', row });
+      } catch {}
+      return true;
+    }
+    if (type === 'updateTokenSize') {
+      try {
+        const tokenId = String(msg.tokenId || msg.token_id || '').trim();
+        if (!tokenId) return true;
+        const current = (lastState?.players || []).find((p) => String(p?.id || '') === tokenId) || null;
+        const row = {
+          token_id: tokenId,
+          map_id: String(msg.mapId || msg.map_id || current?.mapId || lastState?.currentMapId || '').trim(),
+          x: (current?.x === null || typeof current?.x === 'undefined') ? null : Number(current?.x),
+          y: (current?.y === null || typeof current?.y === 'undefined') ? null : Number(current?.y),
+          size: Number(msg.size) || Number(current?.size) || 1,
+          is_public: (typeof msg.isPublic === 'undefined') ? !!current?.isPublic : !!msg.isPublic,
+          color: (typeof current?.color === 'string') ? current.color : null,
+          updated_at: new Date().toISOString()
+        };
+        handleMessage({ type: 'tokenRow', row });
+      } catch {}
+      return true;
+    }
+    if (type === 'removeTokenFromBoard') {
+      try {
+        const tokenId = String(msg.tokenId || msg.token_id || '').trim();
+        if (!tokenId) return true;
+        handleMessage({
+          type: 'tokenRowDeleted',
+          row: { token_id: tokenId, map_id: String(msg.mapId || msg.map_id || '').trim() }
+        });
+      } catch {}
+      return true;
+    }
     if (type === 'users' || type === 'usersSnapshot') {
       try { handleMessage({ type: 'users', users: Array.isArray(msg.users) ? msg.users : [] }); } catch {}
       return true;
