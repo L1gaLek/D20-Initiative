@@ -793,10 +793,10 @@
       .monster-hero-card__value{font-size:22px;font-weight:800;color:#fff7ef}
       .monster-hero-card__sub{font-size:12px;color:rgba(255,236,212,.7);margin-top:5px}
       .monster-hero-card__input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:20px;font-weight:700}
-      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(84px,.9fr) minmax(98px,1fr) minmax(66px,.64fr);gap:6px;align-items:end}
+      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(68px,.9fr) minmax(68px,.9fr) minmax(70px,.72fr) minmax(58px,.62fr);gap:5px;align-items:end}
       .monster-hp-summary-field{display:flex;flex-direction:column;gap:4px;min-width:0}
-      .monster-hp-summary-field span{font-size:10px;color:rgba(255,236,212,.72)}
-      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 7px;font-size:14px;font-weight:700;line-height:1.15;min-height:39px;display:flex;align-items:center}
+      .monster-hp-summary-field span{font-size:9px;color:rgba(255,236,212,.72)}
+      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:6px 6px;font-size:12px;font-weight:700;line-height:1.12;min-height:34px;display:flex;align-items:center}
       .monster-hero-card--hp .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card--hp .monster-die-btn{width:42px;height:42px}
       .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:10px}
@@ -831,8 +831,17 @@
       .monster-stat{border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,228,204,.1);padding:10px;text-align:center}
       .monster-stat__label{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
-      .monster-stat__mod{margin-top:4px;font-size:12px;color:#ffd5a0}
-      .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 6px;font-size:18px;font-weight:800;text-align:center}
+      .monster-stat__value-row{margin-top:5px;display:grid;grid-template-columns:minmax(0,1fr) 36px;gap:5px;align-items:stretch}
+      .monster-stat__input{margin-top:0;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:8px;color:#fff8ef;padding:0 2px;font-size:10px;font-weight:700;line-height:1;min-height:16px;text-align:center}
+      .monster-stat__mod{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:8px;color:#ffd5a0;font-size:10px;font-weight:700;line-height:1;min-height:16px;margin-top:0}
+      .monster-stat__rolls{margin-top:7px;display:grid;gap:4px}
+      .monster-stat__roll-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:4px;padding:3px 5px;border-radius:8px;border:1px solid rgba(255,228,204,.12);background:rgba(0,0,0,.16);min-width:0}
+      .monster-stat__roll-label{font-size:9px;letter-spacing:.04em;color:rgba(255,236,219,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+      .monster-stat__roll-value{font-size:11px;font-weight:700;color:#ffe2b9;line-height:1}
+      .monster-stat__roll-die{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff3de;cursor:url("/D20-Initiative/cursor/pointer.cur"), pointer;padding:0}
+      .monster-stat__roll-die:hover{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.22)}
+      .monster-stat__roll-die:active{transform:translateY(1px)}
+      .monster-stat__roll-die svg{display:block;width:12px;height:12px}
       .monster-list{display:grid;gap:10px}
       .monster-list-item{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,226,197,.08)}
       .monster-list-item b{color:#fff2db}
@@ -1006,7 +1015,14 @@
         const monsterStat = abilities?.[key] || null;
         const score = toInt(get(sheet, `stats.${key}.score`, monsterStat?.score), toInt(monsterStat?.score, 10));
         const modifier = toInt(get(sheet, `stats.${key}.modifier`, Math.floor((score - 10) / 2)), Math.floor((score - 10) / 2));
-        return { key, label, score, modifier };
+        return {
+          key,
+          label,
+          score,
+          modifier,
+          checkBonus: modifier,
+          saveBonus: modifier
+        };
       })
     };
   }
@@ -1252,6 +1268,10 @@
           set(sheet, `stats.${statKey}.modifier`, mod);
           const modEl = root.querySelector(`[data-monster-stat-mod="${statKey}"]`);
           if (modEl) modEl.textContent = signed(mod);
+          const checkEl = root.querySelector(`[data-monster-stat-check="${statKey}"]`);
+          if (checkEl) checkEl.textContent = signed(mod);
+          const saveEl = root.querySelector(`[data-monster-stat-save="${statKey}"]`);
+          if (saveEl) saveEl.textContent = signed(mod);
         }
 
         const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', get(sheet, 'monsterHpRoll.lastTotal', next)), get(sheet, 'monsterHpRoll.lastTotal', next)));
@@ -1363,13 +1383,12 @@
         if (!deltaSign) return;
         const amount = normalizeAdjustValue();
         const sheet = ensureEnemySheet(player);
-        const received = Math.max(0, toInt(get(sheet, 'monsterHpRoll.lastTotal', get(sheet, 'vitality.hp-max.value', 0)), get(sheet, 'vitality.hp-max.value', 0)));
+        const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', get(sheet, 'monsterHpRoll.lastTotal', 0)), get(sheet, 'monsterHpRoll.lastTotal', 0)));
         const currentHp = Math.max(0, toInt(get(sheet, 'vitality.hp-current.value', 0), 0));
         const nextHp = deltaSign < 0
           ? Math.max(0, currentHp - amount)
-          : Math.min(received, currentHp + amount);
+          : Math.min(maxHp, currentHp + amount);
 
-        set(sheet, 'vitality.hp-max.value', received);
         set(sheet, 'vitality.hp-current.value', nextHp);
         hpInput.value = String(nextHp);
 
@@ -1384,6 +1403,36 @@
     });
   }
 
+  function bindMonsterStatRollButtons(root, player) {
+    if (!root || !player?.sheet?.parsed) return;
+    const buttons = Array.from(root.querySelectorAll('[data-monster-roll-kind][data-monster-roll-stat]'));
+    if (!buttons.length) return;
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const statKey = String(btn.getAttribute('data-monster-roll-stat') || '').trim();
+        const kind = String(btn.getAttribute('data-monster-roll-kind') || '').trim();
+        if (!statKey || !kind) return;
+
+        const sheet = ensureEnemySheet(player);
+        const statLabel = String(get(sheet, `stats.${statKey}.label`, statKey.toUpperCase()) || statKey.toUpperCase());
+        const statMod = toInt(get(sheet, `stats.${statKey}.modifier`, 0), 0);
+        const bonus = statMod;
+        const kindText = kind === 'save'
+          ? `${statLabel}: Спасбросок d20${bonus ? signed(bonus) : ''}`
+          : `${statLabel}: Проверка d20${bonus ? signed(bonus) : ''}`;
+
+        if (window.DicePanel?.roll) {
+          await window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText });
+        }
+      });
+    });
+  }
+
+
   function bindManualDescriptionTab(root, player, vm, canEdit) {
     const main = root.querySelector('#sheet-main');
     if (!main) return;
@@ -1392,6 +1441,7 @@
       main.innerHTML = renderMonsterTabContent('monster-manual', player, vm, canEdit);
       bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
+      bindMonsterStatRollButtons(root, player);
       bindMonsterHpRollControls(root, player, canEdit);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
@@ -1468,6 +1518,7 @@
     const bindCurrentTab = () => {
       bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
+      bindMonsterStatRollButtons(root, player);
       bindMonsterHpRollControls(root, player, canEdit);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
@@ -1586,8 +1637,12 @@
                   <span>Текущее здоровье</span>
                   <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-current.value" value="${esc(String(vm.currentHp))}">
                 </label>
+                <label class="monster-hp-summary-field">
+                  <span>Макс. здоровье</span>
+                  <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-max.value" value="${esc(String(vm.maxHp))}">
+                </label>
                 <div class="monster-hp-summary-field">
-                  <span>Мин/Макс здоровья</span>
+                  <span>Диапазон HP</span>
                   <div class="monster-hp-summary-value" data-monster-hp-range>${esc(`${vm.hpRange.min} / ${vm.hpRange.max}`)}</div>
                 </div>
                 <div class="monster-hp-summary-field">
@@ -1648,8 +1703,32 @@
                 ${vm.stats.map((stat) => `
                   <div class="monster-stat">
                     <div class="monster-stat__label">${esc(stat.label)}</div>
-                    <input class="monster-stat__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="stats.${esc(stat.key)}.score" value="${esc(String(stat.score))}">
-                    <div class="monster-stat__mod" data-monster-stat-mod="${esc(stat.key)}">${esc(signed(stat.modifier))}</div>
+                    <div class="monster-stat__value-row">
+                      <input class="monster-stat__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="stats.${esc(stat.key)}.score" value="${esc(String(stat.score))}">
+                      <div class="monster-stat__mod" data-monster-stat-mod="${esc(stat.key)}">${esc(signed(stat.modifier))}</div>
+                    </div>
+                    <div class="monster-stat__rolls">
+                      <div class="monster-stat__roll-row">
+                        <span class="monster-stat__roll-label">ПРОВЕРКА</span>
+                        <span class="monster-stat__roll-value" data-monster-stat-check="${esc(stat.key)}">${esc(signed(stat.checkBonus))}</span>
+                        <button type="button" class="monster-stat__roll-die" data-monster-roll-kind="check" data-monster-roll-stat="${esc(stat.key)}" title="Проверка d20" aria-label="Проверка ${esc(stat.label)}">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor"></path>
+                            <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="1.2"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <div class="monster-stat__roll-row">
+                        <span class="monster-stat__roll-label">СПАСБРОСОК</span>
+                        <span class="monster-stat__roll-value" data-monster-stat-save="${esc(stat.key)}">${esc(signed(stat.saveBonus))}</span>
+                        <button type="button" class="monster-stat__roll-die" data-monster-roll-kind="save" data-monster-roll-stat="${esc(stat.key)}" title="Спасбросок d20" aria-label="Спасбросок ${esc(stat.label)}">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor"></path>
+                            <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="1.2"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 `).join('')}
               </div>
