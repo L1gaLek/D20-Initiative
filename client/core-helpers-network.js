@@ -1095,6 +1095,31 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
   }
 }
 
+async function upsertTokenPositionDirect(roomId, token) {
+  try {
+    await ensureSupabaseReady();
+    const rid = String(roomId || '').trim();
+    const tokenId = String(token?.id || token?.token_id || '').trim();
+    const mapId = String(token?.mapId || token?.map_id || lastState?.currentMapId || '').trim();
+    if (!rid || !tokenId || !mapId) return;
+
+    const payload = {
+      room_id: rid,
+      map_id: mapId,
+      token_id: tokenId,
+      x: (token?.x === null || typeof token?.x === 'undefined') ? null : Number(token.x),
+      y: (token?.y === null || typeof token?.y === 'undefined') ? null : Number(token.y),
+      size: Math.max(1, Number(token?.size) || 1),
+      color: (typeof token?.color === 'string') ? token.color : null,
+      is_public: !!token?.isPublic
+    };
+
+    await sbClient.from('room_tokens').upsert(payload);
+  } catch (e) {
+    console.warn('upsertTokenPositionDirect failed', e);
+  }
+}
+
 function isMapScopedPlayer(player) {
   return !!(player && player.isEnemy && !player.isBase);
 }
@@ -2713,6 +2738,18 @@ async function sendMessage(msg) {
               size: Number(p?.size) || 1,
               isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
+
+            // Hard guarantee path: persist token coordinates directly to room_tokens.
+            // This prevents rare cases where WS echo races cause rollback to stale position.
+            Promise.resolve(upsertTokenPositionDirect(String(currentRoomId || ''), {
+              id: String(p?.id || ''),
+              mapId: String(p?.mapId || next?.currentMapId || ''),
+              x: nx,
+              y: ny,
+              size: Number(p?.size) || 1,
+              color: p?.color || null,
+              isPublic: !!p?.isPublic
+            })).catch(() => {});
           } catch (e) {
             console.warn('moveToken ws send failed', e);
             handleMessage({ type: 'error', message: 'Не удалось отправить перемещение на сервер' });
