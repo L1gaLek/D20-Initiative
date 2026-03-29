@@ -1265,6 +1265,7 @@
         if (statMatch) {
           const statKey = statMatch[1];
           const mod = Math.floor((next - 10) / 2);
+          const prof = toInt(get(sheet, 'proficiency', 0), 0);
           set(sheet, `stats.${statKey}.modifier`, mod);
           const modEl = root.querySelector(`[data-monster-stat-mod="${statKey}"]`);
           if (modEl) modEl.textContent = signed(mod);
