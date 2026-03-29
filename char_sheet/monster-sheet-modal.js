@@ -831,9 +831,9 @@
       .monster-stat{border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,228,204,.1);padding:10px;text-align:center}
       .monster-stat__label{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
-      .monster-stat__value-row{margin-top:6px;display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:6px;align-items:stretch}
-      .monster-stat__input{margin-top:0;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:0 3px;font-size:11px;font-weight:700;line-height:1.05;min-height:20px;text-align:center}
-      .monster-stat__mod{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#ffd5a0;font-size:11px;font-weight:700;line-height:1.05;min-height:20px;margin-top:0}
+      .monster-stat__value-row{margin-top:5px;display:grid;grid-template-columns:minmax(0,1fr) 36px;gap:5px;align-items:stretch}
+      .monster-stat__input{margin-top:0;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:8px;color:#fff8ef;padding:0 2px;font-size:10px;font-weight:700;line-height:1;min-height:16px;text-align:center}
+      .monster-stat__mod{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:8px;color:#ffd5a0;font-size:10px;font-weight:700;line-height:1;min-height:16px;margin-top:0}
       .monster-stat__rolls{margin-top:7px;display:grid;gap:4px}
       .monster-stat__roll-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:4px;padding:3px 5px;border-radius:8px;border:1px solid rgba(255,228,204,.12);background:rgba(0,0,0,.16);min-width:0}
       .monster-stat__roll-label{font-size:9px;letter-spacing:.04em;color:rgba(255,236,219,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
