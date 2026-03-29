@@ -502,21 +502,35 @@ function applyTokenRowToLocalState(row) {
     if (guard) {
       const gx = Number(guard.x);
       const gy = Number(guard.y);
+      const gPrevX = Number(guard.prevX);
+      const gPrevY = Number(guard.prevY);
       const gMapId = String(guard.mapId || '').trim();
+      const guardAtMs = Number(guard.at) || 0;
       const guardAgeMs = Date.now() - (Number(guard.at) || 0);
       const rowMapId = String(mapId || '').trim();
       const rowX = (x === null || typeof x === 'undefined') ? null : Number(x);
       const rowY = (y === null || typeof y === 'undefined') ? null : Number(y);
+      const rowUpdatedAtMs = Number(new Date(String(row?.updated_at || '')).getTime()) || 0;
       const rowMatchesOptimistic = (
         Number.isFinite(rowX) && Number.isFinite(rowY) &&
         rowX === gx && rowY === gy &&
         (!gMapId || !rowMapId || gMapId === rowMapId)
       );
+      const rowLooksLikeOldStartCell = (
+        Number.isFinite(rowX) && Number.isFinite(rowY) &&
+        Number.isFinite(gPrevX) && Number.isFinite(gPrevY) &&
+        rowX === gPrevX && rowY === gPrevY
+      );
+      const rowIsOlderThanMove = !!rowUpdatedAtMs && !!guardAtMs && (rowUpdatedAtMs + 120 < guardAtMs);
 
-      // Ignore short-lived stale echoes right after optimistic move
-      // (prevents visual rollback/jitter of token position).
-      if (!rowMatchesOptimistic && guardAgeMs >= 0 && guardAgeMs < 1800) return;
-      if (rowMatchesOptimistic || guardAgeMs >= 1800) {
+      // Ignore stale/conflicting echoes while optimistic move is in-flight.
+      // This prevents "moved -> snapped back -> maybe moved again".
+      if (!rowMatchesOptimistic) {
+        if (rowIsOlderThanMove) return;
+        if (guardAgeMs >= 0 && guardAgeMs < 5000) return;
+        if (!rowUpdatedAtMs && rowLooksLikeOldStartCell) return;
+      }
+      if (rowMatchesOptimistic || guardAgeMs >= 5000 || (rowUpdatedAtMs && !rowIsOlderThanMove)) {
         try { tokenMoveGuard.delete(tokenId); } catch {}
       }
     }
@@ -589,7 +603,7 @@ function getMonsterPreferredTokenSize(player) {
   return null;
 }
 
-function setTokenMoveOptimisticGuard(tokenId, x, y, mapId) {
+function setTokenMoveOptimisticGuard(tokenId, x, y, mapId, prevX = null, prevY = null) {
   try {
     if (typeof window === 'undefined') return;
     if (!(window.__tokenMoveOptimisticGuard instanceof Map)) {
@@ -600,6 +614,8 @@ function setTokenMoveOptimisticGuard(tokenId, x, y, mapId) {
     window.__tokenMoveOptimisticGuard.set(id, {
       x: Number(x),
       y: Number(y),
+      prevX: (prevX === null || typeof prevX === 'undefined') ? null : Number(prevX),
+      prevY: (prevY === null || typeof prevY === 'undefined') ? null : Number(prevY),
       mapId: String(mapId || '').trim(),
       at: Date.now()
     });
@@ -2644,7 +2660,7 @@ async function sendMessage(msg) {
           // Keep optimistic local update for instant UX, then wait for tokenRow from WS.
           try {
             if (p) { p.x = nx; p.y = ny; }
-            try { setTokenMoveOptimisticGuard(String(p?.id || ''), nx, ny, String(next?.currentMapId || p?.mapId || '')); } catch {}
+            try { setTokenMoveOptimisticGuard(String(p?.id || ''), nx, ny, String(next?.currentMapId || p?.mapId || ''), prevX, prevY); } catch {}
             try {
               const pid = String(p?.id || '');
               const syncCoords = (entry) => {
