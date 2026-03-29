@@ -2610,6 +2610,7 @@ async function sendMessage(msg) {
               actorUserId: String(myUserId || ''),
               x: nx,
               y: ny,
+              size: Number(p?.size) || 1,
               isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
           } catch (e) {
