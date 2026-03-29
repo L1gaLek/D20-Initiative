@@ -793,10 +793,10 @@
       .monster-hero-card__value{font-size:22px;font-weight:800;color:#fff7ef}
       .monster-hero-card__sub{font-size:12px;color:rgba(255,236,212,.7);margin-top:5px}
       .monster-hero-card__input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:20px;font-weight:700}
-      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(84px,.9fr) minmax(98px,1fr) minmax(66px,.64fr);gap:6px;align-items:end}
+      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(68px,.85fr) minmax(68px,.85fr) minmax(86px,1fr) minmax(58px,.62fr);gap:5px;align-items:end}
       .monster-hp-summary-field{display:flex;flex-direction:column;gap:4px;min-width:0}
-      .monster-hp-summary-field span{font-size:10px;color:rgba(255,236,212,.72)}
-      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 7px;font-size:14px;font-weight:700;line-height:1.15;min-height:39px;display:flex;align-items:center}
+      .monster-hp-summary-field span{font-size:9px;color:rgba(255,236,212,.72)}
+      .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:6px 6px;font-size:12px;font-weight:700;line-height:1.12;min-height:34px;display:flex;align-items:center}
       .monster-hero-card--hp .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card--hp .monster-die-btn{width:42px;height:42px}
       .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:10px}
@@ -832,7 +832,7 @@
       .monster-stat__label{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
       .monster-stat__mod{margin-top:4px;font-size:12px;color:#ffd5a0}
-      .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:4px 3px;font-size:15px;font-weight:700;text-align:center}
+      .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:1px 3px;font-size:12px;font-weight:700;line-height:1.1;text-align:center}
       .monster-stat__rolls{margin-top:7px;display:grid;gap:4px}
       .monster-stat__roll-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:4px;padding:3px 5px;border-radius:8px;border:1px solid rgba(255,228,204,.12);background:rgba(0,0,0,.16);min-width:0}
       .monster-stat__roll-label{font-size:9px;letter-spacing:.04em;color:rgba(255,236,219,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
@@ -1383,13 +1383,12 @@
         if (!deltaSign) return;
         const amount = normalizeAdjustValue();
         const sheet = ensureEnemySheet(player);
-        const received = Math.max(0, toInt(get(sheet, 'monsterHpRoll.lastTotal', get(sheet, 'vitality.hp-max.value', 0)), get(sheet, 'vitality.hp-max.value', 0)));
+        const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', get(sheet, 'monsterHpRoll.lastTotal', 0)), get(sheet, 'monsterHpRoll.lastTotal', 0)));
         const currentHp = Math.max(0, toInt(get(sheet, 'vitality.hp-current.value', 0), 0));
         const nextHp = deltaSign < 0
           ? Math.max(0, currentHp - amount)
-          : Math.min(received, currentHp + amount);
+          : Math.min(maxHp, currentHp + amount);
 
-        set(sheet, 'vitality.hp-max.value', received);
         set(sheet, 'vitality.hp-current.value', nextHp);
         hpInput.value = String(nextHp);
 
@@ -1638,8 +1637,12 @@
                   <span>Текущее здоровье</span>
                   <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-current.value" value="${esc(String(vm.currentHp))}">
                 </label>
+                <label class="monster-hp-summary-field">
+                  <span>Макс. здоровье</span>
+                  <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-max.value" value="${esc(String(vm.maxHp))}">
+                </label>
                 <div class="monster-hp-summary-field">
-                  <span>Мин/Макс здоровья</span>
+                  <span>Диапазон HP</span>
                   <div class="monster-hp-summary-value" data-monster-hp-range>${esc(`${vm.hpRange.min} / ${vm.hpRange.max}`)}</div>
                 </div>
                 <div class="monster-hp-summary-field">
