@@ -495,6 +495,31 @@ function applyTokenRowToLocalState(row) {
     const mapId = String(row.map_id || '').trim();
     const hasPublic = (typeof row.is_public !== 'undefined');
     const isPublic = hasPublic ? !!row.is_public : null;
+    const tokenMoveGuard = (typeof window !== 'undefined' && window.__tokenMoveOptimisticGuard instanceof Map)
+      ? window.__tokenMoveOptimisticGuard
+      : null;
+    const guard = tokenMoveGuard ? tokenMoveGuard.get(tokenId) : null;
+    if (guard) {
+      const gx = Number(guard.x);
+      const gy = Number(guard.y);
+      const gMapId = String(guard.mapId || '').trim();
+      const guardAgeMs = Date.now() - (Number(guard.at) || 0);
+      const rowMapId = String(mapId || '').trim();
+      const rowX = (x === null || typeof x === 'undefined') ? null : Number(x);
+      const rowY = (y === null || typeof y === 'undefined') ? null : Number(y);
+      const rowMatchesOptimistic = (
+        Number.isFinite(rowX) && Number.isFinite(rowY) &&
+        rowX === gx && rowY === gy &&
+        (!gMapId || !rowMapId || gMapId === rowMapId)
+      );
+
+      // Ignore short-lived stale echoes right after optimistic move
+      // (prevents visual rollback/jitter of token position).
+      if (!rowMatchesOptimistic && guardAgeMs >= 0 && guardAgeMs < 1800) return;
+      if (rowMatchesOptimistic || guardAgeMs >= 1800) {
+        try { tokenMoveGuard.delete(tokenId); } catch {}
+      }
+    }
 
     // Apply into lastState.players for current UI rendering.
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
@@ -562,6 +587,23 @@ function getMonsterPreferredTokenSize(player) {
     if (raw.includes('gargantuan') || raw.includes('гиган') || raw.includes('испол') || raw.includes('громад')) return 4;
   } catch {}
   return null;
+}
+
+function setTokenMoveOptimisticGuard(tokenId, x, y, mapId) {
+  try {
+    if (typeof window === 'undefined') return;
+    if (!(window.__tokenMoveOptimisticGuard instanceof Map)) {
+      window.__tokenMoveOptimisticGuard = new Map();
+    }
+    const id = String(tokenId || '').trim();
+    if (!id) return;
+    window.__tokenMoveOptimisticGuard.set(id, {
+      x: Number(x),
+      y: Number(y),
+      mapId: String(mapId || '').trim(),
+      at: Date.now()
+    });
+  } catch {}
 }
 
 
@@ -2602,6 +2644,7 @@ async function sendMessage(msg) {
           // Keep optimistic local update for instant UX, then wait for tokenRow from WS.
           try {
             if (p) { p.x = nx; p.y = ny; }
+            try { setTokenMoveOptimisticGuard(String(p?.id || ''), nx, ny, String(next?.currentMapId || p?.mapId || '')); } catch {}
             try {
               const pid = String(p?.id || '');
               const syncCoords = (entry) => {
