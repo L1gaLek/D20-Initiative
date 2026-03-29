@@ -832,15 +832,15 @@
       .monster-stat__label{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
       .monster-stat__mod{margin-top:4px;font-size:12px;color:#ffd5a0}
-      .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 6px;font-size:18px;font-weight:800;text-align:center}
-      .monster-stat__rolls{margin-top:8px;display:grid;gap:6px}
-      .monster-stat__roll-row{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:6px;padding:5px 7px;border-radius:10px;border:1px solid rgba(255,228,204,.12);background:rgba(0,0,0,.16)}
-      .monster-stat__roll-label{font-size:10px;letter-spacing:.05em;color:rgba(255,236,219,.72)}
-      .monster-stat__roll-value{font-size:12px;font-weight:800;color:#ffe2b9}
-      .monster-stat__roll-die{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff3de;cursor:url("/D20-Initiative/cursor/pointer.cur"), pointer;padding:0}
+      .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:4px 3px;font-size:15px;font-weight:700;text-align:center}
+      .monster-stat__rolls{margin-top:7px;display:grid;gap:4px}
+      .monster-stat__roll-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:4px;padding:3px 5px;border-radius:8px;border:1px solid rgba(255,228,204,.12);background:rgba(0,0,0,.16);min-width:0}
+      .monster-stat__roll-label{font-size:9px;letter-spacing:.04em;color:rgba(255,236,219,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+      .monster-stat__roll-value{font-size:11px;font-weight:700;color:#ffe2b9;line-height:1}
+      .monster-stat__roll-die{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff3de;cursor:url("/D20-Initiative/cursor/pointer.cur"), pointer;padding:0}
       .monster-stat__roll-die:hover{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.22)}
       .monster-stat__roll-die:active{transform:translateY(1px)}
-      .monster-stat__roll-die svg{display:block;width:16px;height:16px}
+      .monster-stat__roll-die svg{display:block;width:12px;height:12px}
       .monster-list{display:grid;gap:10px}
       .monster-list-item{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,226,197,.08)}
       .monster-list-item b{color:#fff2db}
@@ -1020,7 +1020,7 @@
           score,
           modifier,
           checkBonus: modifier,
-          saveBonus: modifier + proficiencyBonus
+          saveBonus: modifier
         };
       })
     };
@@ -1271,16 +1271,7 @@
           const checkEl = root.querySelector(`[data-monster-stat-check="${statKey}"]`);
           if (checkEl) checkEl.textContent = signed(mod);
           const saveEl = root.querySelector(`[data-monster-stat-save="${statKey}"]`);
-          if (saveEl) saveEl.textContent = signed(mod + prof);
-        }
-
-        if (String(path) === 'proficiency') {
-          const prof = toInt(get(sheet, 'proficiency', 0), 0);
-          ['str','dex','con','int','wis','cha'].forEach((statKey) => {
-            const mod = toInt(get(sheet, `stats.${statKey}.modifier`, 0), 0);
-            const saveEl = root.querySelector(`[data-monster-stat-save="${statKey}"]`);
-            if (saveEl) saveEl.textContent = signed(mod + prof);
-          });
+          if (saveEl) saveEl.textContent = signed(mod);
         }
 
         const maxHp = Math.max(0, toInt(get(sheet, 'vitality.hp-max.value', get(sheet, 'monsterHpRoll.lastTotal', next)), get(sheet, 'monsterHpRoll.lastTotal', next)));
@@ -1430,8 +1421,7 @@
         const sheet = ensureEnemySheet(player);
         const statLabel = String(get(sheet, `stats.${statKey}.label`, statKey.toUpperCase()) || statKey.toUpperCase());
         const statMod = toInt(get(sheet, `stats.${statKey}.modifier`, 0), 0);
-        const prof = toInt(get(sheet, 'proficiency', 0), 0);
-        const bonus = kind === 'save' ? statMod + prof : statMod;
+        const bonus = statMod;
         const kindText = kind === 'save'
           ? `${statLabel}: Спасбросок d20${bonus ? signed(bonus) : ''}`
           : `${statLabel}: Проверка d20${bonus ? signed(bonus) : ''}`;
