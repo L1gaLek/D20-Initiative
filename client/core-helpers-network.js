@@ -502,7 +502,18 @@ function applyTokenRowToLocalState(row) {
       if (p) {
         if (x === null || Number.isFinite(x)) p.x = x;
         if (y === null || Number.isFinite(y)) p.y = y;
-        if (Number.isFinite(size) && size > 0) p.size = size;
+        if (Number.isFinite(size) && size > 0) {
+          const preferredMonsterSize = getMonsterPreferredTokenSize(p);
+          if (!Number.isFinite(preferredMonsterSize) || size >= preferredMonsterSize) {
+            p.size = size;
+          } else if (!(Number.isFinite(Number(p.size)) && Number(p.size) >= preferredMonsterSize)) {
+            p.size = preferredMonsterSize;
+          }
+        }
+        if (!Number.isFinite(Number(p.size)) || Number(p.size) <= 0) {
+          const preferredMonsterSize = getMonsterPreferredTokenSize(p);
+          if (Number.isFinite(preferredMonsterSize) && preferredMonsterSize > 0) p.size = preferredMonsterSize;
+        }
         if (color) p.color = color;
         // map-local safety
         if (mapId && isMapScopedPlayer(p)) p.mapId = mapId;
@@ -535,6 +546,22 @@ function applyTokenRowToLocalState(row) {
       }
     }
   } catch {}
+}
+
+function getMonsterPreferredTokenSize(player) {
+  try {
+    if (!player || !player.isMonster) return null;
+    const mon = player?.sheet?.parsed?.monster || null;
+    const raw = String(mon?.size_en || mon?.size_ru || '').toLowerCase().trim();
+    if (!raw) return null;
+    if (raw.includes('tiny') || raw.includes('крош')) return 1;
+    if (raw.includes('small') || raw.includes('мал')) return 1;
+    if (raw.includes('medium') || raw.includes('сред')) return 1;
+    if (raw.includes('large') || raw.includes('бол')) return 2;
+    if (raw.includes('huge') || raw.includes('огром') || raw.includes('огр')) return 3;
+    if (raw.includes('gargantuan') || raw.includes('гиган') || raw.includes('испол') || raw.includes('громад')) return 4;
+  } catch {}
+  return null;
 }
 
 
@@ -2561,7 +2588,9 @@ async function sendMessage(msg) {
             if (p.id !== currentId && !notPlacedYet) return;
           }
 
-          const size = Number(p.size) || 1;
+          const preferredMonsterSize = getMonsterPreferredTokenSize(p);
+          const size = Math.max(1, Number(p.size) || 1, Number(preferredMonsterSize) || 1);
+          p.size = size;
           const maxX = next.boardWidth - size;
           const maxY = next.boardHeight - size;
           const prevX = (p.x === null || typeof p.x === 'undefined') ? null : Number(p.x);

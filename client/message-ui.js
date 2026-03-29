@@ -1367,17 +1367,15 @@ function updatePlayerList() {
       // ===== Верхняя кнопка "Лист персонажа" (на всю ширину карточки) =====
       const topActions = document.createElement('div');
       topActions.className = 'player-actions-top';
-      if (!p.isMonster) {
-        if (canViewSensitiveInfo(p)) {
-          const sheetBtn = document.createElement('button');
-          sheetBtn.textContent = 'Лист персонажа';
-          sheetBtn.className = 'sheet-btn';
-          sheetBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window.InfoModal?.open?.(p);
-          });
-          topActions.appendChild(sheetBtn);
-        }
+      if (canViewSensitiveInfo(p)) {
+        const sheetBtn = document.createElement('button');
+        sheetBtn.textContent = 'Лист персонажа';
+        sheetBtn.className = 'sheet-btn';
+        sheetBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.InfoModal?.open?.(p);
+        });
+        topActions.appendChild(sheetBtn);
       }
       actions.appendChild(topActions);
 
