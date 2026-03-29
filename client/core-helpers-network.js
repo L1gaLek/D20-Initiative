@@ -586,6 +586,17 @@ function applyTokenRowToLocalState(row) {
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
       const p = lastState.players.find(pp => String(pp?.id) === tokenId);
       if (p) {
+        try {
+          if (!(window.__tokenPositionSnapshotCache instanceof Map)) window.__tokenPositionSnapshotCache = new Map();
+          window.__tokenPositionSnapshotCache.set(String(tokenId), {
+            x: (x === null || typeof x === 'undefined') ? null : Number(x),
+            y: (y === null || typeof y === 'undefined') ? null : Number(y),
+            size: (Number.isFinite(size) && size > 0) ? Number(size) : (Number(p?.size) || 1),
+            color: color || p?.color || null,
+            mapId: mapId || p?.mapId || null,
+            updatedAt: Date.now()
+          });
+        } catch {}
         if (x === null || Number.isFinite(x)) p.x = x;
         if (y === null || Number.isFinite(y)) p.y = y;
         if (Number.isFinite(size) && size > 0) {
@@ -1033,6 +1044,7 @@ function applyTokenDeleteToLocalState(row) {
     if (!row) return;
     const tokenId = String(row.token_id || '').trim();
     if (!tokenId) return;
+    try { window.__tokenPositionSnapshotCache?.delete?.(tokenId); } catch {}
 
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
       const p = lastState.players.find(pp => String(pp?.id) === tokenId);
@@ -2733,6 +2745,17 @@ async function sendMessage(msg) {
           try {
             if (p) { p.x = nx; p.y = ny; }
             try { setTokenMoveOptimisticGuard(String(p?.id || ''), nx, ny, String(next?.currentMapId || p?.mapId || ''), prevX, prevY); } catch {}
+            try {
+              if (!(window.__tokenPositionSnapshotCache instanceof Map)) window.__tokenPositionSnapshotCache = new Map();
+              window.__tokenPositionSnapshotCache.set(String(p?.id || ''), {
+                x: nx,
+                y: ny,
+                size: Number(p?.size) || 1,
+                color: p?.color || null,
+                mapId: String(next?.currentMapId || p?.mapId || ''),
+                updatedAt: Date.now()
+              });
+            } catch {}
             try {
               const pid = String(p?.id || '');
               const syncCoords = (entry) => {

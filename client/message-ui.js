@@ -540,16 +540,20 @@ try { handleSessionUiMessage?.(msg); } catch {}
         (lastState.players || []).forEach(p => {
           if (!p || !p.id) return;
           const snap = prevPos.get(String(p.id));
-          if (!snap) return;
+          const cached = (window.__tokenPositionSnapshotCache instanceof Map)
+            ? window.__tokenPositionSnapshotCache.get(String(p.id))
+            : null;
+          const chosen = cached || snap;
+          if (!chosen) return;
           // On same-map updates we preserve local token coordinates until room_tokens catches up.
           // On map switch we must NOT carry coordinates from the previous map into the new one.
           if (!mapChanged) {
-            if (snap.x === null || Number.isFinite(snap.x)) p.x = snap.x;
-            if (snap.y === null || Number.isFinite(snap.y)) p.y = snap.y;
-            if (snap.mapId && typeof snap.mapId === 'string') p.mapId = snap.mapId;
+            if (chosen.x === null || Number.isFinite(chosen.x)) p.x = chosen.x;
+            if (chosen.y === null || Number.isFinite(chosen.y)) p.y = chosen.y;
+            if (chosen.mapId && typeof chosen.mapId === 'string') p.mapId = chosen.mapId;
           }
-          if (Number.isFinite(snap.size) && snap.size > 0) p.size = snap.size;
-          if (snap.color && typeof snap.color === 'string') p.color = snap.color;
+          if (Number.isFinite(chosen.size) && chosen.size > 0) p.size = chosen.size;
+          if (chosen.color && typeof chosen.color === 'string') p.color = chosen.color;
         });
       } catch {}
       boardWidth = normalized.boardWidth;
