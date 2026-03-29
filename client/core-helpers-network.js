@@ -455,12 +455,13 @@ function handleDetachedWsMessage(msg) {
         const row = {
           token_id: tokenId,
           map_id: String(msg.mapId || msg.map_id || current?.mapId || lastState?.currentMapId || '').trim(),
-          x: (current?.x === null || typeof current?.x === 'undefined') ? null : Number(current?.x),
-          y: (current?.y === null || typeof current?.y === 'undefined') ? null : Number(current?.y),
+          // IMPORTANT: do not synthesize x/y from potentially stale local state.
+          // updateTokenSize should only affect size/public visibility.
+          x: undefined,
+          y: undefined,
           size: Number(msg.size) || Number(current?.size) || 1,
           is_public: (typeof msg.isPublic === 'undefined') ? !!current?.isPublic : !!msg.isPublic,
-          color: (typeof current?.color === 'string') ? current.color : null,
-          updated_at: new Date().toISOString()
+          color: undefined
         };
         handleMessage({ type: 'tokenRow', row });
       } catch {}
