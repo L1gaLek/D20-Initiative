@@ -793,7 +793,7 @@
       .monster-hero-card__value{font-size:22px;font-weight:800;color:#fff7ef}
       .monster-hero-card__sub{font-size:12px;color:rgba(255,236,212,.7);margin-top:5px}
       .monster-hero-card__input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:20px;font-weight:700}
-      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(68px,.85fr) minmax(68px,.85fr) minmax(86px,1fr) minmax(58px,.62fr);gap:5px;align-items:end}
+      .monster-hp-top-grid{display:grid;grid-template-columns:minmax(68px,.9fr) minmax(68px,.9fr) minmax(70px,.72fr) minmax(58px,.62fr);gap:5px;align-items:end}
       .monster-hp-summary-field{display:flex;flex-direction:column;gap:4px;min-width:0}
       .monster-hp-summary-field span{font-size:9px;color:rgba(255,236,212,.72)}
       .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:6px 6px;font-size:12px;font-weight:700;line-height:1.12;min-height:34px;display:flex;align-items:center}
@@ -831,8 +831,9 @@
       .monster-stat{border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,228,204,.1);padding:10px;text-align:center}
       .monster-stat__label{font-size:12px;color:rgba(255,236,219,.72)}
       .monster-stat__score{margin-top:6px;font-size:20px;font-weight:800;color:#fff}
-      .monster-stat__mod{margin-top:4px;font-size:12px;color:#ffd5a0}
-      .monster-stat__input{margin-top:6px;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:1px 3px;font-size:12px;font-weight:700;line-height:1.1;text-align:center}
+      .monster-stat__value-row{margin-top:6px;display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:6px;align-items:stretch}
+      .monster-stat__input{margin-top:0;width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:0 3px;font-size:11px;font-weight:700;line-height:1.05;min-height:20px;text-align:center}
+      .monster-stat__mod{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#ffd5a0;font-size:11px;font-weight:700;line-height:1.05;min-height:20px;margin-top:0}
       .monster-stat__rolls{margin-top:7px;display:grid;gap:4px}
       .monster-stat__roll-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:4px;padding:3px 5px;border-radius:8px;border:1px solid rgba(255,228,204,.12);background:rgba(0,0,0,.16);min-width:0}
       .monster-stat__roll-label{font-size:9px;letter-spacing:.04em;color:rgba(255,236,219,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
@@ -1703,8 +1704,10 @@
                 ${vm.stats.map((stat) => `
                   <div class="monster-stat">
                     <div class="monster-stat__label">${esc(stat.label)}</div>
-                    <input class="monster-stat__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="stats.${esc(stat.key)}.score" value="${esc(String(stat.score))}">
-                    <div class="monster-stat__mod" data-monster-stat-mod="${esc(stat.key)}">${esc(signed(stat.modifier))}</div>
+                    <div class="monster-stat__value-row">
+                      <input class="monster-stat__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="stats.${esc(stat.key)}.score" value="${esc(String(stat.score))}">
+                      <div class="monster-stat__mod" data-monster-stat-mod="${esc(stat.key)}">${esc(signed(stat.modifier))}</div>
+                    </div>
                     <div class="monster-stat__rolls">
                       <div class="monster-stat__roll-row">
                         <span class="monster-stat__roll-label">ПРОВЕРКА</span>
