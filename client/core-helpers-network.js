@@ -2359,6 +2359,32 @@ async function sendMessage(msg) {
               }
             }
           };
+          const resolvedSheet = (() => {
+            if (!providedSheet) return defaultSheet;
+            const parsed = (providedSheet.parsed && typeof providedSheet.parsed === 'object')
+              ? providedSheet.parsed
+              : ((providedSheet && typeof providedSheet === 'object') ? providedSheet : {});
+            if (!parsed.appearance || typeof parsed.appearance !== 'object') parsed.appearance = {};
+            if (!String(parsed.appearance.baseUrl || '').trim() && defaultTokenBaseUrl) {
+              parsed.appearance.baseUrl = defaultTokenBaseUrl;
+            }
+            if (!parsed.appearance.token || typeof parsed.appearance.token !== 'object') parsed.appearance.token = {};
+            if (!String(parsed.appearance.token.mode || '').trim()) {
+              parsed.appearance.token.mode = hasRoleTokenPreset ? 'full' : 'crop';
+            }
+            if (!parsed.appearance.token.crop || typeof parsed.appearance.token.crop !== 'object') {
+              parsed.appearance.token.crop = { x: 50, y: 35, zoom: 140 };
+            } else {
+              if (parsed.appearance.token.crop.x === undefined) parsed.appearance.token.crop.x = 50;
+              if (parsed.appearance.token.crop.y === undefined) parsed.appearance.token.crop.y = 35;
+              if (parsed.appearance.token.crop.zoom === undefined) parsed.appearance.token.crop.zoom = 140;
+            }
+            if (!providedSheet.parsed || typeof providedSheet.parsed !== 'object') {
+              return { ...providedSheet, parsed };
+            }
+            providedSheet.parsed = parsed;
+            return providedSheet;
+          })();
 
           next.players.push({
             id,
@@ -2384,7 +2410,7 @@ async function sendMessage(msg) {
             ownerRole,
             mapId,
             ownerName: myNameSpan?.textContent || "",
-            sheet: providedSheet || defaultSheet
+            sheet: resolvedSheet
           });
           logEventToState(next, `${isMonster ? 'Добавлен монстр' : 'Добавлен игрок'} ${player.name}`);
         }
@@ -2584,6 +2610,19 @@ async function sendMessage(msg) {
               actorUserId: String(myUserId || ''),
               x: nx,
               y: ny,
+              size: Number(p?.size) || 1,
+              isPublic: !!p?.isPublic
+            }, { optimisticApplied: true });
+            // Важно: на некоторых серверах moveToken обновляет только координаты.
+            // Если в room_tokens уже лежит size=1 (например, из ранней stub-записи),
+            // то последующий tokenRow может откатить локальный размер токена до 1x1.
+            // Явно дублируем апдейт размера, чтобы размер монстра на поле не сбрасывался.
+            sendWsEnvelope({
+              type: 'updateTokenSize',
+              roomId: String(currentRoomId || ''),
+              mapId: String(p?.mapId || next?.currentMapId || ''),
+              tokenId: String(p.id),
+              size: Number(p?.size) || 1,
               isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
           } catch (e) {
