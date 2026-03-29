@@ -2613,6 +2613,18 @@ async function sendMessage(msg) {
               size: Number(p?.size) || 1,
               isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
+            // Важно: на некоторых серверах moveToken обновляет только координаты.
+            // Если в room_tokens уже лежит size=1 (например, из ранней stub-записи),
+            // то последующий tokenRow может откатить локальный размер токена до 1x1.
+            // Явно дублируем апдейт размера, чтобы размер монстра на поле не сбрасывался.
+            sendWsEnvelope({
+              type: 'updateTokenSize',
+              roomId: String(currentRoomId || ''),
+              mapId: String(p?.mapId || next?.currentMapId || ''),
+              tokenId: String(p.id),
+              size: Number(p?.size) || 1,
+              isPublic: !!p?.isPublic
+            }, { optimisticApplied: true });
           } catch (e) {
             console.warn('moveToken ws send failed', e);
             handleMessage({ type: 'error', message: 'Не удалось отправить перемещение на сервер' });
