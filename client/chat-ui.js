@@ -1222,7 +1222,9 @@ function hydrateRoomChatFromRows(rows) {
   resetRoomChatState(currentRoomId || roomChatState.roomId || '');
   const list = Array.isArray(rows) ? rows : [];
   list.forEach((row) => {
-    const msg = decodeRoomChatLogRow(row?.text || row);
+    const msg = (row && typeof row === 'object' && String(row?.chatType || ''))
+      ? row
+      : decodeRoomChatLogRow(row?.text || row);
     if (!msg) return;
     const normalized = normalizeRoomChatMessage(msg);
     const reveal = normalized?.chatKey ? roomChatState.tabs.some((tab) => String(tab.key) === String(normalized.chatKey)) : true;
