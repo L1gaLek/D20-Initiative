@@ -442,9 +442,25 @@ async function listCampaignSavesByOwner(ownerKey) {
 
 async function createCampaignSave(ownerKey, name, state) {
   await ensureSupabaseReady();
+  let payloadState = state;
+  try {
+    const roomId = String(arguments?.[3] || currentRoomId || '').trim();
+    if (roomId) {
+      const detached = await snapshotCampaignDetachedData(roomId, state);
+      payloadState = {
+        __format: 'campaign-save-v2',
+        state: deepClone(state || {}),
+        detached,
+        savedAt: new Date().toISOString()
+      };
+    }
+  } catch (e) {
+    console.warn('createCampaignSave: detached snapshot failed, fallback to plain state', e);
+    payloadState = state;
+  }
   const { error } = await sbClient
     .from('campaign_saves')
-    .insert({ owner_key: ownerKey, name, state });
+    .insert({ owner_key: ownerKey, name, state: payloadState });
   if (error) throw error;
 }
 
@@ -457,6 +473,172 @@ async function getCampaignSaveState(saveId) {
     .single();
   if (error) throw error;
   return data?.state || null;
+}
+
+function _normalizeCampaignPayload(raw) {
+  const payload = raw && typeof raw === 'object' ? raw : null;
+  if (payload && payload.__format === 'campaign-save-v2' && payload.state && typeof payload.state === 'object') {
+    return {
+      state: deepClone(payload.state),
+      detached: payload.detached && typeof payload.detached === 'object' ? deepClone(payload.detached) : null
+    };
+  }
+  return {
+    state: deepClone(raw || {}),
+    detached: null
+  };
+}
+
+async function snapshotCampaignDetachedData(roomId, stateLike = null) {
+  await ensureSupabaseReady();
+  const rid = String(roomId || '').trim();
+  if (!rid) return null;
+  const st = ensureStateHasMaps(deepClone(stateLike || lastState || {}));
+  const mapIds = new Set((Array.isArray(st.maps) ? st.maps : []).map((m) => String(m?.id || '').trim()).filter(Boolean));
+  const [mapMetaRes, wallsRes, marksRes, fogRes, tokensRes] = await Promise.all([
+    sbClient.from('room_map_meta').select('*').eq('room_id', rid),
+    sbClient.from('room_walls').select('*').eq('room_id', rid),
+    sbClient.from('room_marks').select('*').eq('room_id', rid),
+    sbClient.from('room_fog').select('*').eq('room_id', rid),
+    sbClient.from('room_tokens').select('*').eq('room_id', rid)
+  ]);
+  if (mapMetaRes.error) throw mapMetaRes.error;
+  if (wallsRes.error) throw wallsRes.error;
+  if (marksRes.error) throw marksRes.error;
+  if (fogRes.error) throw fogRes.error;
+  if (tokensRes.error) throw tokensRes.error;
+  return {
+    roomMapMeta: (mapMetaRes.data || []).filter((r) => mapIds.has(String(r?.map_id || '').trim())),
+    roomWalls: (wallsRes.data || []).filter((r) => mapIds.has(String(r?.map_id || '').trim())),
+    roomMarks: (marksRes.data || []).filter((r) => mapIds.has(String(r?.map_id || '').trim())),
+    roomFog: (fogRes.data || []).filter((r) => mapIds.has(String(r?.map_id || '').trim())),
+    roomTokens: (tokensRes.data || []).filter((r) => mapIds.has(String(r?.map_id || '').trim()))
+  };
+}
+
+function _deriveDetachedFromState(stateLike) {
+  const st = ensureStateHasMaps(deepClone(stateLike || {}));
+  const maps = Array.isArray(st.maps) ? st.maps : [];
+  const players = Array.isArray(st.players) ? st.players : [];
+  const tokens = [];
+  const seen = new Set();
+  const roomMapMeta = maps.map((m) => ({
+    map_id: String(m?.id || ''),
+    name: String(m?.name || 'Карта'),
+    section_id: String(m?.sectionId || '') || null,
+    board_width: Math.max(5, Math.min(150, Number(m?.boardWidth) || 10)),
+    board_height: Math.max(5, Math.min(150, Number(m?.boardHeight) || 10)),
+    board_bg_url: m?.boardBgUrl || m?.boardBgDataUrl || null,
+    board_bg_storage_path: m?.boardBgStoragePath || null,
+    board_bg_storage_bucket: m?.boardBgStorageBucket || null,
+    grid_alpha: Number.isFinite(Number(m?.gridAlpha)) ? clamp(Number(m.gridAlpha), 0, 1) : 1,
+    wall_alpha: Number.isFinite(Number(m?.wallAlpha)) ? clamp(Number(m.wallAlpha), 0, 1) : 1
+  }));
+  const roomWalls = maps.flatMap((m) => (Array.isArray(m?.walls) ? m.walls : []).map((w) => ({
+    map_id: String(m?.id || ''),
+    x: Number(w?.x) || 0,
+    y: Number(w?.y) || 0,
+    dir: String(w?.dir || '').toUpperCase(),
+    wall_type: String(w?.type || 'stone'),
+    thickness: Math.max(1, Math.min(12, Number(w?.thickness) || 4))
+  }))).filter((w) => !!w.map_id && (w.dir === 'N' || w.dir === 'E' || w.dir === 'S' || w.dir === 'W'));
+  const roomMarks = maps.flatMap((m) => (Array.isArray(m?.marks) ? m.marks : []).map((mk) => ({
+    map_id: String(m?.id || ''),
+    mark_id: String(mk?.id || ''),
+    owner_id: String(mk?.ownerId || '') || null,
+    kind: String(mk?.kind || ''),
+    payload: deepClone(mk || {})
+  }))).filter((mk) => !!mk.map_id && !!mk.mark_id && !!mk.kind);
+  const roomFog = maps.map((m) => buildDetachedFogRow('', String(m?.id || ''), m?.fog || {}, m?.boardWidth, m?.boardHeight))
+    .map((row) => ({ map_id: row.map_id, settings: row.settings, manual_stamps: row.manual_stamps, explored_packed: row.explored_packed }));
+  const playerById = new Map(players.map((p) => [String(p?.id || ''), p]));
+  maps.forEach((m) => {
+    const mapId = String(m?.id || '');
+    const pos = (m?.playersPos && typeof m.playersPos === 'object') ? m.playersPos : {};
+    Object.keys(pos).forEach((pid) => {
+      const p = playerById.get(String(pid)) || {};
+      const k = `${mapId}::${pid}`;
+      if (seen.has(k)) return;
+      seen.add(k);
+      const pp = pos[pid] || {};
+      tokens.push({
+        map_id: mapId,
+        token_id: String(pid),
+        x: (pp?.x === null || typeof pp?.x === 'undefined') ? null : Number(pp.x),
+        y: (pp?.y === null || typeof pp?.y === 'undefined') ? null : Number(pp.y),
+        size: Math.max(1, Number(p?.size) || 1),
+        color: (typeof p?.color === 'string') ? p.color : null,
+        is_public: !!p?.isPublic
+      });
+    });
+  });
+  players.forEach((p) => {
+    const pid = String(p?.id || '');
+    const mapId = String(p?.mapId || st?.currentMapId || '');
+    if (!pid || !mapId) return;
+    const k = `${mapId}::${pid}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    tokens.push({
+      map_id: mapId,
+      token_id: pid,
+      x: (p?.x === null || typeof p?.x === 'undefined') ? null : Number(p.x),
+      y: (p?.y === null || typeof p?.y === 'undefined') ? null : Number(p.y),
+      size: Math.max(1, Number(p?.size) || 1),
+      color: (typeof p?.color === 'string') ? p.color : null,
+      is_public: !!p?.isPublic
+    });
+  });
+  return { roomMapMeta, roomWalls, roomMarks, roomFog, roomTokens: tokens };
+}
+
+async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
+  await ensureSupabaseReady();
+  const rid = String(roomId || '').trim();
+  if (!rid) return;
+  const payload = _normalizeCampaignPayload(rawSavePayload);
+  const normalized = ensureStateHasMaps(deepClone(payload.state || {}));
+  await upsertRoomState(rid, normalized);
+
+  const detached = payload.detached || _deriveDetachedFromState(normalized);
+  const mapIds = new Set((Array.isArray(normalized.maps) ? normalized.maps : []).map((m) => String(m?.id || '').trim()).filter(Boolean));
+  const withRoom = (rows) => (Array.isArray(rows) ? rows : []).map((r) => ({ ...r, room_id: rid, updated_at: new Date().toISOString() }))
+    .filter((r) => mapIds.has(String(r?.map_id || '').trim()));
+
+  await Promise.all([
+    sbClient.from('room_map_meta').delete().eq('room_id', rid),
+    sbClient.from('room_walls').delete().eq('room_id', rid),
+    sbClient.from('room_marks').delete().eq('room_id', rid),
+    sbClient.from('room_fog').delete().eq('room_id', rid),
+    sbClient.from('room_tokens').delete().eq('room_id', rid)
+  ]);
+
+  const mapMetaRows = withRoom(detached?.roomMapMeta);
+  const wallRows = withRoom(detached?.roomWalls);
+  const markRows = withRoom(detached?.roomMarks);
+  const fogRows = withRoom(detached?.roomFog);
+  const tokenRows = withRoom(detached?.roomTokens);
+
+  if (mapMetaRows.length) {
+    const { error } = await sbClient.from('room_map_meta').upsert(mapMetaRows, { onConflict: 'room_id,map_id' });
+    if (error) throw error;
+  }
+  if (wallRows.length) {
+    const { error } = await sbClient.from('room_walls').upsert(wallRows, { onConflict: 'room_id,map_id,x,y,dir' });
+    if (error) throw error;
+  }
+  if (markRows.length) {
+    const { error } = await sbClient.from('room_marks').upsert(markRows, { onConflict: 'room_id,map_id,mark_id' });
+    if (error) throw error;
+  }
+  if (fogRows.length) {
+    const { error } = await sbClient.from('room_fog').upsert(fogRows, { onConflict: 'room_id,map_id' });
+    if (error) throw error;
+  }
+  if (tokenRows.length) {
+    const { error } = await sbClient.from('room_tokens').upsert(tokenRows);
+    if (error) throw error;
+  }
 }
 
 async function deleteCampaignSave(saveId) {
@@ -502,4 +684,3 @@ const WS_SEND_QUEUE_LIMIT = 25;
 let wsHeartbeatTimer = null;
 let wsLastPongAt = 0;
 let wsPendingEnvelopes = [];
-

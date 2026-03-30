@@ -293,7 +293,7 @@ saveCampaignBtn?.addEventListener('click', async () => {
 
     const snap = snapshotCampaignStateForSave();
     const ownerKey = getCampaignOwnerKey();
-    await createCampaignSave(ownerKey, clean, snap);
+    await createCampaignSave(ownerKey, clean, snap, currentRoomId);
     alert('Кампания сохранена. Теперь её можно загрузить в любой комнате.');
   } catch (err) {
     console.error(err);
@@ -313,10 +313,8 @@ loadCampaignBtn?.addEventListener('click', async () => {
       try {
         const st = await getCampaignSaveState(saveId);
         if (!st) return alert('Сохранение пустое/не найдено');
-
-        const normalized = ensureStateHasMaps(deepClone(st));
-        // Загружаем в ТЕКУЩУЮ комнату
-        await upsertRoomState(currentRoomId, normalized);
+        // Загружаем в ТЕКУЩУЮ комнату (state + detached room tables).
+        await applyCampaignSaveToRoom(currentRoomId, st);
       } catch (e) {
         console.error(e);
         alert('Не удалось загрузить кампанию');
