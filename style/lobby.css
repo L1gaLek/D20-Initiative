@@ -1079,6 +1079,32 @@ body.lobby-active #lobby-scene {
 .room-top-actions__btn--chat{
   padding-right: 28px;
 }
+.room-top-actions__btn--chat-unread{
+  border-color: rgba(86, 232, 120, 0.95) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 0 0 1px rgba(86, 232, 120, 0.35),
+    0 0 20px rgba(86, 232, 120, 0.42),
+    0 10px 25px rgba(0,0,0,0.22) !important;
+  animation: room-chat-unread-pulse 1s ease-in-out infinite;
+}
+
+@keyframes room-chat-unread-pulse{
+  0%, 100%{
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      0 0 0 1px rgba(86, 232, 120, 0.35),
+      0 0 20px rgba(86, 232, 120, 0.42),
+      0 10px 25px rgba(0,0,0,0.22);
+  }
+  50%{
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      0 0 0 1px rgba(86, 232, 120, 0.65),
+      0 0 34px rgba(86, 232, 120, 0.82),
+      0 10px 25px rgba(0,0,0,0.22);
+  }
+}
 
 /* ===== Room entry / create room modals in tavern style ===== */
 .room-entry-modal{
