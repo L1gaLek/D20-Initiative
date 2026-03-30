@@ -51,6 +51,14 @@
     try { node?.remove?.(); } catch {}
   }
 
+
+  function isMinePlayerId(playerId) {
+    const pid = String(playerId || '').trim();
+    if (!pid) return false;
+    const pl = getAllPlayers().find((p) => String(p?.id || '') === pid);
+    return !!pl && ownsPlayer(pl);
+  }
+
   function openTransferModal({ fromPlayer, tabId, idx, item, maxQty }) {
     const ctx = getCtx();
     const sendMessage = ctx?.sendMessage;
@@ -144,7 +152,9 @@
   }
 
   function openIncomingOfferModal(offer) {
-    if (!offer || !ownsPlayer({ ownerId: offer?.toOwnerId })) return;
+    if (!offer) return;
+    const allowed = ownsPlayer({ ownerId: offer?.toOwnerId }) || isMinePlayerId(offer?.toPlayerId);
+    if (!allowed) return;
 
     const wrap = document.createElement('div');
     wrap.className = 'equip-overlay';
@@ -189,7 +199,9 @@
     if (!offer) return;
     const ctx = getCtx();
     const myId = (typeof ctx?.getMyId === 'function') ? String(ctx.getMyId() ?? '') : '';
-    if (String(offer?.toOwnerId || '') !== myId) return;
+    const byOwnerId = !!myId && String(offer?.toOwnerId || '') === myId;
+    const byPlayerOwnership = isMinePlayerId(offer?.toPlayerId);
+    if (!byOwnerId && !byPlayerOwnership) return;
     openIncomingOfferModal(offer);
   }
 
@@ -198,8 +210,9 @@
     if (!result) return;
     const ctx = getCtx();
     const myId = (typeof ctx?.getMyId === 'function') ? String(ctx.getMyId() ?? '') : '';
-    const mine = String(result?.fromOwnerId || '') === myId || String(result?.toOwnerId || '') === myId;
-    if (!mine) return;
+    const byOwnerId = String(result?.fromOwnerId || '') === myId || String(result?.toOwnerId || '') === myId;
+    const byPlayerOwnership = isMinePlayerId(result?.fromPlayerId) || isMinePlayerId(result?.toPlayerId);
+    if (!byOwnerId && !byPlayerOwnership) return;
     const text = String(result?.message || '').trim();
     if (text) alert(text);
   }

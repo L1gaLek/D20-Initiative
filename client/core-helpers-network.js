@@ -2175,6 +2175,8 @@ async function sendMessage(msg) {
           const result = {
             id: String(offer.id || ''),
             accepted: false,
+            fromPlayerId: String(fromPlayer?.id || ''),
+            toPlayerId: String(toPlayer?.id || ''),
             fromOwnerId: String(fromPlayer?.ownerId || ''),
             toOwnerId: String(toPlayer?.ownerId || ''),
             message: String(message || 'Передача отменена.')
@@ -2249,6 +2251,8 @@ async function sendMessage(msg) {
         const result = {
           id: String(offer.id || ''),
           accepted: true,
+          fromPlayerId: String(fromPlayer?.id || ''),
+          toPlayerId: String(toPlayer?.id || ''),
           fromOwnerId: String(fromPlayer?.ownerId || ''),
           toOwnerId: String(toPlayer?.ownerId || ''),
           message: `Передано ${qty} × ${String(offer?.itemName || 'предмет')} игроку ${String(toPlayer?.name || 'получатель')}.`
