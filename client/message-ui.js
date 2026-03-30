@@ -228,6 +228,9 @@ try { handleSessionUiMessage?.(msg); } catch {}
     if (msg.type === 'inventoryTransferResult') {
       try { window.__inventoryTransfer?.onTransferResult?.(msg); } catch {}
     }
+    if (msg.type === 'coinsTransferResult') {
+      try { window.__inventoryTransfer?.onCoinsTransferResult?.(msg); } catch {}
+    }
 
     // ================== v4: LOG (append-only) ==================
     if (msg.type === 'tavernLogRow' && msg.row) {

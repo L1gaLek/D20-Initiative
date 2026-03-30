@@ -1805,6 +1805,15 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
         return;
       }
 
+      // transfer coins to another base player
+      if (e.target?.closest?.('[data-coins-transfer]')) {
+        if (!curCanEdit) return;
+        try {
+          window.__inventoryTransfer?.openCoinsTransferModal?.({ fromPlayer: curPlayer });
+        } catch {}
+        return;
+      }
+
       // Open DB from inventory
       if (e.target?.closest?.('[data-inv-open-db]')) {
         openEquipOverlay('add');

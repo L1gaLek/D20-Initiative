@@ -1014,9 +1014,12 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
         <div class="sheet-card fullwidth coins-card">
           <div class="coins-head">
             <h4 style="margin:0">Монеты</h4>
-            <div class="exchange-pill" tabindex="0">
-              Обменный курс
-              ${exchangeTooltip}
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+              <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-coins-transfer>Передать монеты</button>
+              <div class="exchange-pill" tabindex="0">
+                Обменный курс
+                ${exchangeTooltip}
+              </div>
             </div>
           </div>
 

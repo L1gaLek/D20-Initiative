@@ -2115,7 +2115,7 @@ async function sendMessage(msg) {
 
         const fromPlayer = (next.players || []).find((pl) => String(pl?.id || '') === fromPlayerId);
         const toPlayer = (next.players || []).find((pl) => String(pl?.id || '') === toPlayerId);
-        if (!fromPlayer || !toPlayer) return;
+        if (!fromPlayer || !toPlayer || !toPlayer.isBase) return;
 
         const ownsFrom = String(fromPlayer?.ownerId || '') === myUserId;
         if (!isGm && !ownsFrom) return;
@@ -2166,7 +2166,7 @@ async function sendMessage(msg) {
 
         const fromPlayer = (next.players || []).find((pl) => String(pl?.id || '') === fromPlayerId);
         const toPlayer = (next.players || []).find((pl) => String(pl?.id || '') === toPlayerId);
-        if (!fromPlayer || !toPlayer) return;
+        if (!fromPlayer || !toPlayer || !toPlayer.isBase) return;
 
         const ownsTo = String(toPlayer?.ownerId || '') === myUserId;
         if (!isGm && !ownsTo) return;
@@ -2175,6 +2175,8 @@ async function sendMessage(msg) {
           const result = {
             id: String(offer.id || ''),
             accepted: false,
+            fromPlayerId: String(fromPlayer?.id || ''),
+            toPlayerId: String(toPlayer?.id || ''),
             fromOwnerId: String(fromPlayer?.ownerId || ''),
             toOwnerId: String(toPlayer?.ownerId || ''),
             message: String(message || 'Передача отменена.')
@@ -2249,12 +2251,96 @@ async function sendMessage(msg) {
         const result = {
           id: String(offer.id || ''),
           accepted: true,
+          fromPlayerId: String(fromPlayer?.id || ''),
+          toPlayerId: String(toPlayer?.id || ''),
           fromOwnerId: String(fromPlayer?.ownerId || ''),
           toOwnerId: String(toPlayer?.ownerId || ''),
           message: `Передано ${qty} × ${String(offer?.itemName || 'предмет')} игроку ${String(toPlayer?.name || 'получатель')}.`
         };
         try {
           sendWsEnvelope({ type: 'inventoryTransferResult', roomId: currentRoomId, result }, { optimisticApplied: true });
+        } catch {}
+        break;
+      }
+
+      case "coinsTransfer": {
+        if (!currentRoomId || !lastState) return;
+        const next = deepClone(lastState);
+        const isGm = (String(myRole || "") === "GM");
+        const myUserId = String(getAppStorageItem("int_user_id") || "");
+
+        const fromPlayerId = String(msg.fromPlayerId || '').trim();
+        const toPlayerId = String(msg.toPlayerId || '').trim();
+        const coin = String(msg.coin || 'gp').trim().toLowerCase();
+        const amount = Math.max(1, Number(msg.amount) || 1);
+        const validCoins = new Set(['cp','sp','ep','gp','pp']);
+        if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) return;
+        if (!validCoins.has(coin)) return;
+
+        const fromPlayer = (next.players || []).find((pl) => String(pl?.id || '') === fromPlayerId);
+        const toPlayer = (next.players || []).find((pl) => String(pl?.id || '') === toPlayerId);
+        if (!fromPlayer || !toPlayer || !toPlayer.isBase) return;
+
+        const ownsFrom = String(fromPlayer?.ownerId || '') === myUserId;
+        if (!isGm && !ownsFrom) return;
+
+        const ensureCoins = (pl) => {
+          if (!pl.sheet || typeof pl.sheet !== 'object') pl.sheet = { parsed: {} };
+          if (!pl.sheet.parsed || typeof pl.sheet.parsed !== 'object') pl.sheet.parsed = {};
+          if (!pl.sheet.parsed.coins || typeof pl.sheet.parsed.coins !== 'object') {
+            pl.sheet.parsed.coins = { cp:{value:0}, sp:{value:0}, ep:{value:0}, gp:{value:0}, pp:{value:0} };
+          }
+          const c = pl.sheet.parsed.coins;
+          ['cp','sp','ep','gp','pp'].forEach((k) => {
+            if (!c[k] || typeof c[k] !== 'object') c[k] = { value: 0 };
+            c[k].value = Math.max(0, Number(c[k].value) || 0);
+          });
+          return c;
+        };
+
+        const fromCoins = ensureCoins(fromPlayer);
+        const toCoins = ensureCoins(toPlayer);
+
+        if ((Number(fromCoins?.[coin]?.value) || 0) < amount) {
+          const failResult = {
+            accepted: false,
+            fromPlayerId: String(fromPlayer?.id || ''),
+            toPlayerId: String(toPlayer?.id || ''),
+            fromOwnerId: String(fromPlayer?.ownerId || ''),
+            toOwnerId: String(toPlayer?.ownerId || ''),
+            message: 'Передача монет не удалась: недостаточно средств.'
+          };
+          try {
+            sendWsEnvelope({ type: 'coinsTransferResult', roomId: currentRoomId, result: failResult }, { optimisticApplied: true });
+          } catch {}
+          break;
+        }
+
+        fromCoins[coin].value = Math.max(0, Number(fromCoins[coin].value) - amount);
+        toCoins[coin].value = Math.max(0, Number(toCoins[coin].value) + amount);
+
+        try {
+          fromPlayer.sheetUpdatedAt = Date.now();
+          toPlayer.sheetUpdatedAt = Date.now();
+        } catch {}
+
+        try {
+          handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+        } catch {}
+
+        await upsertRoomState(currentRoomId, next);
+
+        const RU = { cp: 'мм', sp: 'см', ep: 'эм', gp: 'зм', pp: 'пм' };
+        const okResult = {
+          accepted: true,
+          fromPlayerId: String(fromPlayer?.id || ''),
+          toPlayerId: String(toPlayer?.id || ''),
+          fromOwnerId: String(fromPlayer?.ownerId || ''),
+          toOwnerId: String(toPlayer?.ownerId || ''),
+          message: `Передано ${amount} ${RU[coin] || coin} игроку ${String(toPlayer?.name || 'получатель')}.`
+        };
+        try {
+          sendWsEnvelope({ type: 'coinsTransferResult', roomId: currentRoomId, result: okResult }, { optimisticApplied: true });
         } catch {}
         break;
       }
