@@ -639,6 +639,49 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
     const { error } = await sbClient.from('room_tokens').upsert(tokenRows);
     if (error) throw error;
   }
+
+  // Apply detached snapshot immediately in the current client (GM) without page reload.
+  try {
+    if (typeof resetDetachedRoomCache === 'function') resetDetachedRoomCache(rid);
+    mapMetaRows.forEach((row) => { try { _cacheMapMeta?.(row); } catch {} });
+    try { _cacheWallRows?.(wallRows); } catch {}
+    try { _cacheMarkRows?.(markRows); } catch {}
+    try { _cacheFogRows?.(fogRows); } catch {}
+    try { _refreshDetachedRoomView?.(); } catch {}
+  } catch (e) {
+    console.warn('applyCampaignSaveToRoom: local detached refresh failed', e);
+  }
+
+  // Broadcast detached updates via WS relay so all connected players apply changes immediately.
+  try {
+    mapMetaRows.forEach((row) => { try { sendWsEnvelope?.({ type: 'mapMetaRow', roomId: rid, row }); } catch {} });
+    wallRows.forEach((row) => { try { sendWsEnvelope?.({ type: 'wallRow', roomId: rid, row }); } catch {} });
+    fogRows.forEach((row) => { try { sendWsEnvelope?.({ type: 'fogRow', roomId: rid, row }); } catch {} });
+    const marksByMap = new Map();
+    markRows.forEach((row) => {
+      const mid = String(row?.map_id || '').trim();
+      if (!mid) return;
+      if (!marksByMap.has(mid)) marksByMap.set(mid, []);
+      marksByMap.get(mid).push(row);
+    });
+    marksByMap.forEach((rows, mapId) => {
+      try { sendWsEnvelope?.({ type: 'marksReplace', roomId: rid, mapId, rows }); } catch {}
+    });
+  } catch (e) {
+    console.warn('applyCampaignSaveToRoom: WS detached sync failed', e);
+  }
+
+  // Refresh token coordinates right away for users on the active map.
+  try {
+    const activeMapId = String(lastState?.currentMapId || normalized?.currentMapId || '').trim();
+    if (activeMapId && typeof handleMessage === 'function') {
+      const activeRows = tokenRows.filter((r) => String(r?.map_id || '').trim() === activeMapId);
+      handleMessage({ type: 'tokensInit', rows: activeRows, mapId: activeMapId });
+      try { sendWsEnvelope?.({ type: 'tokensInit', roomId: rid, rows: activeRows, mapId: activeMapId }); } catch {}
+    }
+  } catch (e) {
+    console.warn('applyCampaignSaveToRoom: token refresh failed', e);
+  }
 }
 
 async function deleteCampaignSave(saveId) {
