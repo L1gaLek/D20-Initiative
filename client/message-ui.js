@@ -222,6 +222,13 @@ try { handleSessionUiMessage?.(msg); } catch {}
       window.InfoModal?.onSavedBaseDeleted?.(msg);
     }
 
+    if (msg.type === 'inventoryTransferOffer') {
+      try { window.__inventoryTransfer?.onTransferOffer?.(msg); } catch {}
+    }
+    if (msg.type === 'inventoryTransferResult') {
+      try { window.__inventoryTransfer?.onTransferResult?.(msg); } catch {}
+    }
+
     // ================== v4: LOG (append-only) ==================
     if (msg.type === 'tavernLogRow' && msg.row) {
       try {

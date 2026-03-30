@@ -1927,6 +1927,30 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
         return;
       }
 
+
+      // transfer inventory item to another player
+      const transferBtn = e.target?.closest?.('[data-inv-transfer][data-tab][data-idx]');
+      if (transferBtn) {
+        if (!curCanEdit) return;
+        const tabId = String(transferBtn.getAttribute('data-tab') || 'weapons');
+        const idx = safeInt(transferBtn.getAttribute('data-idx'), -1);
+        const sheet = curPlayer?.sheet?.parsed;
+        const arr = sheet?.inventory?.[tabId];
+        if (!Array.isArray(arr) || idx < 0 || idx >= arr.length) return;
+        const it = arr[idx];
+        const qty = Math.max(1, safeInt(it?.qty, 1));
+        try {
+          window.__inventoryTransfer?.openTransferModal?.({
+            fromPlayer: curPlayer,
+            tabId,
+            idx,
+            item: it,
+            maxQty: qty
+          });
+        } catch {}
+        return;
+      }
+
       // sell/delete inventory item
       const sellBtn = e.target?.closest?.('[data-inv-sell][data-tab][data-idx]');
       if (sellBtn) {
