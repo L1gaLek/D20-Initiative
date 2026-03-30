@@ -791,6 +791,58 @@ function openTavernRooms() {
 
 const ROOM_CHAT_LOG_PREFIX = 'RCHAT1:';
 const ROOM_CHAT_MAX_MESSAGES = 50;
+const ROOM_CHAT_CACHE_LIMIT = 500;
+
+function getRoomChatStorageKey(roomId = '') {
+  const userId = String(getAppStorageItem('int_user_id') || myId || 'guest').trim() || 'guest';
+  return `int_room_chat_messages:${userId}:${String(roomId || '').trim() || 'room'}`;
+}
+
+function readRoomChatCache(roomId = '') {
+  try {
+    const raw = localStorage.getItem(getRoomChatStorageKey(roomId));
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRoomChatCache(roomId = '') {
+  const rid = String(roomId || roomChatState.roomId || currentRoomId || '').trim();
+  if (!rid) return;
+  try {
+    const all = [];
+    roomChatState.chats.forEach((messages) => {
+      (Array.isArray(messages) ? messages : []).forEach((msg) => {
+        if (!msg || !msg.id) return;
+        all.push({
+          id: String(msg.id),
+          chatType: String(msg.chatType || 'global') === 'direct' ? 'direct' : 'global',
+          fromId: String(msg.fromId || ''),
+          fromName: String(msg.fromName || ''),
+          toId: String(msg.toId || ''),
+          toName: String(msg.toName || ''),
+          text: String(msg.text || ''),
+          ts: Number(msg.ts || Date.now()),
+          system: !!msg.system,
+          quote: (msg.quote && typeof msg.quote === 'object') ? {
+            fromId: String(msg.quote.fromId || ''),
+            fromName: String(msg.quote.fromName || ''),
+            text: String(msg.quote.text || '')
+          } : null
+        });
+      });
+    });
+    const dedup = new Map();
+    all
+      .sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0))
+      .forEach((msg) => dedup.set(String(msg.id), msg));
+    const compact = Array.from(dedup.values()).slice(-ROOM_CHAT_CACHE_LIMIT);
+    localStorage.setItem(getRoomChatStorageKey(rid), JSON.stringify(compact));
+  } catch {}
+}
+
 const roomChatState = {
   activeChatKey: 'global',
   chats: new Map([['global', []]]),
@@ -810,23 +862,19 @@ function _roomChatBroadcastEventName(roomId) {
 }
 
 async function cleanupExpiredRoomChatMessagesDb(force = false) {
-  if (!sbClient || !currentRoomId) return;
-  const now = Date.now();
-  if (!force && (now - _lastRoomCleanupAt) < CHAT_CLEANUP_THROTTLE_MS) return;
-  _lastRoomCleanupAt = now;
-  try {
-    await sbClient.from('room_log')
-      .delete()
-      .eq('room_id', currentRoomId)
-      .like('text', `${ROOM_CHAT_LOG_PREFIX}%`)
-      .lt('created_at', new Date(getChatTtlCutoffMs(now)).toISOString());
-  } catch (e) {
-    console.warn('cleanupExpiredRoomChatMessagesDb failed', e);
-  }
+  // Room chat history is intentionally kept without TTL cleanup.
+  void force;
 }
 
 async function syncRoomChatFromDb(forceHydrate = false) {
-  if (!sbClient || !currentRoomId) return;
+  if (!currentRoomId) return;
+  const cachedMessages = readRoomChatCache(currentRoomId);
+
+  if (!sbClient) {
+    if (forceHydrate || !roomChatState.loadedHistory) hydrateRoomChatFromRows(cachedMessages);
+    return;
+  }
+
   try {
     void cleanupExpiredRoomChatMessagesDb(forceHydrate);
     const { data, error } = await sbClient
@@ -834,25 +882,31 @@ async function syncRoomChatFromDb(forceHydrate = false) {
       .select('id,text,created_at')
       .eq('room_id', currentRoomId)
       .like('text', `${ROOM_CHAT_LOG_PREFIX}%`)
-      .gte('created_at', new Date(getChatTtlCutoffMs()).toISOString())
       .order('created_at', { ascending: true })
-      .limit(200);
+      .limit(500);
     if (error) throw error;
     const rows = Array.isArray(data) ? data : [];
+    const decodedRows = rows.map((row) => decodeRoomChatLogRow(row?.text || row)).filter(Boolean);
+    const merged = new Map();
+    decodedRows.forEach((msg) => { if (msg?.id) merged.set(String(msg.id), msg); });
+    cachedMessages.forEach((msg) => { if (msg?.id) merged.set(String(msg.id), msg); });
+    const mergedRows = Array.from(merged.values()).sort((a, b) => Number(a?.ts || 0) - Number(b?.ts || 0));
+
     if (forceHydrate || !roomChatState.loadedHistory) {
-      hydrateRoomChatFromRows(rows);
+      hydrateRoomChatFromRows(mergedRows);
       return;
     }
-    rows.forEach((row) => {
-      const msg = decodeRoomChatLogRow(row?.text || row);
-      if (msg) pushRoomChatMessage(msg, { revealTab: !roomChatState.hiddenChatKeys.has(String(msg?.chatKey || '')) });
+    mergedRows.forEach((msg) => {
+      pushRoomChatMessage(msg, { revealTab: !roomChatState.hiddenChatKeys.has(String(msg?.chatKey || '')) });
     });
     renderRoomChatTabs();
     renderRoomChatSubtitle();
     renderRoomChatUsersList();
     renderRoomChat();
+    saveRoomChatCache(currentRoomId);
   } catch (e) {
     console.warn('syncRoomChatFromDb failed', e);
+    if (forceHydrate || !roomChatState.loadedHistory) hydrateRoomChatFromRows(cachedMessages);
   }
 }
 
@@ -926,8 +980,14 @@ function getRoomChatUserName(userId, fallback = 'Собеседник') {
 }
 function getRoomDirectChatKey(otherUserId) { return `dm:${String(otherUserId || '').trim()}`; }
 function getRoomUnreadCountForChat(chatKey) { return Number(roomChatState.unreadByChat.get(String(chatKey || 'global')) || 0) || 0; }
+function updateRoomChatBlinkState() {
+  if (!roomChatOpenBtn) return;
+  const hasUnread = (Number(roomChatState.unreadGlobal) || 0) > 0 || (Number(roomChatState.unreadDirect) || 0) > 0;
+  roomChatOpenBtn.classList.toggle('room-top-actions__btn--chat-unread', hasUnread);
+}
 function updateRoomChatBadges() {
   updateUnreadBadges(roomChatState, roomChatBadgeGlobal, roomChatBadgeDirect);
+  updateRoomChatBlinkState();
 }
 function clearRoomChatQuoteDraft() {
   clearQuoteDraftState(roomChatState, roomChatQuote);
@@ -981,7 +1041,7 @@ function normalizeRoomChatMessage(entry) {
 }
 function pushRoomChatMessage(entry, options = null) {
   const item = normalizeRoomChatMessage(entry);
-  if (!item || isChatEntryExpired(item)) return;
+  if (!item) return;
   if (roomChatState.messageIds.has(String(item.id))) return;
   roomChatState.messageIds.add(String(item.id));
 
@@ -995,6 +1055,7 @@ function pushRoomChatMessage(entry, options = null) {
   if (hidden && !shouldRevealHidden) {
     renderRoomChatTabs();
     saveRoomChatUiState();
+    saveRoomChatCache(currentRoomId);
     return;
   }
 
@@ -1002,6 +1063,7 @@ function pushRoomChatMessage(entry, options = null) {
   renderRoomChatTabs();
   renderRoomChat();
   saveRoomChatUiState();
+  saveRoomChatCache(currentRoomId);
 }
 function getActiveRoomChatMessages() {
   return roomChatState.chats.get(String(roomChatState.activeChatKey || 'global')) || [];
@@ -1118,6 +1180,7 @@ function closeRoomChatTab(chatKey) {
   renderRoomChatSubtitle();
   renderRoomChat();
   saveRoomChatUiState();
+  saveRoomChatCache(currentRoomId);
 }
 function renderRoomChat() {
   if (!roomChatList) return;
