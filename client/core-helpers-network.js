@@ -2100,6 +2100,165 @@ async function sendMessage(msg) {
         break;
       }
 
+      case "inventoryTransferRequest": {
+        if (!currentRoomId || !lastState) return;
+        const next = deepClone(lastState);
+        const isGm = (String(myRole || "") === "GM");
+        const myUserId = String(getAppStorageItem("int_user_id") || "");
+
+        const fromPlayerId = String(msg.fromPlayerId || "").trim();
+        const toPlayerId = String(msg.toPlayerId || "").trim();
+        const tabId = String(msg.tabId || "other").trim() || 'other';
+        const idx = Math.max(0, Number(msg.itemIdx) || 0);
+        const qty = Math.max(1, Number(msg.qty) || 1);
+        if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) return;
+
+        const fromPlayer = (next.players || []).find((pl) => String(pl?.id || '') === fromPlayerId);
+        const toPlayer = (next.players || []).find((pl) => String(pl?.id || '') === toPlayerId);
+        if (!fromPlayer || !toPlayer) return;
+
+        const ownsFrom = String(fromPlayer?.ownerId || '') === myUserId;
+        if (!isGm && !ownsFrom) return;
+
+        const items = fromPlayer?.sheet?.parsed?.inventory?.[tabId];
+        if (!Array.isArray(items) || idx < 0 || idx >= items.length) return;
+        const item = items[idx];
+        const maxQty = Math.max(1, Number(item?.qty) || 1);
+        if (qty > maxQty) return;
+
+        const offer = {
+          id: (crypto?.randomUUID ? crypto.randomUUID() : (`inv-offer-${Date.now()}-${Math.random().toString(16).slice(2)}`)),
+          createdAt: Date.now(),
+          fromPlayerId,
+          fromPlayerName: String(fromPlayer?.name || 'Игрок').trim() || 'Игрок',
+          fromOwnerId: String(fromPlayer?.ownerId || ''),
+          toPlayerId,
+          toPlayerName: String(toPlayer?.name || 'Игрок').trim() || 'Игрок',
+          toOwnerId: String(toPlayer?.ownerId || ''),
+          tabId,
+          itemIdx: idx,
+          itemId: String(item?.id || ''),
+          itemName: String(item?.name_ru || item?.name || item?.name_en || 'Предмет').trim() || 'Предмет',
+          qty
+        };
+
+        try {
+          sendWsEnvelope({ type: 'inventoryTransferOffer', roomId: currentRoomId, offer }, { optimisticApplied: true });
+        } catch {}
+        break;
+      }
+
+      case "inventoryTransferRespond": {
+        if (!currentRoomId || !lastState) return;
+        const next = deepClone(lastState);
+        const isGm = (String(myRole || "") === "GM");
+        const myUserId = String(getAppStorageItem("int_user_id") || "");
+        const offer = (msg && typeof msg.offer === 'object') ? msg.offer : null;
+        const accepted = !!msg.accepted;
+        if (!offer) return;
+
+        const fromPlayerId = String(offer.fromPlayerId || '').trim();
+        const toPlayerId = String(offer.toPlayerId || '').trim();
+        const tabId = String(offer.tabId || 'other').trim() || 'other';
+        const idx = Math.max(0, Number(offer.itemIdx) || 0);
+        const qty = Math.max(1, Number(offer.qty) || 1);
+        if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) return;
+
+        const fromPlayer = (next.players || []).find((pl) => String(pl?.id || '') === fromPlayerId);
+        const toPlayer = (next.players || []).find((pl) => String(pl?.id || '') === toPlayerId);
+        if (!fromPlayer || !toPlayer) return;
+
+        const ownsTo = String(toPlayer?.ownerId || '') === myUserId;
+        if (!isGm && !ownsTo) return;
+
+        const notify = (message) => {
+          const result = {
+            id: String(offer.id || ''),
+            accepted: false,
+            fromOwnerId: String(fromPlayer?.ownerId || ''),
+            toOwnerId: String(toPlayer?.ownerId || ''),
+            message: String(message || 'Передача отменена.')
+          };
+          try {
+            sendWsEnvelope({ type: 'inventoryTransferResult', roomId: currentRoomId, result }, { optimisticApplied: true });
+          } catch {}
+        };
+
+        if (!accepted) {
+          notify(`Игрок ${String(toPlayer?.name || 'получатель')} отклонил передачу ${qty} × ${String(offer?.itemName || 'предмет')}.`);
+          break;
+        }
+
+        const fromItems = fromPlayer?.sheet?.parsed?.inventory?.[tabId];
+        if (!Array.isArray(fromItems) || idx < 0 || idx >= fromItems.length) {
+          notify('Передача не удалась: предмет больше недоступен у отправителя.');
+          break;
+        }
+
+        const fromItem = fromItems[idx];
+        const currentQty = Math.max(1, Number(fromItem?.qty) || 1);
+        if (qty > currentQty) {
+          notify('Передача не удалась: у отправителя недостаточно количества предмета.');
+          break;
+        }
+
+        if (String(offer.itemId || '') && String(fromItem?.id || '') !== String(offer.itemId || '')) {
+          notify('Передача не удалась: предмет у отправителя изменился.');
+          break;
+        }
+
+        if (!toPlayer.sheet || typeof toPlayer.sheet !== 'object') toPlayer.sheet = { parsed: {} };
+        if (!toPlayer.sheet.parsed || typeof toPlayer.sheet.parsed !== 'object') toPlayer.sheet.parsed = {};
+        if (!toPlayer.sheet.parsed.inventory || typeof toPlayer.sheet.parsed.inventory !== 'object') toPlayer.sheet.parsed.inventory = { activeTab: tabId };
+        if (!Array.isArray(toPlayer.sheet.parsed.inventory[tabId])) toPlayer.sheet.parsed.inventory[tabId] = [];
+
+        const targetArr = toPlayer.sheet.parsed.inventory[tabId];
+        const same = targetArr.find((it) => String(it?.id || '') && String(it?.id || '') === String(fromItem?.id || ''));
+        if (same) {
+          same.qty = Math.max(1, Number(same?.qty) || 1) + qty;
+        } else {
+          const cloned = deepClone(fromItem);
+          cloned.qty = qty;
+          targetArr.push(cloned);
+        }
+
+        fromItem.qty = currentQty - qty;
+        if (fromItem.qty <= 0) {
+          fromItems.splice(idx, 1);
+          try {
+            if (tabId === 'weapons' && Array.isArray(fromPlayer?.sheet?.parsed?.weaponsList)) {
+              const invId = String(fromItem?.id || '').trim();
+              if (invId) {
+                fromPlayer.sheet.parsed.weaponsList = fromPlayer.sheet.parsed.weaponsList.filter((w) => String(w?.invId || '') !== invId);
+              }
+            }
+          } catch {}
+        }
+
+        try {
+          fromPlayer.sheetUpdatedAt = Date.now();
+          toPlayer.sheetUpdatedAt = Date.now();
+        } catch {}
+
+        try {
+          handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+        } catch {}
+
+        await upsertRoomState(currentRoomId, next);
+
+        const result = {
+          id: String(offer.id || ''),
+          accepted: true,
+          fromOwnerId: String(fromPlayer?.ownerId || ''),
+          toOwnerId: String(toPlayer?.ownerId || ''),
+          message: `Передано ${qty} × ${String(offer?.itemName || 'предмет')} игроку ${String(toPlayer?.name || 'получатель')}.`
+        };
+        try {
+          sendWsEnvelope({ type: 'inventoryTransferResult', roomId: currentRoomId, result }, { optimisticApplied: true });
+        } catch {}
+        break;
+      }
+
       case "setPlayerSheet": {
   if (!currentRoomId) return;
   if (!lastState) return;
