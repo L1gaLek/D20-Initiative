@@ -18,6 +18,15 @@
   }
 
   function getAllPlayers() {
+    const ctx = getCtx();
+    try {
+      const arr = (typeof ctx?.getPlayers === 'function') ? ctx.getPlayers() : null;
+      if (Array.isArray(arr)) return arr;
+    } catch {}
+    try {
+      const arr = (typeof window.getVisiblePlayers === 'function') ? window.getVisiblePlayers() : null;
+      if (Array.isArray(arr)) return arr;
+    } catch {}
     if (Array.isArray(window.players)) return window.players;
     if (Array.isArray(window.lastState?.players)) return window.lastState.players;
     return [];
@@ -73,8 +82,8 @@
         <div class="equip-overlay__list" style="padding-top:10px;">
           <div class="sheet-note" style="margin-bottom:10px;">Предмет: <b>${escapeHtml(itemName)}</b> (доступно: ${qtyCap})</div>
           <label style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
-            <input type="checkbox" data-transfer-only-base checked>
-            <span>Только «Основа»</span>
+            <input type="checkbox" data-transfer-only-base>
+            <span>Только персонажи с флагом «Основа»</span>
           </label>
           <div style="display:flex; justify-content:flex-end; gap:8px;">
             <button class="weapon-btn" type="button" data-transfer-close>Отмена</button>
@@ -94,7 +103,7 @@
       const targets = buildPlayerOptions(fromPlayer?.id, !!onlyBaseEl?.checked);
       if (selectEl) {
         selectEl.innerHTML = targets.length
-          ? targets.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}${p.isBase ? ' · Основа' : ''}</option>`).join('')
+          ? targets.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}${p.isBase ? ' ☑ Основа' : ' ☐ Основа'}</option>`).join('')
           : '<option value="">Нет доступных игроков</option>';
       }
     }
