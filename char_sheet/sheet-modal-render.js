@@ -885,6 +885,7 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
             <span class="equip-qty-lbl">x</span>
             <input class="equip-qty-in" type="number" min="1" max="999" value="${escapeHtml(String(qty))}" ${canEdit ? "" : "disabled"} data-sheet-path="inventory.${escapeHtml(tabId)}.${idx}.qty">
           </div>
+          <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-transfer data-tab="${escapeHtml(tabId)}" data-idx="${idx}" title="Передать игроку">Передать</button>
           <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-inv-sell data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Продать</button>
           <button class="weapon-btn danger" type="button" ${canEdit ? "" : "disabled"} data-inv-del data-tab="${escapeHtml(tabId)}" data-idx="${idx}">Удалить</button>
           ${descToggleBtn}
@@ -1013,9 +1014,12 @@ function renderInvItemCard(item, tabId, idx, canEdit) {
         <div class="sheet-card fullwidth coins-card">
           <div class="coins-head">
             <h4 style="margin:0">Монеты</h4>
-            <div class="exchange-pill" tabindex="0">
-              Обменный курс
-              ${exchangeTooltip}
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+              <button class="weapon-btn" type="button" ${canEdit ? "" : "disabled"} data-coins-transfer>Передать монеты</button>
+              <div class="exchange-pill" tabindex="0">
+                Обменный курс
+                ${exchangeTooltip}
+              </div>
             </div>
           </div>
 

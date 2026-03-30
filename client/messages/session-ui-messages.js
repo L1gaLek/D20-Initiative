@@ -34,7 +34,8 @@ function handleRegisteredMessage(msg) {
     window.InfoModal.init({
       sendMessage,
       getMyId: () => myId,
-      getMyRole: () => myRole
+      getMyRole: () => myRole,
+      getPlayers: () => (Array.isArray(players) ? players : [])
     });
   }
 

@@ -1805,6 +1805,15 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
         return;
       }
 
+      // transfer coins to another base player
+      if (e.target?.closest?.('[data-coins-transfer]')) {
+        if (!curCanEdit) return;
+        try {
+          window.__inventoryTransfer?.openCoinsTransferModal?.({ fromPlayer: curPlayer });
+        } catch {}
+        return;
+      }
+
       // Open DB from inventory
       if (e.target?.closest?.('[data-inv-open-db]')) {
         openEquipOverlay('add');
@@ -1924,6 +1933,30 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
         });
         scheduleSheetSave(curPlayer);
         rerenderActiveTab(curPlayer);
+        return;
+      }
+
+
+      // transfer inventory item to another player
+      const transferBtn = e.target?.closest?.('[data-inv-transfer][data-tab][data-idx]');
+      if (transferBtn) {
+        if (!curCanEdit) return;
+        const tabId = String(transferBtn.getAttribute('data-tab') || 'weapons');
+        const idx = safeInt(transferBtn.getAttribute('data-idx'), -1);
+        const sheet = curPlayer?.sheet?.parsed;
+        const arr = sheet?.inventory?.[tabId];
+        if (!Array.isArray(arr) || idx < 0 || idx >= arr.length) return;
+        const it = arr[idx];
+        const qty = Math.max(1, safeInt(it?.qty, 1));
+        try {
+          window.__inventoryTransfer?.openTransferModal?.({
+            fromPlayer: curPlayer,
+            tabId,
+            idx,
+            item: it,
+            maxQty: qty
+          });
+        } catch {}
         return;
       }
 
