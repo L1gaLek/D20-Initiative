@@ -599,6 +599,15 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
   const payload = _normalizeCampaignPayload(rawSavePayload);
   const normalized = ensureStateHasMaps(deepClone(payload.state || {}));
   await upsertRoomState(rid, normalized);
+  // Ensure GM client immediately switches to loaded campaign state (players/maps/phase/etc.),
+  // without waiting for a roundtrip or room re-enter.
+  try {
+    if (typeof handleMessage === 'function') {
+      handleMessage({ type: 'state', state: deepClone(normalized) });
+    }
+  } catch (e) {
+    console.warn('applyCampaignSaveToRoom: immediate local state apply failed', e);
+  }
 
   const detached = payload.detached || _deriveDetachedFromState(normalized);
   const mapIds = new Set((Array.isArray(normalized.maps) ? normalized.maps : []).map((m) => String(m?.id || '').trim()).filter(Boolean));
