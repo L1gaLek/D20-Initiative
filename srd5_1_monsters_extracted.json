@@ -3,8 +3,8 @@
     "source": "SRD 5.1 CC v5.1 PDF",
     "extracted_from": "SRD_CC_v5.1.pdf",
     "extracted_at": "2026-02-11T13:27:51.441144Z",
-    "count": 197,
-    "notes": "Все описательные тексты полностью переведены на русский язык. Поля text_en удалены. Терминология приведена к стандарту D&D 5 редакции."
+    "count": 207,
+    "notes": "Все описательные тексты полностью переведены на русский язык. Поля text_en удалены. Терминология приведена к стандарту D&D 5 редакции. + Добавлены 10 монстров из SRD 5.2.1 (черновые записи с русским переводом названий)."
   },
   "monsters": [
     {
@@ -14747,6 +14747,566 @@
       "reactions": [],
       "legendary_actions": [],
       "source": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "id": "goblin-minion",
+      "name_ru": "Гоблин-миньон",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "goblin-boss",
+      "name_ru": "Главарь гоблинов",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "sphinx-of-lore",
+      "name_ru": "Сфинкс знаний",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "sphinx-of-valor",
+      "name_ru": "Сфинкс доблести",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "sphinx-of-wonder",
+      "name_ru": "Сфинкс чудес",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "tough",
+      "name_ru": "Громила",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "tough-boss",
+      "name_ru": "Главарь громил",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "warrior-infantry",
+      "name_ru": "Воин-пехотинец",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "warrior-veteran",
+      "name_ru": "Воин-ветеран",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
+    },
+    {
+      "id": "vampire-familiar",
+      "name_ru": "Вампир-фамильяр",
+      "size_ru": "Неизвестно",
+      "type_ru": "Неизвестно",
+      "alignment_ru": "Неизвестно",
+      "ac": "",
+      "hp": "",
+      "speed": "",
+      "abilities": {
+        "str": {
+          "score": 0,
+          "mod": 0
+        },
+        "dex": {
+          "score": 0,
+          "mod": 0
+        },
+        "con": {
+          "score": 0,
+          "mod": 0
+        },
+        "int": {
+          "score": 0,
+          "mod": 0
+        },
+        "wis": {
+          "score": 0,
+          "mod": 0
+        },
+        "cha": {
+          "score": 0,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "",
+      "languages": "",
+      "cr": "",
+      "xp": "",
+      "traits": [
+        {
+          "name_ru": "Примечание",
+          "text_ru": "Добавлено из SRD 5.2.1. Требуется заполнение полного статблока."
+        }
+      ],
+      "actions": [],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 (добавлено вручную, перевод на русский)"
     }
   ]
 }
