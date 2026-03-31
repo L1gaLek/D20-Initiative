@@ -3,7 +3,7 @@
     "source": "SRD 5.1 CC v5.1 PDF",
     "extracted_from": "SRD_CC_v5.1.pdf",
     "extracted_at": "2026-02-11T13:27:51.441144Z",
-    "count": 257,
+    "count": 258,
     "notes": "Все описательные тексты полностью переведены на русский язык. Поля text_en удалены. Терминология приведена к стандарту D&D 5 редакции. Добавлены и обновлены монстры из SRD 5.2.1 (бестиарий Monsters A-Z)."
   },
   "monsters": [
@@ -18459,6 +18459,67 @@
           "mod": 0
         }
       }
+    },
+    {
+      "id": "warriors",
+      "name_ru": "Воины",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "см. варианты",
+      "hp": "см. варианты",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 13,
+          "mod": 1
+        },
+        "dex": {
+          "score": 11,
+          "mod": 0
+        },
+        "con": {
+          "score": 11,
+          "mod": 0
+        },
+        "int": {
+          "score": 8,
+          "mod": -1
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 8,
+          "mod": -1
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий",
+      "cr": "1/8–3",
+      "xp": "25–700",
+      "traits": [
+        {
+          "name_ru": "Варианты",
+          "text_ru": "Группа «Воины» в SRD 5.2.1 включает отдельные статблоки: warrior-infantry и warrior-veteran."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Копьё / Вооружение воина",
+          "text_ru": "См. подробные значения в statblock-ах warrior-infantry и warrior-veteran."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
     }
   ]
 }
