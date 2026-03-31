@@ -3,8 +3,8 @@
     "source": "SRD 5.1 CC v5.1 PDF",
     "extracted_from": "SRD_CC_v5.1.pdf",
     "extracted_at": "2026-02-11T13:27:51.441144Z",
-    "count": 197,
-    "notes": "Все описательные тексты полностью переведены на русский язык. Поля text_en удалены. Терминология приведена к стандарту D&D 5 редакции."
+    "count": 247,
+    "notes": "Все описательные тексты полностью переведены на русский язык. Поля text_en удалены. Терминология приведена к стандарту D&D 5 редакции. Добавлены и обновлены монстры из SRD 5.2.1 (бестиарий Monsters A-Z)."
   },
   "monsters": [
     {
@@ -14747,6 +14747,3106 @@
       "reactions": [],
       "legendary_actions": [],
       "source": "SRD 5.1 (CC BY 4.0)"
+    },
+    {
+      "saving_throws": "",
+      "skills": "Скрытность +6",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 9",
+      "languages": "Общий, Гоблинский",
+      "cr": "1/8",
+      "xp": "25",
+      "traits": [
+        {
+          "name_ru": "Проворный побег",
+          "text_ru": "Бонусным действием гоблин выполняет Отход или Засаду."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Кинжал",
+          "text_ru": "Атака ближнего или дальнего боя: +4 к попаданию, досягаемость 5 фт. или дистанция 20/60 фт., попадание: 4 (1d4+2) колющего урона."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "goblin-minion",
+      "name_ru": "Гоблин-миньон",
+      "size_ru": "Маленький",
+      "type_ru": "фея (гоблиноид)",
+      "alignment_ru": "хаотично-нейтральный",
+      "ac": "12",
+      "hp": "7 (2d6)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 8,
+          "mod": -1
+        },
+        "dex": {
+          "score": 15,
+          "mod": 2
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 8,
+          "mod": -1
+        },
+        "cha": {
+          "score": 8,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Скрытность +6",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 9",
+      "languages": "Общий, Гоблинский",
+      "cr": "1",
+      "xp": "200",
+      "traits": [
+        {
+          "name_ru": "Проворный побег",
+          "text_ru": "Бонусным действием выполняет Отход или Засаду."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Совершает две атаки (ятаганом или коротким луком в любой комбинации)."
+        }
+      ],
+      "reactions": [
+        {
+          "name_ru": "Перенаправление атаки",
+          "text_ru": "Когда цель атаки — главарь, он меняется местами с союзником Малого/Среднего размера в 5 фт.; союзник становится новой целью."
+        }
+      ],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "goblin-boss",
+      "name_ru": "Главарь гоблинов",
+      "size_ru": "Маленький",
+      "type_ru": "фея (гоблиноид)",
+      "alignment_ru": "хаотично-нейтральный",
+      "ac": "17",
+      "hp": "21 (6d6)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 10,
+          "mod": 0
+        },
+        "dex": {
+          "score": 15,
+          "mod": 2
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 8,
+          "mod": -1
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Магия +12, История +12, Восприятие +8, Религия +12",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "Некротический, Излучение",
+      "damage_immunities": "Психический",
+      "condition_immunities": "Очарование, Испуг",
+      "senses": "Истинное зрение 120 фт., пассивное Восприятие 18",
+      "languages": "Небесный, Общий",
+      "cr": "12",
+      "xp": "8400",
+      "traits": [
+        {
+          "name_ru": "Непостижимый",
+          "text_ru": "Магия не может читать мысли сфинкса и наблюдать за ним удалённо без его согласия."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Совершает две атаки когтями."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "sphinx-of-lore",
+      "name_ru": "Сфинкс знаний",
+      "size_ru": "Большой",
+      "type_ru": "небожитель",
+      "alignment_ru": "законно-нейтральный",
+      "ac": "17",
+      "hp": "170 (20d10 + 60)",
+      "speed": "40 фт., полёт 60 фт.",
+      "abilities": {
+        "str": {
+          "score": 18,
+          "mod": 4
+        },
+        "dex": {
+          "score": 15,
+          "mod": 2
+        },
+        "con": {
+          "score": 16,
+          "mod": 3
+        },
+        "int": {
+          "score": 18,
+          "mod": 4
+        },
+        "wis": {
+          "score": 18,
+          "mod": 4
+        },
+        "cha": {
+          "score": 18,
+          "mod": 4
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Магия +9, Восприятие +12, Религия +15",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "Некротический, Излучение",
+      "damage_immunities": "Психический",
+      "condition_immunities": "Очарование, Испуг",
+      "senses": "Истинное зрение 120 фт., пассивное Восприятие 22",
+      "languages": "Небесный, Общий",
+      "cr": "17",
+      "xp": "18000",
+      "traits": [
+        {
+          "name_ru": "Непостижимый",
+          "text_ru": "Магия не может читать мысли сфинкса и наблюдать за ним удалённо без его согласия."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Совершает две атаки когтями и использует Рёв."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "sphinx-of-valor",
+      "name_ru": "Сфинкс доблести",
+      "size_ru": "Большой",
+      "type_ru": "небожитель",
+      "alignment_ru": "законно-нейтральный",
+      "ac": "17",
+      "hp": "199 (19d10 + 95)",
+      "speed": "40 фт., полёт 60 фт.",
+      "abilities": {
+        "str": {
+          "score": 22,
+          "mod": 6
+        },
+        "dex": {
+          "score": 10,
+          "mod": 0
+        },
+        "con": {
+          "score": 20,
+          "mod": 5
+        },
+        "int": {
+          "score": 16,
+          "mod": 3
+        },
+        "wis": {
+          "score": 23,
+          "mod": 6
+        },
+        "cha": {
+          "score": 18,
+          "mod": 4
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Магия +4, Религия +4, Скрытность +5",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "Некротический, Психический, Излучение",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 11",
+      "languages": "Небесный, Общий",
+      "cr": "1",
+      "xp": "200",
+      "traits": [
+        {
+          "name_ru": "Загадочная природа",
+          "text_ru": "Малый хранитель загадок из бестиария SRD 5.2.1."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Когти",
+          "text_ru": "Атака когтями (детали урона см. в первоисточнике SRD 5.2.1)."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "sphinx-of-wonder",
+      "name_ru": "Сфинкс чудес",
+      "size_ru": "Крошечный",
+      "type_ru": "небожитель",
+      "alignment_ru": "законно-добрый",
+      "ac": "13",
+      "hp": "24 (7d4 + 7)",
+      "speed": "20 фт., полёт 40 фт.",
+      "abilities": {
+        "str": {
+          "score": 6,
+          "mod": -2
+        },
+        "dex": {
+          "score": 17,
+          "mod": 3
+        },
+        "con": {
+          "score": 13,
+          "mod": 1
+        },
+        "int": {
+          "score": 15,
+          "mod": 2
+        },
+        "wis": {
+          "score": 12,
+          "mod": 1
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий",
+      "cr": "1/2",
+      "xp": "100",
+      "traits": [
+        {
+          "name_ru": "Тактика стаи",
+          "text_ru": "Преимущество на бросок атаки, если рядом с целью есть союзник громилы."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Булава",
+          "text_ru": "Атака ближнего боя: +4 к попаданию, 5 (1d6+2) дробящего урона."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "tough",
+      "name_ru": "Громила",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "12",
+      "hp": "32 (5d8 + 10)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 15,
+          "mod": 2
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий + ещё один язык",
+      "cr": "4",
+      "xp": "1100",
+      "traits": [
+        {
+          "name_ru": "Тактика стаи",
+          "text_ru": "Преимущество на бросок атаки, если рядом с целью есть союзник громилы."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки (боевым молотом или тяжёлым арбалетом)."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "tough-boss",
+      "name_ru": "Главарь громил",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "16",
+      "hp": "82 (11d8 + 33)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 17,
+          "mod": 3
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 16,
+          "mod": 3
+        },
+        "int": {
+          "score": 11,
+          "mod": 0
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий",
+      "cr": "1/8",
+      "xp": "25",
+      "traits": [
+        {
+          "name_ru": "Тактика стаи",
+          "text_ru": "Преимущество на бросок атаки, если рядом с целью есть союзник воина."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Копьё",
+          "text_ru": "Атака ближнего или дальнего боя: +3 к попаданию, попадание: 4 (1d6+1) колющего урона."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "warrior-infantry",
+      "name_ru": "Воин-пехотинец",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "13",
+      "hp": "9 (2d8)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 13,
+          "mod": 1
+        },
+        "dex": {
+          "score": 11,
+          "mod": 0
+        },
+        "con": {
+          "score": 11,
+          "mod": 0
+        },
+        "int": {
+          "score": 8,
+          "mod": -1
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 8,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Атлетика +5, Восприятие +2",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 12",
+      "languages": "Общий + ещё один язык",
+      "cr": "3",
+      "xp": "700",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки двуручным мечом или тяжёлым арбалетом."
+        }
+      ],
+      "reactions": [
+        {
+          "name_ru": "Парирование",
+          "text_ru": "Добавляет +2 к КД против одной атаки ближнего боя, которая попала по нему."
+        }
+      ],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "warrior-veteran",
+      "name_ru": "Воин-ветеран",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "17",
+      "hp": "65 (10d8 + 20)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 16,
+          "mod": 3
+        },
+        "dex": {
+          "score": 13,
+          "mod": 1
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Восприятие +4, Убеждение +4, Скрытность +7",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "Некротический",
+      "damage_immunities": "",
+      "condition_immunities": "Очарование (кроме эффекта хозяина-вампира)",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 14",
+      "languages": "Общий + ещё один язык",
+      "cr": "3",
+      "xp": "700",
+      "traits": [
+        {
+          "name_ru": "Вампирская связь",
+          "text_ru": "Хозяин-вампир и фамильяр могут телепатически общаться на одном плане."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки теневым кинжалом."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "vampire-familiar",
+      "name_ru": "Вампир-фамильяр",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтрально-злой",
+      "ac": "15",
+      "hp": "65 (10d8 + 20)",
+      "speed": "30 фт., лазание 30 фт.",
+      "abilities": {
+        "str": {
+          "score": 17,
+          "mod": 3
+        },
+        "dex": {
+          "score": 16,
+          "mod": 3
+        },
+        "con": {
+          "score": 15,
+          "mod": 2
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 14,
+          "mod": 2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "Испуг",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий + ещё один язык",
+      "cr": "3",
+      "xp": "700",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки двуручным мечом или тяжёлым арбалетом."
+        }
+      ],
+      "reactions": [
+        {
+          "name_ru": "Парирование",
+          "text_ru": "Добавляет +2 к КД против одной атаки ближнего боя, которая попала по рыцарю."
+        }
+      ],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "knight",
+      "name_ru": "Рыцарь",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "18",
+      "hp": "52 (8d8 + 16)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 16,
+          "mod": 3
+        },
+        "dex": {
+          "score": 11,
+          "mod": 0
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 11,
+          "mod": 0
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 15,
+          "mod": 2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 8",
+      "languages": "Общий, Драконий",
+      "cr": "1/8",
+      "xp": "25",
+      "traits": [
+        {
+          "name_ru": "Тактика стаи",
+          "text_ru": "Преимущество на атаку при наличии союзника рядом с целью."
+        },
+        {
+          "name_ru": "Чувствительность к солнечному свету",
+          "text_ru": "Помеха на проверки характеристик и атаки при солнечном свете."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Кинжал",
+          "text_ru": "Атака ближнего/дальнего боя: +4, урон 4 (1d4+2) колющего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "kobold-warrior",
+      "name_ru": "Кобольд-воин",
+      "size_ru": "Маленький",
+      "type_ru": "дракон",
+      "alignment_ru": "нейтральный",
+      "ac": "14",
+      "hp": "7 (3d6 − 3)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 7,
+          "mod": -2
+        },
+        "dex": {
+          "score": 15,
+          "mod": 2
+        },
+        "con": {
+          "score": 9,
+          "mod": -1
+        },
+        "int": {
+          "score": 8,
+          "mod": -1
+        },
+        "wis": {
+          "score": 7,
+          "mod": -2
+        },
+        "cha": {
+          "score": 8,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Скрытность +6",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 9",
+      "languages": "Общий, Гоблинский",
+      "cr": "1/4",
+      "xp": "50",
+      "traits": [
+        {
+          "name_ru": "Проворный побег",
+          "text_ru": "Бонусным действием выполняет Отход или Засаду."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Ятаган",
+          "text_ru": "Атака +4, урон 5 (1d6+2) рубящего + 1d4 при преимуществе."
+        },
+        {
+          "name_ru": "Короткий лук",
+          "text_ru": "Атака +4, урон 5 (1d6+2) колющего + 1d4 при преимуществе."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "goblin-warrior",
+      "name_ru": "Гоблин-воин",
+      "size_ru": "Маленький",
+      "type_ru": "фея (гоблиноид)",
+      "alignment_ru": "хаотично-нейтральный",
+      "ac": "15",
+      "hp": "10 (3d6)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 8,
+          "mod": -1
+        },
+        "dex": {
+          "score": 15,
+          "mod": 2
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 8,
+          "mod": -1
+        },
+        "cha": {
+          "score": 8,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 10",
+      "languages": "Гнолльский",
+      "cr": "1/2",
+      "xp": "100",
+      "traits": [
+        {
+          "name_ru": "Ярость (1/день)",
+          "text_ru": "После нанесения урона окровавленной цели перемещается до половины скорости и совершает Ренд."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Ренд",
+          "text_ru": "Атака ближнего боя: +4, 5 (1d6+2) колющего урона."
+        },
+        {
+          "name_ru": "Костяной лук",
+          "text_ru": "Атака дальнего боя: +3, 6 (1d10+1) колющего урона."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "gnoll-warrior",
+      "name_ru": "Гнолл-воин",
+      "size_ru": "Средний",
+      "type_ru": "изверг",
+      "alignment_ru": "хаотично-злой",
+      "ac": "15",
+      "hp": "27 (6d8)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 14,
+          "mod": 2
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 11,
+          "mod": 0
+        },
+        "int": {
+          "score": 6,
+          "mod": -2
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 7,
+          "mod": -2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 9",
+      "languages": "—",
+      "cr": "1/2",
+      "xp": "100",
+      "traits": [
+        {
+          "name_ru": "Регенерация",
+          "text_ru": "Восстанавливает 5 хитов в начале хода, кроме хода после получения урона кислотой/огнём."
+        },
+        {
+          "name_ru": "Порождение тролля",
+          "text_ru": "Если не уничтожена за 24 часа, на 1d12 (только на 12) превращается в тролля."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Ренд",
+          "text_ru": "Атака ближнего боя: +6, 9 (2d4+4) рубящего урона."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "troll-limb",
+      "name_ru": "Конечность тролля",
+      "size_ru": "Маленький",
+      "type_ru": "гигант",
+      "alignment_ru": "хаотично-злой",
+      "ac": "13",
+      "hp": "14 (4d6)",
+      "speed": "20 фт.",
+      "abilities": {
+        "str": {
+          "score": 18,
+          "mod": 4
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 1,
+          "mod": -5
+        },
+        "wis": {
+          "score": 9,
+          "mod": -1
+        },
+        "cha": {
+          "score": 1,
+          "mod": -5
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Природа +4, Восприятие +5, Скрытность +6, Выживание +5",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 15",
+      "languages": "Общий + ещё один язык",
+      "cr": "1/2",
+      "xp": "100",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки (коротким мечом и/или длинным луком)."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "scout",
+      "name_ru": "Разведчик",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "13",
+      "hp": "16 (3d8 + 3)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 11,
+          "mod": 0
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 11,
+          "mod": 0
+        },
+        "wis": {
+          "score": 13,
+          "mod": 1
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 11",
+      "languages": "Общий + ещё один язык",
+      "cr": "1",
+      "xp": "200",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки кинжалом; одну атаку может заменить на Обворожительную манеру."
+        },
+        {
+          "name_ru": "Кинжал",
+          "text_ru": "Атака +5, 5 (1d4+3) колющего урона."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "pirate",
+      "name_ru": "Пират",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "14",
+      "hp": "33 (6d8 + 6)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 10,
+          "mod": 0
+        },
+        "dex": {
+          "score": 16,
+          "mod": 3
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 8,
+          "mod": -1
+        },
+        "wis": {
+          "score": 12,
+          "mod": 1
+        },
+        "cha": {
+          "score": 14,
+          "mod": 2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Акробатика +7, Восприятие +5",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 15",
+      "languages": "Общий + ещё один язык",
+      "cr": "6",
+      "xp": "2300",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Несколько атак рапирой/пистолем (см. SRD 5.2.1)."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "pirate-captain",
+      "name_ru": "Капитан пиратов",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "17",
+      "hp": "84 (13d8 + 26)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 10,
+          "mod": 0
+        },
+        "dex": {
+          "score": 18,
+          "mod": 4
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 14,
+          "mod": 2
+        },
+        "cha": {
+          "score": 17,
+          "mod": 3
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Восприятие +2",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 12",
+      "languages": "Общий",
+      "cr": "1/8",
+      "xp": "25",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Копьё",
+          "text_ru": "Атака ближнего или дальнего боя копьём (см. SRD 5.2.1)."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "guard",
+      "name_ru": "Стражник",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "16",
+      "hp": "11 (2d8 + 2)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 13,
+          "mod": 1
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Атлетика +6, Восприятие +4",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 14",
+      "languages": "Общий",
+      "cr": "4",
+      "xp": "1100",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Несколько атак длинным мечом/дротиком (см. SRD 5.2.1)."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "guard-captain",
+      "name_ru": "Капитан стражи",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "18",
+      "hp": "75 (10d8 + 30)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 18,
+          "mod": 4
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 16,
+          "mod": 3
+        },
+        "int": {
+          "score": 12,
+          "mod": 1
+        },
+        "wis": {
+          "score": 14,
+          "mod": 2
+        },
+        "cha": {
+          "score": 13,
+          "mod": 1
+        }
+      }
+    },
+    {
+      "id": "succubus",
+      "name_ru": "Суккуб",
+      "size_ru": "Средний",
+      "type_ru": "изверг",
+      "alignment_ru": "нейтрально-злой",
+      "ac": "15",
+      "hp": "71 (13d8 + 13)",
+      "speed": "30 фт., полёт 60 фт.",
+      "abilities": {
+        "str": {
+          "score": 8,
+          "mod": -1
+        },
+        "dex": {
+          "score": 17,
+          "mod": 3
+        },
+        "con": {
+          "score": 13,
+          "mod": 1
+        },
+        "int": {
+          "score": 15,
+          "mod": 2
+        },
+        "wis": {
+          "score": 12,
+          "mod": 1
+        },
+        "cha": {
+          "score": 20,
+          "mod": 5
+        }
+      },
+      "saving_throws": "",
+      "skills": "Обман +9, Проницательность +5, Восприятие +5, Убеждение +9, Скрытность +7",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "холод, огонь, яд, психический",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 15",
+      "languages": "Бездонный, Общий, Инфернальный; телепатия 60 фт.",
+      "cr": "4",
+      "xp": "1100",
+      "traits": [
+        {
+          "name_ru": "Форма инкуба",
+          "text_ru": "После длительного отдыха может изменить форму на инкуба."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Совершает одну атаку Инфернальным касанием и использует Очарование или Иссушающий поцелуй."
+        },
+        {
+          "name_ru": "Инфернальное касание",
+          "text_ru": "Атака ближнего боя: +7 к попаданию, урон 16 (2d10 + 5) психического урона."
+        },
+        {
+          "name_ru": "Очарование",
+          "text_ru": "Накладывает Доминирование личности (версия 8 уровня), Сл спасброска 15."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "hobgoblin-warrior",
+      "name_ru": "Хобгоблин-воин",
+      "size_ru": "Средний",
+      "type_ru": "фея (гоблиноид)",
+      "alignment_ru": "законно-злой",
+      "ac": "18",
+      "hp": "11 (2d8 + 2)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 13,
+          "mod": 1
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 9,
+          "mod": -1
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 10",
+      "languages": "Общий, Гоблинский",
+      "cr": "1/2",
+      "xp": "100",
+      "traits": [
+        {
+          "name_ru": "Тактика стаи",
+          "text_ru": "Преимущество на атаку при наличии союзника рядом с целью."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Длинный меч",
+          "text_ru": "Атака ближнего боя: +3, урон 12 (2d10 + 1) рубящего."
+        },
+        {
+          "name_ru": "Длинный лук",
+          "text_ru": "Атака дальнего боя: +3, урон 5 (1d8 + 1) колющего + 7 (3d4) ядом."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "bugbear-warrior",
+      "name_ru": "Багбир-воин",
+      "size_ru": "Средний",
+      "type_ru": "фея (гоблиноид)",
+      "alignment_ru": "хаотично-злой",
+      "ac": "14",
+      "hp": "33 (6d8 + 6)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 15,
+          "mod": 2
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 13,
+          "mod": 1
+        },
+        "int": {
+          "score": 8,
+          "mod": -1
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 9,
+          "mod": -1
+        }
+      },
+      "saving_throws": "",
+      "skills": "Скрытность +6, Выживание +2",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 10",
+      "languages": "Общий, Гоблинский",
+      "cr": "1",
+      "xp": "200",
+      "traits": [
+        {
+          "name_ru": "Похищение",
+          "text_ru": "Не тратит дополнительное движение, перемещая схваченную цель."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Хватка",
+          "text_ru": "Атака +4, досягаемость 10 фт., урон 9 (2d6+2) дробящего; цель Средняя/меньше схвачена (Сл 12)."
+        },
+        {
+          "name_ru": "Лёгкий молот",
+          "text_ru": "Атака +4 (с преимуществом по схваченной цели), урон 9 (3d4+2) дробящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "sahuagin-warrior",
+      "name_ru": "Сахуагин-воин",
+      "size_ru": "Средний",
+      "type_ru": "изверг",
+      "alignment_ru": "законно-злой",
+      "ac": "12",
+      "hp": "22 (4d8 + 4)",
+      "speed": "30 фт., плавание 40 фт.",
+      "abilities": {
+        "str": {
+          "score": 13,
+          "mod": 1
+        },
+        "dex": {
+          "score": 11,
+          "mod": 0
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 12,
+          "mod": 1
+        },
+        "wis": {
+          "score": 13,
+          "mod": 1
+        },
+        "cha": {
+          "score": 9,
+          "mod": -1
+        }
+      },
+      "saving_throws": "",
+      "skills": "Восприятие +5",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "кислота, холод",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 120 фт., пассивное Восприятие 15",
+      "languages": "Сахуагинский",
+      "cr": "1/2",
+      "xp": "100",
+      "traits": [
+        {
+          "name_ru": "Кровавое бешенство",
+          "text_ru": "Преимущество на атаки против существ не с полными хитами."
+        },
+        {
+          "name_ru": "Ограниченная амфибийность",
+          "text_ru": "Дышит воздухом и водой, но должен погружаться в воду минимум раз в 4 часа."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Совершает две атаки когтями."
+        },
+        {
+          "name_ru": "Коготь",
+          "text_ru": "Атака +3, урон 4 (1d6 + 1) рубящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "priest-acolyte",
+      "name_ru": "Послушник-жрец",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид (клирик)",
+      "alignment_ru": "нейтральный",
+      "ac": "13",
+      "hp": "11 (2d8 + 2)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 14,
+          "mod": 2
+        },
+        "dex": {
+          "score": 10,
+          "mod": 0
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 14,
+          "mod": 2
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      },
+      "saving_throws": "",
+      "skills": "Медицина +4, Религия +2",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 12",
+      "languages": "Общий",
+      "cr": "1/4",
+      "xp": "50",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Булава",
+          "text_ru": "Атака +4, урон 5 (1d6 + 2) дробящего + 2 (1d4) излучения."
+        },
+        {
+          "name_ru": "Сияющее пламя",
+          "text_ru": "Дальняя атака +4, урон 7 (2d6) излучения."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "priest",
+      "name_ru": "Жрец",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид (клирик)",
+      "alignment_ru": "нейтральный",
+      "ac": "13",
+      "hp": "38 (7d8 + 7)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 16,
+          "mod": 3
+        },
+        "dex": {
+          "score": 10,
+          "mod": 0
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 13,
+          "mod": 1
+        },
+        "wis": {
+          "score": 16,
+          "mod": 3
+        },
+        "cha": {
+          "score": 13,
+          "mod": 1
+        }
+      },
+      "saving_throws": "",
+      "skills": "Медицина +7, Восприятие +5, Религия +5",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 15",
+      "languages": "Общий + ещё один язык",
+      "cr": "2",
+      "xp": "450",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки булавой и/или Сияющим пламенем."
+        },
+        {
+          "name_ru": "Булава",
+          "text_ru": "Атака +5, урон 6 (1d6 + 3) дробящего + 5 (2d4) излучения."
+        },
+        {
+          "name_ru": "Сияющее пламя",
+          "text_ru": "Дальняя атака +5, урон 11 (2d10) излучения."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "noble",
+      "name_ru": "Дворянин",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "15",
+      "hp": "9 (2d8)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 11,
+          "mod": 0
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 11,
+          "mod": 0
+        },
+        "int": {
+          "score": 12,
+          "mod": 1
+        },
+        "wis": {
+          "score": 14,
+          "mod": 2
+        },
+        "cha": {
+          "score": 16,
+          "mod": 3
+        }
+      },
+      "saving_throws": "",
+      "skills": "Обман +5, Проницательность +4, Убеждение +5",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 12",
+      "languages": "Общий + 2 языка",
+      "cr": "1/8",
+      "xp": "25",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Рапира",
+          "text_ru": "Атака +3, урон 5 (1d8 + 1) колющего."
+        }
+      ],
+      "reactions": [
+        {
+          "name_ru": "Парирование",
+          "text_ru": "Добавляет +2 к КД против одной атаки ближнего боя."
+        }
+      ],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "phase-spider",
+      "name_ru": "Фазовый паук",
+      "size_ru": "Большой",
+      "type_ru": "монстрозность",
+      "alignment_ru": "без мировоззрения",
+      "ac": "14",
+      "hp": "45 (7d10 + 7)",
+      "speed": "30 фт., лазание 30 фт.",
+      "abilities": {
+        "str": {
+          "score": 15,
+          "mod": 2
+        },
+        "dex": {
+          "score": 16,
+          "mod": 3
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 6,
+          "mod": -2
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 6,
+          "mod": -2
+        }
+      },
+      "saving_throws": "",
+      "skills": "Скрытность +7",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 10",
+      "languages": "—",
+      "cr": "3",
+      "xp": "700",
+      "traits": [
+        {
+          "name_ru": "Эфирное зрение",
+          "text_ru": "Видит на 60 фт. в Эфирный план с Материального и наоборот."
+        },
+        {
+          "name_ru": "Лазание паука",
+          "text_ru": "Может лазать по сложным поверхностям без проверок."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Укус",
+          "text_ru": "Атака ближнего боя (см. SRD 5.2.1)."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "merfolk-skirmisher",
+      "name_ru": "Мерфолк-застрельщик",
+      "size_ru": "Средний",
+      "type_ru": "элементаль",
+      "alignment_ru": "нейтральный",
+      "ac": "11",
+      "hp": "11 (2d8 + 2)",
+      "speed": "10 фт., плавание 40 фт.",
+      "abilities": {
+        "str": {
+          "score": 10,
+          "mod": 0
+        },
+        "dex": {
+          "score": 13,
+          "mod": 1
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 11,
+          "mod": 0
+        },
+        "wis": {
+          "score": 14,
+          "mod": 2
+        },
+        "cha": {
+          "score": 12,
+          "mod": 1
+        }
+      },
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 12",
+      "languages": "Общий, Первичный (Акван)",
+      "cr": "1/8",
+      "xp": "25",
+      "traits": [
+        {
+          "name_ru": "Амфибия",
+          "text_ru": "Может дышать воздухом и водой."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Океаническое копьё",
+          "text_ru": "Атака +2; урон 3 (1d6) колющего + 2 (1d4) холодом; скорость цели уменьшается на 10 фт. до конца следующего хода."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "id": "spy",
+      "name_ru": "Шпион",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "12",
+      "hp": "27 (6d8)",
+      "speed": "30 фт., лазание 30 фт.",
+      "abilities": {
+        "str": {
+          "score": 10,
+          "mod": 0
+        },
+        "dex": {
+          "score": 15,
+          "mod": 2
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 12,
+          "mod": 1
+        },
+        "wis": {
+          "score": 14,
+          "mod": 2
+        },
+        "cha": {
+          "score": 16,
+          "mod": 3
+        }
+      },
+      "saving_throws": "",
+      "skills": "Обман +5, Проницательность +4, Анализ +5, Восприятие +6, Ловкость рук +4, Скрытность +6",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 16",
+      "languages": "Общий + ещё один язык",
+      "cr": "1",
+      "xp": "200",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Короткий меч",
+          "text_ru": "Атака +4, урон 5 (1d6 + 2) колющего + 7 (2d6) ядом."
+        },
+        {
+          "name_ru": "Ручной арбалет",
+          "text_ru": "Атака +4, урон 5 (1d6 + 2) колющего + 7 (2d6) ядом."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "saving_throws": "",
+      "skills": "Восприятие +7",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 13",
+      "languages": "Бездонный",
+      "cr": "3",
+      "xp": "700",
+      "traits": [
+        {
+          "name_ru": "Безрассудство",
+          "text_ru": "В начале хода может получить преимущество на атаки ближнего боя, но атаки по нему до следующего хода также с преимуществом."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Одна атака боданием и одна атака секирой."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "minotaur-of-baphomet",
+      "name_ru": "Минотавр Бафомета",
+      "size_ru": "Большой",
+      "type_ru": "изверг",
+      "alignment_ru": "хаотично-злой",
+      "ac": "14",
+      "hp": "76 (9d10 + 27)",
+      "speed": "40 фт.",
+      "abilities": {
+        "str": {
+          "score": 18,
+          "mod": 4
+        },
+        "dex": {
+          "score": 11,
+          "mod": 0
+        },
+        "con": {
+          "score": 16,
+          "mod": 3
+        },
+        "int": {
+          "score": 6,
+          "mod": -2
+        },
+        "wis": {
+          "score": 16,
+          "mod": 3
+        },
+        "cha": {
+          "score": 9,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Магия +6, История +6",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 11",
+      "languages": "Общий + 4 языка",
+      "cr": "6",
+      "xp": "2300",
+      "traits": [
+        {
+          "name_ru": "Подготовленные заклинания",
+          "text_ru": "Чародей 9 уровня; базовая характеристика — Интеллект (Сл 14, +6 к атаке заклинаниями)."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Кинжал",
+          "text_ru": "Атака +5, урон 4 (1d4 + 2) колющего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "mage",
+      "name_ru": "Маг",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид (волшебник)",
+      "alignment_ru": "любое мировоззрение",
+      "ac": "12 (15 с Доспехами мага)",
+      "hp": "40 (9d8)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 9,
+          "mod": -1
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 11,
+          "mod": 0
+        },
+        "int": {
+          "score": 17,
+          "mod": 3
+        },
+        "wis": {
+          "score": 12,
+          "mod": 1
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Магия +13, История +13",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 12",
+      "languages": "Общий + 6 языков",
+      "cr": "12",
+      "xp": "8400",
+      "traits": [
+        {
+          "name_ru": "Сопротивление магии",
+          "text_ru": "Преимущество на спасброски против заклинаний и магических эффектов."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Кинжал",
+          "text_ru": "Атака +6, урон 4 (1d4 + 2) колющего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "archmage",
+      "name_ru": "Архимаг",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид (волшебник)",
+      "alignment_ru": "любое мировоззрение",
+      "ac": "12 (15 с Доспехами мага)",
+      "hp": "99 (18d8 + 18)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 10,
+          "mod": 0
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 20,
+          "mod": 5
+        },
+        "wis": {
+          "score": 15,
+          "mod": 2
+        },
+        "cha": {
+          "score": 16,
+          "mod": 3
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Слепое зрение 10 фт., тёмное зрение 60 фт., пассивное Восприятие 10",
+      "languages": "Общий, Драконий",
+      "cr": "5",
+      "xp": "1800",
+      "traits": [
+        {
+          "name_ru": "Дыхание дракона (перезарядка 5–6)",
+          "text_ru": "Выдыхает элементальную энергию в зависимости от драконьего происхождения."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки оружием."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "half-dragon",
+      "name_ru": "Полудракон",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "любое (обычно злой)",
+      "ac": "18 (латы)",
+      "hp": "65 (10d8 + 20)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 16,
+          "mod": 3
+        },
+        "dex": {
+          "score": 10,
+          "mod": 0
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 10",
+      "languages": "Общий, Гоблинский",
+      "cr": "3",
+      "xp": "700",
+      "traits": [
+        {
+          "name_ru": "Тактика стаи",
+          "text_ru": "Преимущество на атаку, если рядом с целью есть союзник."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки мечом или луком."
+        }
+      ],
+      "reactions": [
+        {
+          "name_ru": "Парирование",
+          "text_ru": "+2 к КД против одной атаки ближнего боя."
+        }
+      ],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "hobgoblin-captain",
+      "name_ru": "Капитан хобгоблинов",
+      "size_ru": "Средний",
+      "type_ru": "фея (гоблиноид)",
+      "alignment_ru": "законно-злой",
+      "ac": "17",
+      "hp": "39 (6d8 + 12)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 15,
+          "mod": 2
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 12,
+          "mod": 1
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 13,
+          "mod": 1
+        }
+      }
+    },
+    {
+      "id": "incubus",
+      "name_ru": "Инкуб",
+      "size_ru": "Средний",
+      "type_ru": "изверг",
+      "alignment_ru": "нейтрально-злой",
+      "ac": "15",
+      "hp": "71 (13d8 + 13)",
+      "speed": "30 фт., полёт 60 фт.",
+      "abilities": {
+        "str": {
+          "score": 8,
+          "mod": -1
+        },
+        "dex": {
+          "score": 17,
+          "mod": 3
+        },
+        "con": {
+          "score": 13,
+          "mod": 1
+        },
+        "int": {
+          "score": 15,
+          "mod": 2
+        },
+        "wis": {
+          "score": 12,
+          "mod": 1
+        },
+        "cha": {
+          "score": 20,
+          "mod": 5
+        }
+      },
+      "saving_throws": "",
+      "skills": "Обман +9, Проницательность +5, Восприятие +5, Убеждение +9, Скрытность +7",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "холод, огонь, яд, психический",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 15",
+      "languages": "Бездонный, Общий, Инфернальный; телепатия 60 фт.",
+      "cr": "4",
+      "xp": "1100",
+      "traits": [
+        {
+          "name_ru": "Форма инкуба",
+          "text_ru": "После длительного отдыха может изменить форму на инкуба."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Совершает одну атаку Инфернальным касанием и использует Очарование или Иссушающий поцелуй."
+        },
+        {
+          "name_ru": "Инфернальное касание",
+          "text_ru": "Атака ближнего боя: +7 к попаданию, урон 16 (2d10 + 5) психического урона."
+        },
+        {
+          "name_ru": "Очарование",
+          "text_ru": "Накладывает Доминирование личности (версия 8 уровня), Сл спасброска 15."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)"
+    },
+    {
+      "saving_throws": "",
+      "skills": "Атлетика +10, Запугивание +5",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 11",
+      "languages": "Общий + один язык",
+      "cr": "5",
+      "xp": "1800",
+      "traits": [
+        {
+          "name_ru": "Отважный",
+          "text_ru": "Преимущество на спасброски против Испуга."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Три атаки: копьём или щитом."
+        }
+      ],
+      "reactions": [
+        {
+          "name_ru": "Парирование",
+          "text_ru": "+3 к КД против одной атаки ближнего боя."
+        }
+      ],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "gladiator",
+      "name_ru": "Гладиатор",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "любое мировоззрение",
+      "ac": "16 (проклёпанный доспех)",
+      "hp": "112 (15d8 + 45)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 18,
+          "mod": 4
+        },
+        "dex": {
+          "score": 15,
+          "mod": 2
+        },
+        "con": {
+          "score": 16,
+          "mod": 3
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 12,
+          "mod": 1
+        },
+        "cha": {
+          "score": 15,
+          "mod": 2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Слепое зрение 30 фт., пассивное Восприятие 10",
+      "languages": "—",
+      "cr": "1",
+      "xp": "200",
+      "traits": [
+        {
+          "name_ru": "Рой",
+          "text_ru": "Может занимать пространство другого существа; не может восстанавливать хиты."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Царапающие когти",
+          "text_ru": "Атака +4, урон 10 (4d4) рубящего или 5 (2d4), если у роя половина хитов и меньше."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "crawling-claws-swarm-of",
+      "name_ru": "Рой ползающих когтей",
+      "size_ru": "Средний",
+      "type_ru": "нежить (рой)",
+      "alignment_ru": "нейтрально-злой",
+      "ac": "12",
+      "hp": "22 (5d8)",
+      "speed": "20 фт., лазание 20 фт.",
+      "abilities": {
+        "str": {
+          "score": 13,
+          "mod": 1
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 5,
+          "mod": -3
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 4,
+          "mod": -3
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Обман +4, Убеждение +4, Религия +2",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 11",
+      "languages": "Общий + один язык",
+      "cr": "2",
+      "xp": "450",
+      "traits": [
+        {
+          "name_ru": "Тёмная преданность",
+          "text_ru": "Преимущество на спасброски от Очарования и Испуга."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки кинжалом."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "cultist-fanatic",
+      "name_ru": "Фанатик культа",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "любое незлое?",
+      "ac": "13 (кожаный доспех)",
+      "hp": "33 (6d8 + 6)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 11,
+          "mod": 0
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 13,
+          "mod": 1
+        },
+        "cha": {
+          "score": 14,
+          "mod": 2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Обман +2, Религия +2",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий",
+      "cr": "1/8",
+      "xp": "25",
+      "traits": [
+        {
+          "name_ru": "Тёмная преданность",
+          "text_ru": "Преимущество на спасброски от Очарования и Испуга."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Скимитар",
+          "text_ru": "Атака +3, урон 4 (1d6 + 1) рубящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "cultist",
+      "name_ru": "Культист",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "любое незлое?",
+      "ac": "12 (кожаный доспех)",
+      "hp": "9 (2d8)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 11,
+          "mod": 0
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Восприятие +5, Скрытность +4",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 120 фт., пассивное Восприятие 11",
+      "languages": "—",
+      "cr": "1",
+      "xp": "200",
+      "traits": [
+        {
+          "name_ru": "Двуглавый",
+          "text_ru": "Преимущество на проверки Мудрости (Восприятие) и спасброски против ослепления, оглушения, очарования, испуга, ошеломления и потери сознания."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Пёс смерти совершает две атаки укусом."
+        },
+        {
+          "name_ru": "Укус",
+          "text_ru": "Атака +4, урон 5 (1d6 + 2) колющего; цель проходит спасбросок Телосложения (Сл 12) против болезни."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "death-dog",
+      "name_ru": "Пёс смерти",
+      "size_ru": "Средний",
+      "type_ru": "монстрозность",
+      "alignment_ru": "нейтрально-злой",
+      "ac": "12",
+      "hp": "39 (6d8 + 12)",
+      "speed": "40 фт.",
+      "abilities": {
+        "str": {
+          "score": 15,
+          "mod": 2
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 3,
+          "mod": -4
+        },
+        "wis": {
+          "score": 13,
+          "mod": 1
+        },
+        "cha": {
+          "score": 6,
+          "mod": -2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Медицина +4, Природа +3, Восприятие +4, Религия +3",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 14",
+      "languages": "Друидический, Общий",
+      "cr": "2",
+      "xp": "450",
+      "traits": [
+        {
+          "name_ru": "Заклинания",
+          "text_ru": "Друид-заклинатель 4 уровня (Мудрость; Сл 12, +4 к попаданию)."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Дубинка",
+          "text_ru": "Атака +2, урон 3 (1d4 + 1) дробящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "druid",
+      "name_ru": "Друид",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "нейтральный",
+      "ac": "11 (14 с Дубовой корой)",
+      "hp": "27 (5d8 + 5)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 10,
+          "mod": 0
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 13,
+          "mod": 1
+        },
+        "int": {
+          "score": 12,
+          "mod": 1
+        },
+        "wis": {
+          "score": 15,
+          "mod": 2
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Слепое зрение 30 фт. (слеп за пределами), пассивное Восприятие 6",
+      "languages": "—",
+      "cr": "0",
+      "xp": "10",
+      "traits": [
+        {
+          "name_ru": "Ложный облик",
+          "text_ru": "Пока неподвижен, неотличим от обычного гриба."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Визг",
+          "text_ru": "Реакция: если существо в пределах 30 фт. видит гриб или свет, гриб издаёт пронзительный визг, слышимый в 300 фт."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "shrieker-fungus",
+      "name_ru": "Визгун-гриб",
+      "size_ru": "Средний",
+      "type_ru": "растение",
+      "alignment_ru": "без мировоззрения",
+      "ac": "5",
+      "hp": "13 (3d8)",
+      "speed": "0 фт.",
+      "abilities": {
+        "str": {
+          "score": 1,
+          "mod": -5
+        },
+        "dex": {
+          "score": 1,
+          "mod": -5
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 1,
+          "mod": -5
+        },
+        "wis": {
+          "score": 3,
+          "mod": -4
+        },
+        "cha": {
+          "score": 1,
+          "mod": -5
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Выживание +3",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 11",
+      "languages": "Общий, Сильван",
+      "cr": "2",
+      "xp": "450",
+      "traits": [
+        {
+          "name_ru": "Наскок",
+          "text_ru": "Если кентавр пробежал 30 фт. по прямой и попал пикой, цель должна пройти Сл 14 Силы или быть сбитой с ног."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Одна атака пикой и одна атака копытами."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "centaur-trooper",
+      "name_ru": "Кентавр-кавалерист",
+      "size_ru": "Большой",
+      "type_ru": "фея",
+      "alignment_ru": "нейтральный",
+      "ac": "12",
+      "hp": "45 (6d10 + 12)",
+      "speed": "50 фт.",
+      "abilities": {
+        "str": {
+          "score": 18,
+          "mod": 4
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 9,
+          "mod": -1
+        },
+        "wis": {
+          "score": 13,
+          "mod": 1
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий",
+      "cr": "0",
+      "xp": "10",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Дубинка",
+          "text_ru": "Атака +2, урон 2 (1d4) дробящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "commoner",
+      "name_ru": "Обыватель",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "любое мировоззрение",
+      "ac": "10",
+      "hp": "4 (1d8)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 10,
+          "mod": 0
+        },
+        "dex": {
+          "score": 10,
+          "mod": 0
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Скрытность +6, Выживание +2",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 10",
+      "languages": "Общий, Гоблинский",
+      "cr": "1",
+      "xp": "200",
+      "traits": [
+        {
+          "name_ru": "Скрытая атака",
+          "text_ru": "В первом раунде боя наносит дополнительный урон по удивлённым целям."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Моргенштерн",
+          "text_ru": "Атака +4, урон 11 (2d8 + 2) колющего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "bugbear-stalker",
+      "name_ru": "Багбир-сталкер",
+      "size_ru": "Средний",
+      "type_ru": "фея (гоблиноид)",
+      "alignment_ru": "хаотично-злой",
+      "ac": "14",
+      "hp": "33 (6d8 + 6)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 15,
+          "mod": 2
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 13,
+          "mod": 1
+        },
+        "int": {
+          "score": 8,
+          "mod": -1
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 9,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Восприятие +5, Скрытность +3",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "холод",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 15",
+      "languages": "Общий, Гигантский, Зимневолчий",
+      "cr": "3",
+      "xp": "700",
+      "traits": [
+        {
+          "name_ru": "Острое обоняние и слух",
+          "text_ru": "Преимущество на проверки Восприятия, основанные на слухе или запахе."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Укус",
+          "text_ru": "Атака +6, урон 11 (2d6 + 4) колющего + 4 (1d8) холодом."
+        },
+        {
+          "name_ru": "Ледяное дыхание (перезарядка 5–6)",
+          "text_ru": "Конус 15 фт., урон холодом, спасбросок Ловкости Сл 12."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "winter-wolf",
+      "name_ru": "Зимний волк",
+      "size_ru": "Большой",
+      "type_ru": "монстрозность",
+      "alignment_ru": "нейтрально-злой",
+      "ac": "13",
+      "hp": "75 (10d10 + 20)",
+      "speed": "50 фт.",
+      "abilities": {
+        "str": {
+          "score": 18,
+          "mod": 4
+        },
+        "dex": {
+          "score": 13,
+          "mod": 1
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 7,
+          "mod": -2
+        },
+        "wis": {
+          "score": 12,
+          "mod": 1
+        },
+        "cha": {
+          "score": 8,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Восприятие +4",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Темновидение 60 фт., пассивное Восприятие 14",
+      "languages": "Гоблинский, Ворговый",
+      "cr": "1/2",
+      "xp": "100",
+      "traits": [
+        {
+          "name_ru": "Острое обоняние и слух",
+          "text_ru": "Преимущество на проверки Восприятия, основанные на слухе или запахе."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Укус",
+          "text_ru": "Атака +5, урон 10 (2d6 + 3) колющего; цель проходит Сл 13 Силы или сбивается с ног."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "worg",
+      "name_ru": "Ворг",
+      "size_ru": "Большой",
+      "type_ru": "монстрозность",
+      "alignment_ru": "нейтрально-злой",
+      "ac": "13",
+      "hp": "26 (4d10 + 4)",
+      "speed": "50 фт.",
+      "abilities": {
+        "str": {
+          "score": 16,
+          "mod": 3
+        },
+        "dex": {
+          "score": 13,
+          "mod": 1
+        },
+        "con": {
+          "score": 13,
+          "mod": 1
+        },
+        "int": {
+          "score": 7,
+          "mod": -2
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 8,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "кислота, холод, огонь, некротический, гром, дробящий/колющий/рубящий от немаг. атак",
+      "damage_immunities": "электричество, яд",
+      "condition_immunities": "захват, изнеможение, опутанность, сбивание с ног, паралич, окаменение, отравление, лишение сознания",
+      "senses": "Темновидение 120 фт., пассивное Восприятие 12",
+      "languages": "языки, известные при жизни",
+      "cr": "2",
+      "xp": "450",
+      "traits": [
+        {
+          "name_ru": "Непостоянная иллюминация",
+          "text_ru": "Излучает яркий/тусклый свет или гасит его бонусным действием."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Шок",
+          "text_ru": "Атака +4, урон 9 (2d8) электричеством."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "will-o-wisp",
+      "name_ru": "Блуждающий огонёк",
+      "size_ru": "Крошечный",
+      "type_ru": "нежить",
+      "alignment_ru": "хаотично-злой",
+      "ac": "19",
+      "hp": "22 (9d4)",
+      "speed": "0 фт., полёт 50 фт. (парение)",
+      "abilities": {
+        "str": {
+          "score": 1,
+          "mod": -5
+        },
+        "dex": {
+          "score": 28,
+          "mod": 9
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 13,
+          "mod": 1
+        },
+        "wis": {
+          "score": 14,
+          "mod": 2
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "яд, психический",
+      "condition_immunities": "ослепление, очарование, глухота, изнеможение, испуг, паралич, окаменение, отравление",
+      "senses": "Слепое зрение 60 фт. (слеп за пределами), пассивное Восприятие 7",
+      "languages": "—",
+      "cr": "1/4",
+      "xp": "50",
+      "traits": [
+        {
+          "name_ru": "Антимагическая уязвимость",
+          "text_ru": "Недееспособен в области антимагии; при Рассеивании магии (Сл 11) теряет сознание на 1 минуту."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Меч",
+          "text_ru": "Атака +3, урон 5 (1d8 + 1) рубящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "animated-flying-sword",
+      "name_ru": "Оживший летающий меч",
+      "size_ru": "Маленький",
+      "type_ru": "конструкт",
+      "alignment_ru": "без мировоззрения",
+      "ac": "17 (природная броня)",
+      "hp": "17 (5d6)",
+      "speed": "0 фт., полёт 50 фт.",
+      "abilities": {
+        "str": {
+          "score": 12,
+          "mod": 1
+        },
+        "dex": {
+          "score": 15,
+          "mod": 2
+        },
+        "con": {
+          "score": 11,
+          "mod": 0
+        },
+        "int": {
+          "score": 1,
+          "mod": -5
+        },
+        "wis": {
+          "score": 5,
+          "mod": -3
+        },
+        "cha": {
+          "score": 1,
+          "mod": -5
+        }
+      }
     }
   ]
 }
