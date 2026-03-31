@@ -4838,6 +4838,36 @@
       "school_ru": "evocation",
       "casting_time_en": "1 action",
       "casting_time_ru": "1 action",
+      "range_en": "Touch",
+      "range_ru": "Touch",
+      "components_en": "V, M (a firefly or phosphorescent moss)",
+      "components_ru": "V, M (a firefly or phosphorescent moss)",
+      "duration_en": "1 hour",
+      "duration_ru": "1 hour",
+      "description_en": "moss) You touch one object that is no larger than 10 feet in any dimension. Until the spell ends, the object sheds bright light in a 20-foot radius and dim light for an additional 20 feet. The light can be colored as you like. Completely covering the object with something opaque blocks the light. The spell ends if you cast it again or dismiss it as an action. If you target an object held or worn by a hostile creature, that creature must succeed on a Dexterity saving throw to avoid the spell.",
+      "description_ru": "moss) You touch one object that is no larger than 10 feet in any dimension. Until the spell ends, the object sheds bright light in a 20-foot radius and dim light for an additional 20 feet. The light can be colored as you like. Completely covering the object with something opaque blocks the light. The spell ends if you cast it again or dismiss it as an action. If you target an object held or worn by a hostile creature, that creature must succeed on a Dexterity saving throw to avoid the spell.",
+      "classes": [
+        "Bard",
+        "Cleric",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "levels_by_class": {
+        "Bard": 0,
+        "Cleric": 0,
+        "Sorcerer": 0,
+        "Wizard": 0
+      }
+    },
+    {
+      "id": "lightning-bolt",
+      "name_en": "Lightning Bolt",
+      "name_ru": "Lightning Bolt",
+      "level": 3,
+      "school_en": "evocation",
+      "school_ru": "evocation",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 action",
       "range_en": "Self (100-foot line)",
       "range_ru": "Self (100-foot line)",
       "components_en": "V, S, M (a bit of fur and a rod of amber,",
@@ -5379,6 +5409,66 @@
       "levels_by_class": {
         "Cleric": 3,
         "Druid": 3
+      }
+    },
+    {
+      "id": "mending",
+      "name_en": "Mending",
+      "name_ru": "Mending",
+      "level": 0,
+      "school_en": "transmutation",
+      "school_ru": "transmutation",
+      "casting_time_en": "1 minute",
+      "casting_time_ru": "1 minute",
+      "range_en": "Touch",
+      "range_ru": "Touch",
+      "components_en": "V, S, M (two lodestones)",
+      "components_ru": "V, S, M (two lodestones)",
+      "duration_en": "Instantaneous",
+      "duration_ru": "Instantaneous",
+      "description_en": "This spell repairs a single break or tear in an object you touch, such as a broken chain link, two halves of a broken key, a torn cloak, or a leaking wineskin. As long as the break or tear is no larger than 1 foot in any dimension, you mend it, leaving no trace of the former damage. This spell can physically repair a magic item or construct, but the spell can’t restore magic to such an object.",
+      "description_ru": "This spell repairs a single break or tear in an object you touch, such as a broken chain link, two halves of a broken key, a torn cloak, or a leaking wineskin. As long as the break or tear is no larger than 1 foot in any dimension, you mend it, leaving no trace of the former damage. This spell can physically repair a magic item or construct, but the spell can’t restore magic to such an object.",
+      "classes": [
+        "Bard",
+        "Cleric",
+        "Druid",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "levels_by_class": {
+        "Bard": 0,
+        "Cleric": 0,
+        "Druid": 0,
+        "Sorcerer": 0,
+        "Wizard": 0
+      }
+    },
+    {
+      "id": "message",
+      "name_en": "Message",
+      "name_ru": "Message",
+      "level": 0,
+      "school_en": "transmutation",
+      "school_ru": "transmutation",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 action",
+      "range_en": "120 feet",
+      "range_ru": "120 feet",
+      "components_en": "V, S, M (a short piece of copper wire)",
+      "components_ru": "V, S, M (a short piece of copper wire)",
+      "duration_en": "1 round",
+      "duration_ru": "1 round",
+      "description_en": "You point your finger toward a creature within range and whisper a message. The target (and only the target) hears the message and can reply in a whisper that only you can hear. You can cast this spell through solid objects if you are familiar with the target and know it is beyond the barrier. Magical silence, 1 foot of stone, 1 inch of common metal, a thin sheet of lead, or 3 feet of wood blocks the spell. The spell doesn’t have to follow a straight line and can travel freely around corners or through openings.",
+      "description_ru": "You point your finger toward a creature within range and whisper a message. The target (and only the target) hears the message and can reply in a whisper that only you can hear. You can cast this spell through solid objects if you are familiar with the target and know it is beyond the barrier. Magical silence, 1 foot of stone, 1 inch of common metal, a thin sheet of lead, or 3 feet of wood blocks the spell. The spell doesn’t have to follow a straight line and can travel freely around corners or through openings.",
+      "classes": [
+        "Bard",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "levels_by_class": {
+        "Bard": 0,
+        "Sorcerer": 0,
+        "Wizard": 0
       }
     },
     {
