@@ -3,7 +3,7 @@
     "source": "SRD 5.1 CC v5.1 PDF",
     "extracted_from": "SRD_CC_v5.1.pdf",
     "extracted_at": "2026-02-11T13:27:51.441144Z",
-    "count": 247,
+    "count": 257,
     "notes": "Все описательные тексты полностью переведены на русский язык. Поля text_en удалены. Терминология приведена к стандарту D&D 5 редакции. Добавлены и обновлены монстры из SRD 5.2.1 (бестиарий Monsters A-Z)."
   },
   "monsters": [
@@ -17845,6 +17845,618 @@
         "cha": {
           "score": 1,
           "mod": -5
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "яд, психический",
+      "condition_immunities": "ослепление, очарование, глухота, изнеможение, испуг, паралич, окаменение, отравление",
+      "senses": "Слепое зрение 60 фт. (слеп за пределами), пассивное Восприятие 6",
+      "languages": "—",
+      "cr": "2",
+      "xp": "450",
+      "traits": [
+        {
+          "name_ru": "Ложный облик",
+          "text_ru": "Пока остаётся неподвижным, неотличим от обычного ковра."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Удушение",
+          "text_ru": "Атака +5; цель схвачена (Сл 13), ослеплена и не может дышать, получает 10 (2d6+3) дробящего в начале ходов ковра."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "animated-rug-of-smothering",
+      "name_ru": "Оживлённый удушающий ковёр",
+      "size_ru": "Большой",
+      "type_ru": "конструкт",
+      "alignment_ru": "без мировоззрения",
+      "ac": "12",
+      "hp": "33 (6d10)",
+      "speed": "10 фт.",
+      "abilities": {
+        "str": {
+          "score": 17,
+          "mod": 3
+        },
+        "dex": {
+          "score": 14,
+          "mod": 2
+        },
+        "con": {
+          "score": 10,
+          "mod": 0
+        },
+        "int": {
+          "score": 1,
+          "mod": -5
+        },
+        "wis": {
+          "score": 3,
+          "mod": -4
+        },
+        "cha": {
+          "score": 1,
+          "mod": -5
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Акробатика +6, Обман +3, Восприятие +3, Скрытность +9",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 13",
+      "languages": "Общий + 2 языка",
+      "cr": "8",
+      "xp": "3900",
+      "traits": [
+        {
+          "name_ru": "Убийца",
+          "text_ru": "Преимущество по существу, не ходившему в бою; крит по удивлённой цели."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Две атаки коротким мечом."
+        },
+        {
+          "name_ru": "Короткий меч",
+          "text_ru": "Атака +6, урон 6 (1d6+3) колющего + 24 (7d6) ядом."
+        },
+        {
+          "name_ru": "Лёгкий арбалет",
+          "text_ru": "Атака +6, урон 7 (1d8+3) колющего + 24 (7d6) ядом."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "assassin",
+      "name_ru": "Убийца",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "любое незлое?",
+      "ac": "15 (проклёпанный доспех)",
+      "hp": "78 (12d8 + 24)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 11,
+          "mod": 0
+        },
+        "dex": {
+          "score": 16,
+          "mod": 3
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 13,
+          "mod": 1
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "понимает один язык создателя",
+      "cr": "2",
+      "xp": "450",
+      "traits": [
+        {
+          "name_ru": "Ложный облик",
+          "text_ru": "Пока неподвижно, неотличимо от обычного дерева."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Удар ветвями",
+          "text_ru": "Атака +6, урон 14 (3d6 + 4) дробящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "awakened-tree",
+      "name_ru": "Пробуждённое дерево",
+      "size_ru": "Огромный",
+      "type_ru": "растение",
+      "alignment_ru": "без мировоззрения",
+      "ac": "13",
+      "hp": "59 (7d12 + 14)",
+      "speed": "20 фт.",
+      "abilities": {
+        "str": {
+          "score": 19,
+          "mod": 4
+        },
+        "dex": {
+          "score": 6,
+          "mod": -2
+        },
+        "con": {
+          "score": 15,
+          "mod": 2
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 7,
+          "mod": -2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "понимает один язык создателя",
+      "cr": "0",
+      "xp": "10",
+      "traits": [
+        {
+          "name_ru": "Ложный облик",
+          "text_ru": "Пока неподвижен, неотличим от обычного куста."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Грабли ветками",
+          "text_ru": "Атака +1, урон 1 (1d4−1) рубящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "awakened-shrub",
+      "name_ru": "Пробуждённый куст",
+      "size_ru": "Маленький",
+      "type_ru": "растение",
+      "alignment_ru": "без мировоззрения",
+      "ac": "9",
+      "hp": "10 (3d6)",
+      "speed": "20 фт.",
+      "abilities": {
+        "str": {
+          "score": 3,
+          "mod": -4
+        },
+        "dex": {
+          "score": 8,
+          "mod": -1
+        },
+        "con": {
+          "score": 11,
+          "mod": 0
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 6,
+          "mod": -2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "—",
+      "cr": "1/4",
+      "xp": "50",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Клюв",
+          "text_ru": "Атака +4, урон 6 (1d8 + 2) рубящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "axe-beak",
+      "name_ru": "Топороклюв",
+      "size_ru": "Большой",
+      "type_ru": "зверь",
+      "alignment_ru": "без мировоззрения",
+      "ac": "11",
+      "hp": "19 (3d10 + 3)",
+      "speed": "50 фт.",
+      "abilities": {
+        "str": {
+          "score": 14,
+          "mod": 2
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 2,
+          "mod": -4
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 5,
+          "mod": -3
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "огонь, яд",
+      "condition_immunities": "отравление",
+      "senses": "Пассивное Восприятие 11",
+      "languages": "Общий, Игнан",
+      "cr": "2",
+      "xp": "450",
+      "traits": [
+        {
+          "name_ru": "Пылающее оружие",
+          "text_ru": "Попадания металлическим оружием наносят дополнительно 3 (1d6) урона огнём."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Боевой молот",
+          "text_ru": "Атака +5, урон 7 (1d8 + 3) дробящего + 3 (1d6) огнём."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "azer-sentinel",
+      "name_ru": "Азер-страж",
+      "size_ru": "Средний",
+      "type_ru": "элементаль",
+      "alignment_ru": "законно-нейтральный",
+      "ac": "17 (природная броня, щит)",
+      "hp": "39 (6d8 + 12)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 17,
+          "mod": 3
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 15,
+          "mod": 2
+        },
+        "int": {
+          "score": 12,
+          "mod": 1
+        },
+        "wis": {
+          "score": 13,
+          "mod": 1
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "Атлетика +4, Обман +4",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий + 1 язык",
+      "cr": "2",
+      "xp": "450",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Мультиатака",
+          "text_ru": "Три атаки: две саблей и одна кинжалом/пистолем."
+        }
+      ],
+      "reactions": [
+        {
+          "name_ru": "Парирование",
+          "text_ru": "+2 к КД против одной атаки ближнего боя."
+        }
+      ],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "bandit-captain",
+      "name_ru": "Капитан разбойников",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "любое незлое?",
+      "ac": "15 (проклёпанный доспех)",
+      "hp": "65 (10d8 + 20)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 15,
+          "mod": 2
+        },
+        "dex": {
+          "score": 16,
+          "mod": 3
+        },
+        "con": {
+          "score": 14,
+          "mod": 2
+        },
+        "int": {
+          "score": 14,
+          "mod": 2
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 14,
+          "mod": 2
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий",
+      "cr": "1/8",
+      "xp": "25",
+      "traits": [],
+      "actions": [
+        {
+          "name_ru": "Скимитар",
+          "text_ru": "Атака +3, урон 4 (1d6 + 1) рубящего."
+        },
+        {
+          "name_ru": "Лёгкий арбалет",
+          "text_ru": "Атака +3, урон 5 (1d8 + 1) колющего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "bandit",
+      "name_ru": "Разбойник",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "любое незлое?",
+      "ac": "12 (кожаный доспех)",
+      "hp": "11 (2d8 + 2)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 11,
+          "mod": 0
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 10,
+          "mod": 0
+        },
+        "cha": {
+          "score": 10,
+          "mod": 0
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 10",
+      "languages": "Общий",
+      "cr": "2",
+      "xp": "450",
+      "traits": [
+        {
+          "name_ru": "Безрассудство",
+          "text_ru": "В начале хода может получить преимущество на атаки ближнего боя, но атаки по нему до следующего хода также с преимуществом."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Секира",
+          "text_ru": "Атака +5, урон 9 (1d12 + 3) рубящего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "berserker",
+      "name_ru": "Берсерк",
+      "size_ru": "Средний",
+      "type_ru": "гуманоид",
+      "alignment_ru": "хаотично-злой",
+      "ac": "13 (шкурный доспех)",
+      "hp": "67 (9d8 + 27)",
+      "speed": "30 фт.",
+      "abilities": {
+        "str": {
+          "score": 16,
+          "mod": 3
+        },
+        "dex": {
+          "score": 12,
+          "mod": 1
+        },
+        "con": {
+          "score": 17,
+          "mod": 3
+        },
+        "int": {
+          "score": 9,
+          "mod": -1
+        },
+        "wis": {
+          "score": 11,
+          "mod": 0
+        },
+        "cha": {
+          "score": 9,
+          "mod": -1
+        }
+      }
+    },
+    {
+      "saving_throws": "",
+      "skills": "",
+      "damage_vulnerabilities": "",
+      "damage_resistances": "",
+      "damage_immunities": "",
+      "condition_immunities": "",
+      "senses": "Пассивное Восприятие 13",
+      "languages": "понимает Сильван, но не говорит",
+      "cr": "1/4",
+      "xp": "50",
+      "traits": [
+        {
+          "name_ru": "Мигающее перемещение",
+          "text_ru": "Бонусным действием телепортируется на 40 фт. в видимую точку."
+        }
+      ],
+      "actions": [
+        {
+          "name_ru": "Укус",
+          "text_ru": "Атака +3, урон 4 (1d6 + 1) колющего."
+        }
+      ],
+      "reactions": [],
+      "legendary_actions": [],
+      "source": "SRD 5.2.1 PDF (бестиарий, Monsters A-Z)",
+      "id": "blink-dog",
+      "name_ru": "Мигающая собака",
+      "size_ru": "Средний",
+      "type_ru": "фея",
+      "alignment_ru": "законно-добрый",
+      "ac": "13",
+      "hp": "22 (4d8 + 4)",
+      "speed": "40 фт.",
+      "abilities": {
+        "str": {
+          "score": 12,
+          "mod": 1
+        },
+        "dex": {
+          "score": 17,
+          "mod": 3
+        },
+        "con": {
+          "score": 12,
+          "mod": 1
+        },
+        "int": {
+          "score": 10,
+          "mod": 0
+        },
+        "wis": {
+          "score": 13,
+          "mod": 1
+        },
+        "cha": {
+          "score": 11,
+          "mod": 0
         }
       }
     }
