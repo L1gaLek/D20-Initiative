@@ -574,7 +574,7 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
   const { overlay, close } = openPopup({
     title: "База заклинаний (SRD 5.1)",
     bodyHtml: `
-      <div class="popup-grid" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="popup-grid" style="grid-template-columns:1fr 1fr 1fr 1fr;">
         <div>
           <div class="sheet-note">Класс</div>
           <select class="popup-field" data-db-class></select>
@@ -590,6 +590,13 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
           <div class="sheet-note">Школа</div>
           <select class="popup-field" data-db-filter-school>
             <option value="any" selected>Любая</option>
+          </select>
+        </div>
+        <div>
+          <div class="sheet-note">Сортировка</div>
+          <select class="popup-field" data-db-sort>
+            <option value="level" selected>По уровню</option>
+            <option value="school">По школе</option>
           </select>
         </div>
       </div>
@@ -617,6 +624,7 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
   const classSel = overlay.querySelector("[data-db-class]");
   const filterLevelSel = overlay.querySelector("[data-db-filter-level]");
   const filterSchoolSel = overlay.querySelector("[data-db-filter-school]");
+  const sortSel = overlay.querySelector("[data-db-sort]");
   const forceLevelSel = overlay.querySelector("[data-db-level]");
   const searchInp = overlay.querySelector("[data-db-search]");
   const listBox = overlay.querySelector("[data-db-list]");
@@ -647,15 +655,20 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
 
   function fmtSpellDetails(s) {
     const levelTxt = (s.level === 0) ? "Заговор" : `Уровень ${s.level}`;
-    const school = String(s.school_ru || s.school_en || "").trim();
+    const school = String(s.school_ru || "").trim();
+    const classesTxt = Array.isArray(s.classes) && s.classes.length
+      ? s.classes.join(", ")
+      : "-";
     const parts = [
       `${levelTxt}${school ? ` • ${school}` : ""}`,
-      `Время накладывания: ${s.casting_time_ru || s.casting_time_en || "-"}`,
-      `Дистанция: ${s.range_ru || s.range_en || "-"}`,
-      `Компоненты: ${s.components_ru || s.components_en || "-"}`,
-      `Длительность: ${s.duration_ru || s.duration_en || "-"}`,
+      `Школа: ${school || "-"}`,
+      `Классы: ${classesTxt}`,
+      `Время накладывания: ${s.casting_time_ru || "-"}`,
+      `Дистанция: ${s.range_ru || "-"}`,
+      `Компоненты: ${s.components_ru || "-"}`,
+      `Длительность: ${s.duration_ru || "-"}`,
       "",
-      String(s.description_ru || s.description_en || "").trim() || "(описание пустое)",
+      String(s.description_ru || "").trim() || "(описание пустое)",
     ];
     return parts.join("\n");
   }
@@ -666,12 +679,13 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
     const lvlFilterRaw = String(filterLevelSel?.value || "any");
     const lvlFilter = (lvlFilterRaw === "any") ? null : safeInt(lvlFilterRaw, 0);
     const schoolFilter = String(filterSchoolSel?.value || "any");
+    const sortBy = String(sortSel?.value || "level");
     const forceLevel = String(forceLevelSel?.value || "auto");
 
     const filtered = cache.spells.filter(s => {
-      if (cls && Array.isArray(s.classes) && !s.classes.includes(cls)) return false;
+      if (cls !== "all" && cls && Array.isArray(s.classes) && !s.classes.includes(cls)) return false;
       if (lvlFilter != null && s.level !== lvlFilter) return false;
-      if (schoolFilter !== "any" && String(s.school_en || "").toLowerCase() !== schoolFilter) return false;
+      if (schoolFilter !== "any" && String(s.school_ru || "").toLowerCase() !== schoolFilter) return false;
       if (search) {
         const nm = spellNameForUI(s).toLowerCase();
         if (!nm.includes(search)) return false;
@@ -679,18 +693,23 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
       return true;
     });
 
-    // group by level
+    // group by selected sort
     const groups = new Map();
     for (const s of filtered) {
-      const k = String(s.level ?? "?");
+      const k = (sortBy === "school")
+        ? String(s.school_ru || "Без школы")
+        : String(s.level ?? "?");
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k).push(s);
     }
-    const order = ["0","1","2","3","4","5","6","7","8","9","?"];
+    const order = (sortBy === "school")
+      ? Array.from(groups.keys()).sort((a,b) => String(a).localeCompare(String(b), "ru"))
+      : ["0","1","2","3","4","5","6","7","8","9","?"].filter(k => groups.has(k) && groups.get(k).length);
     const htmlGroups = order
-      .filter(k => groups.has(k) && groups.get(k).length)
       .map(k => {
-        const title = (k === "0") ? "Заговоры (0)" : (k === "?" ? "Уровень не определён" : `Уровень ${k}`);
+        const title = (sortBy === "school")
+          ? `Школа: ${k}`
+          : ((k === "0") ? "Заговоры (0)" : (k === "?" ? "Уровень не определён" : `Уровень ${k}`));
         const rows = groups.get(k)
           .sort((a,b)=>spellNameForUI(a).localeCompare(spellNameForUI(b), "ru"))
           .map(s => {
@@ -767,9 +786,9 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
   }
 
   // fill selects
-  const allClasses = uniq(cache.spells.flatMap(s => Array.isArray(s.classes) ? s.classes : [])).sort((a,b)=>a.localeCompare(b, "en"));
-  classSel.innerHTML = allClasses.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-  const allSchools = uniq(cache.spells.map(s => String(s.school_en || "").toLowerCase())).sort((a,b)=>a.localeCompare(b, "en"));
+  const allClasses = uniq(cache.spells.flatMap(s => Array.isArray(s.classes) ? s.classes : [])).sort((a,b)=>a.localeCompare(b, "ru"));
+  classSel.innerHTML = `<option value="all" selected>Все</option>` + allClasses.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  const allSchools = uniq(cache.spells.map(s => String(s.school_ru || "").toLowerCase())).sort((a,b)=>a.localeCompare(b, "ru"));
   if (filterSchoolSel) {
     filterSchoolSel.innerHTML = `<option value="any" selected>Любая</option>` + allSchools.map(sc => `<option value="${escapeHtml(sc)}">${escapeHtml(sc)}</option>`).join("");
   }
@@ -777,6 +796,7 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
   classSel.addEventListener("change", render);
   filterLevelSel?.addEventListener("change", render);
   filterSchoolSel?.addEventListener("change", render);
+  sortSel?.addEventListener("change", render);
   forceLevelSel?.addEventListener("change", render);
   searchInp?.addEventListener("input", () => {
     clearTimeout(searchInp.__t);
@@ -785,4 +805,3 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
 
   render();
 }
-
