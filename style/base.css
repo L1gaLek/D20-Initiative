@@ -2257,6 +2257,7 @@ textarea[data-sheet-path="text.profPlain.value"]{
   color: rgba(0,200,255,0.95);
   text-decoration: none;
   font-size: 13px;
+  line-height: 1.2;
 }
 .spell-item-link--srd{
   color: rgba(255,165,0,0.98);
@@ -2574,7 +2575,11 @@ textarea[data-sheet-path="text.profPlain.value"]{
   white-space:pre-wrap;
 }
 
-.spell-item-title{font-weight:700;}
+.spell-item-title{
+  font-weight:700;
+  font-size:13px;
+  line-height:1.2;
+}
 .spell-item-title--manual{ color:#fff; }
 .spell-item-title--srd{ color: rgba(255,165,0,0.98); }
 .spell-item--manual .spell-item-title{ color:#fff; }
