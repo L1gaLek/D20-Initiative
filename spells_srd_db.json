@@ -2537,14 +2537,82 @@
       "description_en": "and a lump of clay) You create a seismic disturbance at a point on the ground that you can see within range. For the duration, an intense tremor rips through the ground in a 100-foot-radius circle centered on that point and shakes creatures and structures in contact with the ground in that area. The ground in the area becomes difficult terrain. Each creature on the ground that is concentrating must make a Constitution saving throw. On a failed save, the creature’s concentration is broken. When you cast this spell and at the end of each turn you spend concentrating on it, each creature on the ground in the area must make a Dexterity saving throw. On a failed save, the creature is knocke d prone. This spell can have additional effects depending on the terrain in the area, as determined by the GM. Fissures. Fissures open throughout the spell’s area at the start of your next turn after you cast the spell. A total of 1d6 such fissures open in locations chosen by the GM. Each is 1d10 × 10 feet deep, 10 feet wide, and extends from one edge of the spell’s area to the opposite side. A creature standing on a spot where a fissure opens must succeed on a Dexterity saving throw or fall in. A creatur e that successfully saves moves with the fissure’s edge as it opens. A fissure that opens beneath a structure causes it to automatically collapse (see below). Structures. The tremor deals 50 bludgeoning damage to any structure in contact with the ground in the area when you cast the spell and at the start of each of your turns until the spell ends. If a structure drops to 0 hit points, it collapses and potentially damages nearby creatures. A creature within half the distance of a structure’s height must m ake a Dexterity saving throw. On a failed save, the creature takes 5d6 bludgeoning damage, is knocked prone, and is buried in the rubble, requiring a DC 20 Strength (Athletics) check as an action to escape. The GM can adjust the DC higher or lower, depending on the nature of the rubble. On a successful save, the creature takes half as much damage and doesn’t fall prone or become buried.",
       "description_ru": "Вы вызываете мощную сейсмическую катастрофу. Земля трескается, сооружения рушатся, а существа в зоне падают и теряют устойчивость.",
       "classes": [
-        "Cleric",
-        "Druid",
-        "Sorcerer"
+        "Warlock"
       ],
       "levels_by_class": {
-        "Cleric": 8,
-        "Druid": 8,
-        "Sorcerer": 8
+        "Warlock": 0
+      }
+    },
+    {
+      "id": "eldritch-blast",
+      "name_en": "Eldritch Blast",
+      "name_ru": "Потусторонний заряд",
+      "level": 0,
+      "school_en": "evocation",
+      "school_ru": "воплощение",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 действие",
+      "range_en": "120 feet",
+      "range_ru": "120 футов",
+      "components_en": "V, S",
+      "components_ru": "V, S",
+      "duration_en": "Instantaneous",
+      "duration_ru": "Мгновенно",
+      "description_en": "A beam of crackling energy streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 force damage. The spell creates more than one beam when you reach higher levels: two beams at 5th level, three beams at 11th level, and four beams at 17th level. You can direct the beams at the same target or at different ones. Make a separate attack roll for each beam.",
+      "description_ru": "Вы выпускаете луч потусторонней энергии в цель. С повышением уровня число лучей растёт, и каждый бросается отдельной атакой заклинанием.",
+      "classes": [
+        "Warlock"
+      ],
+      "levels_by_class": {
+        "Warlock": 0
+      }
+    },
+    {
+      "id": "eldritch-blast",
+      "name_en": "Eldritch Blast",
+      "name_ru": "Потусторонний заряд",
+      "level": 0,
+      "school_en": "evocation",
+      "school_ru": "воплощение",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 действие",
+      "range_en": "120 feet",
+      "range_ru": "120 футов",
+      "components_en": "V, S",
+      "components_ru": "V, S",
+      "duration_en": "Instantaneous",
+      "duration_ru": "Мгновенно",
+      "description_en": "A beam of crackling energy streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 force damage. The spell creates more than one beam when you reach higher levels: two beams at 5th level, three beams at 11th level, and four beams at 17th level. You can direct the beams at the same target or at different ones. Make a separate attack roll for each beam.",
+      "description_ru": "Вы выпускаете луч потусторонней энергии в цель. С повышением уровня число лучей растёт, и каждый бросается отдельной атакой заклинанием.",
+      "classes": [
+        "Warlock"
+      ],
+      "levels_by_class": {
+        "Warlock": 0
+      }
+    },
+    {
+      "id": "eldritch-blast",
+      "name_en": "Eldritch Blast",
+      "name_ru": "Потусторонний заряд",
+      "level": 0,
+      "school_en": "evocation",
+      "school_ru": "воплощение",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 действие",
+      "range_en": "120 feet",
+      "range_ru": "120 футов",
+      "components_en": "V, S",
+      "components_ru": "V, S",
+      "duration_en": "Instantaneous",
+      "duration_ru": "Мгновенно",
+      "description_en": "A beam of crackling energy streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 force damage. The spell creates more than one beam when you reach higher levels: two beams at 5th level, three beams at 11th level, and four beams at 17th level. You can direct the beams at the same target or at different ones. Make a separate attack roll for each beam.",
+      "description_ru": "Вы выпускаете луч потусторонней энергии в цель. С повышением уровня число лучей растёт, и каждый бросается отдельной атакой заклинанием.",
+      "classes": [
+        "Warlock"
+      ],
+      "levels_by_class": {
+        "Warlock": 0
       }
     },
     {
@@ -3875,12 +3943,38 @@
       "description_en": "measure of brimstone and oil, a knotted string, a small amount of umber hulk blood, and a small silver rod worth at least 10 gp) You create a ward that protects up to 2,500 square feet of floor space (an area 50 feet square, or one hundred 5-foot squares or twenty -five 10-foot squares). The warded area can be up to 20 feet tall, and shaped as you desire. You can ward several stories of a stronghold by dividing the area among them, as long as you can walk into each contiguous area while you are casting the spell. When you cast this spell, you can specify individuals that are unaffected by any or all of the effects that you choose. You can also specify a password that, when spoken aloud, makes the speaker immune to these effects. Guards and wards creates the following effects within the warded area. Corridors. Fog fills all the warded corridors, making them heavily obscured. In addition, at each intersection or branching passage offering a choice of direction, there is a 50 percent chance that a creature other than you will believe it is going in the opposite direction from the one it chooses. Doors. All doors in the warded a rea are magically locked, as if sealed by an arcane lock spell. In addition, you can cover up to ten doors with an illusion (equivalent to the illusory object function of the minor illusion spell) to make them appear as plain sections of wall. Stairs. Webs fill all stairs in the warded area from top to bottom, as the web spell. These strands regrow in 10 minutes if they are burned or torn away while guards and wards lasts. Other Spell Effect. You can place your choice of one of the following magical effec ts within the warded area of the stronghold. • Place dancing lights in four corridors. You can designate a simple program that the lights repeat as long as guards and wards lasts. • Place magic mouth in two locations. • Place stinking cloud in two locations. The vapors appear in the places you designate; they return within 10 minutes if dispersed by wind while guards and wards lasts. • Place a constant gust of wind in one corridor or room. • Place a suggestion in one location. You select an area of up to 5 feet square, and any creature that enters or passes through the area receives th e suggestion mentally. The whole warded area radiates magic. A dispel magic cast on a specific effect, if successful, removes only that effect. You can create a permanently guarded and warded structure by casting this spell there every day for one year.",
       "description_ru": "Вы насыщаете крепость защитной магией: туман, запертые двери, ложные проходы и иные ловушки для незваных гостей.",
       "classes": [
-        "Bard",
-        "Wizard"
+        "Cleric",
+        "Druid"
       ],
       "levels_by_class": {
-        "Bard": 6,
-        "Wizard": 6
+        "Cleric": 0,
+        "Druid": 0
+      }
+    },
+    {
+      "id": "guidance",
+      "name_en": "Guidance",
+      "name_ru": "Наставление",
+      "level": 0,
+      "school_en": "divination",
+      "school_ru": "прорицание",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 действие",
+      "range_en": "Touch",
+      "range_ru": "Касание",
+      "components_en": "V, S",
+      "components_ru": "V, S",
+      "duration_en": "Concentration, up to 1 minute",
+      "duration_ru": "Концентрация, вплоть до 1 минуты",
+      "description_en": "You touch one willing creature. Once before the spell ends, the target can roll a d4 and add the number rolled to one ability check of its choice. It can roll the die before or after making the ability check. The spell then ends.",
+      "description_ru": "Вы касаетесь союзника и направляете его божественным импульсом, добавляя бонусный кубик к следующей проверке характеристики.",
+      "classes": [
+        "Cleric",
+        "Druid"
+      ],
+      "levels_by_class": {
+        "Cleric": 0,
+        "Druid": 0
       }
     },
     {
@@ -5038,6 +5132,36 @@
       }
     },
     {
+      "id": "mage-hand",
+      "name_en": "Mage Hand",
+      "name_ru": "Волшебная рука",
+      "level": 0,
+      "school_en": "conjuration",
+      "school_ru": "вызов",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 действие",
+      "range_en": "30 feet",
+      "range_ru": "30 футов",
+      "components_en": "V, S",
+      "components_ru": "V, S",
+      "duration_en": "1 minute",
+      "duration_ru": "1 минута",
+      "description_en": "A spectral, floating hand appears at a point you choose within range. The hand last s for the duration or until you dismiss it as an action. The hand vanishes if it is ever more than 30 feet away from you or if you cast this spell again. You can use your action to control the hand. You can use the hand to manipulate an object, open an unlocked door or container, stow or retrieve an item from an open container, or pour the contents out of a vial. You can move the hand up to 30 feet each time you use it. The hand can’t attack, activate magic items, or carry more than 10 pounds.",
+      "description_ru": "Вы создаёте спектральную руку, которая может манипулировать предметами на расстоянии.",
+      "classes": [
+        "Bard",
+        "Sorcerer",
+        "Warlock",
+        "Wizard"
+      ],
+      "levels_by_class": {
+        "Bard": 0,
+        "Sorcerer": 0,
+        "Warlock": 0,
+        "Wizard": 0
+      }
+    },
+    {
       "id": "magic-circle",
       "name_en": "Magic Circle",
       "name_ru": "Магический круг",
@@ -5349,10 +5473,18 @@
       "description_en": "You banish a creature that you can see within range into a labyrinthine demiplane. The target remains there for the duration or until it escapes the maze. The target can use its action to attempt to escape. When it does so, it makes a DC 20 Intelligence check. If it succeeds, it escapes, and the spell ends (a minotaur or goristro demon automatically succeeds). When the spell ends, the target reappears in the space it left or, if that space is occupied, in the nearest unoccupied space.",
       "description_ru": "Вы изгоняете цель в лабиринт межпространства. Пока она не найдёт выход, существо временно исключено из сражения.",
       "classes": [
+        "Bard",
+        "Cleric",
+        "Druid",
+        "Sorcerer",
         "Wizard"
       ],
       "levels_by_class": {
-        "Wizard": 8
+        "Bard": 0,
+        "Cleric": 0,
+        "Druid": 0,
+        "Sorcerer": 0,
+        "Wizard": 0
       }
     },
     {
@@ -5373,12 +5505,46 @@
       "description_en": "You step into a stone object or surface large enough to fully contain your body, melding yourself and all the equipment you carry with the stone for the duration. Using your movement, you step into the stone at a point you can touch. Nothing of your presence remains visible or otherwise detectable by nonmagical senses. While merged with the stone, you can’t see what occurs outside it, and any Wisdom (Perception) checks you make to hear sounds outside it are made with disadvantage. You remain aware of the passage of time and can cast spells on yourself while merged in the stone. You can use your movement to leave the stone where you entered it, which ends the spell. You otherwise can’t move. Minor physical damage to the stone doesn’t harm you, but its partial destruction or a change in its shape (to the extent that y ou no longer fit within it) expels you and deals 6d6 bludgeoning damage to you. The stone’s complete destruction (or transmutation into a different substance) expels you and deals 50 bludgeoning damage to you. If expelled, you fall prone in an unoccupied s pace closest to where you first entered.",
       "description_ru": "Вы сливаетесь с каменной поверхностью, скрываясь внутри породы и оставаясь в безопасности до выхода.",
       "classes": [
+        "Bard",
         "Cleric",
-        "Druid"
+        "Druid",
+        "Sorcerer",
+        "Wizard"
       ],
       "levels_by_class": {
-        "Cleric": 3,
-        "Druid": 3
+        "Bard": 0,
+        "Cleric": 0,
+        "Druid": 0,
+        "Sorcerer": 0,
+        "Wizard": 0
+      }
+    },
+    {
+      "id": "message",
+      "name_en": "Message",
+      "name_ru": "Сообщение",
+      "level": 0,
+      "school_en": "transmutation",
+      "school_ru": "преобразование",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 действие",
+      "range_en": "120 feet",
+      "range_ru": "120 футов",
+      "components_en": "V, S, M (a short piece of copper wire)",
+      "components_ru": "V, S, M (материальный компонент: a short piece of copper wire)",
+      "duration_en": "1 round",
+      "duration_ru": "1 round",
+      "description_en": "You point your finger toward a creature within range and whisper a message. The target (and only the target) hears the message and can reply in a whisper that only you can hear. You can cast this spell through solid objects if you are familiar with the target and know it is beyond the barrier. Magical silence, 1 foot of stone, 1 inch of common metal, a thin sheet of lead, or 3 feet of wood blocks the spell. The spell doesn’t have to follow a straight line and can travel freely around corners or through openings.",
+      "description_ru": "Вы шепчете послание выбранной цели, и только она слышит его; цель может ответить таким же тихим шёпотом.",
+      "classes": [
+        "Bard",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "levels_by_class": {
+        "Bard": 0,
+        "Sorcerer": 0,
+        "Wizard": 0
       }
     },
     {
