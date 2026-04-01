@@ -213,9 +213,11 @@ function renderSpellCard({ level, name, href, desc, action }) {
     const isHttp = /^https?:\/\//i.test(hrefRaw);
     const isSrd = /^srd:\/\//i.test(hrefRaw);
     const isManual = /^manual:\/\//i.test(hrefRaw);
-    const sourceClass = isSrd ? "spell-item--srd" : (isManual ? "spell-item--manual" : (isHttp ? "spell-item--link" : ""));
+    // SRD-заклинания должны выглядеть как обычные карточки:
+    // отдельным остаётся только цвет названия (оранжевый).
+    const sourceClass = isManual ? "spell-item--manual" : (isHttp ? "spell-item--link" : "");
     const titleClass = isSrd ? "spell-item-title spell-item-title--srd" : (isManual ? "spell-item-title spell-item-title--manual" : "spell-item-title");
-    const linkClass = isSrd ? "spell-item-link spell-item-link--srd" : "spell-item-link";
+    const linkClass = "spell-item-link";
     const titleHtml = isHttp
       ? `<a class="${linkClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeName}</a>`
       : `<span class="${titleClass}">${safeName}</span>`;

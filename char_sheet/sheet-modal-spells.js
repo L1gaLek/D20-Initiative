@@ -468,6 +468,7 @@ function openAddSpellPopup({ root, player, sheet, canEdit, level }) {
       <div class="popup-actions">
         <button class="popup-btn primary" type="button" data-add-mode="link">Добавить по ссылке</button>
         <button class="popup-btn" type="button" data-add-mode="manual">Вписать вручную</button>
+        <button class="popup-btn" type="button" data-add-mode="srd-db">Добавить из базы</button>
       </div>
       <div style="margin-top:12px;" data-add-body></div>
     `
@@ -515,6 +516,18 @@ function openAddSpellPopup({ root, player, sheet, canEdit, level }) {
         </div>
       `;
       body.querySelector("[data-manual-name]")?.focus?.();
+      return;
+    }
+
+    if (mode === "srd-db") {
+      close();
+      openSpellDbPopup({
+        root,
+        player,
+        sheet,
+        canEdit,
+        initialForceLevel: lvl
+      });
       return;
     }
   });
@@ -570,7 +583,7 @@ function openAddSpellPopup({ root, player, sheet, canEdit, level }) {
   });
 }
 
-async function openSpellDbPopup({ root, player, sheet, canEdit }) {
+async function openSpellDbPopup({ root, player, sheet, canEdit, initialForceLevel = null }) {
   const { overlay, close } = openPopup({
     title: "База заклинаний (SRD 5.1)",
     bodyHtml: `
@@ -630,6 +643,11 @@ async function openSpellDbPopup({ root, player, sheet, canEdit }) {
   const listBox = overlay.querySelector("[data-db-list]");
 
   if (!classSel || !listBox) return;
+
+  const prefLvl = safeInt(initialForceLevel, -1);
+  if (forceLevelSel && prefLvl >= 0 && prefLvl <= 9) {
+    forceLevelSel.value = String(prefLvl);
+  }
 
   // ---- local SRD cache ----
   if (!window.__srdSpellDb) window.__srdSpellDb = { loaded: false, spells: [], byId: new Map() };
