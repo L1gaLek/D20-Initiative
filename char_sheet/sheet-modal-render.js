@@ -209,10 +209,16 @@ function renderSpellCard({ level, name, href, desc, action }) {
     const actionType = String(action?.type || '').trim().toLowerCase();
     const teleportFeet = Math.max(0, safeInt(action?.rangeFeet, 0));
 
-    const isHttp = /^https?:\/\//i.test(String(href || ""));
+    const hrefRaw = String(href || "");
+    const isHttp = /^https?:\/\//i.test(hrefRaw);
+    const isSrd = /^srd:\/\//i.test(hrefRaw);
+    const isManual = /^manual:\/\//i.test(hrefRaw);
+    const sourceClass = isSrd ? "spell-item--srd" : (isManual ? "spell-item--manual" : (isHttp ? "spell-item--link" : ""));
+    const titleClass = isSrd ? "spell-item-title spell-item-title--srd" : (isManual ? "spell-item-title spell-item-title--manual" : "spell-item-title");
+    const linkClass = isSrd ? "spell-item-link spell-item-link--srd" : "spell-item-link";
     const titleHtml = isHttp
-      ? `<a class="spell-item-link" href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeName}</a>`
-      : `<span class="spell-item-title">${safeName}</span>`;
+      ? `<a class="${linkClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer">${safeName}</a>`
+      : `<span class="${titleClass}">${safeName}</span>`;
 
     const actionSvg = `
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -223,7 +229,7 @@ function renderSpellCard({ level, name, href, desc, action }) {
     `;
 
     return `
-      <div class="spell-item" data-spell-url="${safeHref}" data-spell-level="${lvl}">
+      <div class="spell-item ${sourceClass}" data-spell-url="${safeHref}" data-spell-level="${lvl}">
         <div class="spell-item-head">
           <div class="spell-item-titlewrap">
             ${titleHtml}

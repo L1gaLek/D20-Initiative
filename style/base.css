@@ -2258,6 +2258,9 @@ textarea[data-sheet-path="text.profPlain.value"]{
   text-decoration: none;
   font-size: 13px;
 }
+.spell-item-link--srd{
+  color: rgba(255,165,0,0.98);
+}
 
 .spell-item-link:hover{
   text-decoration: underline;
@@ -2572,6 +2575,11 @@ textarea[data-sheet-path="text.profPlain.value"]{
 }
 
 .spell-item-title{font-weight:700;}
+.spell-item-title--manual{ color:#fff; }
+.spell-item-title--srd{ color: rgba(255,165,0,0.98); }
+.spell-item--manual .spell-item-title{ color:#fff; }
+.spell-item--srd .spell-item-title,
+.spell-item--srd .spell-item-link{ color: rgba(255,165,0,0.98); }
 
 .spell-del-btn{
   padding: 5px 9px;
