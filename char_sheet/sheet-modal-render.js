@@ -213,6 +213,7 @@ function renderSpellCard({ level, name, href, desc, action }) {
     const isHttp = /^https?:\/\//i.test(hrefRaw);
     const isSrd = /^srd:\/\//i.test(hrefRaw);
     const isManual = /^manual:\/\//i.test(hrefRaw);
+    const sourceClass = isSrd ? "spell-item--srd" : (isManual ? "spell-item--manual" : (isHttp ? "spell-item--link" : ""));
     const titleClass = isSrd ? "spell-item-title spell-item-title--srd" : (isManual ? "spell-item-title spell-item-title--manual" : "spell-item-title");
     const linkClass = isSrd ? "spell-item-link spell-item-link--srd" : "spell-item-link";
     const titleHtml = isHttp
@@ -228,7 +229,7 @@ function renderSpellCard({ level, name, href, desc, action }) {
     `;
 
     return `
-      <div class="spell-item" data-spell-url="${safeHref}" data-spell-level="${lvl}">
+      <div class="spell-item ${sourceClass}" data-spell-url="${safeHref}" data-spell-level="${lvl}">
         <div class="spell-item-head">
           <div class="spell-item-titlewrap">
             ${titleHtml}
