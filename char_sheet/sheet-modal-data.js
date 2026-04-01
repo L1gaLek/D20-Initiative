@@ -161,15 +161,18 @@
       let href = null;
 
       const partsPipe = t.split("|").map(s => s.trim()).filter(Boolean);
-      if (partsPipe.length >= 2 && /^(https?:\/\/|manual:)/i.test(partsPipe[1])) {
+      if (partsPipe.length >= 2 && /^(https?:\/\/|manual:|srd:\/\/)/i.test(partsPipe[1])) {
         t = partsPipe[0];
         href = partsPipe[1];
       } else {
-        const m = t.match(/(https?:\/\/[^\s]+)\s*$/i);
+        const m = t.match(/((?:https?:\/\/|srd:\/\/)[^\s]+)\s*$/i);
         if (m) {
           href = m[1];
           t = t.replace(m[1], "").trim();
         } else if (/^https?:\/\//i.test(t)) {
+          href = t;
+          t = t;
+        } else if (/^srd:\/\//i.test(t)) {
           href = t;
           t = t;
         }
