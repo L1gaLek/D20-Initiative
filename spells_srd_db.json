@@ -1878,6 +1878,62 @@
       }
     },
     {
+      "id": "dancing-lights",
+      "name_en": "Dancing Lights",
+      "name_ru": "Dancing Lights",
+      "level": 0,
+      "school_en": "evocation",
+      "school_ru": "evocation",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 action",
+      "range_en": "120 feet",
+      "range_ru": "120 feet",
+      "components_en": "V, S, M (a bit of phosphorus or wychwood, or a glowworm)",
+      "components_ru": "V, S, M (a bit of phosphorus or wychwood, or a glowworm)",
+      "duration_en": "Concentration, up to 1 minute",
+      "duration_ru": "Concentration, up to 1 minute",
+      "description_en": "wychwood, or a glowworm) You create up to four torch -sized lights within range, making them appear as torches, lanterns, or glowing orbs that hover in the air for the duration. You can also combine the four lights into one glowing vaguely humanoid form of Medium size. Whichever form you choose, each light sheds dim light in a 10- foot radius. As a bonus action on your turn, you can move the lights up to 60 feet to a new spot within range. A light must be within 20 feet of another light created by this spell, and a light winks out if it exceeds the spell’s range.",
+      "description_ru": "wychwood, or a glowworm) You create up to four torch -sized lights within range, making them appear as torches, lanterns, or glowing orbs that hover in the air for the duration. You can also combine the four lights into one glowing vaguely humanoid form of Medium size. Whichever form you choose, each light sheds dim light in a 10- foot radius. As a bonus action on your turn, you can move the lights up to 60 feet to a new spot within range. A light must be within 20 feet of another light created by this spell, and a light winks out if it exceeds the spell’s range.",
+      "classes": [
+        "Bard",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "levels_by_class": {
+        "Bard": 0,
+        "Sorcerer": 0,
+        "Wizard": 0
+      }
+    },
+    {
+      "id": "dancing-lights",
+      "name_en": "Dancing Lights",
+      "name_ru": "Пляшущие огоньки",
+      "level": 0,
+      "school_en": "evocation",
+      "school_ru": "воплощение",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 действие",
+      "range_en": "120 feet",
+      "range_ru": "120 футов",
+      "components_en": "V, S, M (a bit of phosphorus or wychwood, or a glowworm)",
+      "components_ru": "V, S, M (материальный компонент: a bit of phosphorus or wychwood, or a glowworm)",
+      "duration_en": "Concentration, up to 1 minute",
+      "duration_ru": "Концентрация, вплоть до 1 минуты",
+      "description_en": "wychwood, or a glowworm) You create up to four torch -sized lights within range, making them appear as torches, lanterns, or glowing orbs that hover in the air for the duration. You can also combine the four lights into one glowing vaguely humanoid form of Medium size. Whichever form you choose, each light sheds dim light in a 10- foot radius. As a bonus action on your turn, you can move the lights up to 60 feet to a new spot within range. A light must be within 20 feet of another light created by this spell, and a light winks out if it exceeds the spell’s range.",
+      "description_ru": "Вы создаёте до четырёх подвижных огней, которыми можно управлять как группой или по отдельности. Они освещают путь и помогают в отвлекающих манёврах.",
+      "classes": [
+        "Bard",
+        "Sorcerer",
+        "Wizard"
+      ],
+      "levels_by_class": {
+        "Bard": 0,
+        "Sorcerer": 0,
+        "Wizard": 0
+      }
+    },
+    {
       "id": "darkness",
       "name_en": "Darkness",
       "name_ru": "Тьма",
@@ -2564,6 +2620,30 @@
       "duration_ru": "Мгновенно",
       "description_en": "A beam of crackling energy streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 force damage. The spell creates more than one beam when you reach higher levels: two beams at 5th level, three beams at 11th level, and four beams at 17th level. You can direct the beams at the same target or at different ones. Make a separate attack roll for each beam.",
       "description_ru": "Вы выпускаете луч потусторонней энергии в цель. С повышением уровня число лучей растёт, и каждый бросается отдельной атакой заклинанием.",
+      "classes": [
+        "Warlock"
+      ],
+      "levels_by_class": {
+        "Warlock": 0
+      }
+    },
+    {
+      "id": "eldritch-blast",
+      "name_en": "Eldritch Blast",
+      "name_ru": "Eldritch Blast",
+      "level": 0,
+      "school_en": "evocation",
+      "school_ru": "evocation",
+      "casting_time_en": "1 action",
+      "casting_time_ru": "1 action",
+      "range_en": "120 feet",
+      "range_ru": "120 feet",
+      "components_en": "V, S",
+      "components_ru": "V, S",
+      "duration_en": "Instantaneous",
+      "duration_ru": "Instantaneous",
+      "description_en": "A beam of crackling energy streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 force damage. The spell creates more than one beam when you reach higher levels: two beams at 5th level, three beams at 11th level, and four beams at 17th level. You can direct the beams at the same target or at different ones. Make a separate attack roll for each beam.",
+      "description_ru": "A beam of crackling energy streaks toward a creature within range. Make a ranged spell attack against the target. On a hit, the target takes 1d10 force damage. The spell creates more than one beam when you reach higher levels: two beams at 5th level, three beams at 11th level, and four beams at 17th level. You can direct the beams at the same target or at different ones. Make a separate attack roll for each beam.",
       "classes": [
         "Warlock"
       ],
