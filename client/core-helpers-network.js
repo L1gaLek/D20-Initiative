@@ -623,10 +623,9 @@ function applyTokenRowToLocalState(row) {
       if (p) {
         const activeMapId = String(lastState?.currentMapId || '').trim();
         const rowMapId = String(mapId || '').trim();
-        const isScoped = !!isMapScopedPlayer?.(p);
-        // Safety for multi-map rooms: a delayed row from another map must not
-        // rewrite token coordinates on the currently open map.
-        if (isScoped && rowMapId && activeMapId && rowMapId !== activeMapId) {
+        // Safety for multi-map rooms: token coordinates are map-local for every token.
+        // A delayed row from another map must not rewrite coordinates on the active map.
+        if (rowMapId && activeMapId && rowMapId !== activeMapId) {
           try {
             if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
             const prev = window.__tokenRowFreshnessClock.get(tokenId) || {};
@@ -663,8 +662,8 @@ function applyTokenRowToLocalState(row) {
           if (Number.isFinite(preferredMonsterSize) && preferredMonsterSize > 0) p.size = preferredMonsterSize;
         }
         if (color !== undefined && color) p.color = color;
-        // map-local safety
-        if (mapId && isMapScopedPlayer(p)) p.mapId = mapId;
+        // Keep last known map source of this token row.
+        if (mapId) p.mapId = mapId;
 
         // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates.
         // But for GM-created non-allies the default is hidden, and the first placement on the board
@@ -1106,8 +1105,7 @@ function applyTokenDeleteToLocalState(row) {
     try {
       const mapId = String(row.map_id || '').trim();
       const activeMapId = String(lastState?.currentMapId || '').trim();
-      const p = (lastState?.players || []).find(pp => String(pp?.id || '') === tokenId);
-      if (p && isMapScopedPlayer?.(p) && mapId && activeMapId && mapId !== activeMapId) return;
+      if (mapId && activeMapId && mapId !== activeMapId) return;
     } catch {}
     try { window.__tokenPositionSnapshotCache?.delete?.(tokenId); } catch {}
 
@@ -2776,7 +2774,7 @@ async function sendMessage(msg) {
             sendWsEnvelope({
               type: 'updateTokenColor',
               roomId: String(currentRoomId || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               tokenId: String(p.id),
               color: c
             }, { optimisticApplied: true });
@@ -3114,7 +3112,7 @@ async function sendMessage(msg) {
             sendWsEnvelope({
               type: 'updateTokenSize',
               roomId: String(currentRoomId || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               tokenId: String(p.id),
               size: Number(p?.size) || 1,
               isPublic: !!p?.isPublic,
@@ -3125,7 +3123,7 @@ async function sendMessage(msg) {
             // This prevents rare cases where WS echo races cause rollback to stale position.
             Promise.resolve(upsertTokenPositionDirect(String(currentRoomId || ''), {
               id: String(p?.id || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               x: nx,
               y: ny,
               size: Number(p?.size) || 1,
@@ -3174,7 +3172,7 @@ async function sendMessage(msg) {
             sendWsEnvelope({
               type: 'updateTokenSize',
               roomId: String(currentRoomId || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               tokenId: String(p.id),
               size: newSize,
               isPublic: !!p?.isPublic
@@ -3198,7 +3196,7 @@ async function sendMessage(msg) {
             sendWsEnvelope({
               type: 'removeTokenFromBoard',
               roomId: String(currentRoomId || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               tokenId: String(p.id),
               isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
