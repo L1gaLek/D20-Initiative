@@ -621,6 +621,22 @@ function applyTokenRowToLocalState(row) {
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
       const p = lastState.players.find(pp => String(pp?.id) === tokenId);
       if (p) {
+        const activeMapId = String(lastState?.currentMapId || '').trim();
+        const rowMapId = String(mapId || '').trim();
+        const isScoped = !!isMapScopedPlayer?.(p);
+        // Safety for multi-map rooms: a delayed row from another map must not
+        // rewrite token coordinates on the currently open map.
+        if (isScoped && rowMapId && activeMapId && rowMapId !== activeMapId) {
+          try {
+            if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
+            const prev = window.__tokenRowFreshnessClock.get(tokenId) || {};
+            window.__tokenRowFreshnessClock.set(tokenId, {
+              updatedAtMs: rowUpdatedAtMs || Number(prev?.updatedAtMs) || 0,
+              appliedAtMs: Date.now()
+            });
+          } catch {}
+          return;
+        }
         try {
           if (!(window.__tokenPositionSnapshotCache instanceof Map)) window.__tokenPositionSnapshotCache = new Map();
           window.__tokenPositionSnapshotCache.set(String(tokenId), {
@@ -1087,6 +1103,12 @@ function applyTokenDeleteToLocalState(row) {
     if (!row) return;
     const tokenId = String(row.token_id || '').trim();
     if (!tokenId) return;
+    try {
+      const mapId = String(row.map_id || '').trim();
+      const activeMapId = String(lastState?.currentMapId || '').trim();
+      const p = (lastState?.players || []).find(pp => String(pp?.id || '') === tokenId);
+      if (p && isMapScopedPlayer?.(p) && mapId && activeMapId && mapId !== activeMapId) return;
+    } catch {}
     try { window.__tokenPositionSnapshotCache?.delete?.(tokenId); } catch {}
 
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
