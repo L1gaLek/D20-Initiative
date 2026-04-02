@@ -1235,8 +1235,29 @@ async function upsertTokenPositionDirect(roomId, token) {
       color: (typeof token?.color === 'string') ? token.color : null,
       is_public: !!token?.isPublic
     };
-
-    await sbClient.from('room_tokens').upsert(payload);
+    const mutable = {
+      x: payload.x,
+      y: payload.y,
+      size: payload.size,
+      color: payload.color,
+      is_public: payload.is_public
+    };
+    // Keep positions map-local: update only the row for (room_id, map_id, token_id).
+    // If such row doesn't exist yet, insert a new one for this map.
+    const upd = await sbClient
+      .from('room_tokens')
+      .update(mutable)
+      .eq('room_id', rid)
+      .eq('map_id', mapId)
+      .eq('token_id', tokenId)
+      .select('token_id')
+      .limit(1);
+    if (upd.error) throw upd.error;
+    const updatedRows = Array.isArray(upd.data) ? upd.data.length : 0;
+    if (!updatedRows) {
+      const ins = await sbClient.from('room_tokens').insert(payload);
+      if (ins.error) throw ins.error;
+    }
   } catch (e) {
     console.warn('upsertTokenPositionDirect failed', e);
   }
