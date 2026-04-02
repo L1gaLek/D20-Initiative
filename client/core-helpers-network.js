@@ -536,13 +536,26 @@ function applyTokenRowToLocalState(row) {
     if (!row) return;
     const tokenId = String(row.token_id || '').trim();
     if (!tokenId) return;
-    const x = (row.x === null || typeof row.x === 'undefined') ? null : Number(row.x);
-    const y = (row.y === null || typeof row.y === 'undefined') ? null : Number(row.y);
-    const size = (row.size === null || typeof row.size === 'undefined') ? null : Number(row.size);
-    const color = (typeof row.color === 'string') ? row.color : null;
+    const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+    const hasX = hasOwn(row, 'x');
+    const hasY = hasOwn(row, 'y');
+    const hasSize = hasOwn(row, 'size');
+    const hasColor = hasOwn(row, 'color');
+    const x = !hasX ? undefined : ((row.x === null || typeof row.x === 'undefined') ? null : Number(row.x));
+    const y = !hasY ? undefined : ((row.y === null || typeof row.y === 'undefined') ? null : Number(row.y));
+    const size = !hasSize ? undefined : ((row.size === null || typeof row.size === 'undefined') ? null : Number(row.size));
+    const color = hasColor ? ((typeof row.color === 'string') ? row.color : null) : undefined;
     const mapId = String(row.map_id || '').trim();
     const hasPublic = (typeof row.is_public !== 'undefined');
     const isPublic = hasPublic ? !!row.is_public : null;
+    const rowUpdatedAtMs = Number(new Date(String(row?.updated_at || '')).getTime()) || 0;
+    try {
+      if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
+      const prev = window.__tokenRowFreshnessClock.get(tokenId);
+      const prevUpdatedAtMs = Number(prev?.updatedAtMs) || 0;
+      // Out-of-order delivery safety: never let an older row rollback a newer token snapshot.
+      if (rowUpdatedAtMs && prevUpdatedAtMs && (rowUpdatedAtMs + 50 < prevUpdatedAtMs)) return;
+    } catch {}
     const tokenMoveGuard = (typeof window !== 'undefined' && window.__tokenMoveOptimisticGuard instanceof Map)
       ? window.__tokenMoveOptimisticGuard
       : null;
@@ -558,7 +571,6 @@ function applyTokenRowToLocalState(row) {
       const rowMapId = String(mapId || '').trim();
       const rowX = (x === null || typeof x === 'undefined') ? null : Number(x);
       const rowY = (y === null || typeof y === 'undefined') ? null : Number(y);
-      const rowUpdatedAtMs = Number(new Date(String(row?.updated_at || '')).getTime()) || 0;
       const rowMatchesOptimistic = (
         Number.isFinite(rowX) && Number.isFinite(rowY) &&
         rowX === gx && rowY === gy &&
@@ -590,16 +602,16 @@ function applyTokenRowToLocalState(row) {
         try {
           if (!(window.__tokenPositionSnapshotCache instanceof Map)) window.__tokenPositionSnapshotCache = new Map();
           window.__tokenPositionSnapshotCache.set(String(tokenId), {
-            x: (x === null || typeof x === 'undefined') ? null : Number(x),
-            y: (y === null || typeof y === 'undefined') ? null : Number(y),
+            x: (!hasX || x === undefined) ? ((p?.x === null || typeof p?.x === 'undefined') ? null : Number(p.x)) : ((x === null || typeof x === 'undefined') ? null : Number(x)),
+            y: (!hasY || y === undefined) ? ((p?.y === null || typeof p?.y === 'undefined') ? null : Number(p.y)) : ((y === null || typeof y === 'undefined') ? null : Number(y)),
             size: (Number.isFinite(size) && size > 0) ? Number(size) : (Number(p?.size) || 1),
-            color: color || p?.color || null,
+            color: (color === undefined) ? (p?.color || null) : (color || p?.color || null),
             mapId: mapId || p?.mapId || null,
             updatedAt: Date.now()
           });
         } catch {}
-        if (x === null || Number.isFinite(x)) p.x = x;
-        if (y === null || Number.isFinite(y)) p.y = y;
+        if (hasX && (x === null || Number.isFinite(x))) p.x = x;
+        if (hasY && (y === null || Number.isFinite(y))) p.y = y;
         if (Number.isFinite(size) && size > 0) {
           const preferredMonsterSize = getMonsterPreferredTokenSize(p);
           if (!Number.isFinite(preferredMonsterSize) || size >= preferredMonsterSize) {
@@ -612,7 +624,7 @@ function applyTokenRowToLocalState(row) {
           const preferredMonsterSize = getMonsterPreferredTokenSize(p);
           if (Number.isFinite(preferredMonsterSize) && preferredMonsterSize > 0) p.size = preferredMonsterSize;
         }
-        if (color) p.color = color;
+        if (color !== undefined && color) p.color = color;
         // map-local safety
         if (mapId && isMapScopedPlayer(p)) p.mapId = mapId;
 
@@ -640,6 +652,14 @@ function applyTokenRowToLocalState(row) {
         try {
           window.FogWar?.onTokenPositionsChanged?.(lastState);
           (lastState?.players || []).forEach(pp => { try { setPlayerPosition?.(pp); } catch {} });
+        } catch {}
+        try {
+          if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
+          const prev = window.__tokenRowFreshnessClock.get(tokenId) || {};
+          window.__tokenRowFreshnessClock.set(tokenId, {
+            updatedAtMs: rowUpdatedAtMs || Number(prev?.updatedAtMs) || 0,
+            appliedAtMs: Date.now()
+          });
         } catch {}
       }
     }
