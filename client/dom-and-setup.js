@@ -47,6 +47,7 @@ const tavernCreateRoomBtn = document.getElementById('tavernCreateRoomBtn');
 const tavernChatHotspot = document.getElementById('tavern-hotspot-chat');
 const tavernBartenderHotspot = document.getElementById('tavern-hotspot-bartender');
 const tavernBoardHotspot = document.getElementById('tavern-hotspot-board');
+const tavernBoardBadge = document.getElementById('tavern-hotspot-board-badge');
 const tavernAdventuresHotspot = document.getElementById('tavern-hotspot-adventures');
 const tavernCreateAnnouncementModal = document.getElementById('tavernCreateAnnouncementModal');
 const tavernCreateAnnouncementClose = document.getElementById('tavernCreateAnnouncementClose');

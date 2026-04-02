@@ -415,6 +415,10 @@ body.lobby-active #lobby-scene {
   position:relative;
   padding-right:54px;
 }
+.tavern-toolbar__btn--board{
+  position:relative;
+  padding-right:42px;
+}
 .tavern-toolbar__btn-label{
   display:inline-block;
 }
@@ -759,9 +763,15 @@ body.lobby-active #lobby-scene {
 .tavern-board-card{padding:14px;border-radius:14px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,255,255,0.08);}
 .tavern-board-card h3{margin:0;font-size:17px;color:#fff2d8;}
 .tavern-board-card__head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.tavern-board-card__actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+.tavern-board-card__toggle{min-height:34px !important;min-width:100px !important;font-size:12px !important;}
 .tavern-board-card__meta,.tavern-board-card__stats,.tavern-board-card__contacts{margin-top:6px;color:#d4c3a8;font-size:13px;}
+.tavern-board-card__type{display:inline-flex;padding:2px 8px;border-radius:999px;border:1px solid transparent;font-size:11px;font-weight:900;letter-spacing:.03em;margin-right:4px;}
+.tavern-board-card__type--campaign{border-color:rgba(92,184,92,.75);color:#bff3bf;background:rgba(56,120,56,.2);}
+.tavern-board-card__type--oneshot{border-color:rgba(235,162,70,.78);color:#ffd7a4;background:rgba(176,105,38,.2);}
 .tavern-board-card__stats{display:flex;flex-wrap:wrap;gap:8px 14px;}
 .tavern-board-card__description{margin:8px 0 0;color:#f3ecdf;white-space:pre-wrap;}
+.tavern-board-card__description.hidden{display:none;}
 .tavern-board-card__delete{min-height:34px !important;min-width:100px !important;font-size:12px !important;background:linear-gradient(180deg, rgba(128,44,28,.95) 0%, rgba(87,26,16,.98) 100%) !important;border-color:rgba(255,130,110,.32) !important;}
 .tavern-board-form{display:flex;flex-direction:column;gap:10px;}
 .tavern-board-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}

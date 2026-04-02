@@ -81,7 +81,10 @@
         <span id="tavern-hotspot-chat-badge-direct" class="tavern-toolbar__badge tavern-toolbar__badge--direct hidden">0</span>
       </button>
       <button id="tavern-hotspot-bartender" class="tavern-toolbar__btn" type="button" aria-label="Бармен">Бармен</button>
-      <button id="tavern-hotspot-board" class="tavern-toolbar__btn tavern-toolbar__btn--wide" type="button" aria-label="Доска объявлений">Доска объявлений</button>
+      <button id="tavern-hotspot-board" class="tavern-toolbar__btn tavern-toolbar__btn--wide tavern-toolbar__btn--board" type="button" aria-label="Доска объявлений">
+        <span class="tavern-toolbar__btn-label">Доска объявлений</span>
+        <span id="tavern-hotspot-board-badge" class="tavern-toolbar__badge tavern-toolbar__badge--global hidden">0</span>
+      </button>
       <button id="tavern-hotspot-adventures" class="tavern-toolbar__btn tavern-toolbar__btn--wide" type="button" aria-label="Приключения">Приключения</button>
     </div>
   </div>
@@ -208,7 +211,7 @@
           <label class="room-entry-field"><span>Дата и время приключения</span><input id="announcementStartAtInput" class="room-entry-input" type="datetime-local"></label>
           <label class="room-entry-field"><span>Контакты ГМа</span><input id="announcementContactInput" class="room-entry-input" type="text" placeholder="@discord / Telegram / почта"></label>
         </div>
-        <label class="room-entry-field"><span>Описание</span><textarea id="announcementDescriptionInput" class="room-entry-input tavern-board-textarea" maxlength="4000" placeholder="Опишите сеттинг, темп игры, требования к игрокам и любые важные детали."></textarea></label>
+        <label class="room-entry-field"><span>Описание (необязательно)</span><textarea id="announcementDescriptionInput" class="room-entry-input tavern-board-textarea" maxlength="4000" placeholder="Опишите сеттинг, темп игры, требования к игрокам и любые важные детали."></textarea></label>
         <div id="tavernCreateAnnouncementError" class="room-entry-error"></div>
         <div class="room-entry-actions">
           <button id="tavernCreateAnnouncementCancel" type="button">Отмена</button>
