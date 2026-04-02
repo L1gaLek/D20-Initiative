@@ -29,7 +29,7 @@ function showSingleRoomLimitPopup() {
   const roomName = String(ownedRoomRecord?.name || 'ваша комната');
   const message = `Лимит на пользователя — только 1 комната. У вас уже есть «${roomName}». Вы можете отредактировать её или удалить.`;
   if (roomsError) roomsError.textContent = message;
-  if (tavernRoomsError) tavernRoomsError.textContent = message;
+  if (tavernAdventuresError) tavernAdventuresError.textContent = message;
   window.showRoomAccessPopup?.(message, 'Лимит комнат');
 }
 
@@ -55,7 +55,7 @@ function openCreateRoomModal(room = null) {
   }
   if (createRoomSubmit) createRoomSubmit.textContent = editing ? 'Сохранить' : 'Создать';
   if (roomsError) roomsError.textContent = '';
-  if (tavernRoomsError) tavernRoomsError.textContent = '';
+  if (tavernAdventuresError) tavernAdventuresError.textContent = '';
   createRoomModal.classList.remove('hidden');
 }
 
@@ -79,10 +79,10 @@ function confirmDeleteRoom(room) {
 }
 
 function renderRooms(rooms) {
-  const targets = [roomsList, tavernRoomsList].filter(Boolean);
+  const targets = [roomsList, tavernAdventuresList].filter(Boolean);
   if (!targets.length) return;
   if (roomsError) roomsError.textContent = '';
-  if (tavernRoomsError) tavernRoomsError.textContent = '';
+  if (tavernAdventuresError) tavernAdventuresError.textContent = '';
   targets.forEach((target) => { target.innerHTML = ''; });
   updateRoomCreationAvailability(rooms);
 
@@ -287,7 +287,7 @@ function openRoleModalForRoom(room) {
     }
   } catch {}
 
-  try { tavernRoomsModal?.classList.add('hidden'); } catch {}
+  try { tavernAdventuresModal?.classList.add('hidden'); } catch {}
   if (modal) modal.classList.remove('hidden');
 }
 
