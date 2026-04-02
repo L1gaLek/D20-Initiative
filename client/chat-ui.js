@@ -210,6 +210,7 @@ function openTavern() {
   tavernDiv.setAttribute('aria-hidden', 'false');
   if (tavernMyName) tavernMyName.textContent = String(getAppStorageItem('int_user_name') || myNameSpan?.textContent || 'путник');
   initTavernVideoBackground();
+  void refreshTavernBoardBadge();
   updateLobbyModeClass();
   try { lobbyAmbientAudio.sync(); } catch {}
 }
@@ -218,7 +219,7 @@ function closeTavern() {
   if (!tavernDiv) return;
   tavernDiv.classList.add('hidden');
   tavernDiv.setAttribute('aria-hidden', 'true');
-  [tavernChatModal, tavernBartenderModal, tavernRoomsModal].forEach(hideModalEl);
+  [tavernChatModal, tavernBartenderModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal].forEach(hideModalEl);
   closeTavernUsersPopover();
   updateLobbyModeClass();
   try { lobbyAmbientAudio.sync(); } catch {}
@@ -234,6 +235,96 @@ function getTavernMyUserName() {
 
 function safeJsonParse(raw, fallback = null) {
   try { return JSON.parse(raw); } catch { return fallback; }
+}
+
+const TAVERN_BOARD_SEEN_STORAGE_KEY = 'int_tavern_board_seen_ids_v1';
+const TAVERN_BOARD_TABLE = 'tavern_announcements';
+const TAVERN_BOARD_MAX_PER_USER = 2;
+const TAVERN_BOARD_MAX_MS_AHEAD = 10.5 * 24 * 60 * 60 * 1000;
+const tavernBoardState = {
+  editingId: '',
+  expandedIds: new Set(),
+  items: []
+};
+
+function normalizeAnnouncementRow(row = {}) {
+  return {
+    id: String(row?.id || ''),
+    authorId: String(row?.author_id || ''),
+    authorName: String(row?.author_name || ''),
+    createdAtTs: Date.parse(String(row?.created_at || '')) || Date.now(),
+    updatedAtTs: Date.parse(String(row?.updated_at || '')) || 0,
+    scenario: String(row?.scenario || ''),
+    adventureType: String(row?.adventure_type || 'Кампания'),
+    level: String(row?.level || ''),
+    maxPlayers: Number(row?.max_players || 0),
+    neededPlayers: Number(row?.needed_players || 0),
+    startAtTs: Date.parse(String(row?.start_at || '')) || 0,
+    contact: String(row?.contact || ''),
+    description: String(row?.description || '')
+  };
+}
+
+async function fetchTavernAnnouncements({ purgeExpired = false } = {}) {
+  if (!sbClient) {
+    tavernBoardState.items = [];
+    return [];
+  }
+  const nowIso = new Date().toISOString();
+  if (purgeExpired) {
+    try { await sbClient.from(TAVERN_BOARD_TABLE).delete().lt('start_at', nowIso); } catch {}
+  }
+  const { data, error } = await sbClient
+    .from(TAVERN_BOARD_TABLE)
+    .select('id,author_id,author_name,scenario,adventure_type,level,max_players,needed_players,start_at,contact,description,created_at,updated_at')
+    .gt('start_at', nowIso)
+    .order('start_at', { ascending: true });
+  if (error) {
+    console.warn('tavern board fetch failed', error);
+    if (tavernBoardError) tavernBoardError.textContent = 'Не удалось загрузить объявления. Проверьте таблицу tavern_announcements в Supabase.';
+    tavernBoardState.items = [];
+    return [];
+  }
+  tavernBoardState.items = (Array.isArray(data) ? data : []).map(normalizeAnnouncementRow);
+  return tavernBoardState.items;
+}
+
+function readSeenAnnouncementIds() {
+  const list = safeJsonParse(localStorage.getItem(TAVERN_BOARD_SEEN_STORAGE_KEY), []);
+  return new Set(Array.isArray(list) ? list.map((id) => String(id || '')) : []);
+}
+
+function saveSeenAnnouncementIds(idsSet) {
+  const list = Array.from(idsSet || []).map((id) => String(id || '')).filter(Boolean);
+  localStorage.setItem(TAVERN_BOARD_SEEN_STORAGE_KEY, JSON.stringify(list));
+}
+
+async function refreshTavernBoardBadge() {
+  if (!tavernBoardBadge) return;
+  const active = await fetchTavernAnnouncements();
+  const seen = readSeenAnnouncementIds();
+  const unseenCount = active.filter((item) => !seen.has(String(item?.id || ''))).length;
+  tavernBoardBadge.textContent = String(unseenCount);
+  tavernBoardBadge.classList.toggle('hidden', unseenCount <= 0);
+}
+
+function formatAnnouncementDate(ts) {
+  try {
+    return new Date(Number(ts || Date.now())).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' });
+  } catch {
+    return 'Дата не указана';
+  }
+}
+
+function formatDateTimeLocalInput(ts) {
+  const d = new Date(Number(ts || Date.now()));
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function getMyAnnouncementCount(items = []) {
+  const myUserId = getTavernMyUserId();
+  return items.filter((item) => String(item?.authorId || '') === myUserId).length;
 }
 
 function encodeTavernLogRow(message) {
@@ -781,10 +872,180 @@ function openTavernBartender() {
   showModalEl(tavernBartenderModal);
 }
 
-function openTavernRooms() {
-  showModalEl(tavernRoomsModal);
-  if (tavernRoomsError) tavernRoomsError.textContent = '';
+async function renderTavernBoard() {
+  if (!tavernBoardList) return;
+  const announcements = (await fetchTavernAnnouncements({ purgeExpired: true }))
+    .sort((a, b) => Number(a.startAtTs || 0) - Number(b.startAtTs || 0));
+  const myCount = getMyAnnouncementCount(announcements);
+  if (tavernBoardHint) tavernBoardHint.textContent = `Активных объявлений: ${announcements.length}. Ваших: ${myCount}/${TAVERN_BOARD_MAX_PER_USER}.`;
+  if (tavernBoardError && tavernBoardError.textContent !== 'Не удалось загрузить объявления. Проверьте таблицу tavern_announcements в Supabase.') {
+    tavernBoardError.textContent = '';
+  }
+
+  if (!announcements.length) {
+    tavernBoardList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Пока объявлений нет. Нажмите «Дать объявление», чтобы собрать группу.</div></div>';
+    return;
+  }
+
+  tavernBoardList.innerHTML = announcements.map((item) => {
+    const itemId = String(item?.id || '');
+    const canManage = String(item?.authorId || '') === getTavernMyUserId();
+    const isExpanded = tavernBoardState.expandedIds.has(itemId);
+    const typeCls = String(item?.adventureType || '').toLowerCase() === 'ваншот'
+      ? 'tavern-board-card__type tavern-board-card__type--oneshot'
+      : 'tavern-board-card__type tavern-board-card__type--campaign';
+    return `
+      <article class="tavern-board-card">
+        <div class="tavern-board-card__head">
+          <div>
+            <h3>${escapeHtmlLite(item?.scenario || 'Без названия')}</h3>
+            <div class="tavern-board-card__meta"><span class="${typeCls}">${escapeHtmlLite(item?.adventureType || 'Кампания')}</span> • Уровень персонажа: ${escapeHtmlLite(item?.level || 'любой')}</div>
+          </div>
+          <div class="tavern-board-card__actions">
+            <button type="button" class="tavern-board-card__toggle" data-announcement-toggle="${escapeHtmlLite(itemId)}">${isExpanded ? 'Скрыть описание' : 'Описание'}</button>
+            ${canManage ? `<button type="button" class="tavern-board-card__toggle" data-announcement-edit="${escapeHtmlLite(itemId)}">Редактировать</button>` : ''}
+            ${canManage ? `<button type="button" class="tavern-board-card__delete" data-announcement-delete="${escapeHtmlLite(itemId)}">Удалить</button>` : ''}
+          </div>
+        </div>
+        <div class="tavern-board-card__stats">
+          <span>Игроков нужно: ${escapeHtmlLite(item?.neededPlayers || '—')} / максимум: ${escapeHtmlLite(item?.maxPlayers || '—')}</span>
+          <span>Старт: ${escapeHtmlLite(formatAnnouncementDate(item?.startAtTs))}</span>
+        </div>
+        <div class="tavern-board-card__contacts">Контакты ГМа: ${escapeHtmlLite(item?.contact || 'не указаны')}</div>
+        <p class="tavern-board-card__description ${isExpanded ? '' : 'hidden'}">${escapeHtmlLite(item?.description || 'Описание не указано.')}</p>
+      </article>
+    `;
+  }).join('');
+  await refreshTavernBoardBadge();
+}
+
+async function openTavernBoard() {
+  const active = await fetchTavernAnnouncements({ purgeExpired: true });
+  saveSeenAnnouncementIds(new Set(active.map((item) => String(item?.id || ''))));
+  showModalEl(tavernBoardModal);
+  await renderTavernBoard();
+}
+
+function openTavernAdventures() {
+  showModalEl(tavernAdventuresModal);
+  if (tavernAdventuresError) tavernAdventuresError.textContent = '';
   try { sendMessage({ type: 'listRooms' }); } catch {}
+}
+
+function resetAnnouncementForm() {
+  if (announcementScenarioInput) announcementScenarioInput.value = '';
+  if (announcementAdventureType) announcementAdventureType.value = 'Кампания';
+  if (announcementLevelInput) announcementLevelInput.value = '';
+  if (announcementMaxPlayersInput) announcementMaxPlayersInput.value = '';
+  if (announcementNeededPlayersInput) announcementNeededPlayersInput.value = '';
+  if (announcementStartAtInput) announcementStartAtInput.value = '';
+  if (announcementContactInput) announcementContactInput.value = '';
+  if (announcementDescriptionInput) announcementDescriptionInput.value = '';
+  if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = '';
+  if (tavernCreateAnnouncementSubmit) tavernCreateAnnouncementSubmit.textContent = 'Опубликовать';
+}
+
+async function openCreateAnnouncementModal(item = null) {
+  const active = await fetchTavernAnnouncements({ purgeExpired: true });
+  const editing = !!item;
+  if (!editing && getMyAnnouncementCount(active) >= TAVERN_BOARD_MAX_PER_USER) {
+    if (tavernBoardError) tavernBoardError.textContent = `Лимит: не более ${TAVERN_BOARD_MAX_PER_USER} активных объявлений на пользователя.`;
+    return;
+  }
+  resetAnnouncementForm();
+  tavernBoardState.editingId = editing ? String(item?.id || '') : '';
+  if (editing) {
+    if (announcementScenarioInput) announcementScenarioInput.value = String(item?.scenario || '');
+    if (announcementAdventureType) announcementAdventureType.value = String(item?.adventureType || 'Кампания');
+    if (announcementLevelInput) announcementLevelInput.value = String(item?.level || '');
+    if (announcementMaxPlayersInput) announcementMaxPlayersInput.value = String(item?.maxPlayers || '');
+    if (announcementNeededPlayersInput) announcementNeededPlayersInput.value = String(item?.neededPlayers || '');
+    if (announcementStartAtInput) announcementStartAtInput.value = formatDateTimeLocalInput(item?.startAtTs);
+    if (announcementContactInput) announcementContactInput.value = String(item?.contact || '');
+    if (announcementDescriptionInput) announcementDescriptionInput.value = String(item?.description || '');
+    if (tavernCreateAnnouncementSubmit) tavernCreateAnnouncementSubmit.textContent = 'Сохранить';
+  }
+  showModalEl(tavernCreateAnnouncementModal);
+  setTimeout(() => announcementScenarioInput?.focus(), 0);
+}
+
+async function saveAnnouncementFromForm() {
+  if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = '';
+  if (!sbClient) {
+    if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = 'Supabase не подключен. Объявления недоступны.';
+    return;
+  }
+  const scenario = String(announcementScenarioInput?.value || '').trim();
+  const adventureType = String(announcementAdventureType?.value || 'Кампания').trim();
+  const level = String(announcementLevelInput?.value || '').trim();
+  const maxPlayers = Number(announcementMaxPlayersInput?.value || 0);
+  const neededPlayers = Number(announcementNeededPlayersInput?.value || 0);
+  const startAtRaw = String(announcementStartAtInput?.value || '').trim();
+  const contact = String(announcementContactInput?.value || '').trim();
+  const description = String(announcementDescriptionInput?.value || '').trim();
+
+  const startAtTs = startAtRaw ? Date.parse(startAtRaw) : NaN;
+  const now = Date.now();
+  if (!scenario || !level || !contact || !startAtRaw || !Number.isFinite(startAtTs)) {
+    if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = 'Заполните все поля объявления.';
+    return;
+  }
+  if (startAtTs <= now) {
+    if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = 'Дата приключения должна быть в будущем.';
+    return;
+  }
+  if ((startAtTs - now) > TAVERN_BOARD_MAX_MS_AHEAD) {
+    if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = 'Дата приключения не может быть дальше, чем на полторы недели.';
+    return;
+  }
+  if (!Number.isInteger(maxPlayers) || !Number.isInteger(neededPlayers) || maxPlayers < 1 || neededPlayers < 1 || neededPlayers > maxPlayers) {
+    if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = 'Проверьте количество игроков (нужно >= 1 и не больше максимума).';
+    return;
+  }
+
+  const active = await fetchTavernAnnouncements({ purgeExpired: true });
+  const isEditing = !!tavernBoardState.editingId;
+  if (!isEditing && getMyAnnouncementCount(active) >= TAVERN_BOARD_MAX_PER_USER) {
+    if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = `Лимит: ${TAVERN_BOARD_MAX_PER_USER} активных объявления на пользователя.`;
+    return;
+  }
+
+  const payload = {
+    scenario,
+    adventure_type: adventureType,
+    level,
+    max_players: maxPlayers,
+    needed_players: neededPlayers,
+    start_at: new Date(startAtTs).toISOString(),
+    contact,
+    description
+  };
+
+  if (isEditing) {
+    const { error } = await sbClient
+      .from(TAVERN_BOARD_TABLE)
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq('id', tavernBoardState.editingId)
+      .eq('author_id', getTavernMyUserId());
+    if (error) {
+      if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = `Не удалось сохранить объявление: ${error.message || 'ошибка Supabase'}`;
+      return;
+    }
+  } else {
+    const { error } = await sbClient.from(TAVERN_BOARD_TABLE).insert({
+      ...payload,
+      author_id: getTavernMyUserId(),
+      author_name: getTavernMyUserName()
+    });
+    if (error) {
+      if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = `Не удалось создать объявление: ${error.message || 'ошибка Supabase'}`;
+      return;
+    }
+  }
+  tavernBoardState.editingId = '';
+  hideModalEl(tavernCreateAnnouncementModal);
+  await renderTavernBoard();
+  await refreshTavernBoardBadge();
 }
 
 
@@ -1374,7 +1635,7 @@ window.returnToTavernFromRoom = returnToTavernFromRoom;
 
 window.openTavern = openTavern;
 window.closeTavern = closeTavern;
-window.openTavernRooms = openTavernRooms;
+window.openTavernRooms = openTavernAdventures;
 window.stopTavernChannel = stopTavernChannel;
 window.ensureTavernChannel = ensureTavernChannel;
 window.isTavernVisible = isTavernVisible;
@@ -1387,12 +1648,12 @@ try { lobbyAmbientAudio.sync(); } catch {}
 pushTavernMessage({ system: true, text: 'Собирайтесь у стола, слушайте бармена или выбирайте путешествие на доске объявлений.' });
 updateTavernHotspotBadges();
 
-[tavernChatClose, tavernBartenderClose, tavernRoomsClose].forEach((btn, idx) => {
+[tavernChatClose, tavernBartenderClose, tavernBoardClose, tavernAdventuresClose, tavernCreateAnnouncementClose, tavernCreateAnnouncementCancel].forEach((btn, idx) => {
   if (!btn) return;
-  const targets = [tavernChatModal, tavernBartenderModal, tavernRoomsModal];
+  const targets = [tavernChatModal, tavernBartenderModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal, tavernCreateAnnouncementModal];
   btn.addEventListener('click', () => hideModalEl(targets[idx]));
 });
-[tavernChatModal, tavernBartenderModal, tavernRoomsModal].forEach((modal) => {
+[tavernChatModal, tavernBartenderModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal].forEach((modal) => {
   if (!modal) return;
   modal.addEventListener('click', (e) => {
     if (e.target === modal) hideModalEl(modal);
@@ -1400,7 +1661,8 @@ updateTavernHotspotBadges();
 });
 if (tavernChatHotspot) tavernChatHotspot.addEventListener('click', openTavernChat);
 if (tavernBartenderHotspot) tavernBartenderHotspot.addEventListener('click', openTavernBartender);
-if (tavernBoardHotspot) tavernBoardHotspot.addEventListener('click', openTavernRooms);
+if (tavernBoardHotspot) tavernBoardHotspot.addEventListener('click', () => { void openTavernBoard(); });
+if (tavernAdventuresHotspot) tavernAdventuresHotspot.addEventListener('click', openTavernAdventures);
 if (tavernChatSend) tavernChatSend.addEventListener('click', () => { sendTavernChatMessage(); });
 if (tavernChatUsersBtn) tavernChatUsersBtn.addEventListener('click', () => { toggleTavernUsersPopover(); });
 if (tavernChatTabs) {
@@ -1484,8 +1746,48 @@ document.querySelectorAll('[data-tavern-topic]').forEach((btn) => {
     }
   });
 });
+if (tavernCreateAnnouncementBtn) tavernCreateAnnouncementBtn.addEventListener('click', () => {
+  void openCreateAnnouncementModal();
+});
+if (tavernBoardList) tavernBoardList.addEventListener('click', async (e) => {
+  const toggleBtn = e.target?.closest?.('[data-announcement-toggle]');
+  if (toggleBtn) {
+    const id = String(toggleBtn.getAttribute('data-announcement-toggle') || '');
+    if (tavernBoardState.expandedIds.has(id)) tavernBoardState.expandedIds.delete(id);
+    else tavernBoardState.expandedIds.add(id);
+    await renderTavernBoard();
+    return;
+  }
+  const editBtn = e.target?.closest?.('[data-announcement-edit]');
+  if (editBtn) {
+    const id = String(editBtn.getAttribute('data-announcement-edit') || '');
+    const active = await fetchTavernAnnouncements({ purgeExpired: true });
+    const item = active.find((entry) => String(entry?.id || '') === id && String(entry?.authorId || '') === getTavernMyUserId());
+    if (item) await openCreateAnnouncementModal(item);
+    return;
+  }
+  const deleteBtn = e.target?.closest?.('[data-announcement-delete]');
+  if (!deleteBtn) return;
+  const id = String(deleteBtn.getAttribute('data-announcement-delete') || '');
+  if (!sbClient) {
+    if (tavernBoardError) tavernBoardError.textContent = 'Supabase не подключен. Удаление недоступно.';
+    return;
+  }
+  const { error } = await sbClient
+    .from(TAVERN_BOARD_TABLE)
+    .delete()
+    .eq('id', id)
+    .eq('author_id', getTavernMyUserId());
+  if (error && tavernBoardError) {
+    tavernBoardError.textContent = `Не удалось удалить объявление: ${error.message || 'ошибка Supabase'}`;
+    return;
+  }
+  await renderTavernBoard();
+  await refreshTavernBoardBadge();
+});
+if (tavernCreateAnnouncementSubmit) tavernCreateAnnouncementSubmit.addEventListener('click', saveAnnouncementFromForm);
 if (tavernCreateRoomBtn) tavernCreateRoomBtn.addEventListener('click', () => {
-  hideModalEl(tavernRoomsModal);
+  hideModalEl(tavernAdventuresModal);
   if (typeof openCreateRoomModal === 'function') openCreateRoomModal();
 });
 

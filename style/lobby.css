@@ -415,6 +415,10 @@ body.lobby-active #lobby-scene {
   position:relative;
   padding-right:54px;
 }
+.tavern-toolbar__btn--board{
+  position:relative;
+  padding-right:42px;
+}
 .tavern-toolbar__btn-label{
   display:inline-block;
 }
@@ -731,7 +735,7 @@ body.lobby-active #lobby-scene {
   filter: brightness(1.08);
 }
 #rooms-list .sheet-card,
-#tavern-rooms-list .sheet-card{
+#tavern-adventures-list .sheet-card{
   margin-bottom:0 !important;
   padding:16px 18px;
   border-radius:16px;
@@ -740,33 +744,56 @@ body.lobby-active #lobby-scene {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
 #rooms-list .sheet-card > div:first-child > div:first-child,
-#tavern-rooms-list .sheet-card > div:first-child > div:first-child{
+#tavern-adventures-list .sheet-card > div:first-child > div:first-child{
   color:#fff2d8;
   font-size:18px;
 }
 #rooms-list .sheet-card > div:first-child > div:last-child,
-#tavern-rooms-list .sheet-card > div:first-child > div:last-child{
+#tavern-adventures-list .sheet-card > div:first-child > div:last-child{
   color:#cbbda9 !important;
   line-height:1.45;
 }
 #rooms-list .sheet-card button,
-#tavern-rooms-list .sheet-card button{
+#tavern-adventures-list .sheet-card button{
   width:auto;
   min-width:112px;
 }
+.tavern-board-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.tavern-board-list{min-height:220px;max-height:min(58vh,560px);overflow:auto;display:flex;flex-direction:column;gap:10px;}
+.tavern-board-card{padding:14px;border-radius:14px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,255,255,0.08);}
+.tavern-board-card h3{margin:0;font-size:17px;color:#fff2d8;}
+.tavern-board-card__head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.tavern-board-card__actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+.tavern-board-card__toggle{min-height:34px !important;min-width:100px !important;font-size:12px !important;}
+.tavern-board-card__meta,.tavern-board-card__stats,.tavern-board-card__contacts{margin-top:6px;color:#d4c3a8;font-size:13px;}
+.tavern-board-card__type{display:inline-flex;padding:2px 8px;border-radius:999px;border:1px solid transparent;font-size:11px;font-weight:900;letter-spacing:.03em;margin-right:4px;}
+.tavern-board-card__type--campaign{border-color:rgba(92,184,92,.75);color:#bff3bf;background:rgba(56,120,56,.2);}
+.tavern-board-card__type--oneshot{border-color:rgba(235,162,70,.78);color:#ffd7a4;background:rgba(176,105,38,.2);}
+.tavern-board-card__stats{display:flex;flex-wrap:wrap;gap:8px 14px;}
+.tavern-board-card__description{margin:8px 0 0;color:#f3ecdf;white-space:pre-wrap;}
+.tavern-board-card__description.hidden{display:none;}
+.tavern-board-card__delete{min-height:34px !important;min-width:100px !important;font-size:12px !important;background:linear-gradient(180deg, rgba(128,44,28,.95) 0%, rgba(87,26,16,.98) 100%) !important;border-color:rgba(255,130,110,.32) !important;}
+.tavern-board-form{display:flex;flex-direction:column;gap:10px;}
+.tavern-board-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.tavern-board-textarea{min-height:110px;resize:vertical;}
+.tavern-board-form select,.tavern-board-form textarea{border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:#f5efe3;padding:12px 14px;border-radius:14px;}
 @media (max-width: 900px){
   .tavern-headbar{ left:20px; right:20px; gap:12px; }
   .tavern-topbar{ min-width:0; }
   .tavern-toolbar{ margin-top:0; }
 }
 @media (max-width: 760px){
+  .tavern-board-head,
   .tavern-rooms-head,
   .lobby-room-card{ flex-direction:column; align-items:stretch; }
   .lobby-room-card__actions,
+  .tavern-board-head,
   .tavern-rooms-head{ justify-content:stretch; }
   .lobby-room-card__actions button,
   .tavern-rooms-head .lobby-server-total,
-  .tavern-rooms-head button{ width:100%; }
+  .tavern-rooms-head button,
+  .tavern-board-head button{ width:100%; }
+  .tavern-board-form-grid{ grid-template-columns:1fr; }
 }
 @media (max-width: 640px){
   .tavern-menu-grid{ grid-template-columns:1fr; }
