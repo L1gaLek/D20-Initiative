@@ -75,6 +75,28 @@ function queueWsEnvelope(payload) {
   }
 }
 
+function resolveTokenEventUpdatedAtIso(msg) {
+  try {
+    const raw = Number(
+      msg?.client_ts
+      || msg?.clientTs
+      || msg?.token_ts
+      || msg?.tokenTs
+      || msg?.ts
+      || 0
+    );
+    if (Number.isFinite(raw) && raw > 0) return new Date(raw).toISOString();
+  } catch {}
+  try {
+    const s = String(msg?.updated_at || msg?.updatedAt || '').trim();
+    if (s) {
+      const ms = Number(new Date(s).getTime()) || 0;
+      if (ms > 0) return new Date(ms).toISOString();
+    }
+  } catch {}
+  return new Date().toISOString();
+}
+
 function startWsHeartbeat(sock = wsClient) {
   stopWsHeartbeat();
   markWsAlive();
@@ -441,7 +463,7 @@ function handleDetachedWsMessage(msg) {
           y: (msg.y === null || typeof msg.y === 'undefined') ? null : Number(msg.y),
           size: Number(msg.size) || null,
           is_public: (typeof msg.isPublic === 'undefined') ? undefined : !!msg.isPublic,
-          updated_at: new Date().toISOString()
+          updated_at: resolveTokenEventUpdatedAtIso(msg)
         };
         handleMessage({ type: 'tokenRow', row });
       } catch {}
@@ -536,13 +558,26 @@ function applyTokenRowToLocalState(row) {
     if (!row) return;
     const tokenId = String(row.token_id || '').trim();
     if (!tokenId) return;
-    const x = (row.x === null || typeof row.x === 'undefined') ? null : Number(row.x);
-    const y = (row.y === null || typeof row.y === 'undefined') ? null : Number(row.y);
-    const size = (row.size === null || typeof row.size === 'undefined') ? null : Number(row.size);
-    const color = (typeof row.color === 'string') ? row.color : null;
+    const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+    const hasX = hasOwn(row, 'x');
+    const hasY = hasOwn(row, 'y');
+    const hasSize = hasOwn(row, 'size');
+    const hasColor = hasOwn(row, 'color');
+    const x = !hasX ? undefined : ((row.x === null || typeof row.x === 'undefined') ? null : Number(row.x));
+    const y = !hasY ? undefined : ((row.y === null || typeof row.y === 'undefined') ? null : Number(row.y));
+    const size = !hasSize ? undefined : ((row.size === null || typeof row.size === 'undefined') ? null : Number(row.size));
+    const color = hasColor ? ((typeof row.color === 'string') ? row.color : null) : undefined;
     const mapId = String(row.map_id || '').trim();
     const hasPublic = (typeof row.is_public !== 'undefined');
     const isPublic = hasPublic ? !!row.is_public : null;
+    const rowUpdatedAtMs = Number(new Date(String(row?.updated_at || '')).getTime()) || 0;
+    try {
+      if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
+      const prev = window.__tokenRowFreshnessClock.get(tokenId);
+      const prevUpdatedAtMs = Number(prev?.updatedAtMs) || 0;
+      // Out-of-order delivery safety: never let an older row rollback a newer token snapshot.
+      if (rowUpdatedAtMs && prevUpdatedAtMs && (rowUpdatedAtMs + 50 < prevUpdatedAtMs)) return;
+    } catch {}
     const tokenMoveGuard = (typeof window !== 'undefined' && window.__tokenMoveOptimisticGuard instanceof Map)
       ? window.__tokenMoveOptimisticGuard
       : null;
@@ -558,7 +593,6 @@ function applyTokenRowToLocalState(row) {
       const rowMapId = String(mapId || '').trim();
       const rowX = (x === null || typeof x === 'undefined') ? null : Number(x);
       const rowY = (y === null || typeof y === 'undefined') ? null : Number(y);
-      const rowUpdatedAtMs = Number(new Date(String(row?.updated_at || '')).getTime()) || 0;
       const rowMatchesOptimistic = (
         Number.isFinite(rowX) && Number.isFinite(rowY) &&
         rowX === gx && rowY === gy &&
@@ -587,19 +621,34 @@ function applyTokenRowToLocalState(row) {
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
       const p = lastState.players.find(pp => String(pp?.id) === tokenId);
       if (p) {
+        const activeMapId = String(lastState?.currentMapId || '').trim();
+        const rowMapId = String(mapId || '').trim();
+        // Safety for multi-map rooms: token coordinates are map-local for every token.
+        // A delayed row from another map must not rewrite coordinates on the active map.
+        if (rowMapId && activeMapId && rowMapId !== activeMapId) {
+          try {
+            if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
+            const prev = window.__tokenRowFreshnessClock.get(tokenId) || {};
+            window.__tokenRowFreshnessClock.set(tokenId, {
+              updatedAtMs: rowUpdatedAtMs || Number(prev?.updatedAtMs) || 0,
+              appliedAtMs: Date.now()
+            });
+          } catch {}
+          return;
+        }
         try {
           if (!(window.__tokenPositionSnapshotCache instanceof Map)) window.__tokenPositionSnapshotCache = new Map();
           window.__tokenPositionSnapshotCache.set(String(tokenId), {
-            x: (x === null || typeof x === 'undefined') ? null : Number(x),
-            y: (y === null || typeof y === 'undefined') ? null : Number(y),
+            x: (!hasX || x === undefined) ? ((p?.x === null || typeof p?.x === 'undefined') ? null : Number(p.x)) : ((x === null || typeof x === 'undefined') ? null : Number(x)),
+            y: (!hasY || y === undefined) ? ((p?.y === null || typeof p?.y === 'undefined') ? null : Number(p.y)) : ((y === null || typeof y === 'undefined') ? null : Number(y)),
             size: (Number.isFinite(size) && size > 0) ? Number(size) : (Number(p?.size) || 1),
-            color: color || p?.color || null,
+            color: (color === undefined) ? (p?.color || null) : (color || p?.color || null),
             mapId: mapId || p?.mapId || null,
             updatedAt: Date.now()
           });
         } catch {}
-        if (x === null || Number.isFinite(x)) p.x = x;
-        if (y === null || Number.isFinite(y)) p.y = y;
+        if (hasX && (x === null || Number.isFinite(x))) p.x = x;
+        if (hasY && (y === null || Number.isFinite(y))) p.y = y;
         if (Number.isFinite(size) && size > 0) {
           const preferredMonsterSize = getMonsterPreferredTokenSize(p);
           if (!Number.isFinite(preferredMonsterSize) || size >= preferredMonsterSize) {
@@ -612,9 +661,9 @@ function applyTokenRowToLocalState(row) {
           const preferredMonsterSize = getMonsterPreferredTokenSize(p);
           if (Number.isFinite(preferredMonsterSize) && preferredMonsterSize > 0) p.size = preferredMonsterSize;
         }
-        if (color) p.color = color;
-        // map-local safety
-        if (mapId && isMapScopedPlayer(p)) p.mapId = mapId;
+        if (color !== undefined && color) p.color = color;
+        // Keep last known map source of this token row.
+        if (mapId) p.mapId = mapId;
 
         // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates.
         // But for GM-created non-allies the default is hidden, and the first placement on the board
@@ -640,6 +689,14 @@ function applyTokenRowToLocalState(row) {
         try {
           window.FogWar?.onTokenPositionsChanged?.(lastState);
           (lastState?.players || []).forEach(pp => { try { setPlayerPosition?.(pp); } catch {} });
+        } catch {}
+        try {
+          if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
+          const prev = window.__tokenRowFreshnessClock.get(tokenId) || {};
+          window.__tokenRowFreshnessClock.set(tokenId, {
+            updatedAtMs: rowUpdatedAtMs || Number(prev?.updatedAtMs) || 0,
+            appliedAtMs: Date.now()
+          });
         } catch {}
       }
     }
@@ -1045,6 +1102,11 @@ function applyTokenDeleteToLocalState(row) {
     if (!row) return;
     const tokenId = String(row.token_id || '').trim();
     if (!tokenId) return;
+    try {
+      const mapId = String(row.map_id || '').trim();
+      const activeMapId = String(lastState?.currentMapId || '').trim();
+      if (mapId && activeMapId && mapId !== activeMapId) return;
+    } catch {}
     try { window.__tokenPositionSnapshotCache?.delete?.(tokenId); } catch {}
 
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
@@ -2712,7 +2774,7 @@ async function sendMessage(msg) {
             sendWsEnvelope({
               type: 'updateTokenColor',
               roomId: String(currentRoomId || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               tokenId: String(p.id),
               color: c
             }, { optimisticApplied: true });
@@ -3040,7 +3102,8 @@ async function sendMessage(msg) {
               x: nx,
               y: ny,
               size: Number(p?.size) || 1,
-              isPublic: !!p?.isPublic
+              isPublic: !!p?.isPublic,
+              client_ts: Date.now()
             }, { optimisticApplied: true });
             // Важно: на некоторых серверах moveToken обновляет только координаты.
             // Если в room_tokens уже лежит size=1 (например, из ранней stub-записи),
@@ -3049,17 +3112,18 @@ async function sendMessage(msg) {
             sendWsEnvelope({
               type: 'updateTokenSize',
               roomId: String(currentRoomId || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               tokenId: String(p.id),
               size: Number(p?.size) || 1,
-              isPublic: !!p?.isPublic
+              isPublic: !!p?.isPublic,
+              client_ts: Date.now()
             }, { optimisticApplied: true });
 
             // Hard guarantee path: persist token coordinates directly to room_tokens.
             // This prevents rare cases where WS echo races cause rollback to stale position.
             Promise.resolve(upsertTokenPositionDirect(String(currentRoomId || ''), {
               id: String(p?.id || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               x: nx,
               y: ny,
               size: Number(p?.size) || 1,
@@ -3108,7 +3172,7 @@ async function sendMessage(msg) {
             sendWsEnvelope({
               type: 'updateTokenSize',
               roomId: String(currentRoomId || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               tokenId: String(p.id),
               size: newSize,
               isPublic: !!p?.isPublic
@@ -3132,7 +3196,7 @@ async function sendMessage(msg) {
             sendWsEnvelope({
               type: 'removeTokenFromBoard',
               roomId: String(currentRoomId || ''),
-              mapId: String(p?.mapId || next?.currentMapId || ''),
+              mapId: String(next?.currentMapId || ''),
               tokenId: String(p.id),
               isPublic: !!p?.isPublic
             }, { optimisticApplied: true });
