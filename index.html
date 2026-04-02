@@ -81,7 +81,11 @@
         <span id="tavern-hotspot-chat-badge-direct" class="tavern-toolbar__badge tavern-toolbar__badge--direct hidden">0</span>
       </button>
       <button id="tavern-hotspot-bartender" class="tavern-toolbar__btn" type="button" aria-label="Бармен">Бармен</button>
-      <button id="tavern-hotspot-board" class="tavern-toolbar__btn tavern-toolbar__btn--wide" type="button" aria-label="Доска объявлений">Доска объявлений</button>
+      <button id="tavern-hotspot-board" class="tavern-toolbar__btn tavern-toolbar__btn--wide tavern-toolbar__btn--board" type="button" aria-label="Доска объявлений">
+        <span class="tavern-toolbar__btn-label">Доска объявлений</span>
+        <span id="tavern-hotspot-board-badge" class="tavern-toolbar__badge tavern-toolbar__badge--global hidden">0</span>
+      </button>
+      <button id="tavern-hotspot-adventures" class="tavern-toolbar__btn tavern-toolbar__btn--wide" type="button" aria-label="Приключения">Приключения</button>
     </div>
   </div>
 </div>
@@ -135,23 +139,85 @@
   </div>
 </div>
 
-<!-- ===== Tavern rooms modal ===== -->
-<div id="tavernRoomsModal" class="modal-overlay hidden">
-  <div class="modal tavern-modal tavern-rooms-modal">
+<!-- ===== Tavern board modal ===== -->
+<div id="tavernBoardModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal tavern-board-modal">
     <div class="modal-header">
       <div>
         <div class="modal-title">Доска объявлений</div>
+        <div class="modal-subtitle">Свежие наборы в приключения от мастеров таверны</div>
+      </div>
+      <button id="tavernBoardClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tavern-board-head">
+        <div id="tavernBoardHint" class="modal-subtitle"></div>
+        <button id="tavernCreateAnnouncementBtn" type="button">Дать объявление</button>
+      </div>
+      <div id="tavern-board-list" class="tavern-board-list"></div>
+      <div id="tavernBoardError" class="lobby-error"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tavern adventures modal ===== -->
+<div id="tavernAdventuresModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal tavern-rooms-modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Приключения</div>
         <div class="modal-subtitle">Выберите комнату, чтобы отправиться в путешествие</div>
       </div>
-      <button id="tavernRoomsClose" class="modal-close">✕</button>
+      <button id="tavernAdventuresClose" class="modal-close">✕</button>
     </div>
     <div class="modal-body">
       <div class="tavern-rooms-head">
         <div id="tavern-server-users-total" class="lobby-server-total"></div>
         <button id="tavernCreateRoomBtn" type="button">Создать комнату</button>
       </div>
-      <div id="tavern-rooms-list" class="lobby-rooms-list tavern-rooms-list"></div>
-      <div id="tavernRoomsError" class="lobby-error"></div>
+      <div id="tavern-adventures-list" class="lobby-rooms-list tavern-rooms-list"></div>
+      <div id="tavernAdventuresError" class="lobby-error"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Tavern create announcement modal ===== -->
+<div id="tavernCreateAnnouncementModal" class="modal-overlay hidden">
+  <div class="modal tavern-modal room-entry-modal tavern-board-form-modal" style="max-width:640px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Новое объявление</div>
+        <div class="modal-subtitle">До 2 активных объявлений на одного пользователя</div>
+      </div>
+      <button id="tavernCreateAnnouncementClose" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="sheet-card room-entry-card tavern-board-form">
+        <input id="announcementScenarioInput" type="text" placeholder="Название сценария">
+        <div class="tavern-board-form-grid">
+          <label class="room-entry-field"><span>Тип приключения</span>
+            <select id="announcementAdventureType" class="room-entry-input">
+              <option value="Кампания">Кампания</option>
+              <option value="Ваншот">Ваншот</option>
+            </select>
+          </label>
+          <label class="room-entry-field"><span>Уровень персонажа</span><input id="announcementLevelInput" class="room-entry-input" type="text" placeholder="Например: 3-5"></label>
+        </div>
+        <div class="tavern-board-form-grid">
+          <label class="room-entry-field"><span>Всего участников</span><input id="announcementMaxPlayersInput" class="room-entry-input" type="number" min="1" max="20" placeholder="5"></label>
+          <label class="room-entry-field"><span>Требуется игроков</span><input id="announcementNeededPlayersInput" class="room-entry-input" type="number" min="1" max="20" placeholder="3"></label>
+        </div>
+        <div class="tavern-board-form-grid">
+          <label class="room-entry-field"><span>Дата и время приключения</span><input id="announcementStartAtInput" class="room-entry-input" type="datetime-local"></label>
+          <label class="room-entry-field"><span>Контакты ГМа</span><input id="announcementContactInput" class="room-entry-input" type="text" placeholder="@discord / Telegram / почта"></label>
+        </div>
+        <label class="room-entry-field"><span>Описание (необязательно)</span><textarea id="announcementDescriptionInput" class="room-entry-input tavern-board-textarea" maxlength="4000" placeholder="Опишите сеттинг, темп игры, требования к игрокам и любые важные детали."></textarea></label>
+        <div id="tavernCreateAnnouncementError" class="room-entry-error"></div>
+        <div class="room-entry-actions">
+          <button id="tavernCreateAnnouncementCancel" type="button">Отмена</button>
+          <button id="tavernCreateAnnouncementSubmit" type="button">Опубликовать</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
