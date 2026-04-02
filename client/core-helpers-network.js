@@ -75,6 +75,28 @@ function queueWsEnvelope(payload) {
   }
 }
 
+function resolveTokenEventUpdatedAtIso(msg) {
+  try {
+    const raw = Number(
+      msg?.client_ts
+      || msg?.clientTs
+      || msg?.token_ts
+      || msg?.tokenTs
+      || msg?.ts
+      || 0
+    );
+    if (Number.isFinite(raw) && raw > 0) return new Date(raw).toISOString();
+  } catch {}
+  try {
+    const s = String(msg?.updated_at || msg?.updatedAt || '').trim();
+    if (s) {
+      const ms = Number(new Date(s).getTime()) || 0;
+      if (ms > 0) return new Date(ms).toISOString();
+    }
+  } catch {}
+  return new Date().toISOString();
+}
+
 function startWsHeartbeat(sock = wsClient) {
   stopWsHeartbeat();
   markWsAlive();
@@ -441,7 +463,7 @@ function handleDetachedWsMessage(msg) {
           y: (msg.y === null || typeof msg.y === 'undefined') ? null : Number(msg.y),
           size: Number(msg.size) || null,
           is_public: (typeof msg.isPublic === 'undefined') ? undefined : !!msg.isPublic,
-          updated_at: new Date().toISOString()
+          updated_at: resolveTokenEventUpdatedAtIso(msg)
         };
         handleMessage({ type: 'tokenRow', row });
       } catch {}
@@ -3060,7 +3082,8 @@ async function sendMessage(msg) {
               x: nx,
               y: ny,
               size: Number(p?.size) || 1,
-              isPublic: !!p?.isPublic
+              isPublic: !!p?.isPublic,
+              client_ts: Date.now()
             }, { optimisticApplied: true });
             // Важно: на некоторых серверах moveToken обновляет только координаты.
             // Если в room_tokens уже лежит size=1 (например, из ранней stub-записи),
@@ -3072,7 +3095,8 @@ async function sendMessage(msg) {
               mapId: String(p?.mapId || next?.currentMapId || ''),
               tokenId: String(p.id),
               size: Number(p?.size) || 1,
-              isPublic: !!p?.isPublic
+              isPublic: !!p?.isPublic,
+              client_ts: Date.now()
             }, { optimisticApplied: true });
 
             // Hard guarantee path: persist token coordinates directly to room_tokens.
