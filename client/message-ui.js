@@ -550,9 +550,11 @@ try { handleSessionUiMessage?.(msg); } catch {}
         (lastState.players || []).forEach(p => {
           if (!p || !p.id) return;
           const snap = prevPos.get(String(p.id));
-          const cached = (window.__tokenPositionSnapshotCache instanceof Map)
-            ? window.__tokenPositionSnapshotCache.get(String(p.id))
-            : null;
+          const cached = (typeof window.getTokenSnapshotCached === 'function')
+            ? window.getTokenSnapshotCached(String(p.id), String(lastState?.currentMapId || ''))
+            : ((window.__tokenPositionSnapshotCache instanceof Map)
+              ? window.__tokenPositionSnapshotCache.get(String(p.id))
+              : null);
           const chosen = cached || snap;
           if (!chosen) return;
           // On same-map updates we preserve local token coordinates until room_tokens catches up.

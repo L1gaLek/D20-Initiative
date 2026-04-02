@@ -97,6 +97,61 @@ function resolveTokenEventUpdatedAtIso(msg) {
   return new Date().toISOString();
 }
 
+function _tokenSnapshotCacheEnsure() {
+  if (!(window.__tokenPositionSnapshotCache instanceof Map)) window.__tokenPositionSnapshotCache = new Map();
+  return window.__tokenPositionSnapshotCache;
+}
+
+function _tokenSnapshotCacheKey(tokenId, mapId) {
+  return `${String(mapId || '').trim()}::${String(tokenId || '').trim()}`;
+}
+
+function getTokenSnapshotCached(tokenId, mapId = '') {
+  try {
+    const id = String(tokenId || '').trim();
+    if (!id) return null;
+    const mapKey = _tokenSnapshotCacheKey(id, mapId);
+    const cache = _tokenSnapshotCacheEnsure();
+    return cache.get(mapKey) || cache.get(id) || null;
+  } catch {
+    return null;
+  }
+}
+
+function setTokenSnapshotCached(tokenId, mapId = '', snapshot = null) {
+  try {
+    const id = String(tokenId || '').trim();
+    if (!id) return;
+    const cache = _tokenSnapshotCacheEnsure();
+    const normalized = (snapshot && typeof snapshot === 'object') ? snapshot : {};
+    const mk = _tokenSnapshotCacheKey(id, mapId);
+    cache.set(mk, normalized);
+    // Keep legacy key for compatibility with existing read paths.
+    cache.set(id, normalized);
+  } catch {}
+}
+
+function deleteTokenSnapshotCached(tokenId, mapId = '') {
+  try {
+    const id = String(tokenId || '').trim();
+    if (!id) return;
+    const cache = _tokenSnapshotCacheEnsure();
+    if (String(mapId || '').trim()) cache.delete(_tokenSnapshotCacheKey(id, mapId));
+    else {
+      for (const k of cache.keys()) {
+        if (k === id || String(k).endsWith(`::${id}`)) cache.delete(k);
+      }
+    }
+    cache.delete(id);
+  } catch {}
+}
+
+try {
+  window.getTokenSnapshotCached = getTokenSnapshotCached;
+  window.setTokenSnapshotCached = setTokenSnapshotCached;
+  window.deleteTokenSnapshotCached = deleteTokenSnapshotCached;
+} catch {}
+
 function startWsHeartbeat(sock = wsClient) {
   stopWsHeartbeat();
   markWsAlive();
@@ -637,8 +692,7 @@ function applyTokenRowToLocalState(row) {
           return;
         }
         try {
-          if (!(window.__tokenPositionSnapshotCache instanceof Map)) window.__tokenPositionSnapshotCache = new Map();
-          window.__tokenPositionSnapshotCache.set(String(tokenId), {
+          setTokenSnapshotCached(String(tokenId), mapId || p?.mapId || lastState?.currentMapId || '', {
             x: (!hasX || x === undefined) ? ((p?.x === null || typeof p?.x === 'undefined') ? null : Number(p.x)) : ((x === null || typeof x === 'undefined') ? null : Number(x)),
             y: (!hasY || y === undefined) ? ((p?.y === null || typeof p?.y === 'undefined') ? null : Number(p.y)) : ((y === null || typeof y === 'undefined') ? null : Number(y)),
             size: (Number.isFinite(size) && size > 0) ? Number(size) : (Number(p?.size) || 1),
@@ -1107,7 +1161,7 @@ function applyTokenDeleteToLocalState(row) {
       const activeMapId = String(lastState?.currentMapId || '').trim();
       if (mapId && activeMapId && mapId !== activeMapId) return;
     } catch {}
-    try { window.__tokenPositionSnapshotCache?.delete?.(tokenId); } catch {}
+    try { deleteTokenSnapshotCached(tokenId, String(row.map_id || '').trim()); } catch {}
 
     if (typeof lastState !== 'undefined' && lastState && Array.isArray(lastState.players)) {
       const p = lastState.players.find(pp => String(pp?.id) === tokenId);
@@ -3075,8 +3129,7 @@ async function sendMessage(msg) {
             if (p) { p.x = nx; p.y = ny; }
             try { setTokenMoveOptimisticGuard(String(p?.id || ''), nx, ny, String(next?.currentMapId || p?.mapId || ''), prevX, prevY); } catch {}
             try {
-              if (!(window.__tokenPositionSnapshotCache instanceof Map)) window.__tokenPositionSnapshotCache = new Map();
-              window.__tokenPositionSnapshotCache.set(String(p?.id || ''), {
+              setTokenSnapshotCached(String(p?.id || ''), String(next?.currentMapId || p?.mapId || ''), {
                 x: nx,
                 y: ny,
                 size: Number(p?.size) || 1,
