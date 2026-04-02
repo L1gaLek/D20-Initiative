@@ -770,6 +770,7 @@ body.lobby-active #lobby-scene {
 .tavern-board-card__type--campaign{border-color:rgba(92,184,92,.75);color:#bff3bf;background:rgba(56,120,56,.2);}
 .tavern-board-card__type--oneshot{border-color:rgba(235,162,70,.78);color:#ffd7a4;background:rgba(176,105,38,.2);}
 .tavern-board-card__stats{display:flex;flex-wrap:wrap;gap:8px 14px;}
+.tavern-board-card__start{display:inline-flex;align-items:center;padding:2px 8px;border:1px solid rgba(255,255,255,0.28);border-radius:999px;background:transparent;}
 .tavern-board-card__description{margin:8px 0 0;color:#f3ecdf;white-space:pre-wrap;}
 .tavern-board-card__description.hidden{display:none;}
 .tavern-board-card__delete{min-height:34px !important;min-width:100px !important;font-size:12px !important;background:linear-gradient(180deg, rgba(128,44,28,.95) 0%, rgba(87,26,16,.98) 100%) !important;border-color:rgba(255,130,110,.32) !important;}

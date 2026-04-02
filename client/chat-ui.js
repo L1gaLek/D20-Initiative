@@ -908,8 +908,8 @@ async function renderTavernBoard() {
           </div>
         </div>
         <div class="tavern-board-card__stats">
-          <span>Игроков нужно: ${escapeHtmlLite(item?.neededPlayers || '—')} / максимум: ${escapeHtmlLite(item?.maxPlayers || '—')}</span>
-          <span>Старт: ${escapeHtmlLite(formatAnnouncementDate(item?.startAtTs))}</span>
+          <span>Игроков нужно: ${escapeHtmlLite(item?.neededPlayers || '—')} / всего участников: ${escapeHtmlLite(item?.maxPlayers || '—')}</span>
+          <span class="tavern-board-card__start">Старт: ${escapeHtmlLite(formatAnnouncementDate(item?.startAtTs))}</span>
         </div>
         <div class="tavern-board-card__contacts">Контакты ГМа: ${escapeHtmlLite(item?.contact || 'не указаны')}</div>
         <p class="tavern-board-card__description ${isExpanded ? '' : 'hidden'}">${escapeHtmlLite(item?.description || 'Описание не указано.')}</p>
