@@ -666,15 +666,39 @@ function applyTokenRowToLocalState(row) {
         rowX === gPrevX && rowY === gPrevY
       );
       const rowIsOlderThanMove = !!rowUpdatedAtMs && !!guardAtMs && (rowUpdatedAtMs + 120 < guardAtMs);
+      const sameGuardMap = (!gMapId || !rowMapId || gMapId === rowMapId);
 
       // Ignore stale/conflicting echoes while optimistic move is in-flight.
       // This prevents "moved -> snapped back -> maybe moved again".
-      if (!rowMatchesOptimistic) {
+      if (!rowMatchesOptimistic && sameGuardMap) {
         if (rowIsOlderThanMove) return;
-        if (guardAgeMs >= 0 && guardAgeMs < 5000) return;
+        // Even a "newer" row can be stale for coordinates (for example size/visibility-only update
+        // that re-emits old x/y). Keep optimistic coordinates stable for a short settle window.
+        if (guardAgeMs >= 0 && guardAgeMs < 4500) {
+          // Opportunistic self-heal: if we see conflicting coordinates, re-assert the target
+          // position once in a while so DB converges to the moved cell and clients stop snapping back.
+          if (Number.isFinite(gx) && Number.isFinite(gy) && currentRoomId) {
+            const retryTs = Number(guard.retryAtMs) || 0;
+            if (!retryTs || (Date.now() - retryTs) > 350) {
+              guard.retryAtMs = Date.now();
+              try {
+                Promise.resolve(upsertTokenPositionDirect(String(currentRoomId || ''), {
+                  id: tokenId,
+                  mapId: gMapId || rowMapId || lastState?.currentMapId || '',
+                  x: gx,
+                  y: gy,
+                  size: Number.isFinite(Number(guard.size)) ? Math.max(1, Number(guard.size)) : undefined,
+                  color: (typeof guard.color === 'string') ? guard.color : undefined,
+                  isPublic: (typeof guard.isPublic === 'boolean') ? guard.isPublic : undefined
+                })).catch(() => {});
+              } catch {}
+            }
+          }
+          return;
+        }
         if (!rowUpdatedAtMs && rowLooksLikeOldStartCell) return;
       }
-      if (rowMatchesOptimistic || guardAgeMs >= 5000 || (rowUpdatedAtMs && !rowIsOlderThanMove)) {
+      if (rowMatchesOptimistic || (guardAgeMs >= 4500 && sameGuardMap) || (!sameGuardMap && guardAgeMs >= 2500)) {
         try { tokenMoveGuard.delete(tokenId); } catch {}
       }
     }
@@ -780,7 +804,7 @@ function getMonsterPreferredTokenSize(player) {
   return null;
 }
 
-function setTokenMoveOptimisticGuard(tokenId, x, y, mapId, prevX = null, prevY = null) {
+function setTokenMoveOptimisticGuard(tokenId, x, y, mapId, prevX = null, prevY = null, extras = null) {
   try {
     if (typeof window === 'undefined') return;
     if (!(window.__tokenMoveOptimisticGuard instanceof Map)) {
@@ -794,6 +818,9 @@ function setTokenMoveOptimisticGuard(tokenId, x, y, mapId, prevX = null, prevY =
       prevX: (prevX === null || typeof prevX === 'undefined') ? null : Number(prevX),
       prevY: (prevY === null || typeof prevY === 'undefined') ? null : Number(prevY),
       mapId: String(mapId || '').trim(),
+      size: Number(extras?.size),
+      color: (typeof extras?.color === 'string') ? extras.color : null,
+      isPublic: (typeof extras?.isPublic === 'boolean') ? extras.isPublic : null,
       at: Date.now()
     });
   } catch {}
@@ -3134,7 +3161,21 @@ async function sendMessage(msg) {
           // Keep optimistic local update for instant UX, then wait for tokenRow from WS.
           try {
             if (p) { p.x = nx; p.y = ny; }
-            try { setTokenMoveOptimisticGuard(String(p?.id || ''), nx, ny, String(next?.currentMapId || p?.mapId || ''), prevX, prevY); } catch {}
+            try {
+              setTokenMoveOptimisticGuard(
+                String(p?.id || ''),
+                nx,
+                ny,
+                String(next?.currentMapId || p?.mapId || ''),
+                prevX,
+                prevY,
+                {
+                  size: Number(p?.size) || 1,
+                  color: p?.color || null,
+                  isPublic: !!p?.isPublic
+                }
+              );
+            } catch {}
             try {
               setTokenSnapshotCached(String(p?.id || ''), String(next?.currentMapId || p?.mapId || ''), {
                 x: nx,
