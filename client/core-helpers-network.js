@@ -3227,22 +3227,9 @@ async function sendMessage(msg) {
               isPublic: !!p?.isPublic,
               client_ts: Date.now()
             }, { optimisticApplied: true });
-            // Важно: на некоторых серверах moveToken обновляет только координаты.
-            // Если в room_tokens уже лежит size=1 (например, из ранней stub-записи),
-            // то последующий tokenRow может откатить локальный размер токена до 1x1.
-            // Явно дублируем апдейт размера, чтобы размер монстра на поле не сбрасывался.
-            sendWsEnvelope({
-              type: 'updateTokenSize',
-              roomId: String(currentRoomId || ''),
-              mapId: String(next?.currentMapId || ''),
-              tokenId: String(p.id),
-              size: Number(p?.size) || 1,
-              isPublic: !!p?.isPublic,
-              client_ts: Date.now()
-            }, { optimisticApplied: true });
 
             // Hard guarantee path: persist token coordinates directly to room_tokens.
-            // This prevents rare cases where WS echo races cause rollback to stale position.
+            // This prevents rare WS race cases and keeps size/color/public in sync in one write.
             Promise.resolve(upsertTokenPositionDirect(String(currentRoomId || ''), {
               id: String(p?.id || ''),
               mapId: String(next?.currentMapId || ''),
