@@ -1,8 +1,8 @@
 // client/bg-music.js
-// Фоновая музыка (Timeweb S3 через VPS API + синхронизация состояния комнаты)
+// Фоновая музыка (VPS uploads + синхронизация состояния комнаты)
 // - 1 трек одновременно
 // - список/описания треков хранится в room_state.bgMusic
-// - загрузка через VPS API в Timeweb S3 (multipart/form-data)
+// - загрузка на VPS upload endpoint (multipart/form-data)
 // - максимум 10 треков; размер файла <= 50MB
 // - фильтра расширений НЕТ (можно любые), но проигрывание зависит от браузера.
 //
@@ -14,7 +14,6 @@
   const BUCKET = "room-audio"; // legacy fallback для старых path-треков
   const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h (legacy fallback)
   const DEFAULT_UPLOAD_ENDPOINT = "https://ws.d20-initiative.fun/api/uploads/room-audio";
-  const TIMEWEB_S3_PUBLIC_BASE_URL = "https://s3.twcstorage.ru/d20-init-storage";
   const DIAG_KEY = "int_bg_music_diag";
 
   function isDiagEnabled() {
@@ -110,26 +109,26 @@
   return "";
 }
 
-  function isTimewebS3Url(rawUrl) {
-    const value = String(rawUrl || '').trim();
-    if (!value) return false;
-    try {
-      const url = new URL(value, window.location.origin);
-      const base = String(TIMEWEB_S3_PUBLIC_BASE_URL || '').trim();
-      return !!base && String(url.href || '').startsWith(base);
-    } catch {}
-    return value.startsWith(String(TIMEWEB_S3_PUBLIC_BASE_URL || '').trim());
+  function isSupabaseLegacyTrack(track) {
+    const source = String(track?.source || '').trim().toLowerCase();
+    const path = String(track?.path || '').trim();
+    if (source === 'supabase-legacy') return true;
+    if (source === 's3-timeweb' || source === 'vps') return false;
+    return !!path && path.startsWith('music/');
+  }
+
+  function isTimewebS3Track(track) {
+    const source = String(track?.source || '').trim().toLowerCase();
+    const url = String(track?.url || '').trim();
+    if (source === 's3-timeweb') return true;
+    return /^https:\/\/s3\.twcstorage\.ru\//i.test(url);
   }
 
   function isVpsTrack(track) {
     const source = String(track?.source || '').trim().toLowerCase();
-    if (source === 'vps' || source === 's3-timeweb' || source === 'timeweb-s3' || source === 's3') return true;
-    if (source === 'supabase-legacy') return false;
-
-    const url = String(track?.url || '').trim();
-    const path = String(track?.path || track?.storageKey || track?.deleteKey || '').trim();
-    if (isTimewebS3Url(url)) return true;
-    return !!url && !path.startsWith('music/');
+    if (source === 'vps' || source === 's3-timeweb') return true;
+    if (isSupabaseLegacyTrack(track)) return false;
+    return !!String(track?.url || '').trim() && !String(track?.path || '').trim().startsWith('music/');
   }
 
   function pickFirstNonEmpty(obj, keys) {
@@ -162,11 +161,15 @@
   function buildTrackDeleteUrl(track) {
     const endpoint = getMusicUploadEndpoint();
     const url = new URL(endpoint, window.location.origin);
-    const deleteKey = String(track?.deleteKey || track?.storageKey || track?.path || '').trim();
+    const path = String(track?.storageKey || track?.deleteKey || track?.path || '').trim();
     const roomId = getRoomId();
+    if (!roomId) {
+  alert("Не удалось определить ID комнаты. Перезайди в комнату и попробуй снова.");
+  return;
+}
     const fileName = String(track?.fileName || track?.serverFileName || track?.name || '').trim();
     const trackId = String(track?.id || '').trim();
-    if (deleteKey) url.searchParams.set('deleteKey', deleteKey);
+    if (path) url.searchParams.set('path', path);
     if (roomId) url.searchParams.set('roomId', roomId);
     if (fileName) url.searchParams.set('fileName', fileName);
     if (trackId) url.searchParams.set('trackId', trackId);
@@ -192,7 +195,10 @@
         if (!t || typeof t !== 'object') return;
         if (typeof t.desc === 'undefined' && typeof t.description !== 'undefined') t.desc = t.description;
         if (typeof t.description === 'undefined' && typeof t.desc !== 'undefined') t.description = t.desc;
-        if (!t.source) t.source = isVpsTrack(t) ? 'vps' : 'supabase-legacy';
+        if (!t.source) {
+          if (isTimewebS3Track(t)) t.source = 's3-timeweb';
+          else t.source = isVpsTrack(t) ? 'vps' : 'supabase-legacy';
+        }
         if (!t.fileName) t.fileName = String(t.serverFileName || t.name || '');
         if (!t.storageKey) t.storageKey = String(t.deleteKey || t.path || '');
       });
@@ -216,7 +222,9 @@
   audio.loop = true;
   audio.preload = 'auto';
   const SILENT_UNLOCK_SRC = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-  try { audio.crossOrigin = 'anonymous'; } catch {}
+  // Не выставляем crossOrigin глобально: для Timeweb S3 без CORS это ломает воспроизведение.
+  try { audio.removeAttribute('crossorigin'); } catch {}
+  try { audio.crossOrigin = null; } catch {}
   try { audio.playsInline = true; } catch {}
   try { audio.setAttribute('playsinline', ''); } catch {}
   try { audio.setAttribute('webkit-playsinline', ''); } catch {}
@@ -461,6 +469,19 @@
     }
   }
 
+  function configureAudioCorsMode(track, resolvedUrl = '') {
+    const url = String(resolvedUrl || track?.url || '').trim();
+    const forceNoCors = isTimewebS3Track(track) || /^https:\/\/s3\.twcstorage\.ru\//i.test(url);
+    try {
+      if (forceNoCors) {
+        audio.removeAttribute('crossorigin');
+        audio.crossOrigin = null;
+      } else {
+        audio.crossOrigin = 'anonymous';
+      }
+    } catch {}
+  }
+
   async function resolveTrackUrl(track) {
     const t = track || {};
     const directUrl = String(t.url || '').trim();
@@ -470,6 +491,16 @@
     const cached = cacheKey ? resolvedUrlCache.get(cacheKey) : null;
     if (cached && cached.url && cached.expiresAt > now + 5000) {
       return cached.url;
+    }
+
+    // Timeweb S3 / VPS direct URLs не должны проходить через Supabase signed URL.
+    if (!isSupabaseLegacyTrack(t) && directUrl) {
+      bgmDiag('resolveTrackUrl:directUrl-non-supabase', { cacheKey, source: String(t?.source || '') });
+      if (cacheKey) resolvedUrlCache.set(cacheKey, {
+        url: directUrl,
+        expiresAt: now + (60 * 60 * 1000)
+      });
+      return directUrl;
     }
 
     const sb = getSb();
@@ -529,6 +560,13 @@
     if (cached?.objectUrl && cached?.sourceUrl === resolvedUrl) {
       bgmDiag('materializePlayableUrl:cache-hit', { key });
       return cached.objectUrl;
+    }
+
+    // Timeweb S3 без CORS нельзя тянуть через fetch/blob из GitHub Pages.
+    // Для таких треков сразу возвращаем прямой URL и не провоцируем CORS-ошибки.
+    if (isTimewebS3Track(t)) {
+      bgmDiag('materializePlayableUrl:direct-timeweb-s3', { key });
+      return resolvedUrl;
     }
 
     // На ряде браузеров потоковый playback по signed URL может "играть" без звука.
@@ -1033,7 +1071,7 @@
     const fileName = pickFirstNonEmpty(payload, ['fileName', 'serverFileName']) || safeName;
     const storageKey = pickFirstNonEmpty(payload, ['storageKey', 'deleteKey', 'path']);
     const deleteKey = pickFirstNonEmpty(payload, ['deleteKey', 'storageKey', 'path']);
-    const source = pickFirstNonEmpty(payload, ['source']) || (isTimewebS3Url(url) ? 's3-timeweb' : 'vps');
+    const source = pickFirstNonEmpty(payload, ['source']) || 'vps';
 
     if (!url) {
       alert('Сервер не вернул URL загруженного трека.');
@@ -1066,9 +1104,7 @@
 
     if (isVpsTrack(track)) {
       try {
-        const deleteUrl = buildTrackDeleteUrl(track);
-        if (!deleteUrl) throw new Error('Delete URL is empty');
-        const resp = await fetch(deleteUrl, {
+        const resp = await fetch(buildTrackDeleteUrl(track), {
           method: 'DELETE',
           credentials: 'omit',
           mode: 'cors'
