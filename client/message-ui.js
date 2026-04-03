@@ -557,12 +557,18 @@ try { handleSessionUiMessage?.(msg); } catch {}
               : null);
           const chosen = cached || snap;
           if (!chosen) return;
+          const chosenMapId = String(chosen?.mapId || '').trim();
+          const activeMapId = String(lastState?.currentMapId || '').trim();
+          const canApplyCoords = (
+            !mapChanged ||
+            (!!activeMapId && !!chosenMapId && chosenMapId === activeMapId)
+          );
           // On same-map updates we preserve local token coordinates until room_tokens catches up.
-          // On map switch we must NOT carry coordinates from the previous map into the new one.
-          if (!mapChanged) {
+          // On map switch we apply only snapshots that explicitly belong to the new active map.
+          if (canApplyCoords) {
             if (chosen.x === null || Number.isFinite(chosen.x)) p.x = chosen.x;
             if (chosen.y === null || Number.isFinite(chosen.y)) p.y = chosen.y;
-            if (chosen.mapId && typeof chosen.mapId === 'string') p.mapId = chosen.mapId;
+            if (chosenMapId) p.mapId = chosenMapId;
           }
           if (Number.isFinite(chosen.size) && chosen.size > 0) p.size = chosen.size;
           if (chosen.color && typeof chosen.color === 'string') p.color = chosen.color;
