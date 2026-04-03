@@ -978,6 +978,7 @@
         const form = new FormData();
         form.append('file', file, safeName);
         form.append('roomId', roomId);
+        form.append('roomid', roomId);
         form.append('trackId', id);
         return { endpoint: makeEndpoint('roomId', 'trackId'), body: form };
       },
@@ -986,6 +987,7 @@
         const form = new FormData();
         form.append('audio', file, safeName);
         form.append('room_id', roomId);
+        form.append('roomid', roomId);
         form.append('track_id', id);
         return { endpoint: makeEndpoint('room_id', 'track_id'), body: form };
       },
