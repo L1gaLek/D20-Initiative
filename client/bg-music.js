@@ -1,8 +1,8 @@
 // client/bg-music.js
-// Фоновая музыка (VPS uploads + синхронизация состояния комнаты)
+// Фоновая музыка (Timeweb S3 через VPS API + синхронизация состояния комнаты)
 // - 1 трек одновременно
 // - список/описания треков хранится в room_state.bgMusic
-// - загрузка на VPS upload endpoint (multipart/form-data)
+// - загрузка через VPS API в Timeweb S3 (multipart/form-data)
 // - максимум 10 треков; размер файла <= 50MB
 // - фильтра расширений НЕТ (можно любые), но проигрывание зависит от браузера.
 //
@@ -14,6 +14,7 @@
   const BUCKET = "room-audio"; // legacy fallback для старых path-треков
   const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h (legacy fallback)
   const DEFAULT_UPLOAD_ENDPOINT = "https://ws.d20-initiative.fun/api/uploads/room-audio";
+  const TIMEWEB_S3_PUBLIC_BASE_URL = "https://s3.twcstorage.ru/d20-init-storage";
   const DIAG_KEY = "int_bg_music_diag";
 
   function isDiagEnabled() {
@@ -109,11 +110,26 @@
   return "";
 }
 
+  function isTimewebS3Url(rawUrl) {
+    const value = String(rawUrl || '').trim();
+    if (!value) return false;
+    try {
+      const url = new URL(value, window.location.origin);
+      const base = String(TIMEWEB_S3_PUBLIC_BASE_URL || '').trim();
+      return !!base && String(url.href || '').startsWith(base);
+    } catch {}
+    return value.startsWith(String(TIMEWEB_S3_PUBLIC_BASE_URL || '').trim());
+  }
+
   function isVpsTrack(track) {
     const source = String(track?.source || '').trim().toLowerCase();
-    if (source === 'vps') return true;
+    if (source === 'vps' || source === 's3-timeweb' || source === 'timeweb-s3' || source === 's3') return true;
     if (source === 'supabase-legacy') return false;
-    return !!String(track?.url || '').trim() && !String(track?.path || '').trim().startsWith('music/');
+
+    const url = String(track?.url || '').trim();
+    const path = String(track?.path || track?.storageKey || track?.deleteKey || '').trim();
+    if (isTimewebS3Url(url)) return true;
+    return !!url && !path.startsWith('music/');
   }
 
   function pickFirstNonEmpty(obj, keys) {
@@ -146,15 +162,11 @@
   function buildTrackDeleteUrl(track) {
     const endpoint = getMusicUploadEndpoint();
     const url = new URL(endpoint, window.location.origin);
-    const path = String(track?.storageKey || track?.deleteKey || track?.path || '').trim();
+    const deleteKey = String(track?.deleteKey || track?.storageKey || track?.path || '').trim();
     const roomId = getRoomId();
-    if (!roomId) {
-  alert("Не удалось определить ID комнаты. Перезайди в комнату и попробуй снова.");
-  return;
-}
     const fileName = String(track?.fileName || track?.serverFileName || track?.name || '').trim();
     const trackId = String(track?.id || '').trim();
-    if (path) url.searchParams.set('path', path);
+    if (deleteKey) url.searchParams.set('deleteKey', deleteKey);
     if (roomId) url.searchParams.set('roomId', roomId);
     if (fileName) url.searchParams.set('fileName', fileName);
     if (trackId) url.searchParams.set('trackId', trackId);
@@ -956,64 +968,45 @@
 
     const id = uuid();
     const safeName = String(file.name || "track").replaceAll("/", "_").replaceAll("\\", "_");
-    const baseEndpoint = getMusicUploadEndpoint();
-    const makeEndpoint = (roomKey, trackKey) => {
-      const u = new URL(baseEndpoint, window.location.origin);
-      u.searchParams.set(roomKey, roomId);
-      u.searchParams.set(trackKey, id);
-      return u.toString();
-    };
+    const endpoint = getMusicUploadEndpoint();
 
-    const requestVariants = [
-      // Строгий lowercase-контракт (часто у VPS-обработчиков).
-      () => {
-        const form = new FormData();
-        form.append('audio', file, safeName);
-        form.append('roomid', roomId);
-        form.append('trackid', id);
-        return { endpoint: makeEndpoint('roomid', 'trackid'), body: form };
-      },
-      // CamelCase-контракт.
+    const formVariants = [
+      // Основной контракт (текущий клиент).
       () => {
         const form = new FormData();
         form.append('file', file, safeName);
         form.append('roomId', roomId);
-        form.append('roomid', roomId);
         form.append('trackId', id);
-        return { endpoint: makeEndpoint('roomId', 'trackId'), body: form };
+        return form;
       },
-      // snake_case-контракт.
+      // Частый backend-контракт (snake_case + поле audio).
       () => {
         const form = new FormData();
         form.append('audio', file, safeName);
         form.append('room_id', roomId);
-        form.append('roomid', roomId);
         form.append('track_id', id);
-        return { endpoint: makeEndpoint('room_id', 'track_id'), body: form };
+        return form;
       },
-      // Широкий fallback, если backend собран гибридно.
+      // Гибридный fallback для multer/single с разными именами полей.
       () => {
         const form = new FormData();
         form.append('file', file, safeName);
         form.append('audio', file, safeName);
         form.append('roomId', roomId);
         form.append('room_id', roomId);
-        form.append('roomid', roomId);
         form.append('trackId', id);
         form.append('track_id', id);
-        form.append('trackid', id);
-        return { endpoint: makeEndpoint('roomid', 'trackid'), body: form };
+        return form;
       }
     ];
 
     let payload = null;
     let lastError = null;
     try {
-      for (let i = 0; i < requestVariants.length; i++) {
-        const { endpoint, body } = requestVariants[i]();
+      for (let i = 0; i < formVariants.length; i++) {
         const resp = await fetch(endpoint, {
           method: 'POST',
-          body,
+          body: formVariants[i](),
           credentials: 'omit',
           mode: 'cors'
         });
@@ -1040,7 +1033,7 @@
     const fileName = pickFirstNonEmpty(payload, ['fileName', 'serverFileName']) || safeName;
     const storageKey = pickFirstNonEmpty(payload, ['storageKey', 'deleteKey', 'path']);
     const deleteKey = pickFirstNonEmpty(payload, ['deleteKey', 'storageKey', 'path']);
-    const source = pickFirstNonEmpty(payload, ['source']) || 'vps';
+    const source = pickFirstNonEmpty(payload, ['source']) || (isTimewebS3Url(url) ? 's3-timeweb' : 'vps');
 
     if (!url) {
       alert('Сервер не вернул URL загруженного трека.');
@@ -1073,7 +1066,9 @@
 
     if (isVpsTrack(track)) {
       try {
-        const resp = await fetch(buildTrackDeleteUrl(track), {
+        const deleteUrl = buildTrackDeleteUrl(track);
+        if (!deleteUrl) throw new Error('Delete URL is empty');
+        const resp = await fetch(deleteUrl, {
           method: 'DELETE',
           credentials: 'omit',
           mode: 'cors'
