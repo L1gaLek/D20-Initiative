@@ -956,7 +956,12 @@
 
     const id = uuid();
     const safeName = String(file.name || "track").replaceAll("/", "_").replaceAll("\\", "_");
-    const endpoint = getMusicUploadEndpoint();
+    const endpointUrl = new URL(getMusicUploadEndpoint(), window.location.origin);
+    endpointUrl.searchParams.set('roomId', roomId);
+    endpointUrl.searchParams.set('roomid', roomId);
+    endpointUrl.searchParams.set('trackId', id);
+    endpointUrl.searchParams.set('trackid', id);
+    const endpoint = endpointUrl.toString();
 
     const formVariants = [
       // Основной контракт (текущий клиент).
@@ -964,7 +969,9 @@
         const form = new FormData();
         form.append('file', file, safeName);
         form.append('roomId', roomId);
+        form.append('roomid', roomId);
         form.append('trackId', id);
+        form.append('trackid', id);
         return form;
       },
       // Частый backend-контракт (snake_case + поле audio).
@@ -972,7 +979,9 @@
         const form = new FormData();
         form.append('audio', file, safeName);
         form.append('room_id', roomId);
+        form.append('roomid', roomId);
         form.append('track_id', id);
+        form.append('trackid', id);
         return form;
       },
       // Гибридный fallback для multer/single с разными именами полей.
@@ -982,8 +991,10 @@
         form.append('audio', file, safeName);
         form.append('roomId', roomId);
         form.append('room_id', roomId);
+        form.append('roomid', roomId);
         form.append('trackId', id);
         form.append('track_id', id);
+        form.append('trackid', id);
         return form;
       }
     ];
