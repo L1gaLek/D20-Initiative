@@ -110,9 +110,14 @@ function getTokenSnapshotCached(tokenId, mapId = '') {
   try {
     const id = String(tokenId || '').trim();
     if (!id) return null;
-    const mapKey = _tokenSnapshotCacheKey(id, mapId);
     const cache = _tokenSnapshotCacheEnsure();
-    return cache.get(mapKey) || cache.get(id) || null;
+    const mid = String(mapId || '').trim();
+    if (mid) {
+      // Strict map-local lookup: do not fallback to legacy token-only key,
+      // otherwise coordinates from another map can "bleed" into this map.
+      return cache.get(_tokenSnapshotCacheKey(id, mid)) || null;
+    }
+    return cache.get(id) || null;
   } catch {
     return null;
   }
@@ -124,10 +129,12 @@ function setTokenSnapshotCached(tokenId, mapId = '', snapshot = null) {
     if (!id) return;
     const cache = _tokenSnapshotCacheEnsure();
     const normalized = (snapshot && typeof snapshot === 'object') ? snapshot : {};
-    const mk = _tokenSnapshotCacheKey(id, mapId);
+    const mid = String(mapId || '').trim();
+    const mk = _tokenSnapshotCacheKey(id, mid);
     cache.set(mk, normalized);
-    // Keep legacy key for compatibility with existing read paths.
-    cache.set(id, normalized);
+    // Keep legacy key only for calls without explicit map id.
+    // When a map id is provided, map-local cache must stay isolated.
+    if (!mid) cache.set(id, normalized);
   } catch {}
 }
 
