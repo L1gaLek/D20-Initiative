@@ -956,35 +956,42 @@
 
     const id = uuid();
     const safeName = String(file.name || "track").replaceAll("/", "_").replaceAll("\\", "_");
-    const endpointUrl = new URL(getMusicUploadEndpoint(), window.location.origin);
-    endpointUrl.searchParams.set('roomId', roomId);
-    endpointUrl.searchParams.set('roomid', roomId);
-    endpointUrl.searchParams.set('trackId', id);
-    endpointUrl.searchParams.set('trackid', id);
-    const endpoint = endpointUrl.toString();
+    const baseEndpoint = getMusicUploadEndpoint();
+    const makeEndpoint = (roomKey, trackKey) => {
+      const u = new URL(baseEndpoint, window.location.origin);
+      u.searchParams.set(roomKey, roomId);
+      u.searchParams.set(trackKey, id);
+      return u.toString();
+    };
 
-    const formVariants = [
-      // Основной контракт (текущий клиент).
+    const requestVariants = [
+      // Строгий lowercase-контракт (часто у VPS-обработчиков).
+      () => {
+        const form = new FormData();
+        form.append('audio', file, safeName);
+        form.append('roomid', roomId);
+        form.append('trackid', id);
+        return { endpoint: makeEndpoint('roomid', 'trackid'), body: form };
+      },
+      // CamelCase-контракт.
       () => {
         const form = new FormData();
         form.append('file', file, safeName);
         form.append('roomId', roomId);
         form.append('roomid', roomId);
         form.append('trackId', id);
-        form.append('trackid', id);
-        return form;
+        return { endpoint: makeEndpoint('roomId', 'trackId'), body: form };
       },
-      // Частый backend-контракт (snake_case + поле audio).
+      // snake_case-контракт.
       () => {
         const form = new FormData();
         form.append('audio', file, safeName);
         form.append('room_id', roomId);
         form.append('roomid', roomId);
         form.append('track_id', id);
-        form.append('trackid', id);
-        return form;
+        return { endpoint: makeEndpoint('room_id', 'track_id'), body: form };
       },
-      // Гибридный fallback для multer/single с разными именами полей.
+      // Широкий fallback, если backend собран гибридно.
       () => {
         const form = new FormData();
         form.append('file', file, safeName);
@@ -995,17 +1002,18 @@
         form.append('trackId', id);
         form.append('track_id', id);
         form.append('trackid', id);
-        return form;
+        return { endpoint: makeEndpoint('roomid', 'trackid'), body: form };
       }
     ];
 
     let payload = null;
     let lastError = null;
     try {
-      for (let i = 0; i < formVariants.length; i++) {
+      for (let i = 0; i < requestVariants.length; i++) {
+        const { endpoint, body } = requestVariants[i]();
         const resp = await fetch(endpoint, {
           method: 'POST',
-          body: formVariants[i](),
+          body,
           credentials: 'omit',
           mode: 'cors'
         });
