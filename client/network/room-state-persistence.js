@@ -135,13 +135,11 @@ function applyPendingInitiativeOverlayToState(state) {
     const phase = String(st?.phase || '');
     if (phase !== 'initiative' && phase !== 'combat') return state;
 
-    const combatants = Array.isArray(st?.players) ? st.players.filter(p => p && p.inCombat) : [];
     const isFreshInitiativeReset = (
       phase === 'initiative' &&
       (Number(st?.round) || 1) === 1 &&
-      Array.isArray(st?.turnOrder) && st.turnOrder.length === 0 &&
-      combatants.length > 0 &&
-      combatants.every(p => !p.hasRolledInitiative && (p.initiative === null || typeof p.initiative === 'undefined'))
+      Array.isArray(st?.turnOrder) &&
+      st.turnOrder.length === 0
     );
     if (isFreshInitiativeReset) {
       clearPendingInitiativeOverlay(rid);
