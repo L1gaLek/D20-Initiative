@@ -222,17 +222,23 @@ async function fetchRoomStateSnapshot(roomId) {
 
 // Apply initiative updates for owned players with retry to avoid "last write wins" collisions.
 // This is needed when multiple users roll initiative at the same time.
-async function applyInitiativeAtomic(roomId, myUserId, updates) {
+async function applyInitiativeAtomic(roomId, myUserId, updates, options = {}) {
   if (!roomId || !myUserId) return;
   const updArr = Array.isArray(updates) ? updates : [];
-  if (!updArr.length) return;
+  if (!updArr.length) return [];
+  const expectedEpoch = Number(options?.expectedEpoch) || 0;
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const latest = await fetchRoomStateSnapshot(roomId);
-    if (!latest) return;
+    if (!latest) return [];
+    if (expectedEpoch > 0) {
+      const latestEpoch = Number(latest?.initiativeEpoch) || 0;
+      if (latestEpoch && latestEpoch !== expectedEpoch) return [];
+    }
 
     const next = deepClone(latest);
     const pls = Array.isArray(next.players) ? next.players : [];
+    const applicableUpdates = [];
     for (const u of updArr) {
       const pid = String(u?.playerId || "");
       if (!pid) continue;
@@ -246,7 +252,9 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
 
       p.initiative = Number(u.total);
       p.hasRolledInitiative = true;
+      applicableUpdates.push(u);
     }
+    if (!applicableUpdates.length) return [];
 
     await upsertRoomState(roomId, next);
 
@@ -254,15 +262,16 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
     try {
       const check = await fetchRoomStateSnapshot(roomId);
       const cpls = Array.isArray(check?.players) ? check.players : [];
-      const ok = updArr.every(u => {
+      const ok = applicableUpdates.every(u => {
         const pid = String(u?.playerId || "");
         const cp = cpls.find(pp => String(pp?.id) === pid);
         return !!cp && cp.hasRolledInitiative && Number(cp.initiative) === Number(u.total);
       });
-      if (ok) return;
+      if (ok) return applicableUpdates;
     } catch {}
     await delayMs(35 + attempt * 25);
   }
+  throw new Error('Не удалось синхронизировать инициативу: конфликт параллельных изменений.');
 }
 
 async function upsertRoomState(roomId, nextState) {

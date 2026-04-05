@@ -245,6 +245,53 @@ try { handleSessionUiMessage?.(msg); } catch {}
       }
     }
 
+    if (msg.type === 'initiativeReset') {
+      try { window.clearPendingInitiativeOverlay?.(currentRoomId); } catch {}
+      if (lastState && Array.isArray(lastState.players)) {
+        lastState.phase = 'initiative';
+        lastState.turnOrder = [];
+        lastState.currentTurnIndex = 0;
+        lastState.round = 1;
+        if (Number(msg?.epoch) > 0) lastState.initiativeEpoch = Number(msg.epoch);
+        (lastState.players || []).forEach((p) => {
+          if (!p || !p.inCombat) return;
+          p.initiative = null;
+          p.hasRolledInitiative = false;
+          p.pendingInitiativeChoice = false;
+          p.willJoinNextRound = false;
+        });
+        updateTurnOrderBoxVisibility(lastState);
+        renderTurnOrderBox(lastState);
+      }
+    }
+
+    if (msg.type === 'initiativeApplied' && Array.isArray(msg.updates)) {
+      const updates = msg.updates
+        .map((u) => ({
+          playerId: String(u?.playerId || '').trim(),
+          total: Number(u?.total)
+        }))
+        .filter((u) => !!u.playerId && Number.isFinite(u.total));
+      if (updates.length && lastState && Array.isArray(lastState.players)) {
+        if (Number(msg?.epoch) > 0) {
+          const curEpoch = Number(lastState?.initiativeEpoch) || 0;
+          if (curEpoch > 0 && curEpoch !== Number(msg.epoch)) return;
+        }
+        (lastState.players || []).forEach((p) => {
+          if (!p || !p.id) return;
+          const u = updates.find((it) => it.playerId === String(p.id));
+          if (!u) return;
+          if (!p.inCombat) return;
+          p.initiative = Number(u.total);
+          p.hasRolledInitiative = true;
+          p.pendingInitiativeChoice = false;
+        });
+        try { window.rememberPendingInitiativeOverlay?.(currentRoomId, updates); } catch {}
+        updateTurnOrderBoxVisibility(lastState);
+        renderTurnOrderBox(lastState);
+      }
+    }
+
     // ===== Saved bases (персонажи, привязанные к userId) =====
     if (msg.type === "savedBasesList" && Array.isArray(msg.list)) {
       window.InfoModal?.onSavedBasesList?.(msg.list);

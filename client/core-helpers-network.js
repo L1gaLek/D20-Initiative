@@ -2806,6 +2806,7 @@ async function sendMessage(msg) {
           if (!isGM) return;
           try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
           next.phase = "initiative";
+          next.initiativeEpoch = Date.now();
           next.turnOrder = [];
           next.currentTurnIndex = 0;
           next.round = 1;
@@ -2824,6 +2825,13 @@ async function sendMessage(msg) {
             }
           });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
+          try {
+            sendWsEnvelope({
+              type: 'initiativeReset',
+              roomId: String(currentRoomId || ''),
+              epoch: Number(next.initiativeEpoch) || Date.now()
+            }, { optimisticApplied: true });
+          } catch {}
         }
 
         else if (type === 'setPlayerInCombat') {
@@ -3806,27 +3814,44 @@ async function sendMessage(msg) {
             const dexMod = getDexMod(p);
             const total = roll + dexMod;
             updates.push({ playerId: p.id, total, roll, dexMod, name: p.name });
+          }
 
+          // Atomic-ish apply to room_state (retry on collision)
+          const appliedUpdates = await applyInitiativeAtomic(currentRoomId, myUserId, updates, {
+            expectedEpoch: Number(next?.initiativeEpoch) || 0
+          });
+          if (!appliedUpdates.length) return;
+
+          for (const u of appliedUpdates) {
             // Live dice event (broadcast only) – includes its own log line in room_log.
             await broadcastDiceEventOnly({
               fromId: myUserId,
-              fromName: p.name,
-              kindText: `Инициатива: d20${dexMod >= 0 ? "+" : ""}${dexMod}`,
+              fromName: u.name,
+              kindText: `Инициатива: d20${Number(u.dexMod) >= 0 ? "+" : ""}${Number(u.dexMod) || 0}`,
               sides: 20,
               count: 1,
-              bonus: dexMod,
-              rolls: [roll],
-              total,
+              bonus: Number(u.dexMod) || 0,
+              rolls: [Number(u.roll) || 0],
+              total: Number(u.total) || 0,
               crit: ""
             });
           }
 
-          // Atomic-ish apply to room_state (retry on collision)
-          await applyInitiativeAtomic(currentRoomId, myUserId, updates);
+          try {
+            sendWsEnvelope({
+              type: 'initiativeApplied',
+              roomId: String(currentRoomId || ''),
+              updates: appliedUpdates.map((u) => ({
+                playerId: String(u?.playerId || ''),
+                total: Number(u?.total) || 0
+              })),
+              epoch: Number(next?.initiativeEpoch) || 0
+            }, { optimisticApplied: true });
+          } catch {}
 
           // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
           // arrives before the DB echo/WS refresh.
-          try { rememberPendingInitiativeOverlay(currentRoomId, updates); } catch {}
+          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates); } catch {}
           try {
             // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
             // does not carry authoritative token x/y positions (they are stored in room_tokens).
@@ -3836,7 +3861,7 @@ async function sendMessage(msg) {
             const optimistic = deepClone(optimisticBase);
             (optimistic.players || []).forEach((p) => {
               if (!p || !p.id) return;
-              const u = updates.find(x => String(x?.playerId || '') === String(p.id));
+              const u = appliedUpdates.find(x => String(x?.playerId || '') === String(p.id));
               if (!u) return;
               p.initiative = Number(u.total);
               p.hasRolledInitiative = true;
