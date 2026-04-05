@@ -1050,11 +1050,77 @@ let heartbeatTimer = null;
 let membersPollTimer = null;
 let roomChatSyncTimer = null;
 let roomChatChannel = null;
+let lastRoomActivityMs = 0;
+let roomActivityListenersAttached = false;
+const ROOM_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 минут бездействия в комнате
+
+function markRoomActivity() {
+  if (!currentRoomId) return;
+  lastRoomActivityMs = Date.now();
+}
+
+function onRoomActivityEvent() {
+  markRoomActivity();
+}
+
+function attachRoomActivityListeners() {
+  if (roomActivityListenersAttached) return;
+  roomActivityListenersAttached = true;
+  window.addEventListener('pointerdown', onRoomActivityEvent, { passive: true });
+  window.addEventListener('keydown', onRoomActivityEvent, { passive: true });
+  window.addEventListener('wheel', onRoomActivityEvent, { passive: true });
+  window.addEventListener('touchstart', onRoomActivityEvent, { passive: true });
+}
+
+function detachRoomActivityListeners() {
+  if (!roomActivityListenersAttached) return;
+  roomActivityListenersAttached = false;
+  window.removeEventListener('pointerdown', onRoomActivityEvent);
+  window.removeEventListener('keydown', onRoomActivityEvent);
+  window.removeEventListener('wheel', onRoomActivityEvent);
+  window.removeEventListener('touchstart', onRoomActivityEvent);
+}
+
+async function handleRoomPresenceFailure(reason) {
+  const rid = String(currentRoomId || '').trim();
+  if (reason === 'idle-timeout' && rid && myId) {
+    try {
+      await sbClient
+        .from("room_members")
+        .delete()
+        .eq("room_id", rid)
+        .eq("user_id", myId);
+    } catch (e) {
+      console.warn('[heartbeat] idle kick delete failed', e);
+    }
+  }
+
+  try { stopHeartbeat(); } catch {}
+  try { stopMembersPolling(); } catch {}
+  try { await stopSupabaseRealtimeChannels?.(); } catch {}
+  try { window.stopRoomChatSync?.(); } catch {}
+  currentRoomId = null;
+
+  const title = reason === 'idle-timeout' ? 'Отключение за бездействие' : 'Комната недоступна';
+  const text = reason === 'idle-timeout'
+    ? 'Вы были отключены от комнаты: 30 минут бездействия.'
+    : 'Комната была закрыта или удалена. Вы возвращены в таверну.';
+
+  try {
+    Promise.resolve(window.returnToTavernFromRoom?.({ skipMemberCleanup: true })).finally(() => {
+      try { window.showRoomAccessPopup?.(text, title); } catch {}
+    });
+  } catch (e) {
+    console.warn('[heartbeat] returnToTavernFromRoom failed', e);
+  }
+}
 
 function startHeartbeat() {
   stopHeartbeat();
   if (!sbClient || !currentRoomId || !myId) return;
 
+  markRoomActivity();
+  attachRoomActivityListeners();
   updateLastSeen();
   heartbeatTimer = setInterval(updateLastSeen, 60_000); // раз в минуту
 }
@@ -1081,12 +1147,23 @@ function stopHeartbeat() {
     clearInterval(heartbeatTimer);
     heartbeatTimer = null;
   }
+  detachRoomActivityListeners();
 }
 
 async function updateLastSeen() {
   try {
     await ensureSupabaseReady();
-    const ts = new Date().toISOString();
+    if (!currentRoomId || !myId) return;
+
+    const nowMs = Date.now();
+    if (!lastRoomActivityMs) lastRoomActivityMs = nowMs;
+    const idleMs = nowMs - lastRoomActivityMs;
+    if (idleMs >= ROOM_IDLE_TIMEOUT_MS) {
+      await handleRoomPresenceFailure('idle-timeout');
+      return;
+    }
+
+    const ts = new Date(lastRoomActivityMs).toISOString();
 
     // Важно: не трогаем name/role на каждом тике — иначе 2 вкладки могут перезаписать имя.
     const { data, error } = await sbClient
@@ -1096,7 +1173,13 @@ async function updateLastSeen() {
       .eq("user_id", myId)
       .select("room_id");
 
-    if (error) throw error;
+    if (error) {
+      if (String(error?.code || '') === '23503') {
+        await handleRoomPresenceFailure('room-missing');
+        return;
+      }
+      throw error;
+    }
 
     // Если записи нет (например, её подчистил cleanup) — восстановим.
     if (!data || (Array.isArray(data) && data.length === 0)) {
@@ -1108,11 +1191,17 @@ async function updateLastSeen() {
           name: safeGetUserName(),
           role: safeGetUserRoleDb(),
           last_seen: ts
-        });
-      if (upErr) throw upErr;
+        }, { onConflict: 'room_id,user_id' });
+      if (upErr) {
+        if (String(upErr?.code || '') === '23503') {
+          await handleRoomPresenceFailure('room-missing');
+          return;
+        }
+        throw upErr;
+      }
     }
-  } catch {
-    // не критично
+  } catch (e) {
+    console.warn('[heartbeat] updateLastSeen failed', e);
   }
 }
 
