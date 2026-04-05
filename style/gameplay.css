@@ -36,7 +36,7 @@
   --dice-w: var(--pm-w);
 }
 
-/* Левая панель: журнал + управление + инициатива (в одну строку) */
+/* Левая панель: журнал + нижний ряд (управление + списки) */
 #action-log-container {
   display: flex;
   flex-direction: column;
@@ -45,7 +45,20 @@
 }
 
 #action-log {
+  width: 100%;
+  box-sizing: border-box;
   max-height: 200px;
+}
+
+#combat-side-column{
+  width: var(--pl-w);
+  min-width: var(--pl-w);
+  margin-left: var(--left-gap);
+}
+
+#combat-side-column #turn-order-box{
+  width: 100%;
+  margin-bottom: 0;
 }
 
 /* Фазовые кнопки должны перекрывать общий .active из base.css, поэтому здесь !important */
