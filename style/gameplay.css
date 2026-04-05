@@ -51,7 +51,8 @@
 }
 
 #action-log {
-  width: var(--pm-w);
+  width: 100%;
+  box-sizing: border-box;
   max-height: 200px;
 }
 
