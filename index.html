@@ -355,22 +355,10 @@
 
 <!-- Левая панель -->
 <div id="action-log-container">
-
-  <div id="action-top-row">
-    <!-- ЖУРНАЛ -->
-    <div id="action-log">
-      <h3>Журнал действий:</h3>
-      <ul id="log-list"></ul>
-    </div>
-
-    <!-- Очередность хода (видно в фазе инициативы и боя) -->
-    <div id="turn-order-box" class="turn-order-box" style="display:none;">
-      <div class="turn-order-head">
-        <div class="turn-order-title">Очередность хода</div>
-        <div class="turn-order-round">Круг - <span id="turn-order-round">1</span></div>
-      </div>
-      <ul id="turn-order-list" class="turn-order-list"></ul>
-    </div>
+  <!-- ЖУРНАЛ -->
+  <div id="action-log">
+    <h3>Журнал действий:</h3>
+    <ul id="log-list"></ul>
   </div>
 
   <!-- СТРОКА ПОД ЖУРНАЛОМ -->
@@ -480,6 +468,17 @@
             Бросьте инициативу за своих персонажей!
           </div>
 
+        </div>
+
+        <div id="combat-side-column">
+          <!-- Очередность хода (видно в фазе инициативы и боя) -->
+          <div id="turn-order-box" class="turn-order-box" style="display:none;">
+            <div class="turn-order-head">
+              <div class="turn-order-title">Очередность хода</div>
+              <div class="turn-order-round">Круг - <span id="turn-order-round">1</span></div>
+            </div>
+            <ul id="turn-order-list" class="turn-order-list"></ul>
+          </div>
         </div>
 
         <!-- Правая колонка (только для GM, управляется в client.js) -->

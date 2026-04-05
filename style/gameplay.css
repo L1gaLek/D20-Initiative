@@ -36,7 +36,7 @@
   --dice-w: var(--pm-w);
 }
 
-/* Левая панель: верхний ряд (журнал + очередь) и нижний ряд (управление + списки) */
+/* Левая панель: журнал + нижний ряд (управление + списки) */
 #action-log-container {
   display: flex;
   flex-direction: column;
@@ -55,8 +55,14 @@
   max-height: 200px;
 }
 
-#turn-order-box{
+#combat-side-column{
   width: var(--pl-w);
+  min-width: var(--pl-w);
+  margin-left: var(--left-gap);
+}
+
+#combat-side-column #turn-order-box{
+  width: 100%;
   margin-bottom: 0;
 }
 
