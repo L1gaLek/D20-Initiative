@@ -44,6 +44,12 @@
   width: calc(var(--pm-w) + var(--pl-w) + var(--left-gap));
 }
 
+#action-top-row{
+  display: flex;
+  gap: var(--left-gap);
+  align-items: flex-start;
+}
+
 #action-log {
   width: 100%;
   box-sizing: border-box;
