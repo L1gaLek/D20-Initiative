@@ -84,7 +84,8 @@ function delayMs(ms) {
 // ===== Pending initiative overlay (protect against stale room_state snapshots) =====
 const __pendingInitiativeOverlay = {
   roomId: null,
-  byPlayerId: new Map()
+  byPlayerId: new Map(),
+  initiativeEpoch: 0
 };
 
 function clearPendingInitiativeOverlay(roomId) {
@@ -94,19 +95,22 @@ function clearPendingInitiativeOverlay(roomId) {
     if (String(__pendingInitiativeOverlay.roomId || '') !== rid) {
       __pendingInitiativeOverlay.roomId = rid;
       __pendingInitiativeOverlay.byPlayerId = new Map();
+      __pendingInitiativeOverlay.initiativeEpoch = 0;
       return;
     }
     __pendingInitiativeOverlay.byPlayerId.clear();
+    __pendingInitiativeOverlay.initiativeEpoch = 0;
   } catch {}
 }
 
-function rememberPendingInitiativeOverlay(roomId, updates) {
+function rememberPendingInitiativeOverlay(roomId, updates, options = {}) {
   try {
     const rid = String(roomId || currentRoomId || '').trim();
     if (!rid) return;
     if (String(__pendingInitiativeOverlay.roomId || '') !== rid) {
       __pendingInitiativeOverlay.roomId = rid;
       __pendingInitiativeOverlay.byPlayerId = new Map();
+      __pendingInitiativeOverlay.initiativeEpoch = 0;
     }
     const now = Date.now();
     (Array.isArray(updates) ? updates : []).forEach((u) => {
@@ -120,6 +124,8 @@ function rememberPendingInitiativeOverlay(roomId, updates) {
         updatedAt: now
       });
     });
+    const epoch = Number(options?.epoch) || 0;
+    if (epoch > 0) __pendingInitiativeOverlay.initiativeEpoch = epoch;
   } catch {}
 }
 
@@ -137,9 +143,19 @@ function applyPendingInitiativeOverlayToState(state) {
 
     const isFreshInitiativeReset = (
       phase === 'initiative' &&
-      (Number(st?.round) || 1) === 1 &&
-      Array.isArray(st?.turnOrder) &&
-      st.turnOrder.length === 0
+      (
+        (
+          (Number(st?.round) || 1) === 1 &&
+          Array.isArray(st?.turnOrder) &&
+          st.turnOrder.length === 0 &&
+          (Array.isArray(st?.players) ? st.players : []).every((p) => !p?.inCombat || !p?.hasRolledInitiative)
+        ) ||
+        (
+          (Number(st?.initiativeEpoch) || 0) > 0 &&
+          Number(__pendingInitiativeOverlay.initiativeEpoch) > 0 &&
+          Number(st?.initiativeEpoch) !== Number(__pendingInitiativeOverlay.initiativeEpoch)
+        )
+      )
     );
     if (isFreshInitiativeReset) {
       clearPendingInitiativeOverlay(rid);
