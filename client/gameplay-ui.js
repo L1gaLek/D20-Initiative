@@ -77,7 +77,7 @@ if (critType) {
 endTurnBtn?.addEventListener('click', () => sendMessage({ type: 'endTurn' }));
 
 // ================== INITIATIVE ==================
-rollInitiativeBtn.addEventListener('click', async () => {
+rollInitiativeBtn?.addEventListener('click', async () => {
   // Инициатива считается на сервере (d20 + модификатор Ловкости).
   // Сервер рассылает diceEvent — мы покажем его у себя в панели и у других в "Броски других".
   // UX: сразу показываем визуальную "заглушку" в панели броска, чтобы действие было видно мгновенно.
@@ -86,6 +86,10 @@ rollInitiativeBtn.addEventListener('click', async () => {
   if (diceVizKind) diceVizKind.textContent = 'Инициатива: d20';
   if (diceVizValue) diceVizValue.textContent = '…';
   sendMessage({ type: 'rollInitiative' });
+});
+
+rollInitiativeAllBtn?.addEventListener('click', () => {
+  sendMessage({ type: 'rollInitiativeAllOwned' });
 });
 
 /*

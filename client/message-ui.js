@@ -525,7 +525,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
             hasRolledInitiative: !!p.hasRolledInitiative,
             pendingInitiativeChoice: !!p.pendingInitiativeChoice,
             willJoinNextRound: !!p.willJoinNextRound,
-            initiative: (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative)
+            initiative: (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative),
+            initiativeMode: String(p.initiativeMode || 'normal')
           });
         });
       } catch {}
@@ -621,6 +622,9 @@ try { handleSessionUiMessage?.(msg); } catch {}
               p.pendingInitiativeChoice = !!prev.pendingInitiativeChoice && !prev.hasRolledInitiative;
               p.willJoinNextRound = !!prev.willJoinNextRound;
             }
+            if (!String(p.initiativeMode || '').trim() && String(prev.initiativeMode || '').trim()) {
+              p.initiativeMode = prev.initiativeMode;
+            }
           });
         }
       } catch {}
@@ -696,6 +700,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       updatePlayerList();
       updateCurrentPlayer(normalized);
       renderTurnOrderBox(normalized);
+      renderInitiativePlayersBox(normalized);
 
       // v4: log is append-only in room_log.
       // Do NOT clear the UI log on every room_state snapshot update.
@@ -1042,6 +1047,78 @@ function renderTurnOrderBox(state) {
     sortByInit(nonCombatants).forEach(p => {
       turnOrderList.appendChild(renderRow(p, { isInCombatList: false }));
     });
+  }
+}
+
+function renderInitiativePlayersBox(state) {
+  if (!initiativePlayersBox || !initiativePlayersList) return;
+  const phase = String(state?.phase || '');
+  const show = (phase === 'initiative');
+  initiativePlayersBox.style.display = show ? '' : 'none';
+  if (!show) return;
+
+  const ownId = String(myId || '');
+  const mine = (Array.isArray(players) ? players : [])
+    .filter((p) => p && String(p.ownerId || '') === ownId)
+    .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+
+  initiativePlayersList.innerHTML = '';
+  if (!mine.length) {
+    const li = document.createElement('li');
+    li.className = 'initiative-player-item';
+    li.textContent = 'У вас нет персонажей.';
+    initiativePlayersList.appendChild(li);
+    if (rollInitiativeAllBtn) rollInitiativeAllBtn.disabled = true;
+    return;
+  }
+
+  let canRollAny = false;
+  mine.forEach((p) => {
+    const li = document.createElement('li');
+    li.className = 'initiative-player-item';
+
+    const name = document.createElement('div');
+    name.className = 'initiative-player-name';
+    name.textContent = String(p?.name || '—');
+
+    const controls = document.createElement('div');
+    controls.className = 'initiative-player-controls';
+
+    const advSelect = document.createElement('select');
+    const mode = String(p?.initiativeMode || 'normal');
+    advSelect.innerHTML = `
+      <option value="normal">Стандартно</option>
+      <option value="advantage">С преимуществом</option>
+      <option value="disadvantage">С помехой</option>
+    `;
+    advSelect.value = (mode === 'advantage' || mode === 'disadvantage') ? mode : 'normal';
+    advSelect.addEventListener('change', (e) => {
+      e.stopPropagation();
+      sendMessage({ type: 'setInitiativeMode', id: p.id, mode: advSelect.value });
+    });
+
+    const canRoll = !p.hasRolledInitiative;
+    if (canRoll) canRollAny = true;
+    const rollBtn = document.createElement('button');
+    rollBtn.type = 'button';
+    rollBtn.className = 'mini-action-btn';
+    rollBtn.textContent = '🎲';
+    rollBtn.title = canRoll ? 'Бросить инициативу' : 'Инициатива уже назначена';
+    rollBtn.disabled = !canRoll && myRole !== 'GM';
+    rollBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sendMessage({ type: 'rollInitiativeFor', id: p.id });
+    });
+
+    controls.appendChild(advSelect);
+    controls.appendChild(rollBtn);
+    li.appendChild(name);
+    li.appendChild(controls);
+    initiativePlayersList.appendChild(li);
+  });
+
+  if (rollInitiativeAllBtn) {
+    rollInitiativeAllBtn.disabled = !canRollAny;
   }
 }
 
@@ -1617,6 +1694,7 @@ function updatePlayerList() {
   });
 
   try { syncSelectedPlayerUi(); } catch {}
+  try { renderInitiativePlayersBox(lastState || null); } catch {}
 }
 
 // ================== UI PERMISSIONS HELPERS ==================

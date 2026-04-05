@@ -33,6 +33,32 @@ function wsWasSeen(nonce) {
   return true;
 }
 
+function normalizeInitiativeMode(mode) {
+  const m = String(mode || 'normal').trim();
+  if (m === 'advantage' || m === 'disadvantage') return m;
+  return 'normal';
+}
+
+function buildInitiativeRollForPlayer(player, overrideMode = null) {
+  const p = player || {};
+  const mode = normalizeInitiativeMode(overrideMode || p.initiativeMode || 'normal');
+  const r1 = Math.floor(Math.random() * 20) + 1;
+  const r2 = Math.floor(Math.random() * 20) + 1;
+  const pick = (mode === 'advantage') ? Math.max(r1, r2) : (mode === 'disadvantage') ? Math.min(r1, r2) : r1;
+  const dexMod = getDexMod(p);
+  const total = pick + dexMod;
+  const modeLabel = mode === 'advantage' ? ' (преимущество)' : mode === 'disadvantage' ? ' (помеха)' : '';
+  const kindText = `Инициатива${modeLabel}: d20${dexMod >= 0 ? '+' : ''}${dexMod}`;
+  return {
+    mode,
+    total,
+    dexMod,
+    keptRoll: pick,
+    rolls: (mode === 'normal') ? [r1] : [r1, r2],
+    kindText
+  };
+}
+
 
 function stopWsHeartbeat() {
   try { clearInterval(wsHeartbeatTimer); } catch {}
@@ -866,6 +892,7 @@ function syncOptimisticPlayersToLocalState(snapshot) {
       if (typeof src.pendingInitiativeChoice !== 'undefined') dst.pendingInitiativeChoice = !!src.pendingInitiativeChoice;
       if (typeof src.willJoinNextRound !== 'undefined') dst.willJoinNextRound = !!src.willJoinNextRound;
       if (typeof src.initiative !== 'undefined') dst.initiative = src.initiative;
+      if (typeof src.initiativeMode !== 'undefined') dst.initiativeMode = normalizeInitiativeMode(src.initiativeMode);
       if (typeof src.sheetUpdatedAt !== 'undefined') dst.sheetUpdatedAt = src.sheetUpdatedAt;
       if (typeof src.sheet !== 'undefined') {
         try { dst.sheet = deepClone(src.sheet); } catch { dst.sheet = src.sheet; }
@@ -2823,6 +2850,7 @@ async function sendMessage(msg) {
             p.hasRolledInitiative = false;
             p.pendingInitiativeChoice = false;
             p.willJoinNextRound = false;
+            p.initiativeMode = normalizeInitiativeMode(p.initiativeMode || 'normal');
           });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
           try {
@@ -3032,6 +3060,7 @@ async function sendMessage(msg) {
             y: null,
             initiative: 0,
             hasRolledInitiative: false,
+            initiativeMode: 'normal',
             // If created during combat/initiative, do NOT auto-join.
             // GM can add to combat via the Turn Order panel.
             pendingInitiativeChoice: false,
@@ -3131,6 +3160,72 @@ async function sendMessage(msg) {
           });
         }
 
+        else if (type === 'setInitiativeMode') {
+          if (next.phase !== 'initiative') return;
+          const pid = String(msg.id || '');
+          if (!pid) return;
+          const p = (next.players || []).find(pp => String(pp?.id || '') === pid);
+          if (!p) return;
+          if (!isGM && !ownsPlayer(p)) return;
+          p.initiativeMode = normalizeInitiativeMode(msg.mode);
+        }
+
+        else if (type === 'rollInitiativeFor') {
+          if (next.phase !== 'initiative') return;
+          const pid = String(msg.id || '');
+          if (!pid) return;
+          const p = (next.players || []).find(pp => String(pp?.id || '') === pid);
+          if (!p) return;
+          if (!isGM && !ownsPlayer(p)) return;
+          if (p.hasRolledInitiative && !isGM) return;
+          if (!isPlayerEligibleForCurrentMapCombat(p, next)) return;
+
+          const roll = buildInitiativeRollForPlayer(p);
+          p.initiative = Number(roll.total) || 0;
+          p.hasRolledInitiative = true;
+          p.pendingInitiativeChoice = false;
+          await broadcastDiceEventOnly({
+            fromId: myUserId,
+            fromName: p.name,
+            kindText: roll.kindText,
+            sides: 20,
+            count: roll.rolls.length,
+            bonus: Number(roll.dexMod) || 0,
+            rolls: roll.rolls,
+            total: Number(roll.total) || 0,
+            crit: ""
+          });
+        }
+
+        else if (type === 'rollInitiativeAllOwned') {
+          if (next.phase !== 'initiative') return;
+          const owned = (next.players || []).filter((p) => (
+            p &&
+            String(p.ownerId || '') === String(myUserId || '') &&
+            isPlayerEligibleForCurrentMapCombat(p, next) &&
+            !p.hasRolledInitiative
+          ));
+          if (!owned.length) return;
+
+          for (const p of owned) {
+            const roll = buildInitiativeRollForPlayer(p);
+            p.initiative = Number(roll.total) || 0;
+            p.hasRolledInitiative = true;
+            p.pendingInitiativeChoice = false;
+            await broadcastDiceEventOnly({
+              fromId: myUserId,
+              fromName: p.name,
+              kindText: roll.kindText,
+              sides: 20,
+              count: roll.rolls.length,
+              bonus: Number(roll.dexMod) || 0,
+              rolls: roll.rolls,
+              total: Number(roll.total) || 0,
+              crit: ""
+            });
+          }
+        }
+
         else if (type === 'gmRollInitiativeFor') {
           // Optional: GM can roll initiative for any combatant.
           if (!isGM) return;
@@ -3159,14 +3254,18 @@ async function sendMessage(msg) {
             kindText = 'Инициатива основы (GM)';
             logEventToState(next, `GM назначил ${p.name} инициативу основы: ${total}`);
           } else {
-            const roll = Math.floor(Math.random() * 20) + 1;
-            const dexMod = getDexMod(p);
-            total = roll + dexMod;
-            kindText = `Инициатива (GM): d20${dexMod >= 0 ? '+' : ''}${dexMod}`;
-            rolls = [roll];
-            bonus = dexMod;
-            const sign = dexMod >= 0 ? '+' : '';
-            logEventToState(next, `GM бросил инициативу за ${p.name}: ${roll}${sign}${dexMod} = ${total}`);
+            const gmRoll = buildInitiativeRollForPlayer(p);
+            total = gmRoll.total;
+            const modeLabel = gmRoll.mode === 'advantage' ? ' с преимуществом' : gmRoll.mode === 'disadvantage' ? ' с помехой' : '';
+            kindText = `Инициатива (GM${modeLabel}): d20${gmRoll.dexMod >= 0 ? '+' : ''}${gmRoll.dexMod}`;
+            rolls = gmRoll.rolls;
+            bonus = gmRoll.dexMod;
+            const sign = bonus >= 0 ? '+' : '';
+            if (rolls.length > 1) {
+              logEventToState(next, `GM бросил инициативу за ${p.name}: [${rolls.join(', ')}]${sign}${bonus} = ${total}`);
+            } else {
+              logEventToState(next, `GM бросил инициативу за ${p.name}: ${rolls[0]}${sign}${bonus} = ${total}`);
+            }
           }
 
           p.initiative = total;
@@ -3179,7 +3278,7 @@ async function sendMessage(msg) {
             fromName: 'GM',
             kindText,
             sides: 20,
-            count: 1,
+            count: rolls.length || 1,
             bonus,
             rolls,
             total,
@@ -3810,10 +3909,15 @@ async function sendMessage(msg) {
 
           const updates = [];
           for (const p of toRoll) {
-            const roll = Math.floor(Math.random() * 20) + 1;
-            const dexMod = getDexMod(p);
-            const total = roll + dexMod;
-            updates.push({ playerId: p.id, total, roll, dexMod, name: p.name });
+            const roll = buildInitiativeRollForPlayer(p);
+            updates.push({
+              playerId: p.id,
+              total: roll.total,
+              dexMod: roll.dexMod,
+              name: p.name,
+              rolls: roll.rolls,
+              kindText: roll.kindText
+            });
           }
 
           const initiativeEpoch = Number(next?.initiativeEpoch) || 0;
@@ -3850,11 +3954,11 @@ async function sendMessage(msg) {
             await broadcastDiceEventOnly({
               fromId: myUserId,
               fromName: u.name,
-              kindText: `Инициатива: d20${Number(u.dexMod) >= 0 ? "+" : ""}${Number(u.dexMod) || 0}`,
+              kindText: String(u.kindText || `Инициатива: d20${Number(u.dexMod) >= 0 ? "+" : ""}${Number(u.dexMod) || 0}`),
               sides: 20,
-              count: 1,
+              count: Array.isArray(u.rolls) ? u.rolls.length : 1,
               bonus: Number(u.dexMod) || 0,
-              rolls: [Number(u.roll) || 0],
+              rolls: Array.isArray(u.rolls) ? u.rolls.map((v) => Number(v) || 0) : [],
               total: Number(u.total) || 0,
               crit: ""
             });

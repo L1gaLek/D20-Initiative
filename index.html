@@ -355,7 +355,6 @@
 
 <!-- Левая панель -->
 <div id="action-log-container">
-
   <!-- ЖУРНАЛ -->
   <div id="action-log">
     <h3>Журнал действий:</h3>
@@ -421,13 +420,12 @@
         <ul id="player-list"></ul>
       </div>
 
-      <!-- Очередность хода (видно в фазе инициативы и боя) -->
-      <div id="turn-order-box" class="turn-order-box" style="display:none;">
-        <div class="turn-order-head">
-          <div class="turn-order-title">Очередность хода</div>
-          <div class="turn-order-round">Круг - <span id="turn-order-round">1</span></div>
+      <div id="initiative-players-box" style="display:none;">
+        <div class="initiative-players-head">
+          <div class="initiative-players-title">Инициатива игроков</div>
+          <button id="roll-initiative-all" class="mini-action-btn" type="button">Инициатива на всех</button>
         </div>
-        <ul id="turn-order-list" class="turn-order-list"></ul>
+        <ul id="initiative-players-list"></ul>
       </div>
 
     </div>
@@ -470,6 +468,17 @@
             Бросьте инициативу за своих персонажей!
           </div>
 
+        </div>
+
+        <div id="combat-side-column">
+          <!-- Очередность хода (видно в фазе инициативы и боя) -->
+          <div id="turn-order-box" class="turn-order-box" style="display:none;">
+            <div class="turn-order-head">
+              <div class="turn-order-title">Очередность хода</div>
+              <div class="turn-order-round">Круг - <span id="turn-order-round">1</span></div>
+            </div>
+            <ul id="turn-order-list" class="turn-order-list"></ul>
+          </div>
         </div>
 
         <!-- Правая колонка (только для GM, управляется в client.js) -->
@@ -742,11 +751,6 @@
   <!-- Dice Visualizer -->
   <div id="dice-viz" class="dice-viz">
     <div class="dice-viz-title">Бросок</div>
-
-  <!-- Инициатива: отдельная кнопка внутри панели, НЕ выпирает -->
-  <button id="roll-initiative" class="dice-viz-btn dice-viz-btn--initiative" type="button">
-    Инициатива
-  </button>
 
   <!-- Строка броска: кубик + количество + Бросить -->
   <div class="dice-viz-controls">
