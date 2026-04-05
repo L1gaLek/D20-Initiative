@@ -1077,17 +1077,9 @@ function renderInitiativePlayersBox(state) {
     const li = document.createElement('li');
     li.className = 'initiative-player-item';
 
-    const main = document.createElement('div');
-    main.className = 'initiative-player-main';
     const name = document.createElement('div');
     name.className = 'initiative-player-name';
     name.textContent = String(p?.name || '—');
-    const iv = (p?.initiative === null || typeof p?.initiative === 'undefined') ? null : Number(p.initiative);
-    const meta = document.createElement('div');
-    meta.className = 'initiative-player-meta';
-    meta.textContent = Number.isFinite(iv) && p.hasRolledInitiative ? `Инициатива: ${iv}` : 'Инициатива: —';
-    main.appendChild(name);
-    main.appendChild(meta);
 
     const controls = document.createElement('div');
     controls.className = 'initiative-player-controls';
@@ -1095,7 +1087,7 @@ function renderInitiativePlayersBox(state) {
     const advSelect = document.createElement('select');
     const mode = String(p?.initiativeMode || 'normal');
     advSelect.innerHTML = `
-      <option value="normal">прочерк</option>
+      <option value="normal">Стандартно</option>
       <option value="advantage">С преимуществом</option>
       <option value="disadvantage">С помехой</option>
     `;
@@ -1120,13 +1112,13 @@ function renderInitiativePlayersBox(state) {
 
     controls.appendChild(advSelect);
     controls.appendChild(rollBtn);
-    li.appendChild(main);
+    li.appendChild(name);
     li.appendChild(controls);
     initiativePlayersList.appendChild(li);
   });
 
   if (rollInitiativeAllBtn) {
-    rollInitiativeAllBtn.disabled = (!canRollAny && myRole !== 'GM');
+    rollInitiativeAllBtn.disabled = !canRollAny;
   }
 }
 

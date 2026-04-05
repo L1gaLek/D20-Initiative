@@ -149,10 +149,10 @@
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px;
   padding: 8px;
-  display: grid;
-  grid-template-columns: minmax(0,1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
 }
 
 .initiative-player-main{
@@ -169,13 +169,15 @@
 }
 
 .initiative-player-controls{
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
 }
 
 .initiative-player-controls select{
-  min-width: 128px;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12px;
   padding: 5px 6px;
 }

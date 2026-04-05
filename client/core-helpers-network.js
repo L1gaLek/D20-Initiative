@@ -3203,7 +3203,7 @@ async function sendMessage(msg) {
             p &&
             String(p.ownerId || '') === String(myUserId || '') &&
             isPlayerEligibleForCurrentMapCombat(p, next) &&
-            (!p.hasRolledInitiative || isGM)
+            !p.hasRolledInitiative
           ));
           if (!owned.length) return;
 
