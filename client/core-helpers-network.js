@@ -2817,12 +2817,12 @@ async function sendMessage(msg) {
             const isEligibleOnMap = !isMapScopedPlayer(p) || String(p?.mapId || '').trim() === String(next?.currentMapId || '').trim();
             const placed = (p && p.x !== null && p.y !== null);
             p.inCombat = !!placed && !!isEligibleOnMap;
-            if (p.inCombat) {
-              p.initiative = null;
-              p.hasRolledInitiative = false;
-              p.pendingInitiativeChoice = false;
-              p.willJoinNextRound = false;
-            }
+            // Always reset initiative-related fields for everyone.
+            // This keeps GM and players strictly in sync when initiative phase restarts.
+            p.initiative = null;
+            p.hasRolledInitiative = false;
+            p.pendingInitiativeChoice = false;
+            p.willJoinNextRound = false;
           });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
           try {
@@ -3822,6 +3822,20 @@ async function sendMessage(msg) {
           });
           if (!appliedUpdates.length) return;
 
+          // Apply immediately for the roller as well.
+          // We cannot rely only on WS echo because own optimistic envelopes may be skipped,
+          // and a delayed room_state snapshot can make the roller see the result later than others.
+          try {
+            handleMessage({
+              type: 'initiativeApplied',
+              updates: appliedUpdates.map((u) => ({
+                playerId: String(u?.playerId || ''),
+                total: Number(u?.total) || 0
+              })),
+              epoch: Number(next?.initiativeEpoch) || 0
+            });
+          } catch {}
+
           for (const u of appliedUpdates) {
             // Live dice event (broadcast only) – includes its own log line in room_log.
             await broadcastDiceEventOnly({
@@ -3851,7 +3865,7 @@ async function sendMessage(msg) {
 
           // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
           // arrives before the DB echo/WS refresh.
-          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates); } catch {}
+          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: Number(next?.initiativeEpoch) || 0 }); } catch {}
           try {
             // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
             // does not carry authoritative token x/y positions (they are stored in room_tokens).
