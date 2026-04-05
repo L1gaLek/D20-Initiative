@@ -2817,12 +2817,12 @@ async function sendMessage(msg) {
             const isEligibleOnMap = !isMapScopedPlayer(p) || String(p?.mapId || '').trim() === String(next?.currentMapId || '').trim();
             const placed = (p && p.x !== null && p.y !== null);
             p.inCombat = !!placed && !!isEligibleOnMap;
-            if (p.inCombat) {
-              p.initiative = null;
-              p.hasRolledInitiative = false;
-              p.pendingInitiativeChoice = false;
-              p.willJoinNextRound = false;
-            }
+            // Always reset initiative-related fields for everyone.
+            // This keeps GM and players strictly in sync when initiative phase restarts.
+            p.initiative = null;
+            p.hasRolledInitiative = false;
+            p.pendingInitiativeChoice = false;
+            p.willJoinNextRound = false;
           });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
           try {
@@ -3816,13 +3816,36 @@ async function sendMessage(msg) {
             updates.push({ playerId: p.id, total, roll, dexMod, name: p.name });
           }
 
-          // Atomic-ish apply to room_state (retry on collision)
-          const appliedUpdates = await applyInitiativeAtomic(currentRoomId, myUserId, updates, {
-            expectedEpoch: Number(next?.initiativeEpoch) || 0
-          });
-          if (!appliedUpdates.length) return;
+          const initiativeEpoch = Number(next?.initiativeEpoch) || 0;
 
-          for (const u of appliedUpdates) {
+          // Instant local + WS apply (do not wait DB roundtrip).
+          // This removes visible delay for the roller and makes updates realtime for everyone.
+          try {
+            handleMessage({
+              type: 'initiativeApplied',
+              updates: updates.map((u) => ({
+                playerId: String(u?.playerId || ''),
+                total: Number(u?.total) || 0
+              })),
+              epoch: initiativeEpoch
+            });
+          } catch {}
+          try {
+            rememberPendingInitiativeOverlay(currentRoomId, updates, { epoch: initiativeEpoch });
+          } catch {}
+          try {
+            sendWsEnvelope({
+              type: 'initiativeApplied',
+              roomId: String(currentRoomId || ''),
+              updates: updates.map((u) => ({
+                playerId: String(u?.playerId || ''),
+                total: Number(u?.total) || 0
+              })),
+              epoch: initiativeEpoch
+            }, { optimisticApplied: true });
+          } catch {}
+
+          for (const u of updates) {
             // Live dice event (broadcast only) – includes its own log line in room_log.
             await broadcastDiceEventOnly({
               fromId: myUserId,
@@ -3837,41 +3860,15 @@ async function sendMessage(msg) {
             });
           }
 
-          try {
-            sendWsEnvelope({
-              type: 'initiativeApplied',
-              roomId: String(currentRoomId || ''),
-              updates: appliedUpdates.map((u) => ({
-                playerId: String(u?.playerId || ''),
-                total: Number(u?.total) || 0
-              })),
-              epoch: Number(next?.initiativeEpoch) || 0
-            }, { optimisticApplied: true });
-          } catch {}
+          // Atomic-ish persist to room_state (retry on collision).
+          // UI is already updated optimistically above.
+          const appliedUpdates = await applyInitiativeAtomic(currentRoomId, myUserId, updates, {
+            expectedEpoch: initiativeEpoch
+          });
+          if (!appliedUpdates.length) return;
 
-          // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
-          // arrives before the DB echo/WS refresh.
-          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates); } catch {}
-          try {
-            // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
-            // does not carry authoritative token x/y positions (they are stored in room_tokens).
-            // If we start from room_state shadow here, src.x/src.y become null and
-            // syncOptimisticPlayersToLocalState(...) can momentarily hide all tokens on the board.
-            const optimisticBase = lastState || getRoomStateShadow(currentRoomId) || next;
-            const optimistic = deepClone(optimisticBase);
-            (optimistic.players || []).forEach((p) => {
-              if (!p || !p.id) return;
-              const u = appliedUpdates.find(x => String(x?.playerId || '') === String(p.id));
-              if (!u) return;
-              p.initiative = Number(u.total);
-              p.hasRolledInitiative = true;
-              p.pendingInitiativeChoice = false;
-            });
-            try { syncOptimisticPlayersToLocalState(optimistic); } catch {}
-            handleMessage({ type: 'state', state: optimistic });
-          } catch (e) {
-            console.warn('initiative optimistic apply failed', e);
-          }
+          // Keep local pending overlay until DB/WS state is fully observed.
+          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: initiativeEpoch }); } catch {}
 
           // IMPORTANT: We already wrote to DB using the latest snapshot inside applyInitiativeAtomic.
           // Do NOT fall through to the generic upsert at the end of the handler (it would use stale 'next').

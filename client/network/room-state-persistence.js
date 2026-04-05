@@ -84,7 +84,8 @@ function delayMs(ms) {
 // ===== Pending initiative overlay (protect against stale room_state snapshots) =====
 const __pendingInitiativeOverlay = {
   roomId: null,
-  byPlayerId: new Map()
+  byPlayerId: new Map(),
+  initiativeEpoch: 0
 };
 
 function clearPendingInitiativeOverlay(roomId) {
@@ -94,19 +95,22 @@ function clearPendingInitiativeOverlay(roomId) {
     if (String(__pendingInitiativeOverlay.roomId || '') !== rid) {
       __pendingInitiativeOverlay.roomId = rid;
       __pendingInitiativeOverlay.byPlayerId = new Map();
+      __pendingInitiativeOverlay.initiativeEpoch = 0;
       return;
     }
     __pendingInitiativeOverlay.byPlayerId.clear();
+    __pendingInitiativeOverlay.initiativeEpoch = 0;
   } catch {}
 }
 
-function rememberPendingInitiativeOverlay(roomId, updates) {
+function rememberPendingInitiativeOverlay(roomId, updates, options = {}) {
   try {
     const rid = String(roomId || currentRoomId || '').trim();
     if (!rid) return;
     if (String(__pendingInitiativeOverlay.roomId || '') !== rid) {
       __pendingInitiativeOverlay.roomId = rid;
       __pendingInitiativeOverlay.byPlayerId = new Map();
+      __pendingInitiativeOverlay.initiativeEpoch = 0;
     }
     const now = Date.now();
     (Array.isArray(updates) ? updates : []).forEach((u) => {
@@ -120,6 +124,8 @@ function rememberPendingInitiativeOverlay(roomId, updates) {
         updatedAt: now
       });
     });
+    const epoch = Number(options?.epoch) || 0;
+    if (epoch > 0) __pendingInitiativeOverlay.initiativeEpoch = epoch;
   } catch {}
 }
 
@@ -137,9 +143,19 @@ function applyPendingInitiativeOverlayToState(state) {
 
     const isFreshInitiativeReset = (
       phase === 'initiative' &&
-      (Number(st?.round) || 1) === 1 &&
-      Array.isArray(st?.turnOrder) &&
-      st.turnOrder.length === 0
+      (
+        (
+          (Number(st?.round) || 1) === 1 &&
+          Array.isArray(st?.turnOrder) &&
+          st.turnOrder.length === 0 &&
+          (Array.isArray(st?.players) ? st.players : []).every((p) => !p?.inCombat || !p?.hasRolledInitiative)
+        ) ||
+        (
+          (Number(st?.initiativeEpoch) || 0) > 0 &&
+          Number(__pendingInitiativeOverlay.initiativeEpoch) > 0 &&
+          Number(st?.initiativeEpoch) !== Number(__pendingInitiativeOverlay.initiativeEpoch)
+        )
+      )
     );
     if (isFreshInitiativeReset) {
       clearPendingInitiativeOverlay(rid);
@@ -220,6 +236,26 @@ async function fetchRoomStateSnapshot(roomId) {
   return data?.state || null;
 }
 
+async function updateRoomStateIfUnchanged(roomId, nextState, expectedUpdatedAt) {
+  await ensureSupabaseReady();
+  if (!roomId || !expectedUpdatedAt) return false;
+  const payload = {
+    phase: String(nextState?.phase || "lobby"),
+    current_actor_id: nextState?.turnOrder?.[nextState?.currentTurnIndex] ?? null,
+    state: nextState,
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await sbClient
+    .from("room_state")
+    .update(payload)
+    .eq("room_id", roomId)
+    .eq("updated_at", expectedUpdatedAt)
+    .select("updated_at")
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
 // Apply initiative updates for owned players with retry to avoid "last write wins" collisions.
 // This is needed when multiple users roll initiative at the same time.
 async function applyInitiativeAtomic(roomId, myUserId, updates, options = {}) {
@@ -229,8 +265,16 @@ async function applyInitiativeAtomic(roomId, myUserId, updates, options = {}) {
   const expectedEpoch = Number(options?.expectedEpoch) || 0;
 
   for (let attempt = 0; attempt < 6; attempt++) {
-    const latest = await fetchRoomStateSnapshot(roomId);
+    const { data: latestRow, error: latestErr } = await sbClient
+      .from("room_state")
+      .select("state,updated_at")
+      .eq("room_id", roomId)
+      .maybeSingle();
+    if (latestErr) throw latestErr;
+    const latest = latestRow?.state || null;
     if (!latest) return [];
+    const latestUpdatedAt = String(latestRow?.updated_at || '');
+    if (!latestUpdatedAt) return [];
     if (expectedEpoch > 0) {
       const latestEpoch = Number(latest?.initiativeEpoch) || 0;
       if (latestEpoch && latestEpoch !== expectedEpoch) return [];
@@ -256,7 +300,15 @@ async function applyInitiativeAtomic(roomId, myUserId, updates, options = {}) {
     }
     if (!applicableUpdates.length) return [];
 
-    await upsertRoomState(roomId, next);
+    const updated = await updateRoomStateIfUnchanged(roomId, next, latestUpdatedAt);
+    if (!updated) {
+      await delayMs(20 + attempt * 20);
+      continue;
+    }
+    try { rememberRoomStateShadow(roomId, next); } catch {}
+    try {
+      sendWsEnvelope({ type: 'state', roomId, state: stripRoomSecretsFromState(next) }, { optimisticApplied: true });
+    } catch {}
 
     // Verify (read-after-write) – if a concurrent writer overwrote us, retry quickly.
     try {
