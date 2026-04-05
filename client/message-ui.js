@@ -526,12 +526,11 @@ try { handleSessionUiMessage?.(msg); } catch {}
             if (!prev) return;
             const incomingRolled = !!p.hasRolledInitiative;
             const incomingInit = (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative);
-            if (prev.hasRolledInitiative && (!incomingRolled || incomingInit === null)) {
+            if (p.inCombat && prev.hasRolledInitiative && (!incomingRolled || incomingInit === null)) {
               p.initiative = prev.initiative;
               p.hasRolledInitiative = true;
               p.pendingInitiativeChoice = !!prev.pendingInitiativeChoice && !prev.hasRolledInitiative;
               p.willJoinNextRound = !!prev.willJoinNextRound;
-              if (typeof prev.inCombat !== 'undefined') p.inCombat = !!prev.inCombat;
             }
           });
         }

@@ -611,7 +611,15 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
 
   const detached = payload.detached || _deriveDetachedFromState(normalized);
   const mapIds = new Set((Array.isArray(normalized.maps) ? normalized.maps : []).map((m) => String(m?.id || '').trim()).filter(Boolean));
-  const withRoom = (rows) => (Array.isArray(rows) ? rows : []).map((r) => ({ ...r, room_id: rid, updated_at: new Date().toISOString() }))
+  const withRoom = (rows, { dropId = false } = {}) => (Array.isArray(rows) ? rows : [])
+    .map((r) => {
+      const row = { ...(r || {}) };
+      // Detached snapshots can come from DB rows that include table PK "id".
+      // Reusing those IDs during restore may collide with rows from other rooms.
+      if (dropId) delete row.id;
+      delete row.created_at;
+      return { ...row, room_id: rid, updated_at: new Date().toISOString() };
+    })
     .filter((r) => mapIds.has(String(r?.map_id || '').trim()));
 
   await Promise.all([
@@ -622,11 +630,11 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
     sbClient.from('room_tokens').delete().eq('room_id', rid)
   ]);
 
-  const mapMetaRows = withRoom(detached?.roomMapMeta);
-  const wallRows = withRoom(detached?.roomWalls);
-  const markRows = withRoom(detached?.roomMarks);
-  const fogRows = withRoom(detached?.roomFog);
-  const tokenRows = withRoom(detached?.roomTokens);
+  const mapMetaRows = withRoom(detached?.roomMapMeta, { dropId: true });
+  const wallRows = withRoom(detached?.roomWalls, { dropId: true });
+  const markRows = withRoom(detached?.roomMarks, { dropId: true });
+  const fogRows = withRoom(detached?.roomFog, { dropId: true });
+  const tokenRows = withRoom(detached?.roomTokens, { dropId: true });
 
   if (mapMetaRows.length) {
     const { error } = await sbClient.from('room_map_meta').upsert(mapMetaRows, { onConflict: 'room_id,map_id' });
