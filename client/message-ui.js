@@ -891,6 +891,14 @@ function renderTurnOrderBox(state) {
     : (Array.isArray(players) ? players : []);
 
   const isGM = (String(myRole || '') === 'GM');
+  const activeMapId = String(state?.currentMapId || '').trim();
+  const isOnActiveMap = (p) => {
+    if (!p) return false;
+    const pidMap = String(p?.mapId || '').trim();
+    if (!activeMapId) return true;
+    if (!pidMap) return true;
+    return pidMap === activeMapId;
+  };
 
   // Helper: stable sort by initiative (desc), then name
   const sortByInit = (arr) => (arr || []).slice().sort((a, b) => {
@@ -900,8 +908,9 @@ function renderTurnOrderBox(state) {
     return String(a?.name || '').localeCompare(String(b?.name || ''));
   });
 
-  const combatants = stPlayers.filter(p => p && p.inCombat);
-  const nonCombatants = stPlayers.filter(p => p && !p.inCombat);
+  const mapPlayers = stPlayers.filter((p) => isOnActiveMap(p));
+  const combatants = mapPlayers.filter(p => p && p.inCombat);
+  const nonCombatants = mapPlayers.filter(p => p && !p.inCombat);
 
   let orderedCombatants = [];
   if (phase === "combat" && Array.isArray(state?.turnOrder) && state.turnOrder.length) {
@@ -1022,17 +1031,17 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      const items = stPlayers.map((p) => ({ id: p.id, inCombat: true }));
+      const items = mapPlayers.map((p) => ({ id: p.id, inCombat: true }));
       items.forEach((it) => rememberPendingCombatSelection(it.id, it.inCombat));
       sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      const items = stPlayers.map((p) => ({ id: p.id, inCombat: false }));
+      const items = mapPlayers.map((p) => ({ id: p.id, inCombat: false }));
       items.forEach((it) => rememberPendingCombatSelection(it.id, it.inCombat));
       sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      const items = stPlayers.map((p) => {
+      const items = mapPlayers.map((p) => {
         const placed = (p && p.x !== null && p.y !== null);
         return { id: p.id, inCombat: !!placed };
       });
