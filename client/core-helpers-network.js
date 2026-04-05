@@ -2147,7 +2147,7 @@ async function sendMessage(msg) {
             name: safeGetUserName(),
             role: normalizeRoleForDb(role),
             last_seen: new Date().toISOString()
-          });
+          }, { onConflict: 'room_id,user_id' });
           if (mErr) {
             // Unique violation (second GM) => Postgres code 23505
             if (role === "GM" && (mErr.code === "23505" || String(mErr.message || "").includes("uq_one_gm_per_room"))) {
