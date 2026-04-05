@@ -2817,12 +2817,12 @@ async function sendMessage(msg) {
             const isEligibleOnMap = !isMapScopedPlayer(p) || String(p?.mapId || '').trim() === String(next?.currentMapId || '').trim();
             const placed = (p && p.x !== null && p.y !== null);
             p.inCombat = !!placed && !!isEligibleOnMap;
-            if (p.inCombat) {
-              p.initiative = null;
-              p.hasRolledInitiative = false;
-              p.pendingInitiativeChoice = false;
-              p.willJoinNextRound = false;
-            }
+            // Always reset initiative-related fields for everyone.
+            // This keeps GM and players strictly in sync when initiative phase restarts.
+            p.initiative = null;
+            p.hasRolledInitiative = false;
+            p.pendingInitiativeChoice = false;
+            p.willJoinNextRound = false;
           });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
           try {
@@ -3851,7 +3851,7 @@ async function sendMessage(msg) {
 
           // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
           // arrives before the DB echo/WS refresh.
-          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates); } catch {}
+          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: Number(next?.initiativeEpoch) || 0 }); } catch {}
           try {
             // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
             // does not carry authoritative token x/y positions (they are stored in room_tokens).
