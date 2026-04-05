@@ -44,7 +44,14 @@
   width: calc(var(--pm-w) + var(--pl-w) + var(--left-gap));
 }
 
+#action-top-row{
+  display: flex;
+  gap: var(--left-gap);
+  align-items: flex-start;
+}
+
 #action-log {
+  width: var(--pm-w);
   max-height: 200px;
 }
 
