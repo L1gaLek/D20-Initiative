@@ -3867,29 +3867,8 @@ async function sendMessage(msg) {
           });
           if (!appliedUpdates.length) return;
 
-          // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
-          // arrives before the DB echo/WS refresh.
+          // Keep local pending overlay until DB/WS state is fully observed.
           try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: initiativeEpoch }); } catch {}
-          try {
-            // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
-            // does not carry authoritative token x/y positions (they are stored in room_tokens).
-            // If we start from room_state shadow here, src.x/src.y become null and
-            // syncOptimisticPlayersToLocalState(...) can momentarily hide all tokens on the board.
-            const optimisticBase = lastState || getRoomStateShadow(currentRoomId) || next;
-            const optimistic = deepClone(optimisticBase);
-            (optimistic.players || []).forEach((p) => {
-              if (!p || !p.id) return;
-              const u = appliedUpdates.find(x => String(x?.playerId || '') === String(p.id));
-              if (!u) return;
-              p.initiative = Number(u.total);
-              p.hasRolledInitiative = true;
-              p.pendingInitiativeChoice = false;
-            });
-            try { syncOptimisticPlayersToLocalState(optimistic); } catch {}
-            handleMessage({ type: 'state', state: optimistic });
-          } catch (e) {
-            console.warn('initiative optimistic apply failed', e);
-          }
 
           // IMPORTANT: We already wrote to DB using the latest snapshot inside applyInitiativeAtomic.
           // Do NOT fall through to the generic upsert at the end of the handler (it would use stale 'next').
