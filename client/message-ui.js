@@ -119,6 +119,43 @@ function isMapScopedPlayerForUi(player) {
   return !!(player && player.isEnemy && !player.isBase);
 }
 
+const __pendingCombatSelectionOverlay = new Map(); // playerId -> { inCombat, updatedAt }
+
+function rememberPendingCombatSelection(playerId, inCombat) {
+  const pid = String(playerId || '').trim();
+  if (!pid) return;
+  __pendingCombatSelectionOverlay.set(pid, {
+    inCombat: !!inCombat,
+    updatedAt: Date.now()
+  });
+}
+
+function applyPendingCombatSelectionOverlay(stateLike) {
+  const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
+  if (!st || !Array.isArray(st.players) || __pendingCombatSelectionOverlay.size === 0) return st;
+  const now = Date.now();
+  st.players.forEach((p) => {
+    if (!p || !p.id) return;
+    const pid = String(p.id);
+    const ov = __pendingCombatSelectionOverlay.get(pid);
+    if (!ov) return;
+    if ((now - Number(ov.updatedAt || 0)) > 8000) {
+      __pendingCombatSelectionOverlay.delete(pid);
+      return;
+    }
+    if (!!p.inCombat === !!ov.inCombat) {
+      __pendingCombatSelectionOverlay.delete(pid);
+      return;
+    }
+    p.inCombat = !!ov.inCombat;
+    if (!p.inCombat) {
+      p.pendingInitiativeChoice = false;
+      p.willJoinNextRound = false;
+    }
+  });
+  return st;
+}
+
 function syncVisiblePlayersState(state) {
   const normalized = state || lastState || null;
   const allPlayers = Array.isArray(normalized?.players) ? normalized.players : [];
@@ -205,6 +242,53 @@ try { handleSessionUiMessage?.(msg); } catch {}
         } catch {}
       } else {
         applyDiceEventToMain(msg.event);
+      }
+    }
+
+    if (msg.type === 'initiativeReset') {
+      try { window.clearPendingInitiativeOverlay?.(currentRoomId); } catch {}
+      if (lastState && Array.isArray(lastState.players)) {
+        lastState.phase = 'initiative';
+        lastState.turnOrder = [];
+        lastState.currentTurnIndex = 0;
+        lastState.round = 1;
+        if (Number(msg?.epoch) > 0) lastState.initiativeEpoch = Number(msg.epoch);
+        (lastState.players || []).forEach((p) => {
+          if (!p || !p.inCombat) return;
+          p.initiative = null;
+          p.hasRolledInitiative = false;
+          p.pendingInitiativeChoice = false;
+          p.willJoinNextRound = false;
+        });
+        updateTurnOrderBoxVisibility(lastState);
+        renderTurnOrderBox(lastState);
+      }
+    }
+
+    if (msg.type === 'initiativeApplied' && Array.isArray(msg.updates)) {
+      const updates = msg.updates
+        .map((u) => ({
+          playerId: String(u?.playerId || '').trim(),
+          total: Number(u?.total)
+        }))
+        .filter((u) => !!u.playerId && Number.isFinite(u.total));
+      if (updates.length && lastState && Array.isArray(lastState.players)) {
+        if (Number(msg?.epoch) > 0) {
+          const curEpoch = Number(lastState?.initiativeEpoch) || 0;
+          if (curEpoch > 0 && curEpoch !== Number(msg.epoch)) return;
+        }
+        (lastState.players || []).forEach((p) => {
+          if (!p || !p.id) return;
+          const u = updates.find((it) => it.playerId === String(p.id));
+          if (!u) return;
+          if (!p.inCombat) return;
+          p.initiative = Number(u.total);
+          p.hasRolledInitiative = true;
+          p.pendingInitiativeChoice = false;
+        });
+        try { window.rememberPendingInitiativeOverlay?.(currentRoomId, updates); } catch {}
+        updateTurnOrderBoxVisibility(lastState);
+        renderTurnOrderBox(lastState);
       }
     }
 
@@ -449,6 +533,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       let normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
       try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
+      try { normalized = applyPendingCombatSelectionOverlay(normalized) || normalized; } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
 
       try {
@@ -509,15 +594,11 @@ try { handleSessionUiMessage?.(msg); } catch {}
           (prevPhase === 'initiative' || prevPhase === 'combat') &&
           (incomingPhase === 'initiative' || incomingPhase === 'combat')
         );
-        const incomingCombatants = Array.isArray(lastState?.players)
-          ? lastState.players.filter(p => p && p.inCombat)
-          : [];
         const isFreshInitiativeReset = (
           incomingPhase === 'initiative' &&
           (Number(lastState?.round) || 1) === 1 &&
-          Array.isArray(lastState?.turnOrder) && lastState.turnOrder.length === 0 &&
-          incomingCombatants.length > 0 &&
-          incomingCombatants.every(p => !p.hasRolledInitiative && (p.initiative === null || typeof p.initiative === 'undefined'))
+          Array.isArray(lastState?.turnOrder) &&
+          lastState.turnOrder.length === 0
         );
         if (sameInitiativeWindow && !isFreshInitiativeReset) {
           (lastState.players || []).forEach(p => {
@@ -526,12 +607,11 @@ try { handleSessionUiMessage?.(msg); } catch {}
             if (!prev) return;
             const incomingRolled = !!p.hasRolledInitiative;
             const incomingInit = (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative);
-            if (prev.hasRolledInitiative && (!incomingRolled || incomingInit === null)) {
+            if (p.inCombat && prev.hasRolledInitiative && (!incomingRolled || incomingInit === null)) {
               p.initiative = prev.initiative;
               p.hasRolledInitiative = true;
               p.pendingInitiativeChoice = !!prev.pendingInitiativeChoice && !prev.hasRolledInitiative;
               p.willJoinNextRound = !!prev.willJoinNextRound;
-              if (typeof prev.inCombat !== 'undefined') p.inCombat = !!prev.inCombat;
             }
           });
         }
@@ -841,6 +921,7 @@ function renderTurnOrderBox(state) {
       cb.addEventListener('click', (e) => e.stopPropagation());
       cb.addEventListener('change', (e) => {
         e.stopPropagation();
+        rememberPendingCombatSelection(p.id, !!cb.checked);
         sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!cb.checked });
       });
       left.prepend(cb);
@@ -912,16 +993,22 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: true }));
+      const items = stPlayers.map((p) => ({ id: p.id, inCombat: true }));
+      items.forEach((it) => rememberPendingCombatSelection(it.id, it.inCombat));
+      sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      stPlayers.forEach(p => sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: false }));
+      const items = stPlayers.map((p) => ({ id: p.id, inCombat: false }));
+      items.forEach((it) => rememberPendingCombatSelection(it.id, it.inCombat));
+      sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      stPlayers.forEach(p => {
+      const items = stPlayers.map((p) => {
         const placed = (p && p.x !== null && p.y !== null);
-        sendMessage({ type: 'setPlayerInCombat', id: p.id, inCombat: !!placed });
+        return { id: p.id, inCombat: !!placed };
       });
+      items.forEach((it) => rememberPendingCombatSelection(it.id, it.inCombat));
+      sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
 
     controlsLi.appendChild(btnAll);

@@ -135,13 +135,11 @@ function applyPendingInitiativeOverlayToState(state) {
     const phase = String(st?.phase || '');
     if (phase !== 'initiative' && phase !== 'combat') return state;
 
-    const combatants = Array.isArray(st?.players) ? st.players.filter(p => p && p.inCombat) : [];
     const isFreshInitiativeReset = (
       phase === 'initiative' &&
       (Number(st?.round) || 1) === 1 &&
-      Array.isArray(st?.turnOrder) && st.turnOrder.length === 0 &&
-      combatants.length > 0 &&
-      combatants.every(p => !p.hasRolledInitiative && (p.initiative === null || typeof p.initiative === 'undefined'))
+      Array.isArray(st?.turnOrder) &&
+      st.turnOrder.length === 0
     );
     if (isFreshInitiativeReset) {
       clearPendingInitiativeOverlay(rid);
@@ -224,17 +222,23 @@ async function fetchRoomStateSnapshot(roomId) {
 
 // Apply initiative updates for owned players with retry to avoid "last write wins" collisions.
 // This is needed when multiple users roll initiative at the same time.
-async function applyInitiativeAtomic(roomId, myUserId, updates) {
+async function applyInitiativeAtomic(roomId, myUserId, updates, options = {}) {
   if (!roomId || !myUserId) return;
   const updArr = Array.isArray(updates) ? updates : [];
-  if (!updArr.length) return;
+  if (!updArr.length) return [];
+  const expectedEpoch = Number(options?.expectedEpoch) || 0;
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const latest = await fetchRoomStateSnapshot(roomId);
-    if (!latest) return;
+    if (!latest) return [];
+    if (expectedEpoch > 0) {
+      const latestEpoch = Number(latest?.initiativeEpoch) || 0;
+      if (latestEpoch && latestEpoch !== expectedEpoch) return [];
+    }
 
     const next = deepClone(latest);
     const pls = Array.isArray(next.players) ? next.players : [];
+    const applicableUpdates = [];
     for (const u of updArr) {
       const pid = String(u?.playerId || "");
       if (!pid) continue;
@@ -248,7 +252,9 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
 
       p.initiative = Number(u.total);
       p.hasRolledInitiative = true;
+      applicableUpdates.push(u);
     }
+    if (!applicableUpdates.length) return [];
 
     await upsertRoomState(roomId, next);
 
@@ -256,15 +262,16 @@ async function applyInitiativeAtomic(roomId, myUserId, updates) {
     try {
       const check = await fetchRoomStateSnapshot(roomId);
       const cpls = Array.isArray(check?.players) ? check.players : [];
-      const ok = updArr.every(u => {
+      const ok = applicableUpdates.every(u => {
         const pid = String(u?.playerId || "");
         const cp = cpls.find(pp => String(pp?.id) === pid);
         return !!cp && cp.hasRolledInitiative && Number(cp.initiative) === Number(u.total);
       });
-      if (ok) return;
+      if (ok) return applicableUpdates;
     } catch {}
     await delayMs(35 + attempt * 25);
   }
+  throw new Error('Не удалось синхронизировать инициативу: конфликт параллельных изменений.');
 }
 
 async function upsertRoomState(roomId, nextState) {
@@ -611,7 +618,15 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
 
   const detached = payload.detached || _deriveDetachedFromState(normalized);
   const mapIds = new Set((Array.isArray(normalized.maps) ? normalized.maps : []).map((m) => String(m?.id || '').trim()).filter(Boolean));
-  const withRoom = (rows) => (Array.isArray(rows) ? rows : []).map((r) => ({ ...r, room_id: rid, updated_at: new Date().toISOString() }))
+  const withRoom = (rows, { dropId = false } = {}) => (Array.isArray(rows) ? rows : [])
+    .map((r) => {
+      const row = { ...(r || {}) };
+      // Detached snapshots can come from DB rows that include table PK "id".
+      // Reusing those IDs during restore may collide with rows from other rooms.
+      if (dropId) delete row.id;
+      delete row.created_at;
+      return { ...row, room_id: rid, updated_at: new Date().toISOString() };
+    })
     .filter((r) => mapIds.has(String(r?.map_id || '').trim()));
 
   await Promise.all([
@@ -622,11 +637,11 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
     sbClient.from('room_tokens').delete().eq('room_id', rid)
   ]);
 
-  const mapMetaRows = withRoom(detached?.roomMapMeta);
-  const wallRows = withRoom(detached?.roomWalls);
-  const markRows = withRoom(detached?.roomMarks);
-  const fogRows = withRoom(detached?.roomFog);
-  const tokenRows = withRoom(detached?.roomTokens);
+  const mapMetaRows = withRoom(detached?.roomMapMeta, { dropId: true });
+  const wallRows = withRoom(detached?.roomWalls, { dropId: true });
+  const markRows = withRoom(detached?.roomMarks, { dropId: true });
+  const fogRows = withRoom(detached?.roomFog, { dropId: true });
+  const tokenRows = withRoom(detached?.roomTokens, { dropId: true });
 
   if (mapMetaRows.length) {
     const { error } = await sbClient.from('room_map_meta').upsert(mapMetaRows, { onConflict: 'room_id,map_id' });

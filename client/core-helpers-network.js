@@ -1355,6 +1355,16 @@ function isMapScopedPlayer(player) {
   return !!(player && player.isEnemy && !player.isBase);
 }
 
+function isPlayerEligibleForCurrentMapCombat(player, stateLike) {
+  if (!player || !stateLike) return false;
+  if (!player.inCombat) return false;
+  if (!isMapScopedPlayer(player)) return true;
+  const activeMapId = String(stateLike?.currentMapId || '').trim();
+  const playerMapId = String(player?.mapId || '').trim();
+  if (!activeMapId || !playerMapId) return false;
+  return playerMapId === activeMapId;
+}
+
 async function insertRoomLog(roomId, text) {
   try {
     await ensureSupabaseReady();
@@ -2796,20 +2806,32 @@ async function sendMessage(msg) {
           if (!isGM) return;
           try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
           next.phase = "initiative";
+          next.initiativeEpoch = Date.now();
           next.turnOrder = [];
           next.currentTurnIndex = 0;
           next.round = 1;
           // Initiative is now per-combatant, not "everyone in the room".
           // Default selection: those already placed on the board.
           (next.players || []).forEach(p => {
+            if (!p) return;
+            const isEligibleOnMap = !isMapScopedPlayer(p) || String(p?.mapId || '').trim() === String(next?.currentMapId || '').trim();
             const placed = (p && p.x !== null && p.y !== null);
-            p.inCombat = !!placed;
+            p.inCombat = !!placed && !!isEligibleOnMap;
             if (p.inCombat) {
               p.initiative = null;
               p.hasRolledInitiative = false;
+              p.pendingInitiativeChoice = false;
+              p.willJoinNextRound = false;
             }
           });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
+          try {
+            sendWsEnvelope({
+              type: 'initiativeReset',
+              roomId: String(currentRoomId || ''),
+              epoch: Number(next.initiativeEpoch) || Date.now()
+            }, { optimisticApplied: true });
+          } catch {}
         }
 
         else if (type === 'setPlayerInCombat') {
@@ -2820,7 +2842,21 @@ async function sendMessage(msg) {
           const p = (next.players || []).find(pp => String(pp?.id) === pid);
           if (!p) return;
           const inCombat = !!msg.inCombat;
+          if (inCombat && isMapScopedPlayer(p)) {
+            const activeMapId = String(next?.currentMapId || '').trim();
+            const playerMapId = String(p?.mapId || '').trim();
+            if (!activeMapId || !playerMapId || activeMapId !== playerMapId) {
+              p.inCombat = false;
+              p.pendingInitiativeChoice = false;
+              p.willJoinNextRound = false;
+              return;
+            }
+          }
           p.inCombat = inCombat;
+          if (!inCombat) {
+            p.pendingInitiativeChoice = false;
+            p.willJoinNextRound = false;
+          }
 
           // If combat is already running and a new combatant is added, queue for next round.
           if (next.phase === 'combat' && inCombat) {
@@ -2845,7 +2881,22 @@ async function sendMessage(msg) {
             if (!p) continue;
             const inCombat = !!it.inCombat;
             if (!!p.inCombat === inCombat) continue;
+            if (inCombat && isMapScopedPlayer(p)) {
+              const activeMapId = String(next?.currentMapId || '').trim();
+              const playerMapId = String(p?.mapId || '').trim();
+              if (!activeMapId || !playerMapId || activeMapId !== playerMapId) {
+                p.inCombat = false;
+                p.pendingInitiativeChoice = false;
+                p.willJoinNextRound = false;
+                changed++;
+                continue;
+              }
+            }
             p.inCombat = inCombat;
+            if (!inCombat) {
+              p.pendingInitiativeChoice = false;
+              p.willJoinNextRound = false;
+            }
 
             // If combat is already running and a new combatant is added, queue for next round.
             if (next.phase === 'combat' && inCombat) {
@@ -3335,8 +3386,23 @@ async function sendMessage(msg) {
             console.warn('removePlayerCompletely: room_tokens delete failed', e);
           }
 
+          const removedId = String(msg.id || '');
+          const prevTurnOrder = Array.isArray(next.turnOrder) ? next.turnOrder.map(id => String(id)) : [];
+          const removedTurnIdx = prevTurnOrder.indexOf(removedId);
+          const prevCurrentTurnIdx = Math.max(0, Number(next.currentTurnIndex) || 0);
           next.players = (next.players || []).filter(pl => pl.id !== msg.id);
           next.turnOrder = (next.turnOrder || []).filter(id => id !== msg.id);
+          if (removedTurnIdx >= 0) {
+            if (next.turnOrder.length <= 0) {
+              next.currentTurnIndex = 0;
+            } else if (removedTurnIdx < prevCurrentTurnIdx) {
+              next.currentTurnIndex = Math.max(0, prevCurrentTurnIdx - 1);
+            } else if (removedTurnIdx === prevCurrentTurnIdx) {
+              next.currentTurnIndex = Math.min(prevCurrentTurnIdx, next.turnOrder.length - 1);
+            } else {
+              next.currentTurnIndex = Math.min(prevCurrentTurnIdx, next.turnOrder.length - 1);
+            }
+          }
           logEventToState(next, `Игрок ${p.name} полностью удален`);
         }
 
@@ -3735,7 +3801,9 @@ async function sendMessage(msg) {
           // Collect rolls from the current snapshot, then apply them to DB with retry.
           // This prevents the "last write wins" collision when multiple users roll simultaneously.
           const toRoll = (next.players || []).filter(p => (
-            String(p.ownerId) === myUserId && !!p.inCombat && !p.hasRolledInitiative
+            String(p.ownerId) === myUserId &&
+            isPlayerEligibleForCurrentMapCombat(p, next) &&
+            !p.hasRolledInitiative
           ));
 
           if (!toRoll.length) return;
@@ -3746,27 +3814,44 @@ async function sendMessage(msg) {
             const dexMod = getDexMod(p);
             const total = roll + dexMod;
             updates.push({ playerId: p.id, total, roll, dexMod, name: p.name });
+          }
 
+          // Atomic-ish apply to room_state (retry on collision)
+          const appliedUpdates = await applyInitiativeAtomic(currentRoomId, myUserId, updates, {
+            expectedEpoch: Number(next?.initiativeEpoch) || 0
+          });
+          if (!appliedUpdates.length) return;
+
+          for (const u of appliedUpdates) {
             // Live dice event (broadcast only) – includes its own log line in room_log.
             await broadcastDiceEventOnly({
               fromId: myUserId,
-              fromName: p.name,
-              kindText: `Инициатива: d20${dexMod >= 0 ? "+" : ""}${dexMod}`,
+              fromName: u.name,
+              kindText: `Инициатива: d20${Number(u.dexMod) >= 0 ? "+" : ""}${Number(u.dexMod) || 0}`,
               sides: 20,
               count: 1,
-              bonus: dexMod,
-              rolls: [roll],
-              total,
+              bonus: Number(u.dexMod) || 0,
+              rolls: [Number(u.roll) || 0],
+              total: Number(u.total) || 0,
               crit: ""
             });
           }
 
-          // Atomic-ish apply to room_state (retry on collision)
-          await applyInitiativeAtomic(currentRoomId, myUserId, updates);
+          try {
+            sendWsEnvelope({
+              type: 'initiativeApplied',
+              roomId: String(currentRoomId || ''),
+              updates: appliedUpdates.map((u) => ({
+                playerId: String(u?.playerId || ''),
+                total: Number(u?.total) || 0
+              })),
+              epoch: Number(next?.initiativeEpoch) || 0
+            }, { optimisticApplied: true });
+          } catch {}
 
           // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
           // arrives before the DB echo/WS refresh.
-          try { rememberPendingInitiativeOverlay(currentRoomId, updates); } catch {}
+          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates); } catch {}
           try {
             // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
             // does not carry authoritative token x/y positions (they are stored in room_tokens).
@@ -3776,7 +3861,7 @@ async function sendMessage(msg) {
             const optimistic = deepClone(optimisticBase);
             (optimistic.players || []).forEach((p) => {
               if (!p || !p.id) return;
-              const u = updates.find(x => String(x?.playerId || '') === String(p.id));
+              const u = appliedUpdates.find(x => String(x?.playerId || '') === String(p.id));
               if (!u) return;
               p.initiative = Number(u.total);
               p.hasRolledInitiative = true;
@@ -3806,12 +3891,13 @@ async function sendMessage(msg) {
             });
           }
           const combatants = (next.players || []).filter(p => p && p.inCombat);
-          const allRolled = combatants.length ? combatants.every(p => p.hasRolledInitiative) : false;
+          const combatantsOnActiveMap = combatants.filter((p) => isPlayerEligibleForCurrentMapCombat(p, next));
+          const allRolled = combatantsOnActiveMap.length ? combatantsOnActiveMap.every(p => p.hasRolledInitiative) : false;
           if (!allRolled) {
             handleMessage({ type: "error", message: "Сначала бросьте инициативу за всех участников боя" });
             return;
           }
-          next.turnOrder = [...combatants]
+          next.turnOrder = [...combatantsOnActiveMap]
             .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
             .map(p => p.id);
           autoPlacePlayers(next);
@@ -3841,7 +3927,7 @@ async function sendMessage(msg) {
               toJoin.forEach(p => { p.willJoinNextRound = false; });
               next.turnOrder = [...new Set(
                 [...next.players]
-                  .filter(p => p && p.inCombat && (p.initiative !== null && p.initiative !== undefined) && p.hasRolledInitiative)
+                  .filter(p => p && isPlayerEligibleForCurrentMapCombat(p, next) && (p.initiative !== null && p.initiative !== undefined) && p.hasRolledInitiative)
                   .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
                   .map(p => p.id)
               )];
