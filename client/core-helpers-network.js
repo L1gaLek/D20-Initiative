@@ -3816,27 +3816,36 @@ async function sendMessage(msg) {
             updates.push({ playerId: p.id, total, roll, dexMod, name: p.name });
           }
 
-          // Atomic-ish apply to room_state (retry on collision)
-          const appliedUpdates = await applyInitiativeAtomic(currentRoomId, myUserId, updates, {
-            expectedEpoch: Number(next?.initiativeEpoch) || 0
-          });
-          if (!appliedUpdates.length) return;
+          const initiativeEpoch = Number(next?.initiativeEpoch) || 0;
 
-          // Apply immediately for the roller as well.
-          // We cannot rely only on WS echo because own optimistic envelopes may be skipped,
-          // and a delayed room_state snapshot can make the roller see the result later than others.
+          // Instant local + WS apply (do not wait DB roundtrip).
+          // This removes visible delay for the roller and makes updates realtime for everyone.
           try {
             handleMessage({
               type: 'initiativeApplied',
-              updates: appliedUpdates.map((u) => ({
+              updates: updates.map((u) => ({
                 playerId: String(u?.playerId || ''),
                 total: Number(u?.total) || 0
               })),
-              epoch: Number(next?.initiativeEpoch) || 0
+              epoch: initiativeEpoch
             });
           } catch {}
+          try {
+            rememberPendingInitiativeOverlay(currentRoomId, updates, { epoch: initiativeEpoch });
+          } catch {}
+          try {
+            sendWsEnvelope({
+              type: 'initiativeApplied',
+              roomId: String(currentRoomId || ''),
+              updates: updates.map((u) => ({
+                playerId: String(u?.playerId || ''),
+                total: Number(u?.total) || 0
+              })),
+              epoch: initiativeEpoch
+            }, { optimisticApplied: true });
+          } catch {}
 
-          for (const u of appliedUpdates) {
+          for (const u of updates) {
             // Live dice event (broadcast only) – includes its own log line in room_log.
             await broadcastDiceEventOnly({
               fromId: myUserId,
@@ -3851,21 +3860,16 @@ async function sendMessage(msg) {
             });
           }
 
-          try {
-            sendWsEnvelope({
-              type: 'initiativeApplied',
-              roomId: String(currentRoomId || ''),
-              updates: appliedUpdates.map((u) => ({
-                playerId: String(u?.playerId || ''),
-                total: Number(u?.total) || 0
-              })),
-              epoch: Number(next?.initiativeEpoch) || 0
-            }, { optimisticApplied: true });
-          } catch {}
+          // Atomic-ish persist to room_state (retry on collision).
+          // UI is already updated optimistically above.
+          const appliedUpdates = await applyInitiativeAtomic(currentRoomId, myUserId, updates, {
+            expectedEpoch: initiativeEpoch
+          });
+          if (!appliedUpdates.length) return;
 
           // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
           // arrives before the DB echo/WS refresh.
-          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: Number(next?.initiativeEpoch) || 0 }); } catch {}
+          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: initiativeEpoch }); } catch {}
           try {
             // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
             // does not carry authoritative token x/y positions (they are stored in room_tokens).
