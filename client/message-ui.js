@@ -260,15 +260,6 @@ try { handleSessionUiMessage?.(msg); } catch {}
           p.pendingInitiativeChoice = false;
           p.willJoinNextRound = false;
         });
-        if (Array.isArray(players)) {
-          (players || []).forEach((p) => {
-            if (!p) return;
-            p.initiative = null;
-            p.hasRolledInitiative = false;
-            p.pendingInitiativeChoice = false;
-            p.willJoinNextRound = false;
-          });
-        }
         updateTurnOrderBoxVisibility(lastState);
         renderTurnOrderBox(lastState);
       }
@@ -290,20 +281,11 @@ try { handleSessionUiMessage?.(msg); } catch {}
           if (!p || !p.id) return;
           const u = updates.find((it) => it.playerId === String(p.id));
           if (!u) return;
+          if (!p.inCombat) return;
           p.initiative = Number(u.total);
           p.hasRolledInitiative = true;
           p.pendingInitiativeChoice = false;
         });
-        if (Array.isArray(players)) {
-          (players || []).forEach((p) => {
-            if (!p || !p.id) return;
-            const u = updates.find((it) => it.playerId === String(p.id));
-            if (!u) return;
-            p.initiative = Number(u.total);
-            p.hasRolledInitiative = true;
-            p.pendingInitiativeChoice = false;
-          });
-        }
         try { window.rememberPendingInitiativeOverlay?.(currentRoomId, updates, { epoch: Number(msg?.epoch) || 0 }); } catch {}
         updateTurnOrderBoxVisibility(lastState);
         renderTurnOrderBox(lastState);
@@ -884,21 +866,10 @@ function renderTurnOrderBox(state) {
   const round = Number(state?.round) || 1;
   if (turnOrderRound) turnOrderRound.textContent = String(round);
 
-  // Prefer fresh state players for realtime updates (initiativeApplied/initiativeReset).
-  // Fallback to global players[] only when state does not contain a valid players array.
-  const stPlayers = Array.isArray(state?.players)
-    ? state.players
-    : (Array.isArray(players) ? players : []);
+  // Use already-filtered players[] so hidden GM NPCs do not appear for other users.
+  const stPlayers = Array.isArray(players) ? players : (Array.isArray(state?.players) ? state.players : []);
 
   const isGM = (String(myRole || '') === 'GM');
-  const activeMapId = String(state?.currentMapId || '').trim();
-  const isOnActiveMap = (p) => {
-    if (!p) return false;
-    const pidMap = String(p?.mapId || '').trim();
-    if (!activeMapId) return true;
-    if (!pidMap) return true;
-    return pidMap === activeMapId;
-  };
 
   // Helper: stable sort by initiative (desc), then name
   const sortByInit = (arr) => (arr || []).slice().sort((a, b) => {
@@ -908,9 +879,8 @@ function renderTurnOrderBox(state) {
     return String(a?.name || '').localeCompare(String(b?.name || ''));
   });
 
-  const mapPlayers = stPlayers.filter((p) => isOnActiveMap(p));
-  const combatants = mapPlayers.filter(p => p && p.inCombat);
-  const nonCombatants = mapPlayers.filter(p => p && !p.inCombat);
+  const combatants = stPlayers.filter(p => p && p.inCombat);
+  const nonCombatants = stPlayers.filter(p => p && !p.inCombat);
 
   let orderedCombatants = [];
   if (phase === "combat" && Array.isArray(state?.turnOrder) && state.turnOrder.length) {
@@ -1031,17 +1001,17 @@ function renderTurnOrderBox(state) {
     };
 
     const btnAll = mkBtn('Все', 'Включить всех в бой', () => {
-      const items = mapPlayers.map((p) => ({ id: p.id, inCombat: true }));
+      const items = stPlayers.map((p) => ({ id: p.id, inCombat: true }));
       items.forEach((it) => rememberPendingCombatSelection(it.id, it.inCombat));
       sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
     const btnNone = mkBtn('Никто', 'Исключить всех из боя', () => {
-      const items = mapPlayers.map((p) => ({ id: p.id, inCombat: false }));
+      const items = stPlayers.map((p) => ({ id: p.id, inCombat: false }));
       items.forEach((it) => rememberPendingCombatSelection(it.id, it.inCombat));
       sendMessage({ type: 'setPlayersInCombatBulk', items });
     });
     const btnOnBoard = mkBtn('На поле', 'В бою только те, кто стоит на поле', () => {
-      const items = mapPlayers.map((p) => {
+      const items = stPlayers.map((p) => {
         const placed = (p && p.x !== null && p.y !== null);
         return { id: p.id, inCombat: !!placed };
       });
