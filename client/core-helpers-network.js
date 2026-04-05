@@ -3822,6 +3822,20 @@ async function sendMessage(msg) {
           });
           if (!appliedUpdates.length) return;
 
+          // Apply immediately for the roller as well.
+          // We cannot rely only on WS echo because own optimistic envelopes may be skipped,
+          // and a delayed room_state snapshot can make the roller see the result later than others.
+          try {
+            handleMessage({
+              type: 'initiativeApplied',
+              updates: appliedUpdates.map((u) => ({
+                playerId: String(u?.playerId || ''),
+                total: Number(u?.total) || 0
+              })),
+              epoch: Number(next?.initiativeEpoch) || 0
+            });
+          } catch {}
+
           for (const u of appliedUpdates) {
             // Live dice event (broadcast only) – includes its own log line in room_log.
             await broadcastDiceEventOnly({
