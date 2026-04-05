@@ -36,8 +36,8 @@ function applyMapCombatStateToPlayer(player, entry) {
   const safe = (entry && typeof entry === 'object') ? entry : null;
   player.inCombat = !!safe?.inCombat;
   player.initiative = (safe?.initiative === null || typeof safe?.initiative === 'undefined')
-    ? 0
-    : Number(safe.initiative) || 0;
+    ? null
+    : Number(safe.initiative);
   player.hasRolledInitiative = !!safe?.hasRolledInitiative;
   player.pendingInitiativeChoice = !!safe?.pendingInitiativeChoice;
   player.willJoinNextRound = !!safe?.willJoinNextRound;

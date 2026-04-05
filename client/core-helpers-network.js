@@ -4019,7 +4019,7 @@ async function sendMessage(msg) {
 
 function updatePhaseUI(state) {
   const phase = String(state?.phase || '');
-  const combatants = (state?.players || []).filter(p => p && p.inCombat);
+  const combatants = (state?.players || []).filter((p) => isPlayerEligibleForCurrentMapCombat(p, state));
   const allRolled = combatants.length
     ? combatants.every(p => p.hasRolledInitiative)
     : false;
