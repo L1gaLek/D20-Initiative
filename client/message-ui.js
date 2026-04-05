@@ -254,12 +254,21 @@ try { handleSessionUiMessage?.(msg); } catch {}
         lastState.round = 1;
         if (Number(msg?.epoch) > 0) lastState.initiativeEpoch = Number(msg.epoch);
         (lastState.players || []).forEach((p) => {
-          if (!p || !p.inCombat) return;
+          if (!p) return;
           p.initiative = null;
           p.hasRolledInitiative = false;
           p.pendingInitiativeChoice = false;
           p.willJoinNextRound = false;
         });
+        if (Array.isArray(players)) {
+          (players || []).forEach((p) => {
+            if (!p) return;
+            p.initiative = null;
+            p.hasRolledInitiative = false;
+            p.pendingInitiativeChoice = false;
+            p.willJoinNextRound = false;
+          });
+        }
         updateTurnOrderBoxVisibility(lastState);
         renderTurnOrderBox(lastState);
       }
@@ -281,12 +290,21 @@ try { handleSessionUiMessage?.(msg); } catch {}
           if (!p || !p.id) return;
           const u = updates.find((it) => it.playerId === String(p.id));
           if (!u) return;
-          if (!p.inCombat) return;
           p.initiative = Number(u.total);
           p.hasRolledInitiative = true;
           p.pendingInitiativeChoice = false;
         });
-        try { window.rememberPendingInitiativeOverlay?.(currentRoomId, updates); } catch {}
+        if (Array.isArray(players)) {
+          (players || []).forEach((p) => {
+            if (!p || !p.id) return;
+            const u = updates.find((it) => it.playerId === String(p.id));
+            if (!u) return;
+            p.initiative = Number(u.total);
+            p.hasRolledInitiative = true;
+            p.pendingInitiativeChoice = false;
+          });
+        }
+        try { window.rememberPendingInitiativeOverlay?.(currentRoomId, updates, { epoch: Number(msg?.epoch) || 0 }); } catch {}
         updateTurnOrderBoxVisibility(lastState);
         renderTurnOrderBox(lastState);
       }
@@ -500,6 +518,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       // - temporarily reset token positions to null until room_tokens catches up
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
       const prevPhase = String(lastState?.phase || '');
+      const prevInitiativeEpoch = Number(lastState?.initiativeEpoch) || 0;
       const prevMapId = String(lastState?.currentMapId || '').trim();
       const prevPos = new Map();
       const prevSheets = new Map();
@@ -595,10 +614,17 @@ try { handleSessionUiMessage?.(msg); } catch {}
           (incomingPhase === 'initiative' || incomingPhase === 'combat')
         );
         const isFreshInitiativeReset = (
-          incomingPhase === 'initiative' &&
-          (Number(lastState?.round) || 1) === 1 &&
-          Array.isArray(lastState?.turnOrder) &&
-          lastState.turnOrder.length === 0
+          incomingPhase === 'initiative' && (
+            (
+              (Number(lastState?.round) || 1) === 1 &&
+              Array.isArray(lastState?.turnOrder) &&
+              lastState.turnOrder.length === 0
+            ) ||
+            (
+              (Number(lastState?.initiativeEpoch) || 0) > 0 &&
+              (Number(lastState?.initiativeEpoch) || 0) !== prevInitiativeEpoch
+            )
+          )
         );
         if (sameInitiativeWindow && !isFreshInitiativeReset) {
           (lastState.players || []).forEach(p => {
@@ -858,8 +884,11 @@ function renderTurnOrderBox(state) {
   const round = Number(state?.round) || 1;
   if (turnOrderRound) turnOrderRound.textContent = String(round);
 
-  // Use already-filtered players[] so hidden GM NPCs do not appear for other users.
-  const stPlayers = Array.isArray(players) ? players : (Array.isArray(state?.players) ? state.players : []);
+  // Prefer fresh state players for realtime updates (initiativeApplied/initiativeReset).
+  // Fallback to global players[] only when state does not contain a valid players array.
+  const stPlayers = Array.isArray(state?.players)
+    ? state.players
+    : (Array.isArray(players) ? players : []);
 
   const isGM = (String(myRole || '') === 'GM');
 
