@@ -2,7 +2,7 @@
 /* Section: players */
 
 /* Журнал, управление, список инициативы */
-#action-log, #player-management, #player-list-container {
+#action-log, #player-management, #player-list-container, #initiative-players-box {
   background-color: #1e1e1e;
   border: 1px solid #555;
   padding: 10px;
@@ -24,6 +24,12 @@
   /* reserve space for vertical scrollbar so cards don't get clipped */
   scrollbar-gutter: stable;
   padding-right: 14px;
+}
+
+#initiative-players-box{
+  width: var(--pl-w);
+  max-height: 260px;
+  overflow-x: hidden;
 }
 
 /* Справа под журналом: список + очередь друг под другом */
@@ -114,6 +120,64 @@
   /* a bit tighter so cards fit even when scrollbar appears */
   padding-left: 0;
   margin: 0;
+}
+
+.initiative-players-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.initiative-players-title{
+  font-size: 13px;
+  color: #fff;
+  font-weight: 700;
+}
+
+#initiative-players-list{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.initiative-player-item{
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.initiative-player-main{
+  min-width: 0;
+}
+
+.initiative-player-name{
+  font-weight: 700;
+}
+
+.initiative-player-meta{
+  font-size: 12px;
+  opacity: .85;
+}
+
+.initiative-player-controls{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.initiative-player-controls select{
+  min-width: 128px;
+  font-size: 12px;
+  padding: 5px 6px;
 }
 
 #action-log li, #player-list li {
@@ -614,6 +678,7 @@
 #action-log,
 #player-management,
 #player-list-container,
+#initiative-players-box,
 #turn-order-box{
   border: 1px solid var(--room-border);
   border-radius: 20px;
@@ -625,7 +690,8 @@
 
 #action-log h3,
 #player-management h3,
-#player-list-container h3{
+#player-list-container h3,
+.initiative-players-title{
   color: #fff0d2;
   font-size: 14px;
   letter-spacing: .04em;
