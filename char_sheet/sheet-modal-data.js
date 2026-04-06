@@ -68,12 +68,373 @@
       try { inner = JSON.parse(outer.data); } catch { inner = null; }
     }
 
+    const parsed = normalizeImportedSheet(inner || outer, outer);
+
     return {
       source: "charbox",
       importedAt: Date.now(),
       raw: outer,
-      parsed: inner || outer
+      parsed
     };
+  }
+
+  // Нормализация импортируемых .json (Long Story Short / Charbox):
+  // - перенос legacy-полей в поля текущего UI
+  // - санация поломанных модификаторов характеристик
+  function normalizeImportedSheet(sheetLike, outerRaw = null) {
+    const sheet = (sheetLike && typeof sheetLike === 'object')
+      ? JSON.parse(JSON.stringify(sheetLike))
+      : createEmptySheet("-");
+
+    if (!sheet.info || typeof sheet.info !== 'object') sheet.info = {};
+    if (!sheet.notes || typeof sheet.notes !== 'object') sheet.notes = {};
+    if (!sheet.notes.details || typeof sheet.notes.details !== 'object') sheet.notes.details = {};
+    if (!Array.isArray(sheet.notes.entries)) sheet.notes.entries = [];
+    if (!sheet.personality || typeof sheet.personality !== 'object') sheet.personality = {};
+    if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
+    if (!sheet.stats || typeof sheet.stats !== 'object') sheet.stats = {};
+
+    // Legacy Long Story Short: info.charSubclass -> info.classArchetype
+    if (!sheet.info.classArchetype && sheet.info.charSubclass) {
+      sheet.info.classArchetype = sheet.info.charSubclass;
+    }
+
+    // Legacy Long Story Short: subInfo.* -> notes.details.*
+    const subInfo = (sheet.subInfo && typeof sheet.subInfo === 'object') ? sheet.subInfo : null;
+    if (subInfo) {
+      const map = {
+        age: "age",
+        height: "height",
+        weight: "weight",
+        eyes: "eyes",
+        skin: "skin",
+        hair: "hair"
+      };
+      Object.entries(map).forEach(([legacyKey, modernKey]) => {
+        if (!sheet.notes.details[modernKey] && subInfo[legacyKey]) {
+          sheet.notes.details[modernKey] = subInfo[legacyKey];
+        }
+      });
+    }
+
+    const tiptapToText = (doc) => {
+      if (!doc || typeof doc !== 'object' || !Array.isArray(doc.content)) return "";
+      const lines = [];
+      const walk = (node, acc) => {
+        if (!node || typeof node !== 'object') return;
+        if (node.type === 'text') { acc.push(String(node.text || '')); return; }
+        if (Array.isArray(node.content)) node.content.forEach((ch) => walk(ch, acc));
+      };
+      doc.content.forEach((block) => {
+        const acc = [];
+        walk(block, acc);
+        const line = acc.join('').trim();
+        if (line) lines.push(line);
+      });
+      return lines.join('\n').trim();
+    };
+
+    const textNodeToString = (node) => {
+      if (node == null) return "";
+      if (typeof node === 'string') return node.trim();
+      if (typeof node === 'number' || typeof node === 'boolean') return String(node);
+      if (Array.isArray(node)) {
+        return node.map((x) => textNodeToString(x)).filter(Boolean).join('\n').trim();
+      }
+      if (typeof node !== 'object') return "";
+      if (typeof node.value === 'string') return node.value.trim();
+      if (node.value && typeof node.value === 'object' && node.value.type === 'doc' && Array.isArray(node.value.content)) {
+        return tiptapToText(node.value);
+      }
+      if (node.value && typeof node.value === 'object' && node.value.data) {
+        return tiptapToText(node.value.data);
+      }
+      if (node.type === 'doc' && Array.isArray(node.content)) return tiptapToText(node);
+      if (node.data && typeof node.data === 'object') return tiptapToText(node.data);
+      return "";
+    };
+
+    const textObj = (sheet.text && typeof sheet.text === 'object') ? sheet.text : {};
+    const textEntries = Object.entries(textObj);
+    const findTextByKeyHints = (hints = []) => {
+      const hit = textEntries.find(([k, v]) => {
+        const key = String(k || '').toLowerCase();
+        if (!hints.some(h => key.includes(h))) return false;
+        return !!textNodeToString(v);
+      });
+      return hit ? textNodeToString(hit[1]) : "";
+    };
+
+    const pickFirstNonEmpty = (...vals) => {
+      for (const val of vals) {
+        const t = textNodeToString(val);
+        if (t) return t;
+      }
+      return "";
+    };
+
+    const harvested = [];
+    const harvestText = (node, path = "", depth = 0) => {
+      if (depth > 7 || node == null) return;
+      if (typeof node === 'string') {
+        const t = node.trim();
+        if (t) harvested.push({ path, text: t });
+        return;
+      }
+      if (typeof node !== 'object') return;
+
+      const fromNode = textNodeToString(node);
+      if (fromNode) harvested.push({ path, text: fromNode });
+
+      if (Array.isArray(node)) {
+        node.forEach((item, i) => harvestText(item, `${path}[${i}]`, depth + 1));
+        return;
+      }
+
+      Object.entries(node).forEach(([k, v]) => {
+        const next = path ? `${path}.${k}` : String(k || '');
+        harvestText(v, next, depth + 1);
+      });
+    };
+    harvestText(textObj, "text");
+    if (outerRaw && typeof outerRaw === 'object') harvestText(outerRaw, "outer");
+
+    const findHarvestedByHints = (hints = []) => {
+      const hit = harvested.find((x) => {
+        const p = String(x?.path || '').toLowerCase();
+        return hints.some(h => p.includes(h)) && String(x?.text || '').trim();
+      });
+      return hit ? String(hit.text || '').trim() : "";
+    };
+
+    const findHarvestedByPriorityPaths = (paths = []) => {
+      for (const needleRaw of paths) {
+        const needle = String(needleRaw || '').toLowerCase();
+        if (!needle) continue;
+        const hit = harvested.find((x) => String(x?.path || '').toLowerCase().includes(needle) && String(x?.text || '').trim());
+        if (hit) return String(hit.text || '').trim();
+      }
+      return "";
+    };
+    const findHarvestedByTextPattern = (re, groupIndex = 0) => {
+      if (!(re instanceof RegExp)) return "";
+      for (const item of harvested) {
+        const txt = String(item?.text || '');
+        const m = txt.match(re);
+        if (!m) continue;
+        const out = String(m[groupIndex] ?? m[0] ?? '').trim();
+        if (out) return out;
+      }
+      return "";
+    };
+
+    const readByObjectPaths = (root, paths = []) => {
+      for (const path of paths) {
+        const parts = String(path || '').split('.').filter(Boolean);
+        let cur = root;
+        for (const p of parts) {
+          if (!cur || typeof cur !== 'object') { cur = undefined; break; }
+          cur = cur[p];
+        }
+        const t = textNodeToString(cur);
+        if (t) return t;
+      }
+      return "";
+    };
+
+    // Блок "Дополнительные навыки" (textarea text.profPlain.value)
+    // В legacy-файлах этот текст часто лежит не в text.profPlain, а в соседних полях/блоках.
+    if (!sheet.text || typeof sheet.text !== 'object') sheet.text = {};
+    const existingProfPlain = textNodeToString(sheet?.text?.profPlain);
+    if (!existingProfPlain) {
+      const profLike = pickFirstNonEmpty(
+        readByObjectPaths(sheet, [
+          'text.profPlain',
+          'text.prof',
+          'text.proficiencies',
+          'proficiencies',
+          'info.proficiencies',
+          'info.proficienciesText',
+          'info.skillsText'
+        ]),
+        findHarvestedByPriorityPaths([
+          'text.profplain',
+          'text.prof',
+          'text.proficiencies',
+          'proficiencies',
+          'skills',
+          'outer.rooms'
+        ]),
+        findHarvestedByTextPattern(/((?:знание\s+языков|доспехи|оружие|инструменты)[\s\S]{20,})/i, 1)
+      );
+      if (profLike) {
+        sheet.text.profPlain = { value: profLike };
+      }
+    }
+
+    // Импорт заметок/личности из legacy-ключей text.* (если в personality/notes пусто).
+    const personalityMap = {
+      backstory: {
+        hints: ['backstory', 'bio', 'history', 'story', 'предыст', 'background'],
+        paths: [
+          'personality.backstory',
+          'background.story',
+          'background.description',
+          'background.desc',
+          'info.backgroundStory',
+          'info.backgroundDescription',
+          'text.backstory',
+          'text.background',
+          'text.characterBackground'
+        ]
+      },
+      allies: {
+        hints: ['allies', 'contacts', 'союз'],
+        paths: ['personality.allies', 'text.allies', 'text.contacts']
+      },
+      traits: {
+        hints: ['traits', 'черты', 'personality_trait'],
+        paths: [
+          'personality.traits',
+          'personalityTraits',
+          'characterTraits',
+          'traits',
+          'text.traits',
+          'text.characterTraits',
+          'text.personalityTraits'
+        ]
+      },
+      ideals: {
+        hints: ['ideals', 'идеал'],
+        paths: ['personality.ideals', 'ideals', 'text.ideals']
+      },
+      bonds: {
+        hints: ['bonds', 'привязан'],
+        paths: ['personality.bonds', 'bonds', 'text.bonds']
+      },
+      flaws: {
+        hints: ['flaws', 'weakness', 'слабост', 'недостат'],
+        paths: ['personality.flaws', 'flaws', 'weaknesses', 'text.flaws', 'text.weaknesses']
+      }
+    };
+    Object.entries(personalityMap).forEach(([field, cfg]) => {
+      const cur = textNodeToString(sheet.personality?.[field]);
+      if (cur) return;
+      const val = pickFirstNonEmpty(
+        readByObjectPaths(sheet, cfg.paths || []),
+        sheet[field],
+        sheet?.info?.[field],
+        field === 'traits' ? findHarvestedByTextPattern(/черты\s+характера\s*:?\s*([^\n\r]+)/i, 1) : "",
+        findTextByKeyHints(cfg.hints || []),
+        findHarvestedByPriorityPaths(cfg.paths || []),
+        findHarvestedByHints(cfg.hints || [])
+      );
+      if (!val) return;
+      if (!sheet.personality[field] || typeof sheet.personality[field] !== 'object') sheet.personality[field] = {};
+      sheet.personality[field].value = val;
+    });
+
+    // Перенос заметок в новый формат notes.entries.
+    if (!sheet.notes.entries.length) {
+      const noteCandidates = [];
+      const seenNoteText = new Set();
+
+      textEntries
+        .filter(([k]) => {
+          const key = String(k || '').toLowerCase();
+          if (!/(note|замет)/i.test(key)) return false;
+          if (/spell|inventory|prof|appearance/i.test(key)) return false;
+          return true;
+        })
+        .map(([k, v]) => ({ key: String(k || ''), text: textNodeToString(v) }))
+        .filter(x => x.text)
+        .forEach((x) => {
+          const key = `${x.key}@@${x.text}`;
+          if (seenNoteText.has(key)) return;
+          seenNoteText.add(key);
+          noteCandidates.push(x);
+        });
+
+      harvested
+        .filter((x) => {
+          const p = String(x?.path || '').toLowerCase();
+          if (!/(note|замет)/i.test(p)) return false;
+          if (/spell|inventory|prof|appearance/i.test(p)) return false;
+          return !!String(x?.text || '').trim();
+        })
+        .forEach((x) => {
+          const key = `${x.path}@@${x.text}`;
+          if (seenNoteText.has(key)) return;
+          seenNoteText.add(key);
+          noteCandidates.push({ key: String(x.path || 'note'), text: String(x.text || '').trim() });
+        });
+
+      sheet.notes.entries = noteCandidates.map((x, idx) => ({
+        title: x.key || `Заметка-${idx + 1}`,
+        text: x.text,
+        collapsed: true
+      }));
+    }
+
+    // Автозаполнение "Языков" из импортированного файла.
+    const currentLangs = Array.isArray(sheet?.info?.languagesLearned) ? sheet.info.languagesLearned : [];
+    if (!currentLangs.length) {
+      const profText = pickFirstNonEmpty(
+        textObj?.profPlain,
+        textObj?.prof,
+        findTextByKeyHints(['language', 'язык', 'языки']),
+        findHarvestedByHints(['language', 'язык', 'языки'])
+      );
+      const m = profText.match(/(?:знание\s+языков|языки)\s*:\s*([^\n\r]+)/i);
+      const rawList = (m ? m[1] : profText)
+        .split(/[;,]/g)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .filter(s => !/^(языки|знание\s+языков)$/i.test(s));
+
+      if (rawList.length) {
+        if (!sheet.info || typeof sheet.info !== 'object') sheet.info = {};
+        sheet.info.languagesLearned = rawList.map((name) => ({
+          id: String(name).toLowerCase().replace(/\s+/g, '_').replace(/[^\p{L}\p{N}_-]+/gu, ''),
+          name: String(name),
+          typical: "",
+          script: "",
+          category: ""
+        }));
+      }
+    }
+
+    // Legacy death saves format -> current deathSaves object
+    const hasLegacyDeath = (
+      sheet.vitality.isDying !== undefined ||
+      sheet.vitality.deathFails !== undefined ||
+      sheet.vitality.deathSuccesses !== undefined
+    );
+    if (hasLegacyDeath && (!sheet.vitality.deathSaves || typeof sheet.vitality.deathSaves !== 'object')) {
+      sheet.vitality.deathSaves = {
+        success: Math.max(0, Math.min(3, safeInt(sheet.vitality.deathSuccesses, 0))),
+        fail: Math.max(0, Math.min(3, safeInt(sheet.vitality.deathFails, 0))),
+        stabilized: false,
+        lastRoll: null,
+        lastOutcome: ""
+      };
+    }
+
+    // В импортируемых файлах иногда некорректные stats.*.modifier/check.
+    // modifier всегда считаем от score по правилам D&D 5e.
+    // check в этом UI — это уровень 0/1/2, поэтому невалидные legacy-значения сбрасываем в 0.
+    const statKeys = ["str","dex","con","int","wis","cha"];
+    statKeys.forEach((k) => {
+      if (!sheet.stats[k] || typeof sheet.stats[k] !== 'object') sheet.stats[k] = {};
+      const score = safeInt(sheet.stats[k].score, 10);
+      sheet.stats[k].score = score;
+      sheet.stats[k].modifier = scoreToModifier(score);
+
+      const check = safeInt(sheet.stats[k].check, 0);
+      if (check !== 0 && check !== 1 && check !== 2) sheet.stats[k].check = 0;
+    });
+
+    return sheet;
   }
 
   // ================== TIPTAP DOC PARSING ==================
@@ -705,6 +1066,14 @@ const parseLegacyDamage = (dmgStr) => {
   return { dmgNum, dmgDice, dmgType };
 };
 
+const sanitizeWeaponDesc = (rawDesc) => {
+  const txt = normText(rawDesc, "").trim();
+  const normalized = txt.toLowerCase().replace(/\s+/g, '');
+  // В некоторых legacy-импортах в desc ошибочно попадает label поля "Доп. модификатор".
+  if (normalized === 'доп.модификатор' || normalized === 'допмодификатор') return "";
+  return txt;
+};
+
 const weapons = weaponsRaw
   .map((w, idx) => {
     // Новый формат оружия (создаётся в UI вкладки "Бой")
@@ -723,7 +1092,7 @@ const weapons = weaponsRaw
         dmgNum: safeInt(w?.dmgNum, 1),
         dmgDice: normText(w?.dmgDice, "к6"),
         dmgType: normText(w?.dmgType, ""),
-        desc: normText(w?.desc, ""),
+        desc: sanitizeWeaponDesc(w?.desc),
         collapsed: !!w?.collapsed,
         invId: normText(w?.invId, "")
       };
@@ -736,17 +1105,20 @@ const weapons = weaponsRaw
     // Legacy формат из некоторых json (name + mod + dmg) -> конвертируем В СХЕМУ UI (чтобы работали Показать/Удалить)
     const legacyName = normText(w?.name, "-");
     const legacyAtk = normText(w?.mod, "0");
+    const legacyManual = numLike(w?.modBonus, 0);
     const parsed = parseLegacyDamage(w?.dmg);
 
     const converted = {
       name: legacyName,
       ability: "str",
-      prof: false,
-      extraAtk: parseModInput(legacyAtk, 0),
+      prof: !!w?.isProf,
+      // В LSS "mod" часто уже включает суммарный бонус атаки, а modBonus — отдельный ручной бонус.
+      // Чтобы не завышать итог, переносим только ручной modBonus; если его нет, держим 0 по умолчанию.
+      extraAtk: legacyManual,
       dmgNum: parsed.dmgNum,
       dmgDice: parsed.dmgDice,
       dmgType: parsed.dmgType,
-      desc: "",
+      desc: sanitizeWeaponDesc(w?.desc),
       collapsed: true
     };
 
