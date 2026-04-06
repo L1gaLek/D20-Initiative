@@ -777,6 +777,14 @@ const parseLegacyDamage = (dmgStr) => {
   return { dmgNum, dmgDice, dmgType };
 };
 
+const sanitizeWeaponDesc = (rawDesc) => {
+  const txt = normText(rawDesc, "").trim();
+  const normalized = txt.toLowerCase().replace(/\s+/g, '');
+  // В некоторых legacy-импортах в desc ошибочно попадает label поля "Доп. модификатор".
+  if (normalized === 'доп.модификатор' || normalized === 'допмодификатор') return "";
+  return txt;
+};
+
 const weapons = weaponsRaw
   .map((w, idx) => {
     // Новый формат оружия (создаётся в UI вкладки "Бой")
@@ -795,7 +803,7 @@ const weapons = weaponsRaw
         dmgNum: safeInt(w?.dmgNum, 1),
         dmgDice: normText(w?.dmgDice, "к6"),
         dmgType: normText(w?.dmgType, ""),
-        desc: normText(w?.desc, ""),
+        desc: sanitizeWeaponDesc(w?.desc),
         collapsed: !!w?.collapsed,
         invId: normText(w?.invId, "")
       };
@@ -808,17 +816,20 @@ const weapons = weaponsRaw
     // Legacy формат из некоторых json (name + mod + dmg) -> конвертируем В СХЕМУ UI (чтобы работали Показать/Удалить)
     const legacyName = normText(w?.name, "-");
     const legacyAtk = normText(w?.mod, "0");
+    const legacyManual = numLike(w?.modBonus, 0);
     const parsed = parseLegacyDamage(w?.dmg);
 
     const converted = {
       name: legacyName,
       ability: "str",
-      prof: false,
-      extraAtk: parseModInput(legacyAtk, 0),
+      prof: !!w?.isProf,
+      // В LSS "mod" часто уже включает суммарный бонус атаки, а modBonus — отдельный ручной бонус.
+      // Чтобы не завышать итог, переносим только ручной modBonus; если его нет, держим 0 по умолчанию.
+      extraAtk: legacyManual,
       dmgNum: parsed.dmgNum,
       dmgDice: parsed.dmgDice,
       dmgType: parsed.dmgType,
-      desc: "",
+      desc: sanitizeWeaponDesc(w?.desc),
       collapsed: true
     };
 
