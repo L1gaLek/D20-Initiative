@@ -3860,6 +3860,104 @@ body{
   border-bottom-color: rgba(224,177,90,.20);
 }
 
+/* ===== ROOM THEME: minimalist seamless workspace (v2) ===== */
+:root{
+  --room-min-bg: #0f0c09;
+  --room-min-surface: #19120d;
+  --room-min-surface-2: #221911;
+  --room-min-border: rgba(201, 157, 96, 0.26);
+  --room-min-border-strong: rgba(229, 194, 136, 0.42);
+  --room-min-text: #f2e7d6;
+  --room-min-muted: #d2bea1;
+}
+
+body:not(.lobby-active){
+  background:
+    radial-gradient(circle at top right, rgba(168, 110, 47, 0.11), transparent 36%),
+    radial-gradient(circle at top left, rgba(143, 101, 55, 0.09), transparent 34%),
+    linear-gradient(180deg, #090705 0%, #120d09 100%);
+  color: var(--room-min-text);
+}
+
+body:not(.lobby-active) #main-container button,
+body:not(.lobby-active) #main-container input,
+body:not(.lobby-active) #main-container select,
+body:not(.lobby-active) #main-container textarea{
+  border-radius: 6px;
+}
+
+body:not(.lobby-active) #main-container button{
+  border: 1px solid var(--room-min-border);
+  background: linear-gradient(180deg, #2b1f15 0%, #21180f 100%);
+  box-shadow: none;
+  color: var(--room-min-text);
+}
+
+body:not(.lobby-active) #main-container button:hover{
+  border-color: var(--room-min-border-strong);
+  filter: none;
+  background: linear-gradient(180deg, #372718 0%, #281c11 100%);
+}
+
+body:not(.lobby-active) #main-container input,
+body:not(.lobby-active) #main-container select,
+body:not(.lobby-active) #main-container textarea{
+  border: 1px solid var(--room-min-border);
+  background: rgba(25, 19, 14, 0.84);
+  color: var(--room-min-text);
+  box-shadow: none;
+}
+
+body:not(.lobby-active) #main-container input::placeholder,
+body:not(.lobby-active) #main-container textarea::placeholder{
+  color: rgba(218, 193, 157, 0.58);
+}
+
+body:not(.lobby-active) #main-container input:focus,
+body:not(.lobby-active) #main-container select:focus,
+body:not(.lobby-active) #main-container textarea:focus{
+  border-color: var(--room-min-border-strong);
+  box-shadow: 0 0 0 2px rgba(216, 168, 103, 0.16);
+}
+
+body:not(.lobby-active) .side-box,
+body:not(.lobby-active) #action-log,
+body:not(.lobby-active) #player-management,
+body:not(.lobby-active) #player-list-container,
+body:not(.lobby-active) #initiative-players-box,
+body:not(.lobby-active) .turn-order-box,
+body:not(.lobby-active) .dice-viz,
+body:not(.lobby-active) .dice-others{
+  border-radius: 8px;
+  border: 1px solid var(--room-min-border);
+  background:
+    linear-gradient(180deg, rgba(29, 21, 15, 0.96) 0%, rgba(20, 15, 11, 0.96) 100%);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body:not(.lobby-active) .side-box h3,
+body:not(.lobby-active) #action-log h3,
+body:not(.lobby-active) #player-management h3,
+body:not(.lobby-active) #player-list-container h3,
+body:not(.lobby-active) .turn-order-title{
+  color: var(--room-min-text);
+  letter-spacing: 0.02em;
+}
+
+body:not(.lobby-active) .modal{
+  border-radius: 10px;
+  border: 1px solid var(--room-min-border-strong);
+  background: linear-gradient(180deg, rgba(15, 22, 30, 0.97) 0%, rgba(10, 16, 22, 0.97) 100%);
+  box-shadow: 0 20px 48px rgba(0,0,0,0.45);
+}
+
+body:not(.lobby-active) .modal-subtitle,
+body:not(.lobby-active) .side-box label,
+body:not(.lobby-active) .side-box span{
+  color: var(--room-min-muted);
+}
+
 #sheet-modal input[type="text"],
 #sheet-modal input[type="number"],
 #sheet-modal select,
