@@ -227,3 +227,25 @@ outline-color: #666;
   border-radius: 16px;
   overflow: hidden;
 }
+
+/* ===== Room board: flatter integrated frame ===== */
+body:not(.lobby-active) #board-wrapper{
+  border: 1px solid rgba(148, 176, 206, 0.28);
+  border-radius: 6px;
+  background: #0a1016;
+  padding: 6px;
+  box-shadow: none;
+}
+
+body:not(.lobby-active) #game-board{
+  border-radius: 2px;
+}
+
+body:not(.lobby-active) .cell{
+  outline-color: rgba(155, 189, 220, 0.28);
+  background-color: rgba(33, 46, 58, var(--grid-alpha, 1));
+}
+
+body:not(.lobby-active) #game-board.has-bg .cell{
+  outline-color: rgba(170, 200, 228, 0.32);
+}
