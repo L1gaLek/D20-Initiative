@@ -92,6 +92,17 @@
   position: relative;
 }
 
+#action-bottom-row::before{
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--pm-w);
+  width: 2px;
+  background: rgba(178, 136, 66, 0.95);
+  pointer-events: none;
+}
+
 #left-tools-stack{
   display: flex;
   flex-direction: column;
@@ -105,7 +116,7 @@
 
 #player-side-stack{
   gap: 0;
-  border-left: 2px solid rgba(151, 114, 57, 0.88);
+  border-left: none;
 }
 
 #player-list-container{
@@ -113,8 +124,9 @@
 }
 
 #game-container{
-  padding: 0;
+  padding: 0 0 0 12px;
   border-left: 2px solid rgba(156, 118, 58, 0.92);
+  box-sizing: border-box;
 }
 
 #board-row{
@@ -360,8 +372,11 @@
   position: relative;
   width: var(--dice-w);
   padding: 6px;
+  border-top: 2px solid rgba(178, 136, 66, 0.95);
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
   border-radius: 0;
-  border: none;
   background: rgba(20,20,20,0.72);
   box-shadow: none;
   user-select: none;
@@ -505,7 +520,7 @@
   padding: 8px;
   border-radius: 0;
   border: none;
-  border-bottom: 2px solid rgba(151, 114, 57, 0.88);
+  border-bottom: none;
   background: rgba(20,20,20,0.6);
   box-shadow: none;
   z-index: 1;
@@ -969,6 +984,10 @@
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
+}
+
+.dice-viz{
+  border-top: 2px solid rgba(178, 136, 66, 0.95);
 }
 
 .dice-viz-title,
