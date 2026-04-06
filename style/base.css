@@ -3862,20 +3862,20 @@ body{
 
 /* ===== ROOM THEME: minimalist seamless workspace (v2) ===== */
 :root{
-  --room-min-bg: #0b1015;
-  --room-min-surface: #0f151c;
-  --room-min-surface-2: #121a23;
-  --room-min-border: rgba(148, 176, 206, 0.18);
-  --room-min-border-strong: rgba(170, 205, 235, 0.30);
-  --room-min-text: #eaf4ff;
-  --room-min-muted: #a9bed3;
+  --room-min-bg: #0f0c09;
+  --room-min-surface: #19120d;
+  --room-min-surface-2: #221911;
+  --room-min-border: rgba(201, 157, 96, 0.26);
+  --room-min-border-strong: rgba(229, 194, 136, 0.42);
+  --room-min-text: #f2e7d6;
+  --room-min-muted: #d2bea1;
 }
 
 body:not(.lobby-active){
   background:
-    radial-gradient(circle at top right, rgba(89, 156, 224, 0.08), transparent 38%),
-    radial-gradient(circle at top left, rgba(124, 95, 211, 0.06), transparent 30%),
-    linear-gradient(180deg, #070b10 0%, #0a0f15 100%);
+    radial-gradient(circle at top right, rgba(168, 110, 47, 0.11), transparent 36%),
+    radial-gradient(circle at top left, rgba(143, 101, 55, 0.09), transparent 34%),
+    linear-gradient(180deg, #090705 0%, #120d09 100%);
   color: var(--room-min-text);
 }
 
@@ -3888,7 +3888,7 @@ body:not(.lobby-active) #main-container textarea{
 
 body:not(.lobby-active) #main-container button{
   border: 1px solid var(--room-min-border);
-  background: var(--room-min-surface-2);
+  background: linear-gradient(180deg, #2b1f15 0%, #21180f 100%);
   box-shadow: none;
   color: var(--room-min-text);
 }
@@ -3896,28 +3896,28 @@ body:not(.lobby-active) #main-container button{
 body:not(.lobby-active) #main-container button:hover{
   border-color: var(--room-min-border-strong);
   filter: none;
-  background: #16212c;
+  background: linear-gradient(180deg, #372718 0%, #281c11 100%);
 }
 
 body:not(.lobby-active) #main-container input,
 body:not(.lobby-active) #main-container select,
 body:not(.lobby-active) #main-container textarea{
   border: 1px solid var(--room-min-border);
-  background: rgba(9, 13, 18, 0.86);
+  background: rgba(25, 19, 14, 0.84);
   color: var(--room-min-text);
   box-shadow: none;
 }
 
 body:not(.lobby-active) #main-container input::placeholder,
 body:not(.lobby-active) #main-container textarea::placeholder{
-  color: rgba(171, 194, 215, 0.62);
+  color: rgba(218, 193, 157, 0.58);
 }
 
 body:not(.lobby-active) #main-container input:focus,
 body:not(.lobby-active) #main-container select:focus,
 body:not(.lobby-active) #main-container textarea:focus{
   border-color: var(--room-min-border-strong);
-  box-shadow: 0 0 0 2px rgba(122, 177, 222, 0.16);
+  box-shadow: 0 0 0 2px rgba(216, 168, 103, 0.16);
 }
 
 body:not(.lobby-active) .side-box,
@@ -3930,7 +3930,8 @@ body:not(.lobby-active) .dice-viz,
 body:not(.lobby-active) .dice-others{
   border-radius: 8px;
   border: 1px solid var(--room-min-border);
-  background: linear-gradient(180deg, rgba(15, 22, 30, 0.96) 0%, rgba(10, 16, 22, 0.96) 100%);
+  background:
+    linear-gradient(180deg, rgba(29, 21, 15, 0.96) 0%, rgba(20, 15, 11, 0.96) 100%);
   box-shadow: none;
   backdrop-filter: none;
 }
