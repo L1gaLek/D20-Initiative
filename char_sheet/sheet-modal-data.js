@@ -68,7 +68,7 @@
       try { inner = JSON.parse(outer.data); } catch { inner = null; }
     }
 
-    const parsed = normalizeImportedSheet(inner || outer);
+    const parsed = normalizeImportedSheet(inner || outer, outer);
 
     return {
       source: "charbox",
@@ -81,7 +81,7 @@
   // Нормализация импортируемых .json (Long Story Short / Charbox):
   // - перенос legacy-полей в поля текущего UI
   // - санация поломанных модификаторов характеристик
-  function normalizeImportedSheet(sheetLike) {
+  function normalizeImportedSheet(sheetLike, outerRaw = null) {
     const sheet = (sheetLike && typeof sheetLike === 'object')
       ? JSON.parse(JSON.stringify(sheetLike))
       : createEmptySheet("-");
@@ -140,9 +140,13 @@
       if (typeof node === 'number' || typeof node === 'boolean') return String(node);
       if (typeof node !== 'object') return "";
       if (typeof node.value === 'string') return node.value.trim();
+      if (node.value && typeof node.value === 'object' && node.value.type === 'doc' && Array.isArray(node.value.content)) {
+        return tiptapToText(node.value);
+      }
       if (node.value && typeof node.value === 'object' && node.value.data) {
         return tiptapToText(node.value.data);
       }
+      if (node.type === 'doc' && Array.isArray(node.content)) return tiptapToText(node);
       if (node.data && typeof node.data === 'object') return tiptapToText(node.data);
       return "";
     };
@@ -166,6 +170,40 @@
       return "";
     };
 
+    const harvested = [];
+    const harvestText = (node, path = "", depth = 0) => {
+      if (depth > 7 || node == null) return;
+      if (typeof node === 'string') {
+        const t = node.trim();
+        if (t) harvested.push({ path, text: t });
+        return;
+      }
+      if (typeof node !== 'object') return;
+
+      const fromNode = textNodeToString(node);
+      if (fromNode) harvested.push({ path, text: fromNode });
+
+      if (Array.isArray(node)) {
+        node.forEach((item, i) => harvestText(item, `${path}[${i}]`, depth + 1));
+        return;
+      }
+
+      Object.entries(node).forEach(([k, v]) => {
+        const next = path ? `${path}.${k}` : String(k || '');
+        harvestText(v, next, depth + 1);
+      });
+    };
+    harvestText(textObj, "text");
+    if (outerRaw && typeof outerRaw === 'object') harvestText(outerRaw, "outer");
+
+    const findHarvestedByHints = (hints = []) => {
+      const hit = harvested.find((x) => {
+        const p = String(x?.path || '').toLowerCase();
+        return hints.some(h => p.includes(h)) && String(x?.text || '').trim();
+      });
+      return hit ? String(hit.text || '').trim() : "";
+    };
+
     // Импорт заметок/личности из legacy-ключей text.* (если в personality/notes пусто).
     const personalityMap = {
       backstory: ['backstory', 'bio', 'history', 'story', 'предыст'],
@@ -178,7 +216,12 @@
     Object.entries(personalityMap).forEach(([field, hints]) => {
       const cur = textNodeToString(sheet.personality?.[field]);
       if (cur) return;
-      const val = pickFirstNonEmpty(sheet[field], sheet?.info?.[field], findTextByKeyHints(hints));
+      const val = pickFirstNonEmpty(
+        sheet[field],
+        sheet?.info?.[field],
+        findTextByKeyHints(hints),
+        findHarvestedByHints(hints)
+      );
       if (!val) return;
       if (!sheet.personality[field] || typeof sheet.personality[field] !== 'object') sheet.personality[field] = {};
       sheet.personality[field].value = val;
@@ -186,7 +229,10 @@
 
     // Перенос заметок в новый формат notes.entries.
     if (!sheet.notes.entries.length) {
-      const noteCandidates = textEntries
+      const noteCandidates = [];
+      const seenNoteText = new Set();
+
+      textEntries
         .filter(([k]) => {
           const key = String(k || '').toLowerCase();
           if (!/(note|замет)/i.test(key)) return false;
@@ -194,7 +240,27 @@
           return true;
         })
         .map(([k, v]) => ({ key: String(k || ''), text: textNodeToString(v) }))
-        .filter(x => x.text);
+        .filter(x => x.text)
+        .forEach((x) => {
+          const key = `${x.key}@@${x.text}`;
+          if (seenNoteText.has(key)) return;
+          seenNoteText.add(key);
+          noteCandidates.push(x);
+        });
+
+      harvested
+        .filter((x) => {
+          const p = String(x?.path || '').toLowerCase();
+          if (!/(note|замет)/i.test(p)) return false;
+          if (/spell|inventory|prof|appearance/i.test(p)) return false;
+          return !!String(x?.text || '').trim();
+        })
+        .forEach((x) => {
+          const key = `${x.path}@@${x.text}`;
+          if (seenNoteText.has(key)) return;
+          seenNoteText.add(key);
+          noteCandidates.push({ key: String(x.path || 'note'), text: String(x.text || '').trim() });
+        });
 
       sheet.notes.entries = noteCandidates.map((x, idx) => ({
         title: x.key || `Заметка-${idx + 1}`,
@@ -209,7 +275,8 @@
       const profText = pickFirstNonEmpty(
         textObj?.profPlain,
         textObj?.prof,
-        findTextByKeyHints(['language', 'язык', 'языки'])
+        findTextByKeyHints(['language', 'язык', 'языки']),
+        findHarvestedByHints(['language', 'язык', 'языки'])
       );
       const m = profText.match(/(?:знание\s+языков|языки)\s*:\s*([^\n\r]+)/i);
       const rawList = (m ? m[1] : profText)
@@ -228,76 +295,6 @@
           category: ""
         }));
       }
-    }
-
-    // Legacy death saves format -> current deathSaves object
-    const hasLegacyDeath = (
-      sheet.vitality.isDying !== undefined ||
-      sheet.vitality.deathFails !== undefined ||
-      sheet.vitality.deathSuccesses !== undefined
-    );
-    if (hasLegacyDeath && (!sheet.vitality.deathSaves || typeof sheet.vitality.deathSaves !== 'object')) {
-      sheet.vitality.deathSaves = {
-        success: Math.max(0, Math.min(3, safeInt(sheet.vitality.deathSuccesses, 0))),
-        fail: Math.max(0, Math.min(3, safeInt(sheet.vitality.deathFails, 0))),
-        stabilized: false,
-        lastRoll: null,
-        lastOutcome: ""
-      };
-    }
-
-    // В импортируемых файлах иногда некорректные stats.*.modifier/check.
-    // modifier всегда считаем от score по правилам D&D 5e.
-    // check в этом UI — это уровень 0/1/2, поэтому невалидные legacy-значения сбрасываем в 0.
-    const statKeys = ["str","dex","con","int","wis","cha"];
-    statKeys.forEach((k) => {
-      if (!sheet.stats[k] || typeof sheet.stats[k] !== 'object') sheet.stats[k] = {};
-      const score = safeInt(sheet.stats[k].score, 10);
-      sheet.stats[k].score = score;
-      sheet.stats[k].modifier = scoreToModifier(score);
-
-      const check = safeInt(sheet.stats[k].check, 0);
-      if (check !== 0 && check !== 1 && check !== 2) sheet.stats[k].check = 0;
-    });
-
-    return sheet;
-  }
-
-  // Нормализация импортируемых .json (Long Story Short / Charbox):
-  // - перенос legacy-полей в поля текущего UI
-  // - санация поломанных модификаторов характеристик
-  function normalizeImportedSheet(sheetLike) {
-    const sheet = (sheetLike && typeof sheetLike === 'object')
-      ? JSON.parse(JSON.stringify(sheetLike))
-      : createEmptySheet("-");
-
-    if (!sheet.info || typeof sheet.info !== 'object') sheet.info = {};
-    if (!sheet.notes || typeof sheet.notes !== 'object') sheet.notes = {};
-    if (!sheet.notes.details || typeof sheet.notes.details !== 'object') sheet.notes.details = {};
-    if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
-    if (!sheet.stats || typeof sheet.stats !== 'object') sheet.stats = {};
-
-    // Legacy Long Story Short: info.charSubclass -> info.classArchetype
-    if (!sheet.info.classArchetype && sheet.info.charSubclass) {
-      sheet.info.classArchetype = sheet.info.charSubclass;
-    }
-
-    // Legacy Long Story Short: subInfo.* -> notes.details.*
-    const subInfo = (sheet.subInfo && typeof sheet.subInfo === 'object') ? sheet.subInfo : null;
-    if (subInfo) {
-      const map = {
-        age: "age",
-        height: "height",
-        weight: "weight",
-        eyes: "eyes",
-        skin: "skin",
-        hair: "hair"
-      };
-      Object.entries(map).forEach(([legacyKey, modernKey]) => {
-        if (!sheet.notes.details[modernKey] && subInfo[legacyKey]) {
-          sheet.notes.details[modernKey] = subInfo[legacyKey];
-        }
-      });
     }
 
     // Legacy death saves format -> current deathSaves object
