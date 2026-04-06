@@ -68,12 +68,84 @@
       try { inner = JSON.parse(outer.data); } catch { inner = null; }
     }
 
+    const parsed = normalizeImportedSheet(inner || outer);
+
     return {
       source: "charbox",
       importedAt: Date.now(),
       raw: outer,
-      parsed: inner || outer
+      parsed
     };
+  }
+
+  // Нормализация импортируемых .json (Long Story Short / Charbox):
+  // - перенос legacy-полей в поля текущего UI
+  // - санация поломанных модификаторов характеристик
+  function normalizeImportedSheet(sheetLike) {
+    const sheet = (sheetLike && typeof sheetLike === 'object')
+      ? JSON.parse(JSON.stringify(sheetLike))
+      : createEmptySheet("-");
+
+    if (!sheet.info || typeof sheet.info !== 'object') sheet.info = {};
+    if (!sheet.notes || typeof sheet.notes !== 'object') sheet.notes = {};
+    if (!sheet.notes.details || typeof sheet.notes.details !== 'object') sheet.notes.details = {};
+    if (!sheet.vitality || typeof sheet.vitality !== 'object') sheet.vitality = {};
+    if (!sheet.stats || typeof sheet.stats !== 'object') sheet.stats = {};
+
+    // Legacy Long Story Short: info.charSubclass -> info.classArchetype
+    if (!sheet.info.classArchetype && sheet.info.charSubclass) {
+      sheet.info.classArchetype = sheet.info.charSubclass;
+    }
+
+    // Legacy Long Story Short: subInfo.* -> notes.details.*
+    const subInfo = (sheet.subInfo && typeof sheet.subInfo === 'object') ? sheet.subInfo : null;
+    if (subInfo) {
+      const map = {
+        age: "age",
+        height: "height",
+        weight: "weight",
+        eyes: "eyes",
+        skin: "skin",
+        hair: "hair"
+      };
+      Object.entries(map).forEach(([legacyKey, modernKey]) => {
+        if (!sheet.notes.details[modernKey] && subInfo[legacyKey]) {
+          sheet.notes.details[modernKey] = subInfo[legacyKey];
+        }
+      });
+    }
+
+    // Legacy death saves format -> current deathSaves object
+    const hasLegacyDeath = (
+      sheet.vitality.isDying !== undefined ||
+      sheet.vitality.deathFails !== undefined ||
+      sheet.vitality.deathSuccesses !== undefined
+    );
+    if (hasLegacyDeath && (!sheet.vitality.deathSaves || typeof sheet.vitality.deathSaves !== 'object')) {
+      sheet.vitality.deathSaves = {
+        success: Math.max(0, Math.min(3, safeInt(sheet.vitality.deathSuccesses, 0))),
+        fail: Math.max(0, Math.min(3, safeInt(sheet.vitality.deathFails, 0))),
+        stabilized: false,
+        lastRoll: null,
+        lastOutcome: ""
+      };
+    }
+
+    // В импортируемых файлах иногда некорректные stats.*.modifier/check.
+    // modifier всегда считаем от score по правилам D&D 5e.
+    // check в этом UI — это уровень 0/1/2, поэтому невалидные legacy-значения сбрасываем в 0.
+    const statKeys = ["str","dex","con","int","wis","cha"];
+    statKeys.forEach((k) => {
+      if (!sheet.stats[k] || typeof sheet.stats[k] !== 'object') sheet.stats[k] = {};
+      const score = safeInt(sheet.stats[k].score, 10);
+      sheet.stats[k].score = score;
+      sheet.stats[k].modifier = scoreToModifier(score);
+
+      const check = safeInt(sheet.stats[k].check, 0);
+      if (check !== 0 && check !== 1 && check !== 2) sheet.stats[k].check = 0;
+    });
+
+    return sheet;
   }
 
   // ================== TIPTAP DOC PARSING ==================
