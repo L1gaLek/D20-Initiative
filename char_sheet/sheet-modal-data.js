@@ -138,6 +138,9 @@
       if (node == null) return "";
       if (typeof node === 'string') return node.trim();
       if (typeof node === 'number' || typeof node === 'boolean') return String(node);
+      if (Array.isArray(node)) {
+        return node.map((x) => textNodeToString(x)).filter(Boolean).join('\n').trim();
+      }
       if (typeof node !== 'object') return "";
       if (typeof node.value === 'string') return node.value.trim();
       if (node.value && typeof node.value === 'object' && node.value.type === 'doc' && Array.isArray(node.value.content)) {
@@ -204,23 +207,85 @@
       return hit ? String(hit.text || '').trim() : "";
     };
 
+    const findHarvestedByPriorityPaths = (paths = []) => {
+      for (const needleRaw of paths) {
+        const needle = String(needleRaw || '').toLowerCase();
+        if (!needle) continue;
+        const hit = harvested.find((x) => String(x?.path || '').toLowerCase().includes(needle) && String(x?.text || '').trim());
+        if (hit) return String(hit.text || '').trim();
+      }
+      return "";
+    };
+
+    const readByObjectPaths = (root, paths = []) => {
+      for (const path of paths) {
+        const parts = String(path || '').split('.').filter(Boolean);
+        let cur = root;
+        for (const p of parts) {
+          if (!cur || typeof cur !== 'object') { cur = undefined; break; }
+          cur = cur[p];
+        }
+        const t = textNodeToString(cur);
+        if (t) return t;
+      }
+      return "";
+    };
+
     // Импорт заметок/личности из legacy-ключей text.* (если в personality/notes пусто).
     const personalityMap = {
-      backstory: ['backstory', 'bio', 'history', 'story', 'предыст'],
-      allies: ['allies', 'contacts', 'союз'],
-      traits: ['traits', 'черты'],
-      ideals: ['ideals', 'идеал'],
-      bonds: ['bonds', 'привязан'],
-      flaws: ['flaws', 'weakness', 'слабост', 'недостат']
+      backstory: {
+        hints: ['backstory', 'bio', 'history', 'story', 'предыст', 'background'],
+        paths: [
+          'personality.backstory',
+          'background.story',
+          'background.description',
+          'background.desc',
+          'info.backgroundStory',
+          'info.backgroundDescription',
+          'text.backstory',
+          'text.background',
+          'text.characterBackground'
+        ]
+      },
+      allies: {
+        hints: ['allies', 'contacts', 'союз'],
+        paths: ['personality.allies', 'text.allies', 'text.contacts']
+      },
+      traits: {
+        hints: ['traits', 'черты', 'personality_trait'],
+        paths: [
+          'personality.traits',
+          'personalityTraits',
+          'characterTraits',
+          'traits',
+          'text.traits',
+          'text.characterTraits',
+          'text.personalityTraits'
+        ]
+      },
+      ideals: {
+        hints: ['ideals', 'идеал'],
+        paths: ['personality.ideals', 'ideals', 'text.ideals']
+      },
+      bonds: {
+        hints: ['bonds', 'привязан'],
+        paths: ['personality.bonds', 'bonds', 'text.bonds']
+      },
+      flaws: {
+        hints: ['flaws', 'weakness', 'слабост', 'недостат'],
+        paths: ['personality.flaws', 'flaws', 'weaknesses', 'text.flaws', 'text.weaknesses']
+      }
     };
-    Object.entries(personalityMap).forEach(([field, hints]) => {
+    Object.entries(personalityMap).forEach(([field, cfg]) => {
       const cur = textNodeToString(sheet.personality?.[field]);
       if (cur) return;
       const val = pickFirstNonEmpty(
+        readByObjectPaths(sheet, cfg.paths || []),
         sheet[field],
         sheet?.info?.[field],
-        findTextByKeyHints(hints),
-        findHarvestedByHints(hints)
+        findTextByKeyHints(cfg.hints || []),
+        findHarvestedByPriorityPaths(cfg.paths || []),
+        findHarvestedByHints(cfg.hints || [])
       );
       if (!val) return;
       if (!sheet.personality[field] || typeof sheet.personality[field] !== 'object') sheet.personality[field] = {};
