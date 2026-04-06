@@ -36,12 +36,140 @@
   --dice-w: var(--pm-w);
 }
 
+/* ===== Единый стол комнаты (цельная рамка + сплошные разделители) ===== */
+#main-container{
+  gap: 12px;
+}
+
+#status-bar{
+  padding: 10px 14px;
+  border: 1px solid rgba(165, 125, 58, 0.88);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(54, 36, 20, 0.82), rgba(36, 24, 14, 0.9)),
+    radial-gradient(circle at top left, rgba(255, 205, 130, 0.18), transparent 55%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 200, 0.18),
+    0 12px 26px rgba(0, 0, 0, 0.28);
+}
+
+#content-row{
+  gap: 0;
+  align-items: stretch;
+  border: 2px solid rgba(177, 136, 69, 0.9);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(38, 26, 18, 0.88), rgba(23, 17, 12, 0.94)),
+    repeating-linear-gradient(125deg, rgba(255, 212, 139, 0.05) 0 12px, rgba(0, 0, 0, 0) 12px 24px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 204, 0.2),
+    inset 0 0 0 1px rgba(120, 84, 38, 0.45),
+    0 18px 32px rgba(0, 0, 0, 0.34);
+  overflow: hidden;
+}
+
+#action-log-container{
+  border-right: none;
+  padding: 0;
+  gap: 0;
+}
+
+#action-log,
+#player-management,
+#player-list-container,
+#initiative-players-box{
+  border: none;
+  border-radius: 0;
+  background: rgba(9, 9, 9, 0.38);
+}
+
+#action-log{
+  border-bottom: 2px solid rgba(151, 114, 57, 0.88);
+}
+
+#action-bottom-row{
+  gap: 0;
+  position: relative;
+}
+
+#action-bottom-row::before{
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--pm-w);
+  width: 2px;
+  background: rgba(178, 136, 66, 0.95);
+  pointer-events: none;
+}
+
+#left-tools-stack{
+  display: flex;
+  flex-direction: column;
+  width: var(--pm-w);
+  border-right: none;
+}
+
+#player-management{
+  border-right: none;
+}
+
+#player-side-stack{
+  gap: 0;
+  border-left: none;
+}
+
+#player-list-container{
+  border-bottom: 2px solid rgba(151, 114, 57, 0.88);
+}
+
+#game-container{
+  padding: 0 0 0 12px;
+  border-left: 2px solid rgba(156, 118, 58, 0.92);
+  box-sizing: border-box;
+}
+
+#board-row{
+  gap: 0;
+  align-items: stretch;
+}
+
+#board-col{
+  padding: 0;
+}
+
+#board-topbar{
+  border-bottom: 2px solid rgba(158, 119, 58, 0.88);
+  background: linear-gradient(180deg, rgba(26, 18, 12, 0.86), rgba(18, 13, 9, 0.9));
+  padding: 8px 12px 10px;
+}
+
+#board-wrapper{
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: rgba(7, 7, 7, 0.7);
+}
+
+#combat-side-column{
+  margin-left: 0;
+  border-left: 2px solid rgba(156, 118, 58, 0.92);
+}
+
+.turn-order-box{
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0;
+  min-height: 100%;
+  background: rgba(11, 10, 9, 0.58);
+}
+
 /* Левая панель: журнал + нижний ряд (управление + списки) */
 #action-log-container {
   display: flex;
   flex-direction: column;
-  gap: var(--left-gap);
-  width: calc(var(--pm-w) + var(--pl-w) + var(--left-gap));
+  gap: 0;
+  width: calc(var(--pm-w) + var(--pl-w));
 }
 
 #action-top-row{
@@ -59,7 +187,8 @@
 #combat-side-column{
   width: var(--pl-w);
   min-width: var(--pl-w);
-  margin-left: var(--left-gap);
+  margin-left: 0;
+  border-left: 2px solid rgba(156, 118, 58, 0.92);
 }
 
 #combat-side-column #turn-order-box{
@@ -228,25 +357,28 @@
 
 /* ================== DICE STACK (bottom-left) ================== */
 .dice-stack{
-  position: fixed;
-  /* выравниваем по тем же отступам, что и основной интерфейс (body margin) */
-  left: 20px;
-  bottom: 20px;
+  position: relative;
+  left: auto;
+  bottom: auto;
   width: var(--dice-w);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  z-index: 9998;
+  gap: 0;
+  border-top: 2px solid rgba(151, 114, 57, 0.88);
+  z-index: 1;
 }
 
 .dice-viz{
   position: relative;
   width: var(--dice-w);
   padding: 6px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(20,20,20,0.92);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+  border-top: 2px solid rgba(178, 136, 66, 0.95);
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
+  background: rgba(20,20,20,0.72);
+  box-shadow: none;
   user-select: none;
 }
 
@@ -386,12 +518,13 @@
   bottom: auto;
   width: var(--dice-w);
   padding: 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(20,20,20,0.88);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.55);
-  z-index: 9997;
-  pointer-events: none;
+  border-radius: 0;
+  border: none;
+  border-bottom: none;
+  background: rgba(20,20,20,0.6);
+  box-shadow: none;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .dice-others.dice-others--inline .dice-others__title{
@@ -846,11 +979,15 @@
 .dice-viz,
 .dice-others,
 .dice-others.dice-others--inline{
-  border-color: var(--room-border);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(26,20,15,0.82) 0%, rgba(13,10,8,0.92) 100%);
-  box-shadow: var(--room-shadow), inset 0 1px 0 rgba(255,255,255,0.05);
-  backdrop-filter: blur(8px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.dice-viz{
+  border-top: 2px solid rgba(178, 136, 66, 0.95);
 }
 
 .dice-viz-title,
