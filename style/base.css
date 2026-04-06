@@ -3860,6 +3860,103 @@ body{
   border-bottom-color: rgba(224,177,90,.20);
 }
 
+/* ===== ROOM THEME: minimalist seamless workspace (v2) ===== */
+:root{
+  --room-min-bg: #0b1015;
+  --room-min-surface: #0f151c;
+  --room-min-surface-2: #121a23;
+  --room-min-border: rgba(148, 176, 206, 0.18);
+  --room-min-border-strong: rgba(170, 205, 235, 0.30);
+  --room-min-text: #eaf4ff;
+  --room-min-muted: #a9bed3;
+}
+
+body:not(.lobby-active){
+  background:
+    radial-gradient(circle at top right, rgba(89, 156, 224, 0.08), transparent 38%),
+    radial-gradient(circle at top left, rgba(124, 95, 211, 0.06), transparent 30%),
+    linear-gradient(180deg, #070b10 0%, #0a0f15 100%);
+  color: var(--room-min-text);
+}
+
+body:not(.lobby-active) #main-container button,
+body:not(.lobby-active) #main-container input,
+body:not(.lobby-active) #main-container select,
+body:not(.lobby-active) #main-container textarea{
+  border-radius: 6px;
+}
+
+body:not(.lobby-active) #main-container button{
+  border: 1px solid var(--room-min-border);
+  background: var(--room-min-surface-2);
+  box-shadow: none;
+  color: var(--room-min-text);
+}
+
+body:not(.lobby-active) #main-container button:hover{
+  border-color: var(--room-min-border-strong);
+  filter: none;
+  background: #16212c;
+}
+
+body:not(.lobby-active) #main-container input,
+body:not(.lobby-active) #main-container select,
+body:not(.lobby-active) #main-container textarea{
+  border: 1px solid var(--room-min-border);
+  background: rgba(9, 13, 18, 0.86);
+  color: var(--room-min-text);
+  box-shadow: none;
+}
+
+body:not(.lobby-active) #main-container input::placeholder,
+body:not(.lobby-active) #main-container textarea::placeholder{
+  color: rgba(171, 194, 215, 0.62);
+}
+
+body:not(.lobby-active) #main-container input:focus,
+body:not(.lobby-active) #main-container select:focus,
+body:not(.lobby-active) #main-container textarea:focus{
+  border-color: var(--room-min-border-strong);
+  box-shadow: 0 0 0 2px rgba(122, 177, 222, 0.16);
+}
+
+body:not(.lobby-active) .side-box,
+body:not(.lobby-active) #action-log,
+body:not(.lobby-active) #player-management,
+body:not(.lobby-active) #player-list-container,
+body:not(.lobby-active) #initiative-players-box,
+body:not(.lobby-active) .turn-order-box,
+body:not(.lobby-active) .dice-viz,
+body:not(.lobby-active) .dice-others{
+  border-radius: 8px;
+  border: 1px solid var(--room-min-border);
+  background: linear-gradient(180deg, rgba(15, 22, 30, 0.96) 0%, rgba(10, 16, 22, 0.96) 100%);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body:not(.lobby-active) .side-box h3,
+body:not(.lobby-active) #action-log h3,
+body:not(.lobby-active) #player-management h3,
+body:not(.lobby-active) #player-list-container h3,
+body:not(.lobby-active) .turn-order-title{
+  color: var(--room-min-text);
+  letter-spacing: 0.02em;
+}
+
+body:not(.lobby-active) .modal{
+  border-radius: 10px;
+  border: 1px solid var(--room-min-border-strong);
+  background: linear-gradient(180deg, rgba(15, 22, 30, 0.97) 0%, rgba(10, 16, 22, 0.97) 100%);
+  box-shadow: 0 20px 48px rgba(0,0,0,0.45);
+}
+
+body:not(.lobby-active) .modal-subtitle,
+body:not(.lobby-active) .side-box label,
+body:not(.lobby-active) .side-box span{
+  color: var(--room-min-muted);
+}
+
 #sheet-modal input[type="text"],
 #sheet-modal input[type="number"],
 #sheet-modal select,
