@@ -76,6 +76,169 @@
       raw: outer,
       parsed
     };
+
+    // Импорт заметок/личности из legacy-ключей text.* (если в personality/notes пусто).
+    const personalityMap = {
+      backstory: {
+        hints: ['backstory', 'bio', 'history', 'story', 'предыст', 'background'],
+        paths: [
+          'personality.backstory',
+          'background.story',
+          'background.description',
+          'background.desc',
+          'info.backgroundStory',
+          'info.backgroundDescription',
+          'text.backstory',
+          'text.background',
+          'text.characterBackground'
+        ]
+      },
+      allies: {
+        hints: ['allies', 'contacts', 'союз'],
+        paths: ['personality.allies', 'text.allies', 'text.contacts']
+      },
+      traits: {
+        hints: ['traits', 'черты', 'personality_trait'],
+        paths: [
+          'personality.traits',
+          'personalityTraits',
+          'characterTraits',
+          'traits',
+          'text.traits',
+          'text.characterTraits',
+          'text.personalityTraits'
+        ]
+      },
+      ideals: {
+        hints: ['ideals', 'идеал'],
+        paths: ['personality.ideals', 'ideals', 'text.ideals']
+      },
+      bonds: {
+        hints: ['bonds', 'привязан'],
+        paths: ['personality.bonds', 'bonds', 'text.bonds']
+      },
+      flaws: {
+        hints: ['flaws', 'weakness', 'слабост', 'недостат'],
+        paths: ['personality.flaws', 'flaws', 'weaknesses', 'text.flaws', 'text.weaknesses']
+      }
+    };
+    Object.entries(personalityMap).forEach(([field, cfg]) => {
+      const cur = textNodeToString(sheet.personality?.[field]);
+      if (cur) return;
+      const val = pickFirstNonEmpty(
+        readByObjectPaths(sheet, cfg.paths || []),
+        sheet[field],
+        sheet?.info?.[field],
+        findTextByKeyHints(cfg.hints || []),
+        findHarvestedByPriorityPaths(cfg.paths || []),
+        findHarvestedByHints(cfg.hints || [])
+      );
+      if (!val) return;
+      if (!sheet.personality[field] || typeof sheet.personality[field] !== 'object') sheet.personality[field] = {};
+      sheet.personality[field].value = val;
+    });
+
+    // Перенос заметок в новый формат notes.entries.
+    if (!sheet.notes.entries.length) {
+      const noteCandidates = [];
+      const seenNoteText = new Set();
+
+      textEntries
+        .filter(([k]) => {
+          const key = String(k || '').toLowerCase();
+          if (!/(note|замет)/i.test(key)) return false;
+          if (/spell|inventory|prof|appearance/i.test(key)) return false;
+          return true;
+        })
+        .map(([k, v]) => ({ key: String(k || ''), text: textNodeToString(v) }))
+        .filter(x => x.text)
+        .forEach((x) => {
+          const key = `${x.key}@@${x.text}`;
+          if (seenNoteText.has(key)) return;
+          seenNoteText.add(key);
+          noteCandidates.push(x);
+        });
+
+      harvested
+        .filter((x) => {
+          const p = String(x?.path || '').toLowerCase();
+          if (!/(note|замет)/i.test(p)) return false;
+          if (/spell|inventory|prof|appearance/i.test(p)) return false;
+          return !!String(x?.text || '').trim();
+        })
+        .forEach((x) => {
+          const key = `${x.path}@@${x.text}`;
+          if (seenNoteText.has(key)) return;
+          seenNoteText.add(key);
+          noteCandidates.push({ key: String(x.path || 'note'), text: String(x.text || '').trim() });
+        });
+
+      sheet.notes.entries = noteCandidates.map((x, idx) => ({
+        title: x.key || `Заметка-${idx + 1}`,
+        text: x.text,
+        collapsed: true
+      }));
+    }
+
+    // Автозаполнение "Языков" из импортированного файла.
+    const currentLangs = Array.isArray(sheet?.info?.languagesLearned) ? sheet.info.languagesLearned : [];
+    if (!currentLangs.length) {
+      const profText = pickFirstNonEmpty(
+        textObj?.profPlain,
+        textObj?.prof,
+        findTextByKeyHints(['language', 'язык', 'языки']),
+        findHarvestedByHints(['language', 'язык', 'языки'])
+      );
+      const m = profText.match(/(?:знание\s+языков|языки)\s*:\s*([^\n\r]+)/i);
+      const rawList = (m ? m[1] : profText)
+        .split(/[;,]/g)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .filter(s => !/^(языки|знание\s+языков)$/i.test(s));
+
+      if (rawList.length) {
+        if (!sheet.info || typeof sheet.info !== 'object') sheet.info = {};
+        sheet.info.languagesLearned = rawList.map((name) => ({
+          id: String(name).toLowerCase().replace(/\s+/g, '_').replace(/[^\p{L}\p{N}_-]+/gu, ''),
+          name: String(name),
+          typical: "",
+          script: "",
+          category: ""
+        }));
+      }
+    }
+
+    // Legacy death saves format -> current deathSaves object
+    const hasLegacyDeath = (
+      sheet.vitality.isDying !== undefined ||
+      sheet.vitality.deathFails !== undefined ||
+      sheet.vitality.deathSuccesses !== undefined
+    );
+    if (hasLegacyDeath && (!sheet.vitality.deathSaves || typeof sheet.vitality.deathSaves !== 'object')) {
+      sheet.vitality.deathSaves = {
+        success: Math.max(0, Math.min(3, safeInt(sheet.vitality.deathSuccesses, 0))),
+        fail: Math.max(0, Math.min(3, safeInt(sheet.vitality.deathFails, 0))),
+        stabilized: false,
+        lastRoll: null,
+        lastOutcome: ""
+      };
+    }
+
+    // В импортируемых файлах иногда некорректные stats.*.modifier/check.
+    // modifier всегда считаем от score по правилам D&D 5e.
+    // check в этом UI — это уровень 0/1/2, поэтому невалидные legacy-значения сбрасываем в 0.
+    const statKeys = ["str","dex","con","int","wis","cha"];
+    statKeys.forEach((k) => {
+      if (!sheet.stats[k] || typeof sheet.stats[k] !== 'object') sheet.stats[k] = {};
+      const score = safeInt(sheet.stats[k].score, 10);
+      sheet.stats[k].score = score;
+      sheet.stats[k].modifier = scoreToModifier(score);
+
+      const check = safeInt(sheet.stats[k].check, 0);
+      if (check !== 0 && check !== 1 && check !== 2) sheet.stats[k].check = 0;
+    });
+
+    return sheet;
   }
 
   // Нормализация импортируемых .json (Long Story Short / Charbox):
