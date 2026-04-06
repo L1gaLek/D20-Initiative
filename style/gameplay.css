@@ -340,51 +340,6 @@
   padding: 6px 8px;      /* компактнее, чтобы точно не выпирала */
 }
 
-/* ===== Room UI accents: log / initiative / dice in one minimalist style ===== */
-body:not(.lobby-active) #action-log{
-  border: 1px solid rgba(201, 157, 96, 0.24);
-  border-radius: 8px;
-  background: rgba(21, 16, 12, 0.88);
-}
-
-body:not(.lobby-active) .turn-order-box{
-  border: 1px solid rgba(201, 157, 96, 0.24);
-  border-radius: 8px;
-  background: rgba(21, 16, 12, 0.88);
-}
-
-body:not(.lobby-active) .turn-order-item{
-  border-radius: 6px;
-  border: 1px solid rgba(201, 157, 96, 0.15);
-  background: rgba(35, 26, 18, 0.74);
-}
-
-body:not(.lobby-active) .turn-order-item.is-current{
-  border-color: rgba(238, 195, 122, 0.64);
-  background: rgba(160, 112, 37, 0.24);
-}
-
-body:not(.lobby-active) .dice-stack{
-  gap: 6px;
-}
-
-body:not(.lobby-active) .dice-viz,
-body:not(.lobby-active) .dice-others{
-  border: 1px solid rgba(201, 157, 96, 0.24);
-  border-radius: 8px;
-  background: rgba(19, 14, 11, 0.92);
-  box-shadow: none;
-}
-
-body:not(.lobby-active) #action-log h3,
-body:not(.lobby-active) .turn-order-head,
-body:not(.lobby-active) .dice-viz-title,
-body:not(.lobby-active) .dice-others__title{
-  border-bottom: 1px solid rgba(217, 171, 106, 0.22);
-  padding-bottom: 6px;
-  margin-bottom: 8px;
-}
-
 /* ===== Dark dropdown (options list) ===== */
 .weapon-select,
 .dice-viz-select{
