@@ -91,8 +91,15 @@
   gap: 0;
 }
 
-#player-management{
+#left-tools-stack{
+  display: flex;
+  flex-direction: column;
+  width: var(--pm-w);
   border-right: 2px solid rgba(151, 114, 57, 0.88);
+}
+
+#player-management{
+  border-right: none;
 }
 
 #player-side-stack{
@@ -335,25 +342,25 @@
 
 /* ================== DICE STACK (bottom-left) ================== */
 .dice-stack{
-  position: fixed;
-  /* выравниваем по тем же отступам, что и основной интерфейс (body margin) */
-  left: 20px;
-  bottom: 20px;
+  position: relative;
+  left: auto;
+  bottom: auto;
   width: var(--dice-w);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  z-index: 9998;
+  gap: 0;
+  border-top: 2px solid rgba(151, 114, 57, 0.88);
+  z-index: 1;
 }
 
 .dice-viz{
   position: relative;
   width: var(--dice-w);
   padding: 6px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(20,20,20,0.92);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+  border-radius: 0;
+  border: none;
+  background: rgba(20,20,20,0.72);
+  box-shadow: none;
   user-select: none;
 }
 
@@ -493,12 +500,13 @@
   bottom: auto;
   width: var(--dice-w);
   padding: 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(20,20,20,0.88);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.55);
-  z-index: 9997;
-  pointer-events: none;
+  border-radius: 0;
+  border: none;
+  border-bottom: 2px solid rgba(151, 114, 57, 0.88);
+  background: rgba(20,20,20,0.6);
+  box-shadow: none;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .dice-others.dice-others--inline .dice-others__title{
