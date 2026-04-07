@@ -1226,6 +1226,64 @@ function renderShopTab(vm, canEdit) {
     `;
   }
 
+  function renderWildShapeTab(vm, canEdit) {
+    const active = !!vm?.wildShapeActive;
+    const name = String(vm?.wildShapeName || '').trim();
+    return `
+      <div class="sheet-section">
+        <h3>Дикий облик / временный облик</h3>
+        <div class="sheet-card">
+          <div class="sheet-note" style="margin-bottom:8px;">
+            При активации значения ХП/КД/скорости/характеристик берутся из этой вкладки вместо «Основное».
+            ${active ? `Активная форма: <b>${escapeHtml(name || 'без названия')}</b>.` : 'Сейчас активен базовый лист персонажа.'}
+          </div>
+          <div class="kv" style="margin-bottom:10px;">
+            <div class="k">Активировать</div>
+            <div class="v"><input type="checkbox" data-sheet-path="wildShape.active" ${canEdit ? "" : "disabled"}></div>
+          </div>
+
+          <div class="profile-grid">
+            <div class="profile-col">
+              <div class="kv"><div class="k">Ссылка на монстра</div><div class="v"><input type="text" data-sheet-path="wildShape.form.sourceUrl" placeholder="srd://brown-bear или URL"></div></div>
+            </div>
+            <div class="profile-col" style="display:flex;align-items:flex-end;gap:8px;justify-content:flex-end;">
+              <button class="btn" type="button" data-wildshape-apply-link ${canEdit ? "" : "disabled"}>Применить по ссылке</button>
+              <button class="btn" type="button" data-wildshape-pick-srd ${canEdit ? "" : "disabled"}>Выбрать из SRD</button>
+            </div>
+          </div>
+
+          <div class="profile-grid" style="margin-top:10px;">
+            <div class="profile-col">
+              <div class="kv"><div class="k">Название формы</div><div class="v"><input type="text" data-sheet-path="wildShape.form.name"></div></div>
+              <div class="kv"><div class="k">Размер/тип</div><div class="v"><input type="text" data-sheet-path="wildShape.form.meta"></div></div>
+              <div class="kv"><div class="k">КД</div><div class="v"><input type="number" min="0" max="40" data-sheet-path="wildShape.form.ac.value"></div></div>
+              <div class="kv"><div class="k">Скорость</div><div class="v"><input type="number" min="0" max="200" data-sheet-path="wildShape.form.speed.value"></div></div>
+            </div>
+            <div class="profile-col">
+              <div class="kv"><div class="k">ХП (макс)</div><div class="v"><input type="number" min="0" max="999" data-sheet-path="wildShape.form.hp-max.value"></div></div>
+              <div class="kv"><div class="k">ХП (текущие)</div><div class="v"><input type="number" min="0" max="999" data-sheet-path="wildShape.form.hp-current.value"></div></div>
+              <div class="kv"><div class="k">Врем. ХП</div><div class="v"><input type="number" min="0" max="999" data-sheet-path="wildShape.form.hp-temp.value"></div></div>
+              <div class="kv"><div class="k">Чувства/языки</div><div class="v"><input type="text" data-sheet-path="wildShape.form.sensesLang"></div></div>
+            </div>
+          </div>
+
+          <div class="profile-grid" style="margin-top:8px;">
+            <div class="profile-col"><div class="kv"><div class="k">СИЛ</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.str.score"></div></div></div>
+            <div class="profile-col"><div class="kv"><div class="k">ЛОВ</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.dex.score"></div></div></div>
+            <div class="profile-col"><div class="kv"><div class="k">ТЕЛ</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.con.score"></div></div></div>
+            <div class="profile-col"><div class="kv"><div class="k">ИНТ</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.int.score"></div></div></div>
+            <div class="profile-col"><div class="kv"><div class="k">МДР</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.wis.score"></div></div></div>
+            <div class="profile-col"><div class="kv"><div class="k">ХАР</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.cha.score"></div></div></div>
+          </div>
+
+          <div class="kv" style="margin-top:10px;"><div class="k">Особенности</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="6" data-sheet-path="wildShape.form.traitsText"></textarea></div></div>
+          <div class="kv" style="margin-top:8px;"><div class="k">Действия</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="6" data-sheet-path="wildShape.form.actionsText"></textarea></div></div>
+          <div class="kv" style="margin-top:8px;"><div class="k">Описание</div><div class="v" style="width:100%"><textarea class="sheet-textarea" rows="4" data-sheet-path="wildShape.form.description"></textarea></div></div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderAppearanceTab(vm, canEdit) {
     const baseUrl = String(vm?.appearanceBaseUrl || "");
     // Inventory lists (new format): vm.inventory.weapons / vm.inventory.armor
@@ -1390,6 +1448,7 @@ function renderShopTab(vm, canEdit) {
     if (tabId === "personality") return renderPersonalityTab(vm);
     if (tabId === "appearance") return renderAppearanceTab(vm, canEdit);
     if (tabId === "notes") return renderNotesTab(vm);
+    if (tabId === "wildshape") return renderWildShapeTab(vm, canEdit);
     return `<div class="sheet-note">Раздел в разработке</div>`;
   }
 
@@ -1547,7 +1606,8 @@ function renderShopTab(vm, canEdit) {
       { id: "shop", label: "Магазин", icon: "🏪" },
       { id: "personality", label: "Личность", icon: "🎭" },
       { id: "appearance", label: "Персонаж", icon: "👤" },
-      { id: "notes", label: "Заметки", icon: "📝" }
+      { id: "notes", label: "Заметки", icon: "📝" },
+      { id: "wildshape", label: "Дикий облик", icon: "🐾" }
     ];
 
     // восстановление вкладки (если была)
@@ -1633,8 +1693,8 @@ function renderShopTab(vm, canEdit) {
       </div>
     `;
 
-    const shopTab = tabs.find(t => t.id === "shop");
-    const mainTabs = tabs.filter(t => t.id !== "shop");
+    const secondaryTabs = tabs.filter(t => t.id === "shop" || t.id === "wildshape");
+    const mainTabs = tabs.filter(t => t.id !== "shop" && t.id !== "wildshape");
 
     const sidebarHtml = `
       <div class="sheet-sidebar">
@@ -1647,12 +1707,12 @@ function renderShopTab(vm, canEdit) {
 
         <div class="sheet-tab-sep"></div>
 
-        ${shopTab ? `
-          <button class="sheet-tab sheet-tab--shop ${shopTab.id === activeTab ? "active" : ""}" data-tab="${shopTab.id}">
-            <span class="sheet-tab__icon" aria-hidden="true">${escapeHtml(shopTab.icon || "•")}</span>
-            <span class="sheet-tab__label">${escapeHtml(shopTab.label)}</span>
+        ${secondaryTabs.map(t => `
+          <button class="sheet-tab sheet-tab--shop ${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">
+            <span class="sheet-tab__icon" aria-hidden="true">${escapeHtml(t.icon || "•")}</span>
+            <span class="sheet-tab__label">${escapeHtml(t.label)}</span>
           </button>
-        ` : ""}
+        `).join("")}
       </div>
     `;
 
@@ -1691,6 +1751,7 @@ function renderShopTab(vm, canEdit) {
     bindStatRollButtons(sheetContent, player);
     bindAbilityAndSkillEditors(sheetContent, player, canEdit);
     bindNotesEditors(sheetContent, player, canEdit);
+    bindWildShapeEditors(sheetContent, player, canEdit);
     bindSlotEditors(sheetContent, player, canEdit);
     bindSpellAddAndDesc(sheetContent, player, canEdit);
     bindCombatEditors(sheetContent, player, canEdit);
@@ -1735,6 +1796,7 @@ function renderShopTab(vm, canEdit) {
           bindStatRollButtons(sheetContent, player);
           bindAbilityAndSkillEditors(sheetContent, player, canEdit);
           bindNotesEditors(sheetContent, player, canEdit);
+          bindWildShapeEditors(sheetContent, player, canEdit);
           bindSlotEditors(sheetContent, player, canEdit);
           bindSpellAddAndDesc(sheetContent, player, canEdit);
           bindCombatEditors(sheetContent, player, canEdit);
