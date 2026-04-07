@@ -48,7 +48,7 @@
 
 #board-wrapper.board-view--isometric .wall-edge{
   transform-style: preserve-3d;
-  transform: translateY(calc(var(--wall-height, 50px) * -1)) translateZ(2px);
+  transform: translateZ(var(--wall-height, 50px));
 }
 
 #board-wrapper.board-view--isometric .wall-edge::before,
@@ -58,10 +58,23 @@
   pointer-events: none;
   border-radius: 2px;
   box-sizing: border-box;
+  backface-visibility: hidden;
 }
 
-/* Main vertical face under the top cap (for all wall directions). */
-#board-wrapper.board-view--isometric .wall-edge::before{
+/* N/S: vertical face strictly 90° to board plane. */
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-n::before{
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: var(--wall-height, 50px);
+  background: inherit;
+  filter: brightness(0.68) saturate(1.04);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.22);
+  transform-origin: 0 0;
+  transform: rotateX(90deg);
+}
+
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-s::before{
   left: 0;
   top: 100%;
   width: 100%;
@@ -69,17 +82,46 @@
   background: inherit;
   filter: brightness(0.68) saturate(1.04);
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.22);
+  transform-origin: 0 0;
+  transform: rotateX(-90deg);
 }
 
-/* Side face: gives visible volume edge instead of a flat strip. */
+/* E/W: vertical face strictly 90° to board plane. */
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-w::before{
+  left: 0;
+  top: 0;
+  width: var(--wall-height, 50px);
+  height: 100%;
+  background: inherit;
+  filter: brightness(0.68) saturate(1.04);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.22);
+  transform-origin: 0 0;
+  transform: rotateY(-90deg);
+}
+
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-e::before{
+  left: 100%;
+  top: 0;
+  width: var(--wall-height, 50px);
+  height: 100%;
+  background: inherit;
+  filter: brightness(0.68) saturate(1.04);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.22);
+  transform-origin: 0 0;
+  transform: rotateY(90deg);
+}
+
+/* Extra cap for perceived thickness. */
 #board-wrapper.board-view--isometric .wall-edge::after{
   top: 0;
   left: 100%;
   width: calc(var(--t, 4px) * 1.25);
-  height: calc(var(--wall-height, 50px) + var(--t, 4px));
+  height: var(--wall-height, 50px);
   background: inherit;
   filter: brightness(0.54);
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.26);
+  transform-origin: 0 0;
+  transform: rotateY(90deg);
 }
 
 #board-wrapper.board-view--isometric.board-view--dragging{
