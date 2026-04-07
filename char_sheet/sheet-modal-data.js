@@ -466,6 +466,26 @@
           lastOutcome: ""
         }
       },
+      wildShape: {
+        active: false,
+        form: {
+          name: "",
+          description: "",
+          "hp-max": { value: 0 },
+          "hp-current": { value: 0 },
+          "hp-temp": { value: 0 },
+          ac: { value: 0 },
+          speed: { value: 0 },
+          stats: {
+            str: { score: 10 },
+            dex: { score: 10 },
+            con: { score: 10 },
+            int: { score: 10 },
+            wis: { score: 10 },
+            cha: { score: 10 }
+          }
+        }
+      },
       proficiency: 0,
       inspiration: 0,
       exhaustion: 0,
@@ -737,6 +757,8 @@
     const hpTemp = get(sheet, 'vitality.hp-temp.value', 0);
     const ac = get(sheet, 'vitality.ac.value', '-');
     const spd = get(sheet, 'vitality.speed.value', '-');
+    const wildShapeActive = !!get(sheet, 'wildShape.active', false);
+    const wildShapeName = String(get(sheet, 'wildShape.form.name', '') || '').trim();
 
     const dsRaw = (sheet?.vitality?.deathSaves && typeof sheet.vitality.deathSaves === 'object') ? sheet.vitality.deathSaves : {};
     const dsSuccess = Math.max(0, Math.min(3, safeInt(dsRaw.success, 0)));
@@ -1048,6 +1070,7 @@ const weapons = weaponsRaw
       bodySize,
       appearanceBaseUrl,
       hp, hpCur, hpTemp, ac, spd,
+      wildShapeActive, wildShapeName,
       inspiration, exhaustion, conditions,
       stats, passive,
       profLines, profText, languagesHint, languagesLearned,

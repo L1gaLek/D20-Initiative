@@ -185,6 +185,40 @@
           </div>
         </div>
 
+        <div class="sheet-card" style="margin-top:12px;">
+          <h4>Дикая форма / облик</h4>
+          <div class="sheet-note" style="margin-bottom:8px;">
+            Включите форму, чтобы использовать временные характеристики монстра (ХП, КД, скорость и характеристики).
+            ${vm.wildShapeActive ? `Сейчас активно: <b>${escapeHtml(vm.wildShapeName || 'другая форма')}</b>.` : 'Сейчас используется базовый лист персонажа.'}
+          </div>
+          <div class="kv" style="margin-bottom:8px;">
+            <div class="k">Форма активна</div>
+            <div class="v"><input type="checkbox" data-sheet-path="wildShape.active" ${canEdit ? "" : "disabled"}></div>
+          </div>
+          <div class="profile-grid">
+            <div class="profile-col">
+              <div class="kv"><div class="k">Название формы</div><div class="v"><input type="text" data-sheet-path="wildShape.form.name" style="width:180px" placeholder="Например: Бурый медведь"></div></div>
+              <div class="kv"><div class="k">ХП (макс)</div><div class="v"><input type="number" min="0" max="999" data-sheet-path="wildShape.form.hp-max.value" style="width:90px"></div></div>
+              <div class="kv"><div class="k">ХП (текущие)</div><div class="v"><input type="number" min="0" max="999" data-sheet-path="wildShape.form.hp-current.value" style="width:90px"></div></div>
+              <div class="kv"><div class="k">Врем. ХП</div><div class="v"><input type="number" min="0" max="999" data-sheet-path="wildShape.form.hp-temp.value" style="width:90px"></div></div>
+              <div class="kv"><div class="k">КД</div><div class="v"><input type="number" min="0" max="40" data-sheet-path="wildShape.form.ac.value" style="width:90px"></div></div>
+              <div class="kv"><div class="k">Скорость</div><div class="v"><input type="number" min="0" max="200" data-sheet-path="wildShape.form.speed.value" style="width:90px"></div></div>
+            </div>
+            <div class="profile-col">
+              <div class="kv"><div class="k">СИЛ</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.str.score" style="width:90px"></div></div>
+              <div class="kv"><div class="k">ЛОВ</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.dex.score" style="width:90px"></div></div>
+              <div class="kv"><div class="k">ТЕЛ</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.con.score" style="width:90px"></div></div>
+              <div class="kv"><div class="k">ИНТ</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.int.score" style="width:90px"></div></div>
+              <div class="kv"><div class="k">МДР</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.wis.score" style="width:90px"></div></div>
+              <div class="kv"><div class="k">ХАР</div><div class="v"><input type="number" min="1" max="30" data-sheet-path="wildShape.form.stats.cha.score" style="width:90px"></div></div>
+            </div>
+          </div>
+          <div class="kv" style="margin-top:8px;">
+            <div class="k">Описание формы</div>
+            <div class="v" style="width:100%;"><textarea class="sheet-textarea" rows="4" data-sheet-path="wildShape.form.description" placeholder="Особенности монстра, атаки, чувства, иммунитеты и т.д."></textarea></div>
+          </div>
+        </div>
+
         <div class="sheet-section" style="margin-top:12px;">
           <h3>Характеристики и навыки</h3>
           ${renderAbilitiesGrid(vm)}
