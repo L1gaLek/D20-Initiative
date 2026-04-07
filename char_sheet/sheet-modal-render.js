@@ -1494,10 +1494,6 @@ function renderShopTab(vm, canEdit) {
               ${canEdit ? "" : "disabled"}
               style="${ws.active ? 'background:linear-gradient(180deg,#c53929,#7d150d);border-color:rgba(255,120,110,.7);' : ''}"
             >${ws.active ? 'Отключить' : 'Активировать'}</button>
-            <label style="display:flex;align-items:center;gap:8px;">
-              <div class="k" style="margin:0;">Имя формы</div>
-              <input type="text" data-wildshape-name value="${escapeHtml(displayedWildName)}" ${canEdit ? "" : "disabled"} style="width:240px;">
-            </label>
           </div>
           <div class="sheet-note">При активации боевые показатели берутся из этого раздела вместо «Основное».</div>
         </div>
@@ -1542,23 +1538,6 @@ function renderShopTab(vm, canEdit) {
         renderSheetModal(player, { force: true });
       });
     }
-    const wildNameInput = root.querySelector('[data-wildshape-name]');
-    if (wildNameInput && !wildNameInput.__wildBound) {
-      wildNameInput.__wildBound = true;
-      wildNameInput.addEventListener('input', () => {
-        if (!ws.formSheet || typeof ws.formSheet !== 'object') ws.formSheet = {};
-        if (!ws.formSheet.name || typeof ws.formSheet.name !== 'object') ws.formSheet.name = { value: '' };
-        ws.formSheet.name.value = String(wildNameInput.value || '').trim();
-        if (ws.active) {
-          if (!sheet.name || typeof sheet.name !== 'object') sheet.name = { value: '' };
-          sheet.name.value = ws.formSheet.name.value;
-        }
-        try {
-          ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
-        } catch {}
-      });
-    }
-
     const monsterRoot = root.querySelector('[data-wildshape-monster-root]');
     if (!monsterRoot || monsterRoot.__wildMounted) return;
     monsterRoot.__wildMounted = true;
