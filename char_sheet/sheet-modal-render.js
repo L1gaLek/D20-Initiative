@@ -1409,6 +1409,7 @@ function renderShopTab(vm, canEdit) {
         stats: sheet.stats,
         saves: sheet.saves,
         skills: sheet.skills,
+        appearance: sheet.appearance,
         monster: sheet.monster,
         monsterHpRoll: sheet.monsterHpRoll
       }) || {};
@@ -1418,6 +1419,9 @@ function renderShopTab(vm, canEdit) {
     sheet.stats = deepClone(form.stats || {}) || {};
     sheet.saves = deepClone(form.saves || {}) || {};
     sheet.skills = deepClone(form.skills || {}) || {};
+    if (form.appearance && typeof form.appearance === "object") {
+      sheet.appearance = deepClone(form.appearance) || {};
+    }
     sheet.monster = deepClone(form.monster || null);
     sheet.monsterHpRoll = deepClone(form.monsterHpRoll || null);
   }
@@ -1431,6 +1435,7 @@ function renderShopTab(vm, canEdit) {
     if (snap.stats) sheet.stats = deepClone(snap.stats) || {};
     if (snap.saves) sheet.saves = deepClone(snap.saves) || {};
     if (snap.skills) sheet.skills = deepClone(snap.skills) || {};
+    if (snap.appearance) sheet.appearance = deepClone(snap.appearance) || {};
     if (typeof snap.monster !== "undefined") sheet.monster = deepClone(snap.monster);
     if (typeof snap.monsterHpRoll !== "undefined") sheet.monsterHpRoll = deepClone(snap.monsterHpRoll);
     ws.baseSnapshot = null;

@@ -780,6 +780,10 @@
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
       .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
+      .monster-hero-cards--embedded{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+      .monster-hero-cards--embedded .monster-hero-card--hp{grid-column:1;flex:1 1 auto}
+      .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:2;flex:1 1 auto}
+      .monster-hero-cards--embedded .monster-hero-card--stack{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;flex:1 1 auto;min-width:0}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
       .monster-hero-card--hp{flex:0 0 306px;min-width:0}
       .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:0 0 88px;min-width:88px}
@@ -1603,19 +1607,24 @@
     if (!options?.embedded && openedSheetPlayerId !== player.id) return true;
 
     const vm = buildMonsterViewModel(player, sheet, monster);
+    const isEmbedded = !!options?.embedded;
     rootEl.innerHTML = `
       <div class="monster-sheet">
         ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
         <div class="monster-sheet__hero">
           <div>
-            <input
-              class="monster-sheet__title-input"
-              type="text"
-              ${canEdit ? '' : 'disabled'}
-              data-monster-player-name
-              value="${esc(vm.playerName)}"
-              placeholder="Имя персонажа"
-            >
+            ${isEmbedded ? `
+              <div class="monster-sheet__title">${esc(vm.playerName)}</div>
+            ` : `
+              <input
+                class="monster-sheet__title-input"
+                type="text"
+                ${canEdit ? '' : 'disabled'}
+                data-monster-player-name
+                value="${esc(vm.playerName)}"
+                placeholder="Имя персонажа"
+              >
+            `}
             <div class="monster-sheet__subtitle">${esc(vm.subtitle || 'Лист врага')}</div>
             <div class="monster-sheet__summary">
               ${vm.challenge ? `<span class="monster-chip">${esc(vm.challenge)}</span>` : ''}
@@ -1624,7 +1633,7 @@
               ${vm.source ? `<span class="monster-chip">${esc(vm.source)}</span>` : ''}
             </div>
           </div>
-          <div class="monster-hero-cards">
+          <div class="monster-hero-cards ${isEmbedded ? 'monster-hero-cards--embedded' : ''}">
             <div class="monster-hero-card monster-hero-card--hp">
               <div class="monster-hp-top-grid">
                 <label class="monster-hp-summary-field">
