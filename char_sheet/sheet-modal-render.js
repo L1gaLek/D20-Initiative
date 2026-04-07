@@ -1483,10 +1483,15 @@ function renderShopTab(vm, canEdit) {
       <div class="sheet-section">
         <h3>Дикий облик / временный облик</h3>
         <div class="sheet-card">
-          <label class="kv" style="display:flex;align-items:center;gap:10px;">
-            <input type="checkbox" data-wildshape-activate ${ws.active ? "checked" : ""} ${canEdit ? "" : "disabled"}>
-            <div class="k" style="margin:0;">Активировать</div>
-          </label>
+          <div class="kv" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <button
+              type="button"
+              class="btn ${ws.active ? 'danger' : ''}"
+              data-wildshape-activate-btn
+              ${canEdit ? "" : "disabled"}
+              style="${ws.active ? 'background:linear-gradient(180deg,#c53929,#7d150d);border-color:rgba(255,120,110,.7);' : ''}"
+            >${ws.active ? 'Отключить' : 'Активировать'}</button>
+          </div>
           <div class="sheet-note">При активации боевые показатели берутся из этого раздела вместо «Основное».</div>
         </div>
         <div class="sheet-card" style="padding:12px;" data-wildshape-monster-root>
@@ -1516,11 +1521,11 @@ function renderShopTab(vm, canEdit) {
     const ws = ensureWildShapeState(sheet);
     if (!ws) return;
 
-    const activate = root.querySelector('[data-wildshape-activate]');
-    if (activate && !activate.__wildBound) {
-      activate.__wildBound = true;
-      activate.addEventListener('change', () => {
-        const next = !!activate.checked;
+    const activateBtn = root.querySelector('[data-wildshape-activate-btn]');
+    if (activateBtn && !activateBtn.__wildBound) {
+      activateBtn.__wildBound = true;
+      activateBtn.addEventListener('click', () => {
+        const next = !ws.active;
         ws.active = next;
         if (next) applyWildShapeToMain(sheet);
         else restoreMainFromWildShape(sheet);
@@ -1530,7 +1535,6 @@ function renderShopTab(vm, canEdit) {
         renderSheetModal(player, { force: true });
       });
     }
-
     const monsterRoot = root.querySelector('[data-wildshape-monster-root]');
     if (!monsterRoot || monsterRoot.__wildMounted) return;
     monsterRoot.__wildMounted = true;

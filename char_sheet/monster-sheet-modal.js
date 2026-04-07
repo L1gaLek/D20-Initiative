@@ -760,6 +760,7 @@
         <div class="monster-import">
           <input type="text" class="popup-field monster-import__input" placeholder="Ссылка или текст статблока монстра" data-monster-import-url value="${esc(sourceUrl || '')}">
           <button type="button" class="btn" data-monster-import-btn>Импортировать</button>
+          <button type="button" class="btn" data-monster-import-srd-btn>Монстры SRD</button>
         </div>
       </div>
     `;
@@ -781,13 +782,14 @@
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
       .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
-      .monster-hero-cards--embedded{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+      .monster-hero-cards--embedded{display:grid;grid-template-columns:minmax(0,1fr) minmax(88px,96px);gap:10px}
       .monster-hero-cards--embedded .monster-hero-card--hp{grid-column:1;grid-row:1;flex:1 1 auto}
-      .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:2;grid-row:1;flex:1 1 auto}
-      .monster-hero-cards--embedded .monster-hero-card--stack{grid-column:1 / -1;grid-row:2;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;flex:1 1 auto;min-width:0}
-      .monster-hero-cards--embedded .monster-stat__value-row{grid-template-columns:minmax(0,1fr);gap:3px}
-      .monster-hero-cards--embedded .monster-stat__input{min-height:6px;font-size:8px;padding:0 2px}
-      .monster-hero-cards--embedded .monster-stat__mod{min-height:6px;font-size:8px}
+      .monster-hero-cards--embedded .monster-hero-card--stack{grid-column:2;grid-row:1;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:1 1 auto;min-width:0}
+      .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:1 / -1;grid-row:2;flex:1 1 auto}
+      .monster-hero-cards--embedded .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+      .monster-hero-cards--embedded .monster-stat__value-row{grid-template-columns:minmax(0,1fr) 36px;gap:5px}
+      .monster-hero-cards--embedded .monster-stat__input{min-height:22px;font-size:10px;padding:0 3px}
+      .monster-hero-cards--embedded .monster-stat__mod{min-height:22px;font-size:10px}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
       .monster-hero-card--hp{flex:0 0 306px;min-width:0}
       .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:0 0 88px;min-width:88px}
@@ -826,6 +828,10 @@
       .monster-sidebar__btn{padding:12px 14px;text-align:left;border-radius:14px;border:1px solid rgba(255,226,197,.12);background:rgba(39,20,14,.9);color:#ffe9ce;cursor:pointer;font-weight:700}
       .monster-sidebar__btn.active{background:linear-gradient(180deg,rgba(146,64,44,.95),rgba(104,36,23,.95));border-color:rgba(255,219,180,.28);box-shadow:0 8px 18px rgba(0,0,0,.25)}
       .monster-main{min-height:0;overflow:auto;border-radius:18px;border:1px solid rgba(255,220,188,.12);background:linear-gradient(180deg,rgba(24,14,11,.98),rgba(17,10,8,.98));padding:16px}
+      .monster-layout--embedded{grid-template-columns:minmax(0,1fr);gap:10px;min-height:0}
+      .monster-sidebar--embedded{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+      .monster-sidebar--embedded .monster-sidebar__btn{padding:8px 6px;font-size:12px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .monster-layout--embedded .monster-main{width:100%}
       .monster-import-card{width:100%;margin:0 auto;padding:10px 14px;border-radius:16px;border:1px solid rgba(255,221,191,.16);background:linear-gradient(180deg,rgba(48,22,16,.9),rgba(28,14,11,.94));box-shadow:0 12px 28px rgba(0,0,0,.2);text-align:center}
       .monster-import-card__title{font-size:18px;font-weight:800;color:#fff1de}
       .monster-import-card__subtitle{margin-top:3px;color:rgba(255,233,210,.72);font-size:12px;line-height:1.35}
@@ -891,6 +897,7 @@
         .monster-sheet__hero,.monster-layout{grid-template-columns:1fr}
         .monster-grid,.monster-meta,.monster-edit-grid,.monster-quick-grid,.monster-hp-roll-grid,.monster-hero-card__mini-grid,.monster-token-layout{grid-template-columns:1fr}
         .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+        .monster-sidebar--embedded{grid-template-columns:repeat(3,minmax(0,1fr))}
       }
       @media (max-width: 760px){
         .monster-hero-cards{flex-direction:column}
@@ -901,6 +908,15 @@
         .monster-hp-adjust{grid-template-columns:42px minmax(0,1fr) 42px}
         .monster-import{flex-direction:column;flex-wrap:wrap}
         .monster-import__input{min-width:100%;width:100%}
+        .monster-hero-cards--embedded{grid-template-columns:1fr}
+        .monster-hero-cards--embedded .monster-hero-card--hp,
+        .monster-hero-cards--embedded .monster-hero-card--stack,
+        .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:1}
+        .monster-hero-cards--embedded .monster-hero-card--hp{grid-row:1}
+        .monster-hero-cards--embedded .monster-hero-card--stack{grid-row:2}
+        .monster-hero-cards--embedded .monster-hero-card--stats{grid-row:3}
+        .monster-hero-cards--embedded .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+        .monster-sidebar--embedded{grid-template-columns:repeat(2,minmax(0,1fr))}
       }
     `;
     document.head.appendChild(style);
@@ -1633,6 +1649,30 @@
     if (typeof bindCombatEditors === 'function') {
       bindCombatEditors(root, player, canEdit);
     }
+    const main = root?.querySelector?.('#sheet-main');
+    if (main && canEdit && player?._activeSheetTab === 'monster-combat') {
+      const requestImmediateRerender = () => {
+        if (typeof options?.rerender !== 'function') return;
+        Promise.resolve().then(() => options.rerender()).catch(() => {});
+      };
+
+      main.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target) return;
+        if (target.closest('[data-weapon-add]') || target.closest('[data-weapon-del]') || target.closest('[data-weapon-toggle-desc]')) {
+          requestImmediateRerender();
+        }
+      });
+
+      main.addEventListener('input', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target) return;
+        if (target.closest('[data-weapon-field]')) {
+          const sheet = ensureEnemySheet(player);
+          if (typeof updateWeaponsBonuses === 'function') updateWeaponsBonuses(root, sheet);
+        }
+      });
+    }
     markModalInteracted(player.id);
   }
 
@@ -1674,11 +1714,13 @@
     if (!canEdit) return;
     const input = root?.querySelector?.('[data-monster-import-url]');
     const button = root?.querySelector?.('[data-monster-import-btn]');
+    const srdButton = root?.querySelector?.('[data-monster-import-srd-btn]');
     if (!input || !button) return;
 
     const setBusy = (busy) => {
       input.disabled = !!busy;
       button.disabled = !!busy;
+      if (srdButton) srdButton.disabled = !!busy;
       button.textContent = busy ? 'Импорт…' : 'Импортировать';
     };
 
@@ -1705,6 +1747,35 @@
         setBusy(false);
       }
     });
+
+    if (srdButton) {
+      srdButton.addEventListener('click', async () => {
+        if (!window.MonstersLib?.open) return;
+        setBusy(true);
+        try {
+          if (typeof window.MonstersLib.init === 'function') {
+            await window.MonstersLib.init({ jsonUrl: MONSTER_JSON_URL });
+          }
+          window.MonstersLib.open({
+            addButtonLabel: 'Добавить',
+            onAdd: (monster) => {
+              const sheet = ensureEnemySheet(player);
+              ensureImportedMonsterStats(sheet, monster);
+              const importedName = String(monster?.name_ru || monster?.name_en || '').trim();
+              if (importedName) {
+                player.name = importedName;
+                set(sheet, 'name.value', importedName);
+              }
+              scheduleSave(player);
+              markModalInteracted(player.id);
+              options?.rerender?.();
+            }
+          });
+        } finally {
+          setBusy(false);
+        }
+      });
+    }
   }
 
   async function renderMonsterSheetIntoRoot(rootEl, player, options = {}) {
@@ -1730,19 +1801,15 @@
         ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
         <div class="monster-sheet__hero ${isEmbedded ? 'monster-sheet__hero--embedded' : ''}">
           <div>
-            ${isEmbedded ? `
-              <div class="monster-sheet__title">${esc(vm.playerName)}</div>
-            ` : `
-              <input
-                class="monster-sheet__title-input"
-                type="text"
-                ${canEdit ? '' : 'disabled'}
-                data-monster-player-name
-                value="${esc(vm.playerName)}"
-                placeholder="Имя персонажа"
-              >
-            `}
-            <div class="monster-sheet__subtitle">${esc(vm.subtitle || 'Лист врага')}</div>
+            <input
+              class="monster-sheet__title-input"
+              type="text"
+              ${canEdit ? '' : 'disabled'}
+              data-monster-player-name
+              value="${esc(vm.playerName)}"
+              placeholder="Имя персонажа"
+            >
+            ${vm.subtitle ? `<div class="monster-sheet__subtitle">${esc(vm.subtitle)}</div>` : ''}
             <div class="monster-sheet__summary">
               ${vm.challenge ? `<span class="monster-chip">${esc(vm.challenge)}</span>` : ''}
               ${vm.xp ? `<span class="monster-chip">${esc(vm.xp)}</span>` : ''}
@@ -1856,8 +1923,8 @@
           </div>
         </div>
 
-        <div class="monster-layout">
-          <div class="monster-sidebar">
+        <div class="monster-layout ${isEmbedded ? 'monster-layout--embedded' : ''}">
+          <div class="monster-sidebar ${isEmbedded ? 'monster-sidebar--embedded' : ''}">
             <button type="button" class="monster-sidebar__btn ${activeTab === 'monster-main' ? 'active' : ''}" data-monster-tab="monster-main">Основное</button>
             <button type="button" class="monster-sidebar__btn ${activeTab === 'monster-extra' ? 'active' : ''}" data-monster-tab="monster-extra">Дополнительно</button>
             <button type="button" class="monster-sidebar__btn ${activeTab === 'monster-combat' ? 'active' : ''}" data-monster-tab="monster-combat">Бой</button>
