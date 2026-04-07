@@ -56,58 +56,62 @@
   position: absolute;
   pointer-events: none;
   border-radius: 2px;
+  box-sizing: border-box;
 }
 
-/* Vertical face for horizontal wall edges (N/S). */
+/* Horizontal segments (N/S): make a clear vertical face under the top edge. */
 #board-wrapper.board-view--isometric .wall-edge.wall-dir-n::before,
 #board-wrapper.board-view--isometric .wall-edge.wall-dir-s::before{
   left: 0;
-  top: 0;
+  top: 100%;
   width: 100%;
   height: var(--wall-height, 28px);
   background: inherit;
-  filter: brightness(0.76) saturate(1.06);
-  transform-origin: 50% 0;
-  transform: rotateX(-90deg);
+  filter: brightness(0.70) saturate(1.04);
 }
 
-/* Side face for horizontal wall edges. */
+/* Horizontal segments (N/S): side cap to make thickness visible. */
 #board-wrapper.board-view--isometric .wall-edge.wall-dir-n::after,
 #board-wrapper.board-view--isometric .wall-edge.wall-dir-s::after{
   top: 0;
-  right: 0;
-  width: var(--t, 4px);
-  height: var(--wall-height, 28px);
+  left: 100%;
+  width: calc(var(--t, 4px) * 1.25);
+  height: calc(var(--wall-height, 28px) + var(--t, 4px));
   background: inherit;
-  filter: brightness(0.62);
-  transform-origin: 100% 0;
-  transform: rotateX(-90deg) rotateY(90deg);
+  filter: brightness(0.56);
 }
 
-/* Vertical face for vertical wall edges (E/W). */
+/* Vertical segments (E/W): make a clear vertical face on the right side. */
 #board-wrapper.board-view--isometric .wall-edge.wall-dir-e::before,
 #board-wrapper.board-view--isometric .wall-edge.wall-dir-w::before{
-  left: 0;
+  left: 100%;
   top: 0;
   width: var(--wall-height, 28px);
   height: 100%;
   background: inherit;
-  filter: brightness(0.76) saturate(1.06);
-  transform-origin: 0 50%;
-  transform: rotateY(90deg);
+  filter: brightness(0.70) saturate(1.04);
 }
 
-/* Top cap for vertical wall edges. */
+/* Vertical segments (E/W): top cap to make thickness visible. */
 #board-wrapper.board-view--isometric .wall-edge.wall-dir-e::after,
 #board-wrapper.board-view--isometric .wall-edge.wall-dir-w::after{
   left: 0;
-  top: 0;
-  width: var(--wall-height, 28px);
-  height: var(--t, 4px);
+  top: 100%;
+  width: calc(var(--wall-height, 28px) + var(--t, 4px));
+  height: calc(var(--t, 4px) * 1.25);
   background: inherit;
-  filter: brightness(1.08);
-  transform-origin: 0 0;
-  transform: rotateY(90deg) rotateX(-90deg);
+  filter: brightness(0.56);
+}
+
+/* Lift top edge so the whole wall "sticks out" above the board in isometric mode. */
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-n,
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-s{
+  transform: translateY(calc(var(--wall-height, 28px) * -1));
+}
+
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-e,
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-w{
+  transform: translateX(calc(var(--wall-height, 28px) * -1));
 }
 
 #board-wrapper.board-view--isometric.board-view--dragging{

@@ -113,7 +113,7 @@ function buildWallEdgeElement(wall, { withDataset = false } = {}) {
   el.className = `wall-edge wall-type-${type}`;
   el.classList.add(`wall-dir-${String(dir).toLowerCase()}`);
   el.style.setProperty('--t', `${thickness}px`);
-  el.style.setProperty('--wall-height', `${Math.max(18, Math.round(thickness * 7))}px`);
+  el.style.setProperty('--wall-height', `${Math.max(24, Math.round(thickness * 10))}px`);
   if (withDataset) el.dataset.wallKey = `${x},${y},${dir}`;
 
   const left = x * CELL;
