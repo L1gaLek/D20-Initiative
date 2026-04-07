@@ -141,13 +141,22 @@
 
     // ===== Zoom (Ctrl + Wheel) =====
     let zoom = 1;
+    function getBoardViewExtraTransform() {
+      try { return String(window.__boardViewExtraTransform || '').trim(); } catch {}
+      return '';
+    }
     function applyZoom() {
       if (!board) return;
-      board.style.transformOrigin = '0 0';
-      board.style.transform = `scale(${zoom})`;
+      const origin = String(window.__boardViewTransformOrigin || '0 0').trim() || '0 0';
+      board.style.transformOrigin = origin;
+      const extra = getBoardViewExtraTransform();
+      board.style.transform = extra ? `${extra} scale(${zoom})` : `scale(${zoom})`;
       try { window.refreshOpenTokenMini?.(); } catch {}
     }
     applyZoom();
+    window.addEventListener('board-view-mode-changed', () => {
+      applyZoom();
+    });
 
     boardWrapper?.addEventListener('wheel', (e) => {
       // Чтобы скролл работал нормально — зум только при зажатом Ctrl
