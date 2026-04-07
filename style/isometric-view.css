@@ -29,6 +29,7 @@
 
 #board-wrapper.board-view--isometric #game-board{
   transform-origin: center center;
+  transform-style: preserve-3d;
   filter: drop-shadow(0 18px 20px rgba(0,0,0,.35));
 }
 
@@ -38,6 +39,75 @@
 
 #board-wrapper.board-view--isometric .player{
   filter: drop-shadow(0 8px 10px rgba(0,0,0,.35));
+}
+
+/* Isometric wall extrusion (adds Z-height for wall segments). */
+#board-wrapper.board-view--isometric #walls-layer{
+  transform-style: preserve-3d;
+}
+
+#board-wrapper.board-view--isometric .wall-edge{
+  transform-style: preserve-3d;
+}
+
+#board-wrapper.board-view--isometric .wall-edge::before,
+#board-wrapper.board-view--isometric .wall-edge::after{
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: 2px;
+}
+
+/* Vertical face for horizontal wall edges (N/S). */
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-n::before,
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-s::before{
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: var(--wall-height, 28px);
+  background: inherit;
+  filter: brightness(0.76) saturate(1.06);
+  transform-origin: 50% 0;
+  transform: rotateX(-90deg);
+}
+
+/* Side face for horizontal wall edges. */
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-n::after,
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-s::after{
+  top: 0;
+  right: 0;
+  width: var(--t, 4px);
+  height: var(--wall-height, 28px);
+  background: inherit;
+  filter: brightness(0.62);
+  transform-origin: 100% 0;
+  transform: rotateX(-90deg) rotateY(90deg);
+}
+
+/* Vertical face for vertical wall edges (E/W). */
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-e::before,
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-w::before{
+  left: 0;
+  top: 0;
+  width: var(--wall-height, 28px);
+  height: 100%;
+  background: inherit;
+  filter: brightness(0.76) saturate(1.06);
+  transform-origin: 0 50%;
+  transform: rotateY(90deg);
+}
+
+/* Top cap for vertical wall edges. */
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-e::after,
+#board-wrapper.board-view--isometric .wall-edge.wall-dir-w::after{
+  left: 0;
+  top: 0;
+  width: var(--wall-height, 28px);
+  height: var(--t, 4px);
+  background: inherit;
+  filter: brightness(1.08);
+  transform-origin: 0 0;
+  transform: rotateY(90deg) rotateX(-90deg);
 }
 
 #board-wrapper.board-view--isometric.board-view--dragging{
