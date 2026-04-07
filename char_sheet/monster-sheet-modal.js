@@ -760,6 +760,7 @@
         <div class="monster-import">
           <input type="text" class="popup-field monster-import__input" placeholder="Ссылка или текст статблока монстра" data-monster-import-url value="${esc(sourceUrl || '')}">
           <button type="button" class="btn" data-monster-import-btn>Импортировать</button>
+          <button type="button" class="btn" data-monster-import-srd-btn>Монстры SRD</button>
         </div>
       </div>
     `;
@@ -1713,11 +1714,13 @@
     if (!canEdit) return;
     const input = root?.querySelector?.('[data-monster-import-url]');
     const button = root?.querySelector?.('[data-monster-import-btn]');
+    const srdButton = root?.querySelector?.('[data-monster-import-srd-btn]');
     if (!input || !button) return;
 
     const setBusy = (busy) => {
       input.disabled = !!busy;
       button.disabled = !!busy;
+      if (srdButton) srdButton.disabled = !!busy;
       button.textContent = busy ? 'Импорт…' : 'Импортировать';
     };
 
@@ -1744,6 +1747,35 @@
         setBusy(false);
       }
     });
+
+    if (srdButton) {
+      srdButton.addEventListener('click', async () => {
+        if (!window.MonstersLib?.open) return;
+        setBusy(true);
+        try {
+          if (typeof window.MonstersLib.init === 'function') {
+            await window.MonstersLib.init({ jsonUrl: MONSTER_JSON_URL });
+          }
+          window.MonstersLib.open({
+            addButtonLabel: 'Добавить',
+            onAdd: (monster) => {
+              const sheet = ensureEnemySheet(player);
+              ensureImportedMonsterStats(sheet, monster);
+              const importedName = String(monster?.name_ru || monster?.name_en || '').trim();
+              if (importedName) {
+                player.name = importedName;
+                set(sheet, 'name.value', importedName);
+              }
+              scheduleSave(player);
+              markModalInteracted(player.id);
+              options?.rerender?.();
+            }
+          });
+        } finally {
+          setBusy(false);
+        }
+      });
+    }
   }
 
   async function renderMonsterSheetIntoRoot(rootEl, player, options = {}) {
@@ -1781,7 +1813,7 @@
                 placeholder="Имя персонажа"
               >
             `}
-            <div class="monster-sheet__subtitle">${esc(vm.subtitle || 'Лист врага')}</div>
+            ${vm.subtitle ? `<div class="monster-sheet__subtitle">${esc(vm.subtitle)}</div>` : ''}
             <div class="monster-sheet__summary">
               ${vm.challenge ? `<span class="monster-chip">${esc(vm.challenge)}</span>` : ''}
               ${vm.xp ? `<span class="monster-chip">${esc(vm.xp)}</span>` : ''}
