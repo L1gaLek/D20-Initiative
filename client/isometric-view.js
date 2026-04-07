@@ -92,7 +92,8 @@
     });
   }
 
-  function applyBoardViewMode(mode) {
+  function applyBoardViewMode(mode, options = null) {
+    const opts = options && typeof options === 'object' ? options : {};
     const normalized = normalizeMode(mode);
     const wrapper = document.getElementById('board-wrapper');
     if (wrapper) wrapper.classList.toggle('board-view--isometric', normalized === 'isometric');
@@ -101,7 +102,18 @@
     window.__boardViewExtraTransform = normalized === 'isometric' ? getIsometricTransform() : '';
     window.__boardViewTransformOrigin = normalized === 'isometric' ? getIsometricTransformOrigin() : '0 0';
     window.dispatchEvent(new CustomEvent('board-view-mode-changed', { detail: { mode: normalized } }));
-    if (normalized === 'isometric') centerBoardInWrapper();
+    if (normalized === 'isometric' && opts.recenter === true) centerBoardInWrapper();
+  }
+
+  function moveCameraPivotToWrapperCenter(clientX, clientY) {
+    const wrapper = document.getElementById('board-wrapper');
+    if (!wrapper) return;
+    const rect = wrapper.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const centerX = rect.left + (rect.width / 2);
+    const centerY = rect.top + (rect.height / 2);
+    isoState.panX += (centerX - Number(clientX || 0));
+    isoState.panY += (centerY - Number(clientY || 0));
   }
 
   function bindIsometricMouseControls() {
@@ -114,7 +126,7 @@
       if (e.button !== 1) return;
       if (normalizeMode(window.__boardViewMode) !== 'isometric') return;
       setPivotFromPointer(e.clientX, e.clientY, e.target);
-      dragState = { x: e.clientX, y: e.clientY };
+      dragState = { x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, moved: false };
       wrapper.classList.add('board-view--dragging');
       applyBoardViewMode('isometric');
       e.preventDefault();
@@ -122,9 +134,15 @@
 
     window.addEventListener('mousemove', (e) => {
       if (!dragState) return;
+      const startX = dragState.startX;
+      const startY = dragState.startY;
+      const movedBefore = !!dragState.moved;
       const dx = (Number(e.clientX) || 0) - dragState.x;
       const dy = (Number(e.clientY) || 0) - dragState.y;
-      dragState = { x: e.clientX, y: e.clientY };
+      const movedNow = movedBefore
+        || Math.abs((Number(e.clientX) || 0) - startX) > 2
+        || Math.abs((Number(e.clientY) || 0) - startY) > 2;
+      dragState = { x: e.clientX, y: e.clientY, startX, startY, moved: movedNow };
       if (e.shiftKey) {
         isoState.panX += dx;
         isoState.panY += dy;
@@ -132,17 +150,24 @@
         isoState.rotateZ += dx * ISO_ROTATE_SENS;
         isoState.rotateX = clamp(isoState.rotateX - (dy * ISO_TILT_SENS), ISO_MIN_TILT, ISO_MAX_TILT);
       }
-      applyBoardViewMode('isometric');
+      applyBoardViewMode('isometric', { recenter: false });
       e.preventDefault();
     });
 
-    const endDrag = () => {
+    const endDrag = (e = null) => {
       if (!dragState) return;
+      const moved = !!dragState.moved;
+      const upX = Number(e?.clientX);
+      const upY = Number(e?.clientY);
+      if (!moved && Number.isFinite(upX) && Number.isFinite(upY)) {
+        moveCameraPivotToWrapperCenter(upX, upY);
+        applyBoardViewMode('isometric', { recenter: false });
+      }
       dragState = null;
       wrapper.classList.remove('board-view--dragging');
     };
     window.addEventListener('mouseup', endDrag);
-    wrapper.addEventListener('mouseleave', endDrag);
+    wrapper.addEventListener('mouseleave', () => endDrag());
     wrapper.addEventListener('auxclick', (e) => {
       if (e.button !== 1) return;
       if (normalizeMode(window.__boardViewMode) !== 'isometric') return;
@@ -157,14 +182,14 @@
 
     const initial = getSavedMode();
     select.value = initial;
-    applyBoardViewMode(initial);
+    applyBoardViewMode(initial, { recenter: true });
     bindIsometricMouseControls();
 
     select.addEventListener('change', () => {
       const mode = normalizeMode(select.value);
       select.value = mode;
       saveMode(mode);
-      applyBoardViewMode(mode);
+      applyBoardViewMode(mode, { recenter: mode === 'isometric' });
     });
   }
 
