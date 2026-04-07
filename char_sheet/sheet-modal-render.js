@@ -1381,7 +1381,138 @@ function renderShopTab(vm, canEdit) {
   }
 
 
-  function renderActiveTab(tabId, vm, canEdit) {
+
+
+  function deepClone(obj) {
+    try { return JSON.parse(JSON.stringify(obj)); } catch { return null; }
+  }
+
+  function ensureWildShapeState(sheet) {
+    if (!sheet || typeof sheet !== "object") return null;
+    if (!sheet.wildShape || typeof sheet.wildShape !== "object") sheet.wildShape = {};
+    if (typeof sheet.wildShape.active !== "boolean") sheet.wildShape.active = false;
+    if (!sheet.wildShape.formSheet || typeof sheet.wildShape.formSheet !== "object") {
+      const maker = window.__sheetData?.createEmptySheet;
+      sheet.wildShape.formSheet = (typeof maker === "function") ? maker("Дикий облик") : {};
+    }
+    return sheet.wildShape;
+  }
+
+  function applyWildShapeToMain(sheet) {
+    const ws = ensureWildShapeState(sheet);
+    if (!ws) return;
+    const form = ws.formSheet || {};
+    if (!ws.baseSnapshot || typeof ws.baseSnapshot !== "object") {
+      ws.baseSnapshot = deepClone({
+        vitality: sheet.vitality,
+        proficiency: sheet.proficiency,
+        stats: sheet.stats,
+        saves: sheet.saves,
+        skills: sheet.skills,
+        monster: sheet.monster,
+        monsterHpRoll: sheet.monsterHpRoll
+      }) || {};
+    }
+    sheet.vitality = deepClone(form.vitality || {}) || {};
+    sheet.proficiency = Number.isFinite(Number(form.proficiency)) ? Number(form.proficiency) : 0;
+    sheet.stats = deepClone(form.stats || {}) || {};
+    sheet.saves = deepClone(form.saves || {}) || {};
+    sheet.skills = deepClone(form.skills || {}) || {};
+    sheet.monster = deepClone(form.monster || null);
+    sheet.monsterHpRoll = deepClone(form.monsterHpRoll || null);
+  }
+
+  function restoreMainFromWildShape(sheet) {
+    const ws = ensureWildShapeState(sheet);
+    if (!ws?.baseSnapshot || typeof ws.baseSnapshot !== "object") return;
+    const snap = ws.baseSnapshot;
+    if (snap.vitality) sheet.vitality = deepClone(snap.vitality) || {};
+    if (typeof snap.proficiency !== "undefined") sheet.proficiency = snap.proficiency;
+    if (snap.stats) sheet.stats = deepClone(snap.stats) || {};
+    if (snap.saves) sheet.saves = deepClone(snap.saves) || {};
+    if (snap.skills) sheet.skills = deepClone(snap.skills) || {};
+    if (typeof snap.monster !== "undefined") sheet.monster = deepClone(snap.monster);
+    if (typeof snap.monsterHpRoll !== "undefined") sheet.monsterHpRoll = deepClone(snap.monsterHpRoll);
+    ws.baseSnapshot = null;
+  }
+
+  function applyImportedMonsterToForm(formSheet, monster) {
+    if (!formSheet || typeof formSheet !== "object" || !monster || typeof monster !== "object") return;
+    formSheet.monster = deepClone(monster);
+    const hpText = String(monster.hp || "");
+    const hpVal = Number((hpText.match(/(\d+)/) || [0, 0])[1]) || 0;
+    const acVal = Number((String(monster.ac || "").match(/(\d+)/) || [0, 0])[1]) || 0;
+    const spdVal = Number((String(monster.speed || "").match(/(\d+)/) || [0, 0])[1]) || 0;
+    const profVal = Number((String(monster.proficiency_bonus || "").match(/[-+]?\d+/) || [0])[0]) || 0;
+    if (!formSheet.vitality || typeof formSheet.vitality !== "object") formSheet.vitality = {};
+    if (!formSheet.vitality["hp-max"]) formSheet.vitality["hp-max"] = { value: 0 };
+    if (!formSheet.vitality["hp-current"]) formSheet.vitality["hp-current"] = { value: 0 };
+    if (!formSheet.vitality.ac) formSheet.vitality.ac = { value: 0 };
+    if (!formSheet.vitality.speed) formSheet.vitality.speed = { value: 0 };
+    formSheet.vitality["hp-max"].value = hpVal;
+    formSheet.vitality["hp-current"].value = hpVal;
+    formSheet.vitality.ac.value = acVal;
+    formSheet.vitality.speed.value = spdVal;
+    formSheet.proficiency = profVal;
+
+    const abilities = monster.abilities || {};
+    ["str","dex","con","int","wis","cha"].forEach((k) => {
+      const score = Number(abilities?.[k]?.score) || 10;
+      if (!formSheet.stats || typeof formSheet.stats !== "object") formSheet.stats = {};
+      if (!formSheet.stats[k] || typeof formSheet.stats[k] !== "object") formSheet.stats[k] = {};
+      formSheet.stats[k].score = score;
+      formSheet.stats[k].modifier = Math.floor((score - 10) / 2);
+      formSheet.stats[k].check = formSheet.stats[k].modifier;
+    });
+  }
+
+  function renderWildShapeTab(vm, canEdit) {
+    const sheet = vm?._sheetRef || {};
+    const ws = ensureWildShapeState(sheet) || {};
+    const form = ws.formSheet || {};
+    const monster = form?.monster || {};
+    const monsterName = String(monster?.name_ru || monster?.name_en || "").trim();
+    const sourceUrl = String(monster?.source_url || "").trim();
+    return `
+      <div class="sheet-section">
+        <h3>Дикий облик / временный облик</h3>
+        <div class="sheet-card">
+          <label class="kv" style="display:flex;align-items:center;gap:10px;">
+            <input type="checkbox" data-wildshape-activate ${ws.active ? "checked" : ""} ${canEdit ? "" : "disabled"}>
+            <div class="k" style="margin:0;">Активировать</div>
+          </label>
+          <div class="sheet-note">При активации боевые показатели берутся из этого раздела вместо «Основное».</div>
+        </div>
+        <div class="sheet-card">
+          <h4>Импорт монстра</h4>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="text" style="flex:1 1 320px;" data-wildshape-import-url placeholder="Ссылка на монстра" value="${escapeHtml(sourceUrl)}" ${canEdit ? "" : "disabled"}>
+            <button type="button" class="note-btn" data-wildshape-import ${canEdit ? "" : "disabled"}>Импортировать</button>
+          </div>
+          <div class="sheet-note">${monsterName ? `Текущий облик: ${escapeHtml(monsterName)}` : "Монстр пока не выбран."}</div>
+        </div>
+        <div class="sheet-card">
+          <h4>Параметры облика</h4>
+          <div class="profile-grid">
+            <div class="profile-col">
+              <div class="kv"><div class="k">HP макс</div><div class="v"><input type="number" min="0" data-wildshape-path="vitality.hp-max.value" value="${escapeHtml(String(form?.vitality?.["hp-max"]?.value ?? 0))}" ${canEdit ? "" : "disabled"}></div></div>
+              <div class="kv"><div class="k">HP текущее</div><div class="v"><input type="number" min="0" data-wildshape-path="vitality.hp-current.value" value="${escapeHtml(String(form?.vitality?.["hp-current"]?.value ?? 0))}" ${canEdit ? "" : "disabled"}></div></div>
+              <div class="kv"><div class="k">КД</div><div class="v"><input type="number" min="0" data-wildshape-path="vitality.ac.value" value="${escapeHtml(String(form?.vitality?.ac?.value ?? 0))}" ${canEdit ? "" : "disabled"}></div></div>
+              <div class="kv"><div class="k">Скорость</div><div class="v"><input type="number" min="0" data-wildshape-path="vitality.speed.value" value="${escapeHtml(String(form?.vitality?.speed?.value ?? 0))}" ${canEdit ? "" : "disabled"}></div></div>
+            </div>
+            <div class="profile-col">
+              <div class="kv"><div class="k">Владение</div><div class="v"><input type="number" data-wildshape-path="proficiency" value="${escapeHtml(String(form?.proficiency ?? 0))}" ${canEdit ? "" : "disabled"}></div></div>
+              <div class="kv"><div class="k">СИЛ</div><div class="v"><input type="number" data-wildshape-path="stats.str.score" value="${escapeHtml(String(form?.stats?.str?.score ?? 10))}" ${canEdit ? "" : "disabled"}></div></div>
+              <div class="kv"><div class="k">ЛОВ</div><div class="v"><input type="number" data-wildshape-path="stats.dex.score" value="${escapeHtml(String(form?.stats?.dex?.score ?? 10))}" ${canEdit ? "" : "disabled"}></div></div>
+              <div class="kv"><div class="k">ТЕЛ</div><div class="v"><input type="number" data-wildshape-path="stats.con.score" value="${escapeHtml(String(form?.stats?.con?.score ?? 10))}" ${canEdit ? "" : "disabled"}></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderActiveTab(tabId, vm, canEdit, player) {
     if (tabId === "basic") return renderBasicTab(vm, canEdit);
     if (tabId === "spells") return renderSpellsTab(vm);
     if (tabId === "combat") return renderCombatTab(vm);
@@ -1390,7 +1521,88 @@ function renderShopTab(vm, canEdit) {
     if (tabId === "personality") return renderPersonalityTab(vm);
     if (tabId === "appearance") return renderAppearanceTab(vm, canEdit);
     if (tabId === "notes") return renderNotesTab(vm);
+    if (tabId === "wildshape") return renderWildShapeTab(vm, canEdit, player);
     return `<div class="sheet-note">Раздел в разработке</div>`;
+  }
+
+
+  function bindWildShapeTab(root, player, canEdit) {
+    if (!root || !player?.sheet?.parsed) return;
+    const sheet = player.sheet.parsed;
+    const ws = ensureWildShapeState(sheet);
+    if (!ws) return;
+
+    const setPath = (obj, path, value) => {
+      const parts = String(path || '').split('.').filter(Boolean);
+      if (!parts.length) return;
+      let cur = obj;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i];
+        if (!cur[key] || typeof cur[key] !== 'object') cur[key] = {};
+        cur = cur[key];
+      }
+      cur[parts[parts.length - 1]] = value;
+    };
+
+    const activate = root.querySelector('[data-wildshape-activate]');
+    if (activate && !activate.__wildBound) {
+      activate.__wildBound = true;
+      activate.addEventListener('change', () => {
+        const next = !!activate.checked;
+        ws.active = next;
+        if (next) applyWildShapeToMain(sheet);
+        else restoreMainFromWildShape(sheet);
+        try {
+          ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
+        } catch {}
+        renderSheetModal(player, { force: true });
+      });
+    }
+
+    root.querySelectorAll('[data-wildshape-path]').forEach((input) => {
+      if (input.__wildBound) return;
+      input.__wildBound = true;
+      input.addEventListener('input', () => {
+        const path = input.getAttribute('data-wildshape-path') || '';
+        const raw = String(input.value || '');
+        const val = /^stats\./.test(path) || path.includes('vitality') || path === 'proficiency' ? Number(raw || 0) : raw;
+        setPath(ws.formSheet, path, val);
+        if (/^stats\.[a-z]{3}\.score$/.test(path)) {
+          const stat = path.split('.')[1];
+          const score = Number(raw || 0);
+          setPath(ws.formSheet, `stats.${stat}.modifier`, Math.floor((score - 10) / 2));
+        }
+        if (ws.active) applyWildShapeToMain(sheet);
+        ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
+      });
+    });
+
+    const importBtn = root.querySelector('[data-wildshape-import]');
+    const importInput = root.querySelector('[data-wildshape-import-url]');
+    if (importBtn && importInput && canEdit && !importBtn.__wildBound) {
+      importBtn.__wildBound = true;
+      importBtn.addEventListener('click', async () => {
+        const href = String(importInput.value || '').trim();
+        if (!href) return;
+        importBtn.disabled = true;
+        importBtn.textContent = 'Импорт…';
+        try {
+          const monster = await window.MonsterSheetModal?.importFromUrl?.(href);
+          if (!monster) throw new Error('Не удалось загрузить монстра');
+          applyImportedMonsterToForm(ws.formSheet, monster);
+          if (ws.formSheet?.monster && typeof ws.formSheet.monster === 'object') ws.formSheet.monster.source_url = href;
+          if (ws.active) applyWildShapeToMain(sheet);
+          ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
+          renderSheetModal(player, { force: true });
+        } catch (err) {
+          console.error(err);
+          alert(err?.message || 'Ошибка импорта монстра');
+        } finally {
+          importBtn.disabled = false;
+          importBtn.textContent = 'Импортировать';
+        }
+      });
+    }
   }
 
   // ================== RENDER MODAL ==================
@@ -1538,6 +1750,7 @@ function renderShopTab(vm, canEdit) {
     else player.sheet.parsed = sheet;
 
     const vm = toViewModel(sheet, player.name);
+    vm._sheetRef = sheet;
 
     const tabs = [
       { id: "basic", label: "Основное", icon: "🧾" },
@@ -1547,7 +1760,8 @@ function renderShopTab(vm, canEdit) {
       { id: "shop", label: "Магазин", icon: "🏪" },
       { id: "personality", label: "Личность", icon: "🎭" },
       { id: "appearance", label: "Персонаж", icon: "👤" },
-      { id: "notes", label: "Заметки", icon: "📝" }
+      { id: "notes", label: "Заметки", icon: "📝" },
+      { id: "wildshape", label: "Дикий облик", icon: "🐾" }
     ];
 
     // восстановление вкладки (если была)
@@ -1658,7 +1872,7 @@ function renderShopTab(vm, canEdit) {
 
     const mainHtml = `
       <div class="sheet-main" id="sheet-main">
-        ${renderActiveTab(activeTab, vm, canEdit)}
+        ${renderActiveTab(activeTab, vm, canEdit, player)}
       </div>
     `;
 
@@ -1709,6 +1923,8 @@ function renderShopTab(vm, canEdit) {
     // (на некоторых браузерах клики по input могут не доходить, если он disabled)
     wireQuickBasicInteractions(sheetContent);
 
+    bindWildShapeTab(sheetContent, player, canEdit);
+
     const tabButtons = sheetContent.querySelectorAll(".sheet-tab");
     const main = sheetContent.querySelector("#sheet-main");
 
@@ -1727,7 +1943,8 @@ function renderShopTab(vm, canEdit) {
         if (main) {
           const freshSheet = player.sheet?.parsed || createEmptySheet(player.name);
           const freshVm = toViewModel(freshSheet, player.name);
-          main.innerHTML = renderActiveTab(activeTab, freshVm, canEdit);
+          freshVm._sheetRef = freshSheet;
+          main.innerHTML = renderActiveTab(activeTab, freshVm, canEdit, player);
 
           bindEditableInputs(sheetContent, player, canEdit);
           bindSkillBoostDots(sheetContent, player, canEdit);
@@ -1741,6 +1958,7 @@ function renderShopTab(vm, canEdit) {
           bindInventoryEditors(sheetContent, player, canEdit);
           bindEquipmentUi(sheetContent, player, canEdit);
           bindLanguagesUi(sheetContent, player, canEdit);
+          bindWildShapeTab(sheetContent, player, canEdit);
           try { updateHeroChips(sheetContent, player.sheet?.parsed); } catch {}
           updateCoinsTotal(sheetContent, player.sheet?.parsed);
     // Авто-открытие магазина поверх листа при выборе вкладки
