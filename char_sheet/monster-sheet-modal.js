@@ -772,6 +772,7 @@
     style.textContent = `
       .monster-sheet{display:flex;flex-direction:column;gap:16px;color:#f6ead7}
       .monster-sheet__hero{display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:18px;background:linear-gradient(180deg,rgba(79,24,20,.96),rgba(29,12,10,.94));border:1px solid rgba(255,216,183,.16);box-shadow:0 16px 38px rgba(0,0,0,.28)}
+      .monster-sheet__hero--embedded{gap:10px;padding:12px 12px 10px}
       .monster-sheet__title{font-size:30px;font-weight:800;line-height:1.05;color:#fff2df}
       .monster-sheet__title-input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,226,197,.16);color:#fff2df;font-size:30px;font-weight:800;line-height:1.05;padding:0 0 6px;outline:none}
       .monster-sheet__title-input:focus{border-bottom-color:rgba(255,226,197,.42)}
@@ -1156,43 +1157,85 @@
 
   function renderCombatTab(player, canEdit) {
     const sheet = ensureEnemySheet(player);
-    const combat = ensureMonsterCombatState(sheet);
-    const items = combat.weapons || [];
-    return `
-      <div class="monster-panel monster-panel--wide">
-        <div class="monster-panel__title">Бой — оружие</div>
-        ${canEdit ? `
-          <div class="monster-manual-toolbar">
-            <button type="button" class="btn" data-monster-combat-add>Добавить оружие</button>
+    const profBonus = (typeof getProfBonus === 'function') ? getProfBonus(sheet) : toInt(sheet?.proficiency, 0);
+    const abilityOptions = [
+      { k: 'str', label: 'СИЛ' },
+      { k: 'dex', label: 'ЛОВ' },
+      { k: 'con', label: 'ТЕЛ' },
+      { k: 'int', label: 'ИНТ' },
+      { k: 'wis', label: 'МДР' },
+      { k: 'cha', label: 'ХАР' }
+    ];
+    const diceOptions = ['к4','к6','к8','к10','к12','к20'];
+    const d20Svg = `
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor" opacity="0.95"></path>
+        <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="1.2"></path>
+      </svg>
+    `;
+    const weapons = Array.isArray(sheet?.weaponsList) ? sheet.weaponsList : [];
+    const format = (n) => `${n >= 0 ? '+' : ''}${n}`;
+    const dmgText = (w) => `${Math.max(0, toInt(w?.dmgNum, 1))}${String(w?.dmgDice || 'к6')}${toInt(w?.dmgBonus, 0) ? format(toInt(w?.dmgBonus, 0)) : ''}${String(w?.dmgType || '').trim() ? ` ${String(w.dmgType).trim()}` : ''}`;
+    const atkVal = (w) => {
+      if (typeof calcWeaponAttackBonus === 'function') return calcWeaponAttackBonus(sheet, w);
+      const mod = toInt(get(sheet, `stats.${String(w?.ability || 'str')}.modifier`, 0), 0);
+      const prof = w?.prof ? profBonus : 0;
+      return mod + prof + toInt(w?.extraAtk, 0);
+    };
+    const listHtml = weapons.length ? weapons.map((w, idx) => {
+      const collapsed = !!w?.collapsed;
+      return `
+        <div class="sheet-card weapon-card" data-weapon-idx="${idx}">
+          <div class="weapon-head ${collapsed ? 'is-collapsed' : 'is-expanded'}">
+            <input class="weapon-title-input" type="text" value="${esc(String(w?.name || ''))}" placeholder="Название" data-weapon-field="name" ${canEdit ? '' : 'disabled'}>
+            <div class="weapon-actions">
+              <button class="weapon-btn" type="button" data-weapon-toggle-desc>${collapsed ? 'Показать' : 'Скрыть'}</button>
+              <button class="weapon-btn danger" type="button" data-weapon-del ${canEdit ? '' : 'disabled'}>Удалить</button>
+            </div>
           </div>
-        ` : ''}
-        ${items.length ? `
-          <div class="monster-manual-list">
-            ${items.map((entry, index) => `
-              <div class="monster-manual-card ${entry.collapsed ? 'is-collapsed' : ''}">
-                <div class="monster-manual-card__head">
-                  <label class="monster-manual-card__title">
-                    <input class="monster-manual-card__title-input" type="text" ${canEdit ? '' : 'disabled'} data-monster-combat-name="${index}" value="${esc(entry.name || `Оружие ${index + 1}`)}" placeholder="Название оружия">
-                  </label>
-                  <div class="monster-manual-card__actions">
-                    <button type="button" class="monster-manual-icon" data-monster-combat-toggle="${index}" title="${entry.collapsed ? 'Развернуть' : 'Свернуть'}">${entry.collapsed ? '▸' : '▾'}</button>
-                    ${canEdit ? `<button type="button" class="monster-manual-icon" data-monster-combat-delete="${index}" title="Удалить оружие">✕</button>` : ''}
-                  </div>
-                </div>
-                <div class="monster-manual-card__body">
-                  <div class="monster-edit-grid">
-                    <label class="monster-manual-field"><span>Атака</span><input type="text" ${canEdit ? '' : 'disabled'} data-monster-combat-attack="${index}" value="${esc(entry.attack || '')}" placeholder="+5 к попаданию"></label>
-                    <label class="monster-manual-field"><span>Урон</span><input type="text" ${canEdit ? '' : 'disabled'} data-monster-combat-damage="${index}" value="${esc(entry.damage || '')}" placeholder="1к8 + 3"></label>
-                  </div>
-                  <label class="monster-manual-field">
-                    <span>Описание</span>
-                    <textarea ${canEdit ? '' : 'disabled'} data-monster-combat-text="${index}" placeholder="Особенности оружия">${esc(entry.text || '')}</textarea>
-                  </label>
-                </div>
+          <div class="weapon-summary">
+            <div class="weapon-sum-item">
+              <div class="weapon-sum-label"><span>Атака</span><button class="weapon-dice-btn" type="button" data-weapon-roll-atk title="Бросок атаки">${d20Svg}</button></div>
+              <div class="weapon-sum-val" data-weapon-atk>${esc(format(atkVal(w)))}</div>
+            </div>
+            <div class="weapon-sum-item">
+              <div class="weapon-sum-label"><span>Урон</span><button class="weapon-dice-btn" type="button" data-weapon-roll-dmg title="Бросок урона">${d20Svg}</button></div>
+              <div class="weapon-sum-val" data-weapon-dmg>${esc(dmgText(w))}</div>
+            </div>
+          </div>
+          <div class="weapon-details ${collapsed ? 'collapsed' : ''}">
+            <div class="weapon-details-grid">
+              <div class="weapon-fieldbox weapon-ability">
+                <div class="weapon-fieldlabel">Характеристика</div>
+                <select class="weapon-select" data-weapon-field="ability" ${canEdit ? '' : 'disabled'}>
+                  ${abilityOptions.map(o => `<option value="${o.k}" ${o.k === String(w?.ability || 'str') ? 'selected' : ''}>${o.label}</option>`).join('')}
+                </select>
               </div>
-            `).join('')}
+              <div class="weapon-fieldbox weapon-fieldbox-inline"><div class="weapon-fieldlabel">Бонус владения</div><button class="weapon-prof-dot ${w?.prof ? 'active' : ''}" type="button" data-weapon-prof title="Владение: +${profBonus} к атаке" ${canEdit ? '' : 'disabled'}></button></div>
+              <div class="weapon-fieldbox"><div class="weapon-fieldlabel">Доп. модификатор</div><input class="weapon-num weapon-extra" type="number" step="1" value="${esc(String(toInt(w?.extraAtk, 0)))}" data-weapon-field="extraAtk" ${canEdit ? '' : 'disabled'}></div>
+              <div class="weapon-fieldbox weapon-dmg-edit">
+                <div class="weapon-fieldlabel">Урон (редакт.)</div>
+                <div class="weapon-dmg-mini">
+                  <input class="weapon-num weapon-dmg-num" type="number" min="0" step="1" value="${esc(String(Math.max(0, toInt(w?.dmgNum, 1))))}" data-weapon-field="dmgNum" ${canEdit ? '' : 'disabled'}>
+                  <select class="weapon-select weapon-dice" data-weapon-field="dmgDice" ${canEdit ? '' : 'disabled'}>
+                    ${diceOptions.map(d => `<option value="${d}" ${String(w?.dmgDice || 'к6') === d ? 'selected' : ''}>${d}</option>`).join('')}
+                  </select>
+                </div>
+                <input class="weapon-text weapon-dmg-type weapon-dmg-type-full" type="text" value="${esc(String(w?.dmgType || ''))}" placeholder="вид урона" data-weapon-field="dmgType" ${canEdit ? '' : 'disabled'}>
+              </div>
+            </div>
+            <div class="weapon-desc"><textarea class="sheet-textarea weapon-desc-text" rows="4" placeholder="Описание оружия..." data-weapon-field="desc" ${canEdit ? '' : 'disabled'}>${esc(String(w?.desc || ''))}</textarea></div>
           </div>
-        ` : `<div class="monster-empty">Пока оружие не добавлено.</div>`}
+        </div>
+      `;
+    }).join('') : `<div class="monster-empty">Оружие пока не добавлено.</div>`;
+    return `
+      <div class="sheet-section" data-combat-root>
+        <div class="combat-toolbar">
+          <h3>Бой</h3>
+          <button class="weapon-add-btn" type="button" data-weapon-add ${canEdit ? '' : 'disabled'}>Добавить оружие</button>
+        </div>
+        <div class="weapons-list">${listHtml}</div>
       </div>
     `;
   }
@@ -1587,95 +1630,10 @@
   }
 
   function bindCombatTab(root, player, vm, canEdit, options = {}) {
-    const main = root.querySelector('#sheet-main');
-    if (!main) return;
-
-    const rerenderTab = () => {
-      main.innerHTML = renderMonsterTabContent('monster-combat', player, vm, canEdit);
-      bindMonsterNameInput(root, player, canEdit);
-      bindMonsterSheetInputs(root, player);
-      bindMonsterStatRollButtons(root, player);
-      bindMonsterHpRollControls(root, player, canEdit, options);
-      bindMonsterHpAdjustControls(root, player, canEdit);
-      bindCombatTab(root, player, vm, canEdit, options);
-      markModalInteracted(player.id);
-    };
-
-    const addBtn = main.querySelector('[data-monster-combat-add]');
-    if (addBtn && canEdit) {
-      addBtn.addEventListener('click', () => {
-        const sheet = ensureEnemySheet(player);
-        const combat = ensureMonsterCombatState(sheet);
-        combat.weapons.push({ name: `Оружие ${combat.weapons.length + 1}`, attack: '', damage: '', text: '', collapsed: false });
-        scheduleSave(player);
-        rerenderTab();
-      });
+    if (typeof bindCombatEditors === 'function') {
+      bindCombatEditors(root, player, canEdit);
     }
-
-    main.querySelectorAll('[data-monster-combat-name]').forEach((el) => {
-      el.addEventListener('input', () => {
-        const idx = Math.max(0, toInt(el.getAttribute('data-monster-combat-name') || '0', 0));
-        const sheet = ensureEnemySheet(player);
-        const combat = ensureMonsterCombatState(sheet);
-        if (!combat.weapons[idx]) return;
-        combat.weapons[idx].name = String(el.value || '');
-        scheduleSave(player);
-      });
-    });
-    main.querySelectorAll('[data-monster-combat-attack]').forEach((el) => {
-      el.addEventListener('input', () => {
-        const idx = Math.max(0, toInt(el.getAttribute('data-monster-combat-attack') || '0', 0));
-        const sheet = ensureEnemySheet(player);
-        const combat = ensureMonsterCombatState(sheet);
-        if (!combat.weapons[idx]) return;
-        combat.weapons[idx].attack = String(el.value || '');
-        scheduleSave(player);
-      });
-    });
-    main.querySelectorAll('[data-monster-combat-damage]').forEach((el) => {
-      el.addEventListener('input', () => {
-        const idx = Math.max(0, toInt(el.getAttribute('data-monster-combat-damage') || '0', 0));
-        const sheet = ensureEnemySheet(player);
-        const combat = ensureMonsterCombatState(sheet);
-        if (!combat.weapons[idx]) return;
-        combat.weapons[idx].damage = String(el.value || '');
-        scheduleSave(player);
-      });
-    });
-    main.querySelectorAll('[data-monster-combat-text]').forEach((el) => {
-      el.addEventListener('input', () => {
-        const idx = Math.max(0, toInt(el.getAttribute('data-monster-combat-text') || '0', 0));
-        const sheet = ensureEnemySheet(player);
-        const combat = ensureMonsterCombatState(sheet);
-        if (!combat.weapons[idx]) return;
-        combat.weapons[idx].text = String(el.value || '');
-        scheduleSave(player);
-      });
-    });
-
-    main.querySelectorAll('[data-monster-combat-toggle]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const idx = Math.max(0, toInt(button.getAttribute('data-monster-combat-toggle') || '0', 0));
-        const sheet = ensureEnemySheet(player);
-        const combat = ensureMonsterCombatState(sheet);
-        if (!combat.weapons[idx]) return;
-        combat.weapons[idx].collapsed = !combat.weapons[idx].collapsed;
-        scheduleSave(player);
-        rerenderTab();
-      });
-    });
-
-    main.querySelectorAll('[data-monster-combat-delete]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const idx = Math.max(0, toInt(button.getAttribute('data-monster-combat-delete') || '0', 0));
-        const sheet = ensureEnemySheet(player);
-        const combat = ensureMonsterCombatState(sheet);
-        if (!combat.weapons[idx]) return;
-        combat.weapons.splice(idx, 1);
-        scheduleSave(player);
-        rerenderTab();
-      });
-    });
+    markModalInteracted(player.id);
   }
 
   function bindTabs(root, player, vm, canEdit, options = {}) {
@@ -1770,7 +1728,7 @@
     rootEl.innerHTML = `
       <div class="monster-sheet">
         ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
-        <div class="monster-sheet__hero">
+        <div class="monster-sheet__hero ${isEmbedded ? 'monster-sheet__hero--embedded' : ''}">
           <div>
             ${isEmbedded ? `
               <div class="monster-sheet__title">${esc(vm.playerName)}</div>
