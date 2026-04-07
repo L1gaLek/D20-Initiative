@@ -1479,14 +1479,26 @@ function renderShopTab(vm, canEdit) {
   function renderWildShapeTab(vm, canEdit) {
     const sheet = vm?._sheetRef || {};
     const ws = ensureWildShapeState(sheet) || {};
+    const baseName = String(sheet?.name?.value || vm?.name || '').trim();
+    const wildName = String(ws?.formSheet?.name?.value || '').trim();
+    const displayedWildName = ws.active ? (wildName || baseName) : baseName;
     return `
       <div class="sheet-section">
         <h3>Дикий облик / временный облик</h3>
         <div class="sheet-card">
-          <label class="kv" style="display:flex;align-items:center;gap:10px;">
-            <input type="checkbox" data-wildshape-activate ${ws.active ? "checked" : ""} ${canEdit ? "" : "disabled"}>
-            <div class="k" style="margin:0;">Активировать</div>
-          </label>
+          <div class="kv" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <button
+              type="button"
+              class="btn ${ws.active ? 'danger' : ''}"
+              data-wildshape-activate-btn
+              ${canEdit ? "" : "disabled"}
+              style="${ws.active ? 'background:linear-gradient(180deg,#c53929,#7d150d);border-color:rgba(255,120,110,.7);' : ''}"
+            >${ws.active ? 'Отключить' : 'Активировать'}</button>
+            <label style="display:flex;align-items:center;gap:8px;">
+              <div class="k" style="margin:0;">Имя формы</div>
+              <input type="text" data-wildshape-name value="${escapeHtml(displayedWildName)}" ${canEdit ? "" : "disabled"} style="width:240px;">
+            </label>
+          </div>
           <div class="sheet-note">При активации боевые показатели берутся из этого раздела вместо «Основное».</div>
         </div>
         <div class="sheet-card" style="padding:12px;" data-wildshape-monster-root>
@@ -1516,11 +1528,11 @@ function renderShopTab(vm, canEdit) {
     const ws = ensureWildShapeState(sheet);
     if (!ws) return;
 
-    const activate = root.querySelector('[data-wildshape-activate]');
-    if (activate && !activate.__wildBound) {
-      activate.__wildBound = true;
-      activate.addEventListener('change', () => {
-        const next = !!activate.checked;
+    const activateBtn = root.querySelector('[data-wildshape-activate-btn]');
+    if (activateBtn && !activateBtn.__wildBound) {
+      activateBtn.__wildBound = true;
+      activateBtn.addEventListener('click', () => {
+        const next = !ws.active;
         ws.active = next;
         if (next) applyWildShapeToMain(sheet);
         else restoreMainFromWildShape(sheet);
@@ -1528,6 +1540,22 @@ function renderShopTab(vm, canEdit) {
           ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
         } catch {}
         renderSheetModal(player, { force: true });
+      });
+    }
+    const wildNameInput = root.querySelector('[data-wildshape-name]');
+    if (wildNameInput && !wildNameInput.__wildBound) {
+      wildNameInput.__wildBound = true;
+      wildNameInput.addEventListener('input', () => {
+        if (!ws.formSheet || typeof ws.formSheet !== 'object') ws.formSheet = {};
+        if (!ws.formSheet.name || typeof ws.formSheet.name !== 'object') ws.formSheet.name = { value: '' };
+        ws.formSheet.name.value = String(wildNameInput.value || '').trim();
+        if (ws.active) {
+          if (!sheet.name || typeof sheet.name !== 'object') sheet.name = { value: '' };
+          sheet.name.value = ws.formSheet.name.value;
+        }
+        try {
+          ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
+        } catch {}
       });
     }
 
@@ -1552,8 +1580,7 @@ function renderShopTab(vm, canEdit) {
     };
     try {
       const baseName = String(sheet?.name?.value || player.name || '').trim();
-      const wildName = String(ws?.formSheet?.name?.value || '').trim();
-      if (!wildName || wildName === 'Дикий облик') {
+      if (!ws.active) {
         if (!ws.formSheet.name || typeof ws.formSheet.name !== 'object') ws.formSheet.name = { value: baseName };
         else ws.formSheet.name.value = baseName;
         virtualPlayer.sheet.parsed = ws.formSheet;

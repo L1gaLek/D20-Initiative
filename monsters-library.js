@@ -20,6 +20,7 @@
   };
 
   let cfg = { ...DEFAULTS };
+  let openCfg = {};
   let monsters = [];
   let overlay = null;
 
@@ -129,12 +130,14 @@
     return overlay;
   }
 
-  function open() {
+  function open(options = {}) {
+    openCfg = { ...(options || {}) };
     ensureOverlay().classList.remove('hidden');
     renderList();
   }
 
   function close() {
+    openCfg = {};
     overlay?.classList.add('hidden');
   }
 
@@ -260,14 +263,15 @@
       ${renderEntries('Легендарные действия', mon.legendary_actions)}
 
       <div class="mlib-actions">
-        <button class="mlib-btn" type="button" data-add>Добавить на поле боя</button>
+        <button class="mlib-btn" type="button" data-add>${esc(openCfg?.addButtonLabel || 'Добавить на поле боя')}</button>
       </div>
       <div style="opacity:.65;font-size:12px;margin-top:8px">Источник: ${esc(mon.source || 'SRD')}</div>
     `;
 
     viewEl.querySelector('[data-add]')?.addEventListener('click', () => {
       try {
-        if (typeof cfg.onAddToBoard === 'function') cfg.onAddToBoard(mon);
+        if (typeof openCfg?.onAdd === 'function') openCfg.onAdd(mon);
+        else if (typeof cfg.onAddToBoard === 'function') cfg.onAddToBoard(mon);
         window.dispatchEvent(new CustomEvent('monster:addToBoard', { detail: { monster: mon } }));
       } catch {}
       close();
