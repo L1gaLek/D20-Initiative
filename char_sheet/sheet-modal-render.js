@@ -1479,6 +1479,9 @@ function renderShopTab(vm, canEdit) {
   function renderWildShapeTab(vm, canEdit) {
     const sheet = vm?._sheetRef || {};
     const ws = ensureWildShapeState(sheet) || {};
+    const baseName = String(sheet?.name?.value || vm?.name || '').trim();
+    const wildName = String(ws?.formSheet?.name?.value || '').trim();
+    const displayedWildName = ws.active ? (wildName || baseName) : baseName;
     return `
       <div class="sheet-section">
         <h3>Дикий облик / временный облик</h3>
@@ -1556,8 +1559,7 @@ function renderShopTab(vm, canEdit) {
     };
     try {
       const baseName = String(sheet?.name?.value || player.name || '').trim();
-      const wildName = String(ws?.formSheet?.name?.value || '').trim();
-      if (!wildName || wildName === 'Дикий облик') {
+      if (!ws.active) {
         if (!ws.formSheet.name || typeof ws.formSheet.name !== 'object') ws.formSheet.name = { value: baseName };
         else ws.formSheet.name.value = baseName;
         virtualPlayer.sheet.parsed = ws.formSheet;
