@@ -780,6 +780,13 @@
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
       .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
+      .monster-hero-cards--embedded{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+      .monster-hero-cards--embedded .monster-hero-card--hp{grid-column:1;flex:1 1 auto}
+      .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:2;flex:1 1 auto}
+      .monster-hero-cards--embedded .monster-hero-card--stack{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;flex:1 1 auto;min-width:0}
+      .monster-hero-cards--embedded .monster-stat__value-row{grid-template-columns:minmax(0,1fr);gap:3px}
+      .monster-hero-cards--embedded .monster-stat__input{min-height:6px;font-size:8px;padding:0 2px}
+      .monster-hero-cards--embedded .monster-stat__mod{min-height:6px;font-size:8px}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
       .monster-hero-card--hp{flex:0 0 306px;min-width:0}
       .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:0 0 88px;min-width:88px}
@@ -1239,6 +1246,10 @@
   }
 
   function scheduleSave(player) {
+    if (typeof player?.__sheetSaveHook === 'function') {
+      try { player.__sheetSaveHook(); } catch (err) { console.warn('MonsterSheetModal: custom save hook failed', err); }
+      return;
+    }
     const pid = String(player?.id || '');
     if (!pid || !ctx?.sendMessage) return;
     clearTimeout(saveTimers.get(pid));
@@ -1316,7 +1327,7 @@
     });
   }
 
-  function bindMonsterHpRollControls(root, player, canEdit) {
+  function bindMonsterHpRollControls(root, player, canEdit, options = {}) {
     if (!canEdit) return;
     const inputs = Array.from(root.querySelectorAll('[data-monster-hp-roll-field]'));
     const rerollBtn = root.querySelector('[data-monster-hp-roll]');
@@ -1357,7 +1368,8 @@
         if (tokenEl) updateHpBar?.(player, tokenEl);
       } catch {}
       scheduleSave(player);
-      await render(player, { canEdit, force: true });
+      if (typeof options?.rerender === 'function') await options.rerender();
+      else await render(player, { canEdit, force: true });
     });
   }
 
@@ -1434,7 +1446,7 @@
   }
 
 
-  function bindManualDescriptionTab(root, player, vm, canEdit) {
+  function bindManualDescriptionTab(root, player, vm, canEdit, options = {}) {
     const main = root.querySelector('#sheet-main');
     if (!main) return;
 
@@ -1443,11 +1455,11 @@
       bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
       bindMonsterStatRollButtons(root, player);
-      bindMonsterHpRollControls(root, player, canEdit);
+      bindMonsterHpRollControls(root, player, canEdit, options);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
       if (typeof bindAppearanceUi === 'function') bindAppearanceUi(root, player, canEdit);
-      bindManualDescriptionTab(root, player, vm, canEdit);
+      bindManualDescriptionTab(root, player, vm, canEdit, options);
       markModalInteracted(player.id);
     };
 
@@ -1511,7 +1523,7 @@
     });
   }
 
-  function bindTabs(root, player, vm, canEdit) {
+  function bindTabs(root, player, vm, canEdit, options = {}) {
     const buttons = Array.from(root.querySelectorAll('[data-monster-tab]'));
     const main = root.querySelector('#sheet-main');
     if (!buttons.length || !main) return;
@@ -1520,11 +1532,11 @@
       bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
       bindMonsterStatRollButtons(root, player);
-      bindMonsterHpRollControls(root, player, canEdit);
+      bindMonsterHpRollControls(root, player, canEdit, options);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
       if (typeof bindAppearanceUi === 'function') bindAppearanceUi(root, player, canEdit);
-      if (player._activeSheetTab === 'monster-manual') bindManualDescriptionTab(root, player, vm, canEdit);
+      if (player._activeSheetTab === 'monster-manual') bindManualDescriptionTab(root, player, vm, canEdit, options);
     };
 
     buttons.forEach((button) => {
@@ -1533,6 +1545,7 @@
         player._activeSheetTab = tabId;
         const st = getUiState(player.id);
         st.activeTab = tabId;
+        try { options?.onTabChange?.(tabId); } catch {}
         buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
         main.innerHTML = renderMonsterTabContent(tabId, player, vm, canEdit);
         bindCurrentTab();
@@ -1543,10 +1556,10 @@
     bindCurrentTab();
   }
 
-  function bindImportControls(player, canEdit) {
+  function bindImportControls(root, player, canEdit, options = {}) {
     if (!canEdit) return;
-    const input = sheetContent?.querySelector?.('[data-monster-import-url]');
-    const button = sheetContent?.querySelector?.('[data-monster-import-btn]');
+    const input = root?.querySelector?.('[data-monster-import-url]');
+    const button = root?.querySelector?.('[data-monster-import-btn]');
     if (!input || !button) return;
 
     const setBusy = (busy) => {
@@ -1569,7 +1582,8 @@
         }
         scheduleSave(player);
         markModalInteracted(player.id);
-        await render(player, { canEdit, force: true });
+        if (typeof options?.rerender === 'function') await options.rerender();
+        else await render(player, { canEdit, force: true });
       } catch (err) {
         console.error('Monster import failed', err);
         alert(err?.message || 'Не удалось импортировать монстра по ссылке');
@@ -1579,38 +1593,25 @@
     });
   }
 
-  async function render(player, options = {}) {
-    if (!sheetTitle || !sheetSubtitle || !sheetActions || !sheetContent) return false;
+  async function renderMonsterSheetIntoRoot(rootEl, player, options = {}) {
+    if (!rootEl) return false;
     ensureMonsterStyles();
 
     const canEdit = !!options.canEdit;
     const sheet = ensureEnemySheet(player);
     const activeUi = getUiState(player.id);
-    let activeTab = String(player?._activeSheetTab || activeUi?.activeTab || 'monster-main');
+    let activeTab = String(options?.activeTab || player?._activeSheetTab || activeUi?.activeTab || 'monster-main');
     if (!['monster-main', 'monster-extra', 'monster-manual', 'monster-token'].includes(activeTab)) activeTab = 'monster-main';
     player._activeSheetTab = activeTab;
     activeUi.activeTab = activeTab;
-
-    sheetTitle.textContent = `${getMonsterSheetTitleLabel(player)}: ${player.name}`;
-    sheetSubtitle.textContent = player.ownerName
-      ? `Владелец: ${player.ownerName} • Тип: ${getMonsterSheetTypeLabel(player)}`
-      : `Тип: ${getMonsterSheetTypeLabel(player)}`;
-
-    sheetActions.innerHTML = '';
-    const note = document.createElement('div');
-    note.className = 'sheet-note';
-    note.textContent = canEdit
-      ? `Это отдельный лист ${getMonsterSheetTypeLabel(player)}. Основные боевые параметры можно менять сразу здесь.`
-      : `Просмотр листа ${getMonsterSheetTypeLabel(player)}. Изменять параметры может только GM.`;
-    sheetActions.appendChild(note);
-
-    sheetContent.innerHTML = '<div class="monster-note">Загружаю данные монстра…</div>';
+    rootEl.innerHTML = '<div class="monster-note">Загружаю данные монстра…</div>';
 
     const monster = await resolveMonsterRecord(player);
-    if (openedSheetPlayerId !== player.id) return true;
+    if (!options?.embedded && openedSheetPlayerId !== player.id) return true;
 
     const vm = buildMonsterViewModel(player, sheet, monster);
-    sheetContent.innerHTML = `
+    const isEmbedded = !!options?.embedded;
+    rootEl.innerHTML = `
       <div class="monster-sheet">
         ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
         <div class="monster-sheet__hero">
@@ -1631,7 +1632,7 @@
               ${vm.source ? `<span class="monster-chip">${esc(vm.source)}</span>` : ''}
             </div>
           </div>
-          <div class="monster-hero-cards">
+          <div class="monster-hero-cards ${isEmbedded ? 'monster-hero-cards--embedded' : ''}">
             <div class="monster-hero-card monster-hero-card--hp">
               <div class="monster-hp-top-grid">
                 <label class="monster-hp-summary-field">
@@ -1752,18 +1753,37 @@
     `;
 
     restoreUiStateToDom(player);
-    const mainEl = sheetContent.querySelector('#sheet-main');
+    const mainEl = rootEl.querySelector('#sheet-main');
     mainEl?.addEventListener('scroll', () => {
       markModalInteracted(player.id);
       captureUiStateFromDom(player);
     }, { passive: true });
 
-    sheetContent.addEventListener('pointerdown', () => markModalInteracted(player.id), { passive: true });
-    sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
+    rootEl.addEventListener('pointerdown', () => markModalInteracted(player.id), { passive: true });
+    rootEl.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
-    bindTabs(sheetContent, player, vm, canEdit);
-    bindImportControls(player, canEdit);
+    const rerender = () => renderMonsterSheetIntoRoot(rootEl, player, { ...options, activeTab: player?._activeSheetTab || options?.activeTab || 'monster-main' });
+    const bindOptions = { ...options, rerender };
+    bindTabs(rootEl, player, vm, canEdit, bindOptions);
+    bindImportControls(rootEl, player, canEdit, bindOptions);
     return true;
+  }
+
+  async function render(player, options = {}) {
+    if (!sheetTitle || !sheetSubtitle || !sheetActions || !sheetContent) return false;
+    sheetTitle.textContent = `${getMonsterSheetTitleLabel(player)}: ${player.name}`;
+    sheetSubtitle.textContent = player.ownerName
+      ? `Владелец: ${player.ownerName} • Тип: ${getMonsterSheetTypeLabel(player)}`
+      : `Тип: ${getMonsterSheetTypeLabel(player)}`;
+
+    sheetActions.innerHTML = '';
+    const note = document.createElement('div');
+    note.className = 'sheet-note';
+    note.textContent = options?.canEdit
+      ? `Это отдельный лист ${getMonsterSheetTypeLabel(player)}. Основные боевые параметры можно менять сразу здесь.`
+      : `Просмотр листа ${getMonsterSheetTypeLabel(player)}. Изменять параметры может только GM.`;
+    sheetActions.appendChild(note);
+    return renderMonsterSheetIntoRoot(sheetContent, player, { ...options, embedded: false });
   }
 
   function shouldUseForPlayer(player) {
@@ -1773,6 +1793,7 @@
   window.MonsterSheetModal = {
     shouldUseForPlayer,
     render,
+    renderEmbedded: (rootEl, player, options = {}) => renderMonsterSheetIntoRoot(rootEl, player, { ...options, embedded: true }),
     preload: loadMonsterDatabase,
     importFromUrl: importMonsterFromUrl,
     parseText: parseMonsterText
