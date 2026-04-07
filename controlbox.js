@@ -147,7 +147,8 @@
     }
     function applyZoom() {
       if (!board) return;
-      board.style.transformOrigin = '0 0';
+      const origin = String(window.__boardViewTransformOrigin || '0 0').trim() || '0 0';
+      board.style.transformOrigin = origin;
       const extra = getBoardViewExtraTransform();
       board.style.transform = extra ? `${extra} scale(${zoom})` : `scale(${zoom})`;
       try { window.refreshOpenTokenMini?.(); } catch {}
