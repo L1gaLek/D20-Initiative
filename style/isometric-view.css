@@ -48,7 +48,7 @@
 
 #board-wrapper.board-view--isometric .wall-edge{
   transform-style: preserve-3d;
-  transform: translateZ(var(--wall-height, 28px));
+  transform: translateY(calc(var(--wall-height, 50px) * -1)) translateZ(2px);
 }
 
 #board-wrapper.board-view--isometric .wall-edge::before,
@@ -60,56 +60,26 @@
   box-sizing: border-box;
 }
 
-/* Horizontal segments (N/S): vertical wall face dropping from top cap to board plane. */
-#board-wrapper.board-view--isometric .wall-edge.wall-dir-n::before,
-#board-wrapper.board-view--isometric .wall-edge.wall-dir-s::before{
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: var(--wall-height, 28px);
-  background: inherit;
-  filter: brightness(0.70) saturate(1.04);
-  transform-origin: 50% 0;
-  transform: rotateX(-90deg);
-}
-
-/* Horizontal segments (N/S): side face for thickness. */
-#board-wrapper.board-view--isometric .wall-edge.wall-dir-n::after,
-#board-wrapper.board-view--isometric .wall-edge.wall-dir-s::after{
-  top: 0;
-  left: 100%;
-  width: var(--t, 4px);
-  height: var(--wall-height, 28px);
-  background: inherit;
-  filter: brightness(0.56);
-  transform-origin: 0 0;
-  transform: rotateY(90deg) rotateX(-90deg);
-}
-
-/* Vertical segments (E/W): vertical wall face dropping from top cap to board plane. */
-#board-wrapper.board-view--isometric .wall-edge.wall-dir-e::before,
-#board-wrapper.board-view--isometric .wall-edge.wall-dir-w::before{
-  left: 0;
-  top: 0;
-  width: var(--wall-height, 28px);
-  height: 100%;
-  background: inherit;
-  filter: brightness(0.70) saturate(1.04);
-  transform-origin: 0 50%;
-  transform: rotateY(90deg);
-}
-
-/* Vertical segments (E/W): side face for thickness. */
-#board-wrapper.board-view--isometric .wall-edge.wall-dir-e::after,
-#board-wrapper.board-view--isometric .wall-edge.wall-dir-w::after{
+/* Main vertical face under the top cap (for all wall directions). */
+#board-wrapper.board-view--isometric .wall-edge::before{
   left: 0;
   top: 100%;
-  width: var(--wall-height, 28px);
-  height: var(--t, 4px);
+  width: 100%;
+  height: var(--wall-height, 50px);
   background: inherit;
-  filter: brightness(0.56);
-  transform-origin: 0 0;
-  transform: rotateX(-90deg) rotateY(90deg);
+  filter: brightness(0.68) saturate(1.04);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.22);
+}
+
+/* Side face: gives visible volume edge instead of a flat strip. */
+#board-wrapper.board-view--isometric .wall-edge::after{
+  top: 0;
+  left: 100%;
+  width: calc(var(--t, 4px) * 1.25);
+  height: calc(var(--wall-height, 50px) + var(--t, 4px));
+  background: inherit;
+  filter: brightness(0.54);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.26);
 }
 
 #board-wrapper.board-view--isometric.board-view--dragging{
