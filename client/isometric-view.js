@@ -8,7 +8,9 @@
     rotateX: 57,
     rotateZ: -45,
     panX: 0,
-    panY: 0
+    panY: 0,
+    originX: '50%',
+    originY: '50%'
   };
   let dragState = null;
   let controlsBound = false;
@@ -44,6 +46,23 @@
     return `translate(${x}px, ${y}px) rotateX(${rx}deg) rotateZ(${rz}deg)`;
   }
 
+  function getIsometricTransformOrigin() {
+    const ox = String(isoState.originX || '50%').trim() || '50%';
+    const oy = String(isoState.originY || '50%').trim() || '50%';
+    return `${ox} ${oy}`;
+  }
+
+  function setPivotFromPointer(clientX, clientY) {
+    const board = document.getElementById('game-board');
+    if (!board) return;
+    const rect = board.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const rx = clamp((Number(clientX) - rect.left) / rect.width, 0, 1);
+    const ry = clamp((Number(clientY) - rect.top) / rect.height, 0, 1);
+    isoState.originX = `${(rx * 100).toFixed(2)}%`;
+    isoState.originY = `${(ry * 100).toFixed(2)}%`;
+  }
+
   function centerBoardInWrapper() {
     const wrapper = document.getElementById('board-wrapper');
     if (!wrapper) return;
@@ -62,7 +81,7 @@
 
     window.__boardViewMode = normalized;
     window.__boardViewExtraTransform = normalized === 'isometric' ? getIsometricTransform() : '';
-    window.__boardViewTransformOrigin = normalized === 'isometric' ? '50% 50%' : '0 0';
+    window.__boardViewTransformOrigin = normalized === 'isometric' ? getIsometricTransformOrigin() : '0 0';
     window.dispatchEvent(new CustomEvent('board-view-mode-changed', { detail: { mode: normalized } }));
     if (normalized === 'isometric') centerBoardInWrapper();
   }
@@ -76,8 +95,10 @@
     wrapper.addEventListener('mousedown', (e) => {
       if (e.button !== 1) return;
       if (normalizeMode(window.__boardViewMode) !== 'isometric') return;
+      setPivotFromPointer(e.clientX, e.clientY);
       dragState = { x: e.clientX, y: e.clientY };
       wrapper.classList.add('board-view--dragging');
+      applyBoardViewMode('isometric');
       e.preventDefault();
     });
 
