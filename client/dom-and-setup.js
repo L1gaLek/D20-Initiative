@@ -372,6 +372,7 @@ const APP_STORAGE_KEY_ALIASES = Object.freeze({
   int_marks_toolbar_collapsed: [legacyAppKey('marks_toolbar_collapsed')],
   int_viewport_cols: [legacyAppKey('viewport_cols')],
   int_viewport_rows: [legacyAppKey('viewport_rows')],
+  int_board_view_mode: [legacyAppKey('board_view_mode')],
   int_ws_client_id: [legacyAppKey('ws_client_id')],
   int_sheet_rte_heights_v1: [legacyAppKey('sheet_rte_heights_v1')],
   int_sheet_ta_heights_v1: [legacyAppKey('sheet_ta_heights_v1')]
