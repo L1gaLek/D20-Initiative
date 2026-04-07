@@ -785,7 +785,7 @@
       .monster-hero-cards--embedded .monster-hero-card--hp{grid-column:1;grid-row:1;flex:1 1 auto}
       .monster-hero-cards--embedded .monster-hero-card--stack{grid-column:2;grid-row:1;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:1 1 auto;min-width:0}
       .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:1 / -1;grid-row:2;flex:1 1 auto}
-      .monster-hero-cards--embedded .monster-stat-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+      .monster-hero-cards--embedded .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
       .monster-hero-cards--embedded .monster-stat__value-row{grid-template-columns:minmax(0,1fr) 36px;gap:5px}
       .monster-hero-cards--embedded .monster-stat__input{min-height:22px;font-size:10px;padding:0 3px}
       .monster-hero-cards--embedded .monster-stat__mod{min-height:22px;font-size:10px}
@@ -1647,6 +1647,30 @@
   function bindCombatTab(root, player, vm, canEdit, options = {}) {
     if (typeof bindCombatEditors === 'function') {
       bindCombatEditors(root, player, canEdit);
+    }
+    const main = root?.querySelector?.('#sheet-main');
+    if (main && canEdit && player?._activeSheetTab === 'monster-combat') {
+      const requestImmediateRerender = () => {
+        if (typeof options?.rerender !== 'function') return;
+        Promise.resolve().then(() => options.rerender()).catch(() => {});
+      };
+
+      main.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target) return;
+        if (target.closest('[data-weapon-add]') || target.closest('[data-weapon-del]') || target.closest('[data-weapon-toggle-desc]')) {
+          requestImmediateRerender();
+        }
+      });
+
+      main.addEventListener('input', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target) return;
+        if (target.closest('[data-weapon-field]')) {
+          const sheet = ensureEnemySheet(player);
+          if (typeof updateWeaponsBonuses === 'function') updateWeaponsBonuses(root, sheet);
+        }
+      });
     }
     markModalInteracted(player.id);
   }
