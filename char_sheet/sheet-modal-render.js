@@ -519,12 +519,6 @@ function renderCombatTab(vm) {
               <div class="weapon-actions">
                 <button class="weapon-btn" type="button" data-weapon-toggle-desc>${collapsed ? "Показать" : "Скрыть"}</button>
                 <button class="weapon-btn danger" type="button" data-weapon-del>Удалить</button>
-                ${collapsed ? "" : `
-                  <div class="weapon-prof-quick weapon-prof-quick-inline">
-                    <div class="weapon-fieldlabel">Бонус владения</div>
-                    <button class="weapon-prof-dot ${w.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к бонусу атаки"></button>
-                  </div>
-                `}
               </div>
             </div>
 
@@ -550,6 +544,11 @@ function renderCombatTab(vm) {
             <!-- всё ниже скрывается кнопкой Скрыть -->
             <div class="weapon-details ${collapsed ? "collapsed" : ""}">
               <div class="weapon-details-grid">
+                <div class="weapon-prof-quick">
+                  <div class="weapon-fieldlabel">Бонус владения</div>
+                  <button class="weapon-prof-dot ${w.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к бонусу атаки"></button>
+                </div>
+
                 <div class="weapon-fieldbox weapon-ability">
                   <div class="weapon-ability-row">
                     <div class="weapon-ability-main-wrap">
