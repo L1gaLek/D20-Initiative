@@ -1177,103 +1177,6 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
     });
   }
 
-  function bindWildShapeEditors(root, player, canEdit) {
-    if (!root) return;
-    root.__wildShapeState = { player, canEdit };
-    const getState = () => root.__wildShapeState || { player, canEdit };
-    const getSheet = () => getState().player?.sheet?.parsed;
-
-    if (root.__wildShapeBound) return;
-    root.__wildShapeBound = true;
-
-    const parseHpTotal = (hpStr) => {
-      const m = String(hpStr || '').match(/(\d+)/);
-      return m ? Math.max(0, safeInt(m[1], 0)) : 0;
-    };
-    const parseSpeedFeet = (speedStr) => {
-      const m = String(speedStr || '').match(/(\d+)/);
-      return m ? Math.max(0, safeInt(m[1], 0)) : 0;
-    };
-    const toScore = (v) => {
-      if (v && typeof v === 'object' && v.score != null) return safeInt(v.score, 10);
-      return safeInt(v, 10);
-    };
-
-    const applyMonsterToWildShape = (sheet, mon) => {
-      if (!sheet.wildShape || typeof sheet.wildShape !== 'object') sheet.wildShape = {};
-      if (!sheet.wildShape.form || typeof sheet.wildShape.form !== 'object') sheet.wildShape.form = {};
-      const form = sheet.wildShape.form;
-
-      form.sourceUrl = `srd://${String(mon.id || '').trim()}`;
-      form.name = String(mon.name_ru || mon.name_en || form.name || 'Монстр');
-      form.meta = [mon.size_ru || mon.size_en || '', mon.type_ru || mon.type_en || '', mon.alignment_ru || mon.alignment || ''].filter(Boolean).join(', ');
-      form.sensesLang = [mon.senses || '', mon.languages || ''].filter(Boolean).join(' • ');
-      form.description = String(mon?.desc_ru || mon?.desc_en || form.description || '');
-      form.traitsText = Array.isArray(mon?.traits)
-        ? mon.traits.map(t => `${t?.name_ru || t?.name_en || ''}: ${t?.text_ru || t?.text_en || ''}`.trim()).filter(Boolean).join('\n\n')
-        : (form.traitsText || '');
-      form.actionsText = Array.isArray(mon?.actions)
-        ? mon.actions.map(t => `${t?.name_ru || t?.name_en || ''}: ${t?.text_ru || t?.text_en || ''}`.trim()).filter(Boolean).join('\n\n')
-        : (form.actionsText || '');
-
-      if (!form['hp-max'] || typeof form['hp-max'] !== 'object') form['hp-max'] = { value: 0 };
-      if (!form['hp-current'] || typeof form['hp-current'] !== 'object') form['hp-current'] = { value: 0 };
-      if (!form['hp-temp'] || typeof form['hp-temp'] !== 'object') form['hp-temp'] = { value: 0 };
-      if (!form.ac || typeof form.ac !== 'object') form.ac = { value: 0 };
-      if (!form.speed || typeof form.speed !== 'object') form.speed = { value: 0 };
-      if (!form.stats || typeof form.stats !== 'object') form.stats = {};
-
-      const hp = parseHpTotal(mon.hp);
-      form['hp-max'].value = hp;
-      form['hp-current'].value = hp;
-      form['hp-temp'].value = 0;
-      form.ac.value = safeInt(mon.ac, 0);
-      form.speed.value = parseSpeedFeet(mon.speed);
-      form.stats.str = { score: toScore(mon?.abilities?.str) };
-      form.stats.dex = { score: toScore(mon?.abilities?.dex) };
-      form.stats.con = { score: toScore(mon?.abilities?.con) };
-      form.stats.int = { score: toScore(mon?.abilities?.int) };
-      form.stats.wis = { score: toScore(mon?.abilities?.wis) };
-      form.stats.cha = { score: toScore(mon?.abilities?.cha) };
-    };
-
-    const findMonster = (src) => {
-      const all = window.MonstersLib?.getMonsters?.() || [];
-      if (!all.length) return null;
-      const raw = String(src || '').trim();
-      if (!raw) return null;
-      const id = raw.replace(/^srd:\/\//i, '').trim().toLowerCase();
-      return all.find(m => String(m?.id || '').toLowerCase() === id)
-        || all.find(m => String(m?.name_ru || m?.name_en || '').trim().toLowerCase() === raw.toLowerCase())
-        || null;
-    };
-
-    root.addEventListener('click', async (e) => {
-      const { player: curPlayer, canEdit: curCanEdit } = getState();
-      if (!curCanEdit) return;
-      const sheet = getSheet();
-      if (!sheet) return;
-
-      if (e.target?.closest?.('[data-wildshape-pick-srd]')) {
-        try { await window.MonstersLib?.init?.({ jsonUrl: './srd5_1_monsters_extracted.json' }); } catch {}
-        try { await window.MonstersLib?.open?.(); } catch {}
-        return;
-      }
-
-      if (!e.target?.closest?.('[data-wildshape-apply-link]')) return;
-      try { await window.MonstersLib?.init?.({ jsonUrl: './srd5_1_monsters_extracted.json' }); } catch {}
-      const src = getByPath(sheet, 'wildShape.form.sourceUrl');
-      const mon = findMonster(src);
-      if (!mon) {
-        alert('Монстр не найден. Используйте srd://monster-id или точное имя.');
-        return;
-      }
-      applyMonsterToWildShape(sheet, mon);
-      scheduleSheetSave(curPlayer);
-      renderSheetModal(curPlayer, { force: true });
-    });
-  }
-
   // ===== Inventory (coins) editors =====
   function bindInventoryEditors(root, player, canEdit) {
     if (!root) return;
@@ -1562,7 +1465,6 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
         bindStatRollButtons(root, curPlayer);
         bindAbilityAndSkillEditors(root, curPlayer, curCanEdit);
         bindNotesEditors(root, curPlayer, curCanEdit);
-        bindWildShapeEditors(root, curPlayer, curCanEdit);
         bindSlotEditors(root, curPlayer, curCanEdit);
         bindSpellAddAndDesc(root, curPlayer, curCanEdit);
         bindCombatEditors(root, curPlayer, curCanEdit);
