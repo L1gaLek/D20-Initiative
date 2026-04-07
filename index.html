@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="style/layout.css">
 <link rel="stylesheet" href="style/lobby.css">
 <link rel="stylesheet" href="style/board.css">
+<link rel="stylesheet" href="style/isometric-view.css">
 <link rel="stylesheet" href="style/players.css">
 <link rel="stylesheet" href="style/gameplay.css">
 </head>
@@ -694,6 +695,13 @@
               <div id="cell-feet-player-wrap" class="cell-feet-inline cell-feet-inline--player" style="display:none;">
                 1 клетка = <span id="cell-feet-player-value">10</span> футов
               </div>
+              <div id="board-view-mode-box" class="board-settings-box board-view-mode-box">
+                <label for="board-view-mode-select">Режим отображения:</label>
+                <select id="board-view-mode-select" title="Персональный режим просмотра поля">
+                  <option value="topdown">2D сверху</option>
+                  <option value="isometric">Изометрия</option>
+                </select>
+              </div>
               <div class="board-settings-row gm-map-size-settings">
                 <div id="board-settings-viewport" class="board-settings-box">
                   <label>Ширина поля:
@@ -836,6 +844,7 @@
 
  <!-- Client scripts (split from former client.js) -->
   <script src="client/dom-and-setup.js"></script>
+  <script src="client/isometric-view.js"></script>
   <script src="client/app/lobby-shell.js"></script>
   <script src="client/rooms/lobby-room-ui.js"></script>
   <script src="client/chat-ui.js"></script>
