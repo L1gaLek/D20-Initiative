@@ -528,6 +528,11 @@ function renderCombatTab(vm) {
               </div>
             </div>
 
+            <div class="weapon-prof-quick">
+              <div class="weapon-fieldlabel">Бонус владения</div>
+              <button class="weapon-prof-dot ${w.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к бонусу атаки"></button>
+            </div>
+
             <!-- рамка под названием: Бонус атаки + Урон (всегда видима) -->
             <div class="weapon-summary">
               <div class="weapon-sum-item">
