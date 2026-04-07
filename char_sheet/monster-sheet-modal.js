@@ -784,6 +784,9 @@
       .monster-hero-cards--embedded .monster-hero-card--hp{grid-column:1;flex:1 1 auto}
       .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:2;flex:1 1 auto}
       .monster-hero-cards--embedded .monster-hero-card--stack{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;flex:1 1 auto;min-width:0}
+      .monster-hero-cards--embedded .monster-stat__value-row{grid-template-columns:minmax(0,1fr);gap:3px}
+      .monster-hero-cards--embedded .monster-stat__input{min-height:6px;font-size:8px;padding:0 2px}
+      .monster-hero-cards--embedded .monster-stat__mod{min-height:6px;font-size:8px}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
       .monster-hero-card--hp{flex:0 0 306px;min-width:0}
       .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:0 0 88px;min-width:88px}

@@ -1404,6 +1404,7 @@ function renderShopTab(vm, canEdit) {
     const form = ws.formSheet || {};
     if (!ws.baseSnapshot || typeof ws.baseSnapshot !== "object") {
       ws.baseSnapshot = deepClone({
+        name: sheet.name,
         vitality: sheet.vitality,
         proficiency: sheet.proficiency,
         stats: sheet.stats,
@@ -1413,6 +1414,9 @@ function renderShopTab(vm, canEdit) {
         monster: sheet.monster,
         monsterHpRoll: sheet.monsterHpRoll
       }) || {};
+    }
+    if (form.name && typeof form.name === "object") {
+      sheet.name = deepClone(form.name) || { value: "" };
     }
     sheet.vitality = deepClone(form.vitality || {}) || {};
     sheet.proficiency = Number.isFinite(Number(form.proficiency)) ? Number(form.proficiency) : 0;
@@ -1430,6 +1434,7 @@ function renderShopTab(vm, canEdit) {
     const ws = ensureWildShapeState(sheet);
     if (!ws?.baseSnapshot || typeof ws.baseSnapshot !== "object") return;
     const snap = ws.baseSnapshot;
+    if (snap.name) sheet.name = deepClone(snap.name) || { value: "" };
     if (snap.vitality) sheet.vitality = deepClone(snap.vitality) || {};
     if (typeof snap.proficiency !== "undefined") sheet.proficiency = snap.proficiency;
     if (snap.stats) sheet.stats = deepClone(snap.stats) || {};
@@ -1545,6 +1550,15 @@ function renderShopTab(vm, canEdit) {
         ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
       }
     };
+    try {
+      const baseName = String(sheet?.name?.value || player.name || '').trim();
+      const wildName = String(ws?.formSheet?.name?.value || '').trim();
+      if (!wildName || wildName === 'Дикий облик') {
+        if (!ws.formSheet.name || typeof ws.formSheet.name !== 'object') ws.formSheet.name = { value: baseName };
+        else ws.formSheet.name.value = baseName;
+        virtualPlayer.sheet.parsed = ws.formSheet;
+      }
+    } catch {}
 
     window.MonsterSheetModal?.renderEmbedded?.(monsterRoot, virtualPlayer, {
       canEdit,
