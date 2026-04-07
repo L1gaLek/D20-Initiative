@@ -382,35 +382,21 @@ function clearStabilizedIfDamagedAtZero(sheet) {
 
 function getQuickSheetStats(player) {
   const s = player?.sheet?.parsed || {};
-  const formActive = !!getFrom(s, 'wildShape.active', false);
-  const hpMax = formActive ? safeNum(getFrom(s, 'wildShape.form.hp-max.value', null), null) : safeNum(getFrom(s, 'vitality.hp-max.value', null), null);
-  const hpCur = formActive ? safeNum(getFrom(s, 'wildShape.form.hp-current.value', null), null) : safeNum(getFrom(s, 'vitality.hp-current.value', null), null);
-  const hpTemp = formActive ? safeNum(getFrom(s, 'wildShape.form.hp-temp.value', null), null) : safeNum(getFrom(s, 'vitality.hp-temp.value', null), null);
-  const ac = formActive ? safeNum(getFrom(s, 'wildShape.form.ac.value', null), null) : safeNum(getFrom(s, 'vitality.ac.value', null), null);
-  const speed = formActive ? safeNum(getFrom(s, 'wildShape.form.speed.value', null), null) : safeNum(getFrom(s, 'vitality.speed.value', null), null);
+  const hpMax = safeNum(getFrom(s, 'vitality.hp-max.value', null), null);
+  const hpCur = safeNum(getFrom(s, 'vitality.hp-current.value', null), null);
+  const hpTemp = safeNum(getFrom(s, 'vitality.hp-temp.value', null), null);
+  const ac = safeNum(getFrom(s, 'vitality.ac.value', null), null);
+  const speed = safeNum(getFrom(s, 'vitality.speed.value', null), null);
   const lvl = safeNum(getFrom(s, 'info.level.value', null), null);
   const stats = {
-    str: formActive ? safeNum(getFrom(s, 'wildShape.form.stats.str.score', null), null) : safeNum(getFrom(s, 'stats.str.score', null), null),
-    dex: formActive ? safeNum(getFrom(s, 'wildShape.form.stats.dex.score', null), null) : safeNum(getFrom(s, 'stats.dex.score', null), null),
-    con: formActive ? safeNum(getFrom(s, 'wildShape.form.stats.con.score', null), null) : safeNum(getFrom(s, 'stats.con.score', null), null),
-    int: formActive ? safeNum(getFrom(s, 'wildShape.form.stats.int.score', null), null) : safeNum(getFrom(s, 'stats.int.score', null), null),
-    wis: formActive ? safeNum(getFrom(s, 'wildShape.form.stats.wis.score', null), null) : safeNum(getFrom(s, 'stats.wis.score', null), null),
-    cha: formActive ? safeNum(getFrom(s, 'wildShape.form.stats.cha.score', null), null) : safeNum(getFrom(s, 'stats.cha.score', null), null)
+    str: safeNum(getFrom(s, 'stats.str.score', null), null),
+    dex: safeNum(getFrom(s, 'stats.dex.score', null), null),
+    con: safeNum(getFrom(s, 'stats.con.score', null), null),
+    int: safeNum(getFrom(s, 'stats.int.score', null), null),
+    wis: safeNum(getFrom(s, 'stats.wis.score', null), null),
+    cha: safeNum(getFrom(s, 'stats.cha.score', null), null)
   };
   return { hpMax, hpCur, hpTemp, ac, speed, lvl, stats };
-}
-
-function remapSheetPathForWildShape(player, path) {
-  const s = player?.sheet?.parsed || {};
-  if (!getFrom(s, 'wildShape.active', false)) return path;
-  const map = {
-    'vitality.hp-max': 'wildShape.form.hp-max',
-    'vitality.hp-current': 'wildShape.form.hp-current',
-    'vitality.hp-temp': 'wildShape.form.hp-temp',
-    'vitality.ac': 'wildShape.form.ac',
-    'vitality.speed': 'wildShape.form.speed'
-  };
-  return map[path] || path;
 }
 
 function ensureSheetPath(sheetObj, path) {
@@ -443,8 +429,7 @@ function upsertSheetNumber(player, path, value) {
   if (!canEditTokenMiniSheet(current)) return;
   const nextSheet = deepClone(current.sheet || { parsed: {} });
   if (!nextSheet.parsed || typeof nextSheet.parsed !== 'object') nextSheet.parsed = {};
-  const mappedPath = remapSheetPathForWildShape(current, path);
-  const { parent, key } = ensureSheetPath(nextSheet.parsed, mappedPath);
+  const { parent, key } = ensureSheetPath(nextSheet.parsed, path);
   if (!parent || !key) return;
   if (!parent[key] || typeof parent[key] !== 'object') parent[key] = {};
   parent[key].value = value;
