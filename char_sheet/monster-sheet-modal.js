@@ -1801,18 +1801,14 @@
         ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
         <div class="monster-sheet__hero ${isEmbedded ? 'monster-sheet__hero--embedded' : ''}">
           <div>
-            ${isEmbedded ? `
-              <div class="monster-sheet__title">${esc(vm.playerName)}</div>
-            ` : `
-              <input
-                class="monster-sheet__title-input"
-                type="text"
-                ${canEdit ? '' : 'disabled'}
-                data-monster-player-name
-                value="${esc(vm.playerName)}"
-                placeholder="Имя персонажа"
-              >
-            `}
+            <input
+              class="monster-sheet__title-input"
+              type="text"
+              ${canEdit ? '' : 'disabled'}
+              data-monster-player-name
+              value="${esc(vm.playerName)}"
+              placeholder="Имя персонажа"
+            >
             ${vm.subtitle ? `<div class="monster-sheet__subtitle">${esc(vm.subtitle)}</div>` : ''}
             <div class="monster-sheet__summary">
               ${vm.challenge ? `<span class="monster-chip">${esc(vm.challenge)}</span>` : ''}
