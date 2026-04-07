@@ -9,8 +9,8 @@
     rotateZ: -45,
     panX: 0,
     panY: 0,
-    originX: '50%',
-    originY: '50%'
+    originX: null,
+    originY: null
   };
   let dragState = null;
   let controlsBound = false;
@@ -47,20 +47,38 @@
   }
 
   function getIsometricTransformOrigin() {
-    const ox = String(isoState.originX || '50%').trim() || '50%';
-    const oy = String(isoState.originY || '50%').trim() || '50%';
-    return `${ox} ${oy}`;
+    const ox = Number(isoState.originX);
+    const oy = Number(isoState.originY);
+    if (Number.isFinite(ox) && Number.isFinite(oy)) return `${ox}px ${oy}px`;
+    return '50% 50%';
   }
 
-  function setPivotFromPointer(clientX, clientY) {
+  function setPivotFromPointer(clientX, clientY, rawTarget) {
     const board = document.getElementById('game-board');
     if (!board) return;
+    const target = rawTarget && rawTarget.closest ? rawTarget : null;
+    const cell = target ? target.closest('.cell') : null;
+
+    if (cell && cell.dataset) {
+      const cx = Number(cell.dataset.x);
+      const cy = Number(cell.dataset.y);
+      const cellW = Number(cell.offsetWidth) || 50;
+      const cellH = Number(cell.offsetHeight) || 50;
+      if (Number.isFinite(cx) && Number.isFinite(cy)) {
+        isoState.originX = (cx * cellW) + (cellW / 2);
+        isoState.originY = (cy * cellH) + (cellH / 2);
+        return;
+      }
+    }
+
     const rect = board.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
+    const bw = Number(board.offsetWidth) || Number(rect.width) || 0;
+    const bh = Number(board.offsetHeight) || Number(rect.height) || 0;
+    if (!rect.width || !rect.height || !bw || !bh) return;
     const rx = clamp((Number(clientX) - rect.left) / rect.width, 0, 1);
     const ry = clamp((Number(clientY) - rect.top) / rect.height, 0, 1);
-    isoState.originX = `${(rx * 100).toFixed(2)}%`;
-    isoState.originY = `${(ry * 100).toFixed(2)}%`;
+    isoState.originX = rx * bw;
+    isoState.originY = ry * bh;
   }
 
   function centerBoardInWrapper() {
@@ -95,7 +113,7 @@
     wrapper.addEventListener('mousedown', (e) => {
       if (e.button !== 1) return;
       if (normalizeMode(window.__boardViewMode) !== 'isometric') return;
-      setPivotFromPointer(e.clientX, e.clientY);
+      setPivotFromPointer(e.clientX, e.clientY, e.target);
       dragState = { x: e.clientX, y: e.clientY };
       wrapper.classList.add('board-view--dragging');
       applyBoardViewMode('isometric');
