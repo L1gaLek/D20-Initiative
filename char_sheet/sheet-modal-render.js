@@ -522,6 +522,11 @@ function renderCombatTab(vm) {
               </div>
             </div>
 
+            <div class="weapon-prof-quick">
+              <div class="weapon-fieldlabel">Бонус владения</div>
+              <button class="weapon-prof-dot ${w.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к бонусу атаки"></button>
+            </div>
+
             <!-- рамка под названием: Бонус атаки + Урон (всегда видима) -->
             <div class="weapon-summary">
               <div class="weapon-sum-item">
@@ -546,21 +551,17 @@ function renderCombatTab(vm) {
               <div class="weapon-details-grid">
                 <div class="weapon-fieldbox weapon-ability">
                   <div class="weapon-fieldlabel">Характеристика</div>
-                  <select class="weapon-select" data-weapon-field="ability">
-                    ${abilityOptions.map(o => `<option value="${o.k}" ${o.k === w.ability ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
-                  </select>
-                </div>
-
-                <div class="weapon-fieldbox weapon-fieldbox-inline">
-                  <div class="weapon-fieldlabel">Бонус владения</div>
-                  <button class="weapon-prof-dot ${w.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к бонусу атаки"></button>
-                </div>
-
-                <div class="weapon-fieldbox">
-                  <div class="weapon-fieldlabel">Доп. модификатор</div>
-                  <input class="weapon-num weapon-extra" type="number" step="1"
-                         value="${escapeHtml(String(safeInt(w.extraAtk, 0)))}"
-                         data-weapon-field="extraAtk">
+                  <div class="weapon-ability-row">
+                    <select class="weapon-select weapon-ability-main" data-weapon-field="ability">
+                      ${abilityOptions.map(o => `<option value="${o.k}" ${o.k === w.ability ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
+                    </select>
+                    <div class="weapon-ability-extra-wrap">
+                      <div class="weapon-fieldlabel">Доп. модификатор</div>
+                      <input class="weapon-num weapon-extra" type="number" step="1"
+                             value="${escapeHtml(String(safeInt(w.extraAtk, 0)))}"
+                             data-weapon-field="extraAtk">
+                    </div>
+                  </div>
                 </div>
 
                 <div class="weapon-fieldbox weapon-dmg-edit">
@@ -572,11 +573,11 @@ function renderCombatTab(vm) {
                     <select class="weapon-select weapon-dice" data-weapon-field="dmgDice">
                       ${diceOptions.map(d => `<option value="${d}" ${d === w.dmgDice ? "selected" : ""}>${escapeHtml(d)}</option>`).join("")}
                     </select>
+                    <input class="weapon-text weapon-dmg-type weapon-dmg-type-inline" type="text"
+                           value="${escapeHtml(String(w.dmgType || ""))}"
+                           placeholder="вид урона (колющий/рубящий/...)"
+                           data-weapon-field="dmgType">
                   </div>
-                  <input class="weapon-text weapon-dmg-type weapon-dmg-type-full" type="text"
-                         value="${escapeHtml(String(w.dmgType || ""))}"
-                         placeholder="вид урона (колющий/рубящий/...)"
-                         data-weapon-field="dmgType">
                 </div>
               </div>
 
