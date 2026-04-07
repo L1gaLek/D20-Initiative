@@ -1320,7 +1320,7 @@
     });
   }
 
-  function bindMonsterHpRollControls(root, player, canEdit) {
+  function bindMonsterHpRollControls(root, player, canEdit, options = {}) {
     if (!canEdit) return;
     const inputs = Array.from(root.querySelectorAll('[data-monster-hp-roll-field]'));
     const rerollBtn = root.querySelector('[data-monster-hp-roll]');
@@ -1361,7 +1361,8 @@
         if (tokenEl) updateHpBar?.(player, tokenEl);
       } catch {}
       scheduleSave(player);
-      await render(player, { canEdit, force: true });
+      if (typeof options?.rerender === 'function') await options.rerender();
+      else await render(player, { canEdit, force: true });
     });
   }
 
@@ -1438,7 +1439,7 @@
   }
 
 
-  function bindManualDescriptionTab(root, player, vm, canEdit) {
+  function bindManualDescriptionTab(root, player, vm, canEdit, options = {}) {
     const main = root.querySelector('#sheet-main');
     if (!main) return;
 
@@ -1447,11 +1448,11 @@
       bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
       bindMonsterStatRollButtons(root, player);
-      bindMonsterHpRollControls(root, player, canEdit);
+      bindMonsterHpRollControls(root, player, canEdit, options);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
       if (typeof bindAppearanceUi === 'function') bindAppearanceUi(root, player, canEdit);
-      bindManualDescriptionTab(root, player, vm, canEdit);
+      bindManualDescriptionTab(root, player, vm, canEdit, options);
       markModalInteracted(player.id);
     };
 
@@ -1524,11 +1525,11 @@
       bindMonsterNameInput(root, player, canEdit);
       bindMonsterSheetInputs(root, player);
       bindMonsterStatRollButtons(root, player);
-      bindMonsterHpRollControls(root, player, canEdit);
+      bindMonsterHpRollControls(root, player, canEdit, options);
       bindMonsterHpAdjustControls(root, player, canEdit);
       if (typeof bindEditableInputs === 'function') bindEditableInputs(root, player, canEdit);
       if (typeof bindAppearanceUi === 'function') bindAppearanceUi(root, player, canEdit);
-      if (player._activeSheetTab === 'monster-manual') bindManualDescriptionTab(root, player, vm, canEdit);
+      if (player._activeSheetTab === 'monster-manual') bindManualDescriptionTab(root, player, vm, canEdit, options);
     };
 
     buttons.forEach((button) => {
@@ -1548,7 +1549,7 @@
     bindCurrentTab();
   }
 
-  function bindImportControls(root, player, canEdit) {
+  function bindImportControls(root, player, canEdit, options = {}) {
     if (!canEdit) return;
     const input = root?.querySelector?.('[data-monster-import-url]');
     const button = root?.querySelector?.('[data-monster-import-btn]');
@@ -1574,7 +1575,8 @@
         }
         scheduleSave(player);
         markModalInteracted(player.id);
-        await render(player, { canEdit, force: true });
+        if (typeof options?.rerender === 'function') await options.rerender();
+        else await render(player, { canEdit, force: true });
       } catch (err) {
         console.error('Monster import failed', err);
         alert(err?.message || 'Не удалось импортировать монстра по ссылке');
@@ -1752,8 +1754,10 @@
     rootEl.addEventListener('pointerdown', () => markModalInteracted(player.id), { passive: true });
     rootEl.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
 
-    bindTabs(rootEl, player, vm, canEdit, options);
-    bindImportControls(rootEl, player, canEdit);
+    const rerender = () => renderMonsterSheetIntoRoot(rootEl, player, { ...options, activeTab: player?._activeSheetTab || options?.activeTab || 'monster-main' });
+    const bindOptions = { ...options, rerender };
+    bindTabs(rootEl, player, vm, canEdit, bindOptions);
+    bindImportControls(rootEl, player, canEdit, bindOptions);
     return true;
   }
 
