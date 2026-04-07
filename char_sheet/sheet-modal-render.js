@@ -519,6 +519,12 @@ function renderCombatTab(vm) {
               <div class="weapon-actions">
                 <button class="weapon-btn" type="button" data-weapon-toggle-desc>${collapsed ? "Показать" : "Скрыть"}</button>
                 <button class="weapon-btn danger" type="button" data-weapon-del>Удалить</button>
+                ${collapsed ? "" : `
+                  <div class="weapon-prof-quick weapon-prof-quick-inline">
+                    <div class="weapon-fieldlabel">Бонус владения</div>
+                    <button class="weapon-prof-dot ${w.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к бонусу атаки"></button>
+                  </div>
+                `}
               </div>
             </div>
 
@@ -550,11 +556,13 @@ function renderCombatTab(vm) {
             <div class="weapon-details ${collapsed ? "collapsed" : ""}">
               <div class="weapon-details-grid">
                 <div class="weapon-fieldbox weapon-ability">
-                  <div class="weapon-fieldlabel">Характеристика</div>
                   <div class="weapon-ability-row">
-                    <select class="weapon-select weapon-ability-main" data-weapon-field="ability">
-                      ${abilityOptions.map(o => `<option value="${o.k}" ${o.k === w.ability ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
-                    </select>
+                    <div class="weapon-ability-main-wrap">
+                      <div class="weapon-fieldlabel">Характеристика</div>
+                      <select class="weapon-select weapon-ability-main" data-weapon-field="ability">
+                        ${abilityOptions.map(o => `<option value="${o.k}" ${o.k === w.ability ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("")}
+                      </select>
+                    </div>
                     <div class="weapon-ability-extra-wrap">
                       <div class="weapon-fieldlabel">Доп. модификатор</div>
                       <input class="weapon-num weapon-extra" type="number" step="1"

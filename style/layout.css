@@ -1568,16 +1568,21 @@
   background: rgba(255,255,255,.04);
   border-radius: 10px;
   padding: 6px 10px;
-  margin: 8px 0;
-  max-width: 160px;
+  margin: 0;
+  min-width: 160px;
 }
 .weapon-prof-quick .weapon-fieldlabel{ margin-bottom: 0; white-space: normal; }
+.weapon-prof-quick-inline{
+  border-radius: 10px;
+  padding: 4px 10px;
+}
 .weapon-ability-row{
   display:flex;
   align-items:flex-end;
   gap:10px;
 }
-.weapon-ability-main{ flex:1 1 auto; min-width: 0; }
+.weapon-ability-main-wrap{ flex:1 1 auto; min-width: 0; }
+.weapon-ability-main{ width:100%; }
 .weapon-ability-extra-wrap{
   flex: 0 0 132px;
 }
@@ -1587,10 +1592,10 @@
 }
 .weapon-dmg-type-inline{
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: 120px;
 }
 .weapon-dmg-edit .weapon-dice{
-  width: 44px;
+  width: 88px;
 }
 
 /* ===== Combat abilities (like Notes) ===== */
