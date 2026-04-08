@@ -1873,7 +1873,9 @@ addPlayerBtn.addEventListener('click', () => {
   const isAlly = !!isAllyCheckbox?.checked;
   const isEnemy = gmCreating ? (!isAllyCheckbox?.checked || !!isEnemyCheckbox?.checked) : !!isEnemyCheckbox?.checked;
 
+  const playerId = (crypto?.randomUUID ? crypto.randomUUID() : (`p-${Date.now()}-${Math.random().toString(16).slice(2)}`));
   const player = {
+    id: playerId,
     name,
     color: playerColorInput.value,
     size: parseInt(playerSizeInput.value, 10),
@@ -1882,6 +1884,12 @@ addPlayerBtn.addEventListener('click', () => {
     isEnemy
   };
 
+  try {
+    window.__pendingCreatedPlayerPlacement = {
+      id: playerId,
+      createdAt: Date.now()
+    };
+  } catch {}
   sendMessage({ type: 'addPlayer', player });
 
   playerNameInput.value = '';

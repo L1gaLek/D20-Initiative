@@ -712,13 +712,36 @@ try { handleSessionUiMessage?.(msg); } catch {}
           const prompted = window.__tokenPlacementPrompted;
           const ownUserId = String(getAppStorageItem?.('int_user_id') || '').trim();
           const ownRuntimeId = String(window.myId || '').trim();
-          const createdNow = (lastState?.players || []).find((p) => {
-            const pid = String(p?.id || '').trim();
-            if (!pid || prevPlayerIds.has(pid) || prompted.has(pid)) return false;
-            const ownerId = String(p?.ownerId || '').trim();
-            if (ownerId !== ownUserId && ownerId !== ownRuntimeId) return false;
-            return true;
-          });
+          const pending = (window.__pendingCreatedPlayerPlacement && typeof window.__pendingCreatedPlayerPlacement === 'object')
+            ? window.__pendingCreatedPlayerPlacement
+            : null;
+          const pendingId = String(pending?.id || '').trim();
+          const pendingFresh = (Date.now() - (Number(pending?.createdAt) || 0)) < 15000;
+
+          let createdNow = null;
+          if (pendingId && pendingFresh) {
+            createdNow = (lastState?.players || []).find((p) => {
+              const pid = String(p?.id || '').trim();
+              if (!pid || pid !== pendingId || prompted.has(pid)) return false;
+              const ownerId = String(p?.ownerId || '').trim();
+              if (ownerId !== ownUserId && ownerId !== ownRuntimeId) return false;
+              return true;
+            }) || null;
+          }
+
+          if (!createdNow) {
+            createdNow = (lastState?.players || []).find((p) => {
+              const pid = String(p?.id || '').trim();
+              if (!pid || prevPlayerIds.has(pid) || prompted.has(pid)) return false;
+              const ownerId = String(p?.ownerId || '').trim();
+              if (ownerId !== ownUserId && ownerId !== ownRuntimeId) return false;
+              return true;
+            }) || null;
+          }
+
+          if (pending && (!pendingFresh || (createdNow && String(createdNow?.id || '').trim() === pendingId))) {
+            try { window.__pendingCreatedPlayerPlacement = null; } catch {}
+          }
           if (createdNow) {
             const pid = String(createdNow.id || '').trim();
             prompted.add(pid);
