@@ -135,13 +135,18 @@ function updateTokenPreview(root, player, sheet) {
     if (!sheet.appearance.token || typeof sheet.appearance.token !== 'object') sheet.appearance.token = {};
     if (!sheet.appearance.token.crop || typeof sheet.appearance.token.crop !== 'object') sheet.appearance.token.crop = {};
 
-    const mode = String(sheet.appearance.token.mode || '').trim() || 'crop';
+    const normalizeMode = window.TokenIsoMini?.normalizeTokenMode;
+    const mode = typeof normalizeMode === 'function'
+      ? normalizeMode(String(sheet.appearance.token.mode || '').trim())
+      : (String(sheet.appearance.token.mode || '').trim() || 'crop');
     const cropX = Math.max(0, Math.min(100, safeInt(sheet.appearance.token.crop.x, 50)));
     const cropY = Math.max(0, Math.min(100, safeInt(sheet.appearance.token.crop.y, 35)));
     const zoom = Math.max(80, Math.min(220, safeInt(sheet.appearance.token.crop.zoom, 140)));
 
     // Base image URL (same logic as appearance preview)
-    const src = getAppearanceBaseImageUrl(sheet);
+    const src = (mode === 'iso-mini')
+      ? String(sheet?.appearance?.token?.isoMiniUrl || '').trim()
+      : getAppearanceBaseImageUrl(sheet);
 
     // Border color from player
     prev.style.setProperty('--token-border', String(player.color || '#888'));
@@ -162,7 +167,7 @@ function updateTokenPreview(root, player, sheet) {
       prev.style.backgroundImage = `url("${src}")`;
       prev.style.backgroundRepeat = 'no-repeat';
 
-      if (mode === 'full') {
+      if (mode === 'full' || mode === 'portrait' || mode === 'iso-mini') {
         prev.style.backgroundSize = 'contain';
         prev.style.backgroundPosition = 'center center';
       } else {
@@ -189,14 +194,56 @@ function bindAppearanceUi(root, player, canEdit) {
   // token preview
   try {
     if (!sheet.appearance || typeof sheet.appearance !== 'object') sheet.appearance = {};
-    if (!sheet.appearance.token || typeof sheet.appearance.token !== 'object') sheet.appearance.token = { mode: 'crop', crop: { x: 50, y: 35, zoom: 140 } };
+    if (!sheet.appearance.token || typeof sheet.appearance.token !== 'object') sheet.appearance.token = { mode: 'portrait', crop: { x: 50, y: 35, zoom: 140 } };
     if (!sheet.appearance.token.crop || typeof sheet.appearance.token.crop !== 'object') sheet.appearance.token.crop = { x: 50, y: 35, zoom: 140 };
-    if (!sheet.appearance.token.mode) sheet.appearance.token.mode = 'crop';
+    const normalizeMode = window.TokenIsoMini?.normalizeTokenMode;
+    if (!sheet.appearance.token.mode) sheet.appearance.token.mode = 'portrait';
+    if (typeof normalizeMode === 'function') {
+      sheet.appearance.token.mode = normalizeMode(sheet.appearance.token.mode);
+    }
     if (sheet.appearance.token.crop.x === undefined) sheet.appearance.token.crop.x = 50;
     if (sheet.appearance.token.crop.y === undefined) sheet.appearance.token.crop.y = 35;
     if (sheet.appearance.token.crop.zoom === undefined) sheet.appearance.token.crop.zoom = 140;
+    if (sheet.appearance.token.isoMiniUrl === undefined) sheet.appearance.token.isoMiniUrl = '';
   } catch {}
   updateTokenPreview(root, player, sheet);
+
+  // iso-mini upload
+  const tokenIsoUpload = root.querySelector('[data-token-iso-upload]');
+  const tokenIsoClear = root.querySelector('[data-token-iso-clear]');
+  const tokenIsoUrl = root.querySelector('[data-token-iso-url]');
+  const setIsoMiniUrl = (val) => {
+    const next = String(val || '').trim();
+    if (!sheet.appearance.token || typeof sheet.appearance.token !== 'object') sheet.appearance.token = {};
+    sheet.appearance.token.isoMiniUrl = next;
+    if (tokenIsoUrl) tokenIsoUrl.value = next;
+    try { updateTokenPreview(root, player, sheet); } catch {}
+    scheduleSheetSave(player);
+  };
+  if (tokenIsoUpload && canEdit) {
+    tokenIsoUpload.addEventListener('change', async () => {
+      try {
+        const file = tokenIsoUpload.files?.[0];
+        if (!file) return;
+        if (!String(file.type || '').startsWith('image/')) return;
+        const dataUrl = await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(String(fr.result || ''));
+          fr.onerror = () => reject(fr.error || new Error('read failed'));
+          fr.readAsDataURL(file);
+        });
+        setIsoMiniUrl(dataUrl);
+      } catch (e) {
+        console.warn('iso-mini upload failed', e);
+      } finally {
+        try { tokenIsoUpload.value = ''; } catch {}
+      }
+    });
+  }
+  if (tokenIsoClear && canEdit) {
+    tokenIsoClear.addEventListener('click', () => setIsoMiniUrl(''));
+  }
+  if (tokenIsoUrl) tokenIsoUrl.value = String(sheet?.appearance?.token?.isoMiniUrl || '');
 
   // live updates
   const raceSel = root.querySelector('[data-race-select]');
@@ -211,4 +258,3 @@ function bindAppearanceUi(root, player, canEdit) {
   genderSel?.addEventListener('change', onAnyToken);
   baseOverrideInp?.addEventListener('input', onAnyToken);
 }
-
