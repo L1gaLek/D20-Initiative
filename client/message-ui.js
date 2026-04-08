@@ -1649,6 +1649,11 @@ function updatePlayerList() {
       // Быстрые кнопки: "С поля" / "Удалить" — в один ряд с размером/цветом
       if (myRole === "GM" || p.ownerId === myId) {
         const isOnBoard = Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y));
+        const canShowCombatPlacementReady = (
+          !isOnBoard &&
+          phaseNow === 'combat' &&
+          !!p?.inCombat
+        );
         const placeToggleBtn = document.createElement('button');
         placeToggleBtn.textContent = isOnBoard ? 'С поля' : 'На поле';
         placeToggleBtn.classList.add('mini-action-btn');
@@ -1656,7 +1661,7 @@ function updatePlayerList() {
           placeToggleBtn.classList.add('mini-action-btn--secondary');
         } else {
           placeToggleBtn.classList.add('mini-action-btn--ghost');
-          if (phaseNow === 'combat') placeToggleBtn.classList.add('mini-action-btn--place-ready');
+          if (canShowCombatPlacementReady) placeToggleBtn.classList.add('mini-action-btn--place-ready');
         }
         placeToggleBtn.onclick = (e) => {
           e.stopPropagation();

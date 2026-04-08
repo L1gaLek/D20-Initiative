@@ -571,9 +571,9 @@
 }
 
 .mini-action-btn--danger{
-  background: rgba(187, 38, 38, 0.45);
-  border-color: rgba(255, 92, 92, 0.62);
-  color: #ffe9e9;
+  background: rgba(255, 80, 80, 0.10);
+  border-color: rgba(255, 80, 80, 0.35);
+  color: #ffdede;
 }
 
 .player-actions-row--bottom{
