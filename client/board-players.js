@@ -907,11 +907,23 @@ function rollTokenMiniWeapon(player, weaponIdx, kind) {
     const dice = String(weapon?.dmgDice || 'к6').trim().toLowerCase();
     const sides = Math.max(1, safeNum(dice.replace('к', ''), 6) ?? 6);
     const bonus = (typeof calcWeaponDamageBonus === 'function') ? calcWeaponDamageBonus(sheet, weapon) : tokenMiniStatMod(sheet, weapon?.ability);
-    window.DicePanel.roll({ sides, count, bonus, kindText: `Урон: ${count}d${sides} ${formatSignedValue(bonus, '+0')}` });
+    window.DicePanel.roll({
+      sides,
+      count,
+      bonus,
+      kindText: `Урон: ${count}d${sides} ${formatSignedValue(bonus, '+0')}`,
+      actorName: current?.isBase ? '' : String(current?.name || '')
+    });
     return;
   }
   const bonus = (typeof calcWeaponAttackBonus === 'function') ? calcWeaponAttackBonus(sheet, weapon) : (safeNum(weapon?.extraAtk, 0) ?? 0);
-  window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `Атака: d20 ${formatSignedValue(bonus, '+0')}` });
+  window.DicePanel.roll({
+    sides: 20,
+    count: 1,
+    bonus,
+    kindText: `Атака: d20 ${formatSignedValue(bonus, '+0')}`,
+    actorName: current?.isBase ? '' : String(current?.name || '')
+  });
 }
 
 function useTokenMiniPower(player, defId, subId, mode) {
@@ -2923,6 +2935,23 @@ board.addEventListener('click', e => {
   try { window.hideCombatMoveOverlay?.(); } catch {}
 });
 
+window.beginTokenPlacementForPlayer = function beginTokenPlacementForPlayer(playerId) {
+  try {
+    const pid = String(playerId || '').trim();
+    if (!pid) return false;
+    const live = (players || []).find((pp) => String(pp?.id || '') === pid);
+    if (!live) return false;
+    selectedPlayer = live;
+    try { window.syncSelectedPlayerUi?.(); } catch {}
+    try { window.updateMovePreview?.(); } catch {}
+    try { window.renderCombatMoveOverlay?.(); } catch {}
+    try { alert(`Выберите клетку на поле, чтобы разместить токен «${String(live?.name || 'Игрок')}».`); } catch {}
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 document.addEventListener('keydown', (e) => {
   try {
     if (e.key !== 'Escape') return;
@@ -3504,7 +3533,7 @@ window.DicePanel = window.DicePanel || {};
 // Programmatic dice roll used by InfoModal etc.
 // If silent=true, it will only animate/update the local dice panel UI and will NOT send log/diceEvent.
 // Returns: {sides,count,bonus,rolls,sum,total}
-window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false } = {}) => {
+window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false, actorName = '' } = {}) => {
   if (diceAnimBusy) return;
   diceAnimBusy = true;
 
@@ -3558,11 +3587,13 @@ if (critType) {
   if (!silent) {
     try {
       if (typeof sendMessage === "function") {
+        const actor = String(actorName || '').trim();
+        const fromName = actor || ((typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '');
         sendMessage({
           type: "diceEvent",
           event: {
             fromId: (typeof myId !== 'undefined') ? String(myId) : '',
-            fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
+            fromName,
             kindText: kindText ? String(kindText) : `d${S} × ${C}`,
             sides: S,
             count: C,

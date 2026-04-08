@@ -502,6 +502,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       const prevPhase = String(lastState?.phase || '');
       const prevInitiativeEpoch = Number(lastState?.initiativeEpoch) || 0;
       const prevMapId = String(lastState?.currentMapId || '').trim();
+      const prevPlayerIds = new Set((lastState?.players || []).map((p) => String(p?.id || '').trim()).filter(Boolean));
       const prevPos = new Map();
       const prevSheets = new Map();
       const prevInitiatives = new Map();
@@ -701,6 +702,30 @@ try { handleSessionUiMessage?.(msg); } catch {}
       updateCurrentPlayer(normalized);
       renderTurnOrderBox(normalized);
       renderInitiativePlayersBox(normalized);
+
+      // Если в фазе боя пользователь создал персонажа, предлагаем сразу разместить токен.
+      try {
+        const phaseNow = String(lastState?.phase || '');
+        if (phaseNow === 'combat') {
+          if (!(window.__tokenPlacementPrompted instanceof Set)) window.__tokenPlacementPrompted = new Set();
+          const prompted = window.__tokenPlacementPrompted;
+          const ownUserId = String(getAppStorageItem?.('int_user_id') || window.myId || '').trim();
+          const createdNow = (lastState?.players || []).find((p) => {
+            const pid = String(p?.id || '').trim();
+            if (!pid || prevPlayerIds.has(pid) || prompted.has(pid)) return false;
+            if (String(p?.ownerId || '').trim() !== ownUserId) return false;
+            return true;
+          });
+          if (createdNow) {
+            const pid = String(createdNow.id || '').trim();
+            prompted.add(pid);
+            const shouldPlace = window.confirm('Разместить токен на поле?');
+            if (shouldPlace) {
+              window.beginTokenPlacementForPlayer?.(pid);
+            }
+          }
+        }
+      } catch {}
 
       // v4: log is append-only in room_log.
       // Do NOT clear the UI log on every room_state snapshot update.
