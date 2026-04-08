@@ -2853,6 +2853,10 @@ board.addEventListener('click', e => {
   }
 
   const teleportInfo = window.getCombatTeleportInfo?.(selectedPlayer);
+  const forcePlacementSet = (window.__allowInitialCombatPlacementIds instanceof Set)
+    ? window.__allowInitialCombatPlacementIds
+    : null;
+  const forceInitialPlacement = !!(forcePlacementSet && forcePlacementSet.has(String(selectedPlayer?.id || '')));
   if (teleportInfo?.rangeCells > 0) {
     if (!window.canUseCombatTeleportTo?.(selectedPlayer, x, y)) {
       alert('Эта клетка недоступна для телепортации');
@@ -2872,6 +2876,15 @@ board.addEventListener('click', e => {
   }
 
   const combatRestricted = !!window.isCombatRestrictedSelection?.(selectedPlayer);
+  if (forceInitialPlacement) {
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
+    try { forcePlacementSet?.delete(String(selectedPlayer?.id || '')); } catch {}
+    selectedPlayer = null;
+    try { window.syncSelectedPlayerUi?.(); } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
+    return;
+  }
   const moveInfo = combatRestricted ? window.getCombatMoveBudgetInfo?.(selectedPlayer) : null;
   const dashActive = !!moveInfo?.dash?.active;
   if (combatRestricted) {
@@ -2941,6 +2954,10 @@ window.beginTokenPlacementForPlayer = function beginTokenPlacementForPlayer(play
     if (!pid) return false;
     const live = (players || []).find((pp) => String(pp?.id || '') === pid);
     if (!live) return false;
+    if (!(window.__allowInitialCombatPlacementIds instanceof Set)) {
+      window.__allowInitialCombatPlacementIds = new Set();
+    }
+    try { window.__allowInitialCombatPlacementIds.add(pid); } catch {}
     selectedPlayer = live;
     try { window.syncSelectedPlayerUi?.(); } catch {}
     try { window.updateMovePreview?.(); } catch {}
