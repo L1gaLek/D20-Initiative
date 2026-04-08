@@ -2843,6 +2843,20 @@ board.addEventListener('click', e => {
   if (x + selectedPlayer.size > boardWidth) x = boardWidth - selectedPlayer.size;
   if (y + selectedPlayer.size > boardHeight) y = boardHeight - selectedPlayer.size;
 
+  const forcePlacementSet = (window.__allowInitialCombatPlacementIds instanceof Set)
+    ? window.__allowInitialCombatPlacementIds
+    : null;
+  const forceInitialPlacement = !!(forcePlacementSet && forcePlacementSet.has(String(selectedPlayer?.id || '')));
+  if (forceInitialPlacement) {
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
+    try { forcePlacementSet?.delete(String(selectedPlayer?.id || '')); } catch {}
+    selectedPlayer = null;
+    try { window.syncSelectedPlayerUi?.(); } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
+    return;
+  }
+
   // Туман войны: опционально может запрещать движение на неоткрытые клетки.
   try {
     if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
