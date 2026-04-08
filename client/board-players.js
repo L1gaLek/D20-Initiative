@@ -1547,10 +1547,7 @@ window.refreshPlayerConditionIndicators = function (playerId) {
 function getTokenDisplaySettings(p) {
   const sheet = getTokenSheetSafe(p);
   const t = sheet?.appearance?.token || p?.appearance?.token || p?.token || null;
-  const normalizeMode = window.TokenIsoMini?.normalizeTokenMode;
-  const mode = typeof normalizeMode === 'function'
-    ? normalizeMode(String(t?.mode || p?.tokenMode || '').trim())
-    : (String(t?.mode || p?.tokenMode || '').trim() || 'crop');
+  const mode = String(t?.mode || p?.tokenMode || '').trim() || 'crop';
   const crop = (t?.crop && typeof t.crop === 'object') ? t.crop : {};
   const x = Math.max(0, Math.min(100, Number(crop.x ?? 50) || 50));
   const y = Math.max(0, Math.min(100, Number(crop.y ?? 35) || 35));
@@ -1567,11 +1564,6 @@ function applyTokenVisual(el, player) {
   const borderColor = String(player.color || '#888');
   el.style.borderColor = borderColor;
 
-  try {
-    const handledByIsoMini = !!window.TokenIsoMini?.applyTokenVisualOverride?.(el, player, mode);
-    if (handledByIsoMini) return;
-  } catch {}
-
   if (mode === 'color' || !src) {
     el.style.backgroundImage = 'none';
     el.style.backgroundColor = borderColor;
@@ -1584,7 +1576,7 @@ function applyTokenVisual(el, player) {
   el.style.backgroundColor = 'transparent';
   el.style.backgroundImage = `url("${src}")`;
   el.style.backgroundRepeat = 'no-repeat';
-  if (mode === 'full' || mode === 'portrait') {
+  if (mode === 'full') {
     el.style.backgroundSize = 'contain';
     el.style.backgroundPosition = 'center center';
   } else {
