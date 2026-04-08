@@ -2885,7 +2885,14 @@ board.addEventListener('click', e => {
 
   const combatRestricted = !!window.isCombatRestrictedSelection?.(selectedPlayer);
   if (forceInitialPlacement) {
-    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
+    sendMessage({
+      type: 'movePlayer',
+      id: selectedPlayer.id,
+      x,
+      y,
+      usedDash: false,
+      ignoreTurnOrderForPlacement: true
+    });
     try { forcePlacementSet?.delete(String(selectedPlayer?.id || '')); } catch {}
     selectedPlayer = null;
     try { window.syncSelectedPlayerUi?.(); } catch {}
