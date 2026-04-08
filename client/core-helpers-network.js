@@ -3296,7 +3296,7 @@ async function sendMessage(msg) {
             const currentId = next.turnOrder?.[next.currentTurnIndex];
             const notPlacedYet = (p.x === null || p.y === null);
             const ignoreTurnOrderForPlacement = !!msg.ignoreTurnOrderForPlacement && notPlacedYet;
-            if (p.id !== currentId && !notPlacedYet && !ignoreTurnOrderForPlacement) return;
+            if (p.id !== currentId && !ignoreTurnOrderForPlacement) return;
           }
 
           const preferredMonsterSize = getMonsterPreferredTokenSize(p);
