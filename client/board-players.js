@@ -1884,12 +1884,6 @@ addPlayerBtn.addEventListener('click', () => {
     isEnemy
   };
 
-  try {
-    window.__pendingCreatedPlayerPlacement = {
-      id: playerId,
-      createdAt: Date.now()
-    };
-  } catch {}
   sendMessage({ type: 'addPlayer', player });
 
   playerNameInput.value = '';
