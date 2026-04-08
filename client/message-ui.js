@@ -710,11 +710,13 @@ try { handleSessionUiMessage?.(msg); } catch {}
         if (phaseNow === 'combat' && !isGmNow) {
           if (!(window.__tokenPlacementPrompted instanceof Set)) window.__tokenPlacementPrompted = new Set();
           const prompted = window.__tokenPlacementPrompted;
-          const ownUserId = String(window.myId || '').trim();
+          const ownUserId = String(getAppStorageItem?.('int_user_id') || '').trim();
+          const ownRuntimeId = String(window.myId || '').trim();
           const createdNow = (lastState?.players || []).find((p) => {
             const pid = String(p?.id || '').trim();
             if (!pid || prevPlayerIds.has(pid) || prompted.has(pid)) return false;
-            if (String(p?.ownerId || '').trim() !== ownUserId) return false;
+            const ownerId = String(p?.ownerId || '').trim();
+            if (ownerId !== ownUserId && ownerId !== ownRuntimeId) return false;
             return true;
           });
           if (createdNow) {
