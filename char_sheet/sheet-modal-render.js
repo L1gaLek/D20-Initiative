@@ -1348,24 +1348,14 @@ function renderShopTab(vm, canEdit) {
                             <span>Цвет</span>
                           </label>
                           <label class="token-mode">
-                            <input type="radio" name="tokenMode" value="portrait" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
-                            <span>Портрет</span>
+                            <input type="radio" name="tokenMode" value="full" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
+                            <span>Персонаж целиком</span>
                           </label>
                           <label class="token-mode">
-                            <input type="radio" name="tokenMode" value="iso-mini" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
-                            <span>Iso-mini</span>
+                            <input type="radio" name="tokenMode" value="crop" data-sheet-path="appearance.token.mode" ${canEdit ? "" : "disabled"}>
+                            <span>Выбрать область</span>
                           </label>
                         </div>
-
-                        <div class="appearance-tokenbox__iso-upload">
-                          <label class="token-iso-upload">
-                            <span>PNG миниатюры</span>
-                            <input type="file" accept="image/png,image/*" data-token-iso-upload ${canEdit ? "" : "disabled"}>
-                          </label>
-                          <button type="button" class="sheet-btn-secondary" data-token-iso-clear ${canEdit ? "" : "disabled"}>Очистить миниатюру</button>
-                        </div>
-
-                        <input type="text" data-sheet-path="appearance.token.isoMiniUrl" data-token-iso-url style="display:none" ${canEdit ? "" : "disabled"}>
 
                         <div class="appearance-tokenbox__crop" data-token-crop>
                           <div class="token-crop-row">
