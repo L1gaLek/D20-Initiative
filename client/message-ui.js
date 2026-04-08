@@ -703,56 +703,6 @@ try { handleSessionUiMessage?.(msg); } catch {}
       renderTurnOrderBox(normalized);
       renderInitiativePlayersBox(normalized);
 
-      // Если в фазе боя пользователь создал персонажа, предлагаем сразу разместить токен.
-      try {
-        const phaseNow = String(lastState?.phase || '');
-        const isGmNow = String(myRole || '') === 'GM';
-        if (phaseNow === 'combat' && !isGmNow) {
-          if (!(window.__tokenPlacementPrompted instanceof Set)) window.__tokenPlacementPrompted = new Set();
-          const prompted = window.__tokenPlacementPrompted;
-          const ownUserId = String(getAppStorageItem?.('int_user_id') || '').trim();
-          const ownRuntimeId = String(window.myId || '').trim();
-          const pending = (window.__pendingCreatedPlayerPlacement && typeof window.__pendingCreatedPlayerPlacement === 'object')
-            ? window.__pendingCreatedPlayerPlacement
-            : null;
-          const pendingId = String(pending?.id || '').trim();
-          const pendingFresh = (Date.now() - (Number(pending?.createdAt) || 0)) < 15000;
-
-          let createdNow = null;
-          if (pendingId && pendingFresh) {
-            createdNow = (lastState?.players || []).find((p) => {
-              const pid = String(p?.id || '').trim();
-              if (!pid || pid !== pendingId || prompted.has(pid)) return false;
-              const ownerId = String(p?.ownerId || '').trim();
-              if (ownerId !== ownUserId && ownerId !== ownRuntimeId) return false;
-              return true;
-            }) || null;
-          }
-
-          if (!createdNow) {
-            createdNow = (lastState?.players || []).find((p) => {
-              const pid = String(p?.id || '').trim();
-              if (!pid || prevPlayerIds.has(pid) || prompted.has(pid)) return false;
-              const ownerId = String(p?.ownerId || '').trim();
-              if (ownerId !== ownUserId && ownerId !== ownRuntimeId) return false;
-              return true;
-            }) || null;
-          }
-
-          if (pending && (!pendingFresh || (createdNow && String(createdNow?.id || '').trim() === pendingId))) {
-            try { window.__pendingCreatedPlayerPlacement = null; } catch {}
-          }
-          if (createdNow) {
-            const pid = String(createdNow.id || '').trim();
-            prompted.add(pid);
-            const shouldPlace = window.confirm('Разместить токен на поле?');
-            if (shouldPlace) {
-              window.beginTokenPlacementForPlayer?.(pid);
-            }
-          }
-        }
-      } catch {}
-
       // v4: log is append-only in room_log.
       // Do NOT clear the UI log on every room_state snapshot update.
       if (lastState && Array.isArray(lastState.log) && lastState.log.length) {
@@ -1698,12 +1648,23 @@ function updatePlayerList() {
       }
       // Быстрые кнопки: "С поля" / "Удалить" — в один ряд с размером/цветом
       if (myRole === "GM" || p.ownerId === myId) {
-        const removeFromBoardBtn = document.createElement('button');
-        removeFromBoardBtn.textContent = 'С поля';
-        removeFromBoardBtn.classList.add('mini-action-btn','mini-action-btn--secondary');
-        removeFromBoardBtn.onclick = (e) => {
+        const isOnBoard = Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y));
+        const placeToggleBtn = document.createElement('button');
+        placeToggleBtn.textContent = isOnBoard ? 'С поля' : 'На поле';
+        placeToggleBtn.classList.add('mini-action-btn');
+        if (isOnBoard) {
+          placeToggleBtn.classList.add('mini-action-btn--secondary');
+        } else {
+          placeToggleBtn.classList.add('mini-action-btn--ghost');
+          if (phaseNow === 'combat') placeToggleBtn.classList.add('mini-action-btn--place-ready');
+        }
+        placeToggleBtn.onclick = (e) => {
           e.stopPropagation();
-          sendMessage({ type: 'removePlayerFromBoard', id: p.id });
+          if (isOnBoard) {
+            sendMessage({ type: 'removePlayerFromBoard', id: p.id });
+            return;
+          }
+          window.beginTokenPlacementForPlayer?.(p.id);
         };
 
         const removeCompletelyBtn = document.createElement('button');
@@ -1719,7 +1680,7 @@ function updatePlayerList() {
         const spacer = document.createElement('span');
         spacer.className = 'player-actions-spacer';
         midRow.appendChild(spacer);
-        midRow.appendChild(removeFromBoardBtn);
+        midRow.appendChild(placeToggleBtn);
         midRow.appendChild(removeCompletelyBtn);
       }
 

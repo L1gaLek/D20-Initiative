@@ -3295,7 +3295,8 @@ async function sendMessage(msg) {
           if (next.phase === "combat" && !isGM) {
             const currentId = next.turnOrder?.[next.currentTurnIndex];
             const notPlacedYet = (p.x === null || p.y === null);
-            if (p.id !== currentId && !notPlacedYet) return;
+            const ignoreTurnOrderForPlacement = !!msg.ignoreTurnOrderForPlacement && notPlacedYet;
+            if (p.id !== currentId && !ignoreTurnOrderForPlacement) return;
           }
 
           const preferredMonsterSize = getMonsterPreferredTokenSize(p);

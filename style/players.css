@@ -559,7 +559,22 @@
 
 .mini-action-btn--secondary{ background: rgba(255,255,255,0.08); }
 
-.mini-action-btn--danger{ background: rgba(255,0,0,0.18); border-color: rgba(255,0,0,0.35); }
+.mini-action-btn--ghost{
+  background: transparent;
+}
+
+.mini-action-btn--place-ready{
+  background: rgba(46, 175, 76, 0.32);
+  border-color: rgba(76, 215, 108, 0.72);
+  color: #eaffef;
+  box-shadow: 0 0 0 1px rgba(76, 215, 108, 0.22) inset;
+}
+
+.mini-action-btn--danger{
+  background: rgba(187, 38, 38, 0.45);
+  border-color: rgba(255, 92, 92, 0.62);
+  color: #ffe9e9;
+}
 
 .player-actions-row--bottom{
   margin-top: 2px;
