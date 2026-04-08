@@ -2,12 +2,17 @@
   border-color: transparent !important;
 }
 
+.board-view--isometric .player.token-mode-iso-mini{
+  transform-style: preserve-3d;
+}
+
 .player .token-iso-mini{
   position: absolute;
   inset: 0;
   overflow: visible;
   pointer-events: none;
   z-index: 2;
+  transform-style: preserve-3d;
 }
 
 .player .token-iso-mini__figure{
@@ -53,8 +58,19 @@
 }
 
 .board-view--isometric .player .token-iso-mini__figure{
-  width: 165%;
-  height: 205%;
+  width: 135%;
+  height: 185%;
+  bottom: 8px;
+  transform: translateX(-50%) translateZ(36px) rotateX(-88deg);
+  transform-origin: 50% 100%;
+}
+
+.board-view--isometric .player .token-iso-mini__base{
+  transform: translateX(-50%) translateZ(2px);
+}
+
+.board-view--isometric .player .token-iso-mini__shadow{
+  transform: translateX(-50%) translateZ(1px);
 }
 
 .appearance-tokenbox__iso-upload{
