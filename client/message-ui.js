@@ -1501,7 +1501,8 @@ function updatePlayerList() {
       const canArmCombatPlacement = (
         phaseNow === 'combat' &&
         !placed &&
-        (myRole === 'GM' || String(p.ownerId || '') === String(myId || ''))
+        String(myRole || '') !== 'GM' &&
+        String(p.ownerId || '') === String(myId || '')
       );
       if (canArmCombatPlacement) {
         li.classList.add('player-list-item--combat-place-ready');
@@ -1685,9 +1686,9 @@ function updatePlayerList() {
       li.addEventListener('click', () => {
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
         if (canArmCombatPlacement) {
-          const wantsPlace = confirm(`Персонаж "${p.name}" готов к постановке на поле.\n\nНажмите OK, затем кликните по нужной клетке (например 4,7).`);
-          if (!wantsPlace) return;
           try { window.setCombatPlacementPendingPlayerId?.(String(cur?.id || '')); } catch {}
+        } else {
+          try { window.setCombatPlacementPendingPlayerId?.(''); } catch {}
         }
         selectedPlayer = cur;
         try { syncSelectedPlayerUi(); } catch {}

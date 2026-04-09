@@ -2832,7 +2832,7 @@ board.addEventListener('click', e => {
   const cell = e.target.closest('.cell');
   if (!cell) return;
   const placementPendingId = getCombatPlacementPendingPlayerId();
-  if (placementPendingId && String(selectedPlayer?.id || '') !== placementPendingId) {
+  if (String(myRole || '') !== 'GM' && placementPendingId && String(selectedPlayer?.id || '') !== placementPendingId) {
     alert('Сначала завершите постановку выбранного нового персонажа на поле.');
     return;
   }
@@ -2951,6 +2951,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!selectedPlayer) return;
     selectedPlayer = null;
+    try { setCombatPlacementPendingPlayerId(''); } catch {}
     try { window.syncSelectedPlayerUi?.(); } catch {}
     try { window.hideMovePreview?.(); } catch {}
     try { window.hideCombatMoveOverlay?.(); } catch {}
