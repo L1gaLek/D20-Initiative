@@ -1658,7 +1658,7 @@ function updatePlayerList() {
         placeToggleBtn.textContent = isOnBoard ? 'С поля' : 'На поле';
         placeToggleBtn.classList.add('mini-action-btn');
         if (isOnBoard) {
-          placeToggleBtn.classList.add('mini-action-btn--secondary');
+          placeToggleBtn.classList.add('mini-action-btn--on-board');
         } else {
           placeToggleBtn.classList.add('mini-action-btn--ghost');
           if (canShowCombatPlacementReady) placeToggleBtn.classList.add('mini-action-btn--place-ready');
@@ -1693,6 +1693,18 @@ function updatePlayerList() {
 
       li.addEventListener('click', () => {
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
+        try {
+          const phaseNow = String(lastState?.phase || '');
+          const mine = String(cur?.ownerId || '') === String(myId || '');
+          const isCurrent = String(cur?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
+          const forcePlacementSet = (window.__allowInitialCombatPlacementIds instanceof Set)
+            ? window.__allowInitialCombatPlacementIds
+            : null;
+          const forcePlacement = !!(forcePlacementSet && forcePlacementSet.has(String(cur?.id || '')));
+          if (phaseNow === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent && !forcePlacement) {
+            return;
+          }
+        } catch {}
         selectedPlayer = cur;
         try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}

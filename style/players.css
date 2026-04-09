@@ -557,7 +557,12 @@
   white-space: nowrap;
 }
 
-.mini-action-btn--secondary{ background: rgba(255,255,255,0.08); }
+.mini-action-btn--on-board{
+  background: rgba(204, 130, 36, 0.22);
+  border-color: rgba(255, 203, 114, 0.55);
+  color: #ffe4b8;
+  box-shadow: 0 0 0 1px rgba(255, 176, 81, 0.18) inset;
+}
 
 .mini-action-btn--ghost{
   background: transparent;
@@ -571,9 +576,9 @@
 }
 
 .mini-action-btn--danger{
-  background: rgba(255, 80, 80, 0.10);
-  border-color: rgba(255, 80, 80, 0.35);
-  color: #ffdede;
+  background: linear-gradient(180deg, rgba(128, 44, 28, 0.95) 0%, rgba(87, 26, 16, 0.98) 100%);
+  border-color: rgba(255, 130, 110, 0.32);
+  color: #ffe3db;
 }
 
 .player-actions-row--bottom{
