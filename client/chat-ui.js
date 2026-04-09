@@ -219,7 +219,7 @@ function closeTavern() {
   if (!tavernDiv) return;
   tavernDiv.classList.add('hidden');
   tavernDiv.setAttribute('aria-hidden', 'true');
-  [tavernChatModal, tavernBartenderModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal].forEach(hideModalEl);
+  [tavernChatModal, tavernBartenderModal, tavernLicenseModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal].forEach(hideModalEl);
   closeTavernUsersPopover();
   updateLobbyModeClass();
   try { lobbyAmbientAudio.sync(); } catch {}
@@ -870,6 +870,10 @@ function openTavernChat() {
 
 function openTavernBartender() {
   showModalEl(tavernBartenderModal);
+}
+
+function openTavernLicense() {
+  showModalEl(tavernLicenseModal);
 }
 
 async function renderTavernBoard() {
@@ -1648,12 +1652,12 @@ try { lobbyAmbientAudio.sync(); } catch {}
 pushTavernMessage({ system: true, text: 'Собирайтесь у стола, слушайте бармена или выбирайте путешествие на доске объявлений.' });
 updateTavernHotspotBadges();
 
-[tavernChatClose, tavernBartenderClose, tavernBoardClose, tavernAdventuresClose, tavernCreateAnnouncementClose, tavernCreateAnnouncementCancel].forEach((btn, idx) => {
+[tavernChatClose, tavernBartenderClose, tavernLicenseClose, tavernBoardClose, tavernAdventuresClose, tavernCreateAnnouncementClose, tavernCreateAnnouncementCancel].forEach((btn, idx) => {
   if (!btn) return;
-  const targets = [tavernChatModal, tavernBartenderModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal, tavernCreateAnnouncementModal];
+  const targets = [tavernChatModal, tavernBartenderModal, tavernLicenseModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal, tavernCreateAnnouncementModal];
   btn.addEventListener('click', () => hideModalEl(targets[idx]));
 });
-[tavernChatModal, tavernBartenderModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal].forEach((modal) => {
+[tavernChatModal, tavernBartenderModal, tavernLicenseModal, tavernBoardModal, tavernAdventuresModal, tavernCreateAnnouncementModal].forEach((modal) => {
   if (!modal) return;
   modal.addEventListener('click', (e) => {
     if (e.target === modal) hideModalEl(modal);
@@ -1661,6 +1665,7 @@ updateTavernHotspotBadges();
 });
 if (tavernChatHotspot) tavernChatHotspot.addEventListener('click', openTavernChat);
 if (tavernBartenderHotspot) tavernBartenderHotspot.addEventListener('click', openTavernBartender);
+if (tavernBartenderLicenseBtn) tavernBartenderLicenseBtn.addEventListener('click', openTavernLicense);
 if (tavernBoardHotspot) tavernBoardHotspot.addEventListener('click', () => { void openTavernBoard(); });
 if (tavernAdventuresHotspot) tavernAdventuresHotspot.addEventListener('click', openTavernAdventures);
 if (tavernChatSend) tavernChatSend.addEventListener('click', () => { sendTavernChatMessage(); });
