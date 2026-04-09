@@ -502,7 +502,6 @@ try { handleSessionUiMessage?.(msg); } catch {}
       const prevPhase = String(lastState?.phase || '');
       const prevInitiativeEpoch = Number(lastState?.initiativeEpoch) || 0;
       const prevMapId = String(lastState?.currentMapId || '').trim();
-      const prevPlayerIds = new Set((lastState?.players || []).map((p) => String(p?.id || '').trim()).filter(Boolean));
       const prevPos = new Map();
       const prevSheets = new Map();
       const prevInitiatives = new Map();
@@ -1648,28 +1647,12 @@ function updatePlayerList() {
       }
       // Быстрые кнопки: "С поля" / "Удалить" — в один ряд с размером/цветом
       if (myRole === "GM" || p.ownerId === myId) {
-        const isOnBoard = Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y));
-        const canShowCombatPlacementReady = (
-          !isOnBoard &&
-          phaseNow === 'combat' &&
-          !!p?.inCombat
-        );
-        const placeToggleBtn = document.createElement('button');
-        placeToggleBtn.textContent = isOnBoard ? 'С поля' : 'На поле';
-        placeToggleBtn.classList.add('mini-action-btn');
-        if (isOnBoard) {
-          placeToggleBtn.classList.add('mini-action-btn--on-board');
-        } else {
-          placeToggleBtn.classList.add('mini-action-btn--ghost');
-          if (canShowCombatPlacementReady) placeToggleBtn.classList.add('mini-action-btn--place-ready');
-        }
-        placeToggleBtn.onclick = (e) => {
+        const removeFromBoardBtn = document.createElement('button');
+        removeFromBoardBtn.textContent = 'С поля';
+        removeFromBoardBtn.classList.add('mini-action-btn','mini-action-btn--secondary');
+        removeFromBoardBtn.onclick = (e) => {
           e.stopPropagation();
-          if (isOnBoard) {
-            sendMessage({ type: 'removePlayerFromBoard', id: p.id });
-            return;
-          }
-          window.beginTokenPlacementForPlayer?.(p.id);
+          sendMessage({ type: 'removePlayerFromBoard', id: p.id });
         };
 
         const removeCompletelyBtn = document.createElement('button');
@@ -1685,7 +1668,7 @@ function updatePlayerList() {
         const spacer = document.createElement('span');
         spacer.className = 'player-actions-spacer';
         midRow.appendChild(spacer);
-        midRow.appendChild(placeToggleBtn);
+        midRow.appendChild(removeFromBoardBtn);
         midRow.appendChild(removeCompletelyBtn);
       }
 
@@ -1693,18 +1676,6 @@ function updatePlayerList() {
 
       li.addEventListener('click', () => {
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
-        try {
-          const phaseNow = String(lastState?.phase || '');
-          const mine = String(cur?.ownerId || '') === String(myId || '');
-          const isCurrent = String(cur?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
-          const forcePlacementSet = (window.__allowInitialCombatPlacementIds instanceof Set)
-            ? window.__allowInitialCombatPlacementIds
-            : null;
-          const forcePlacement = !!(forcePlacementSet && forcePlacementSet.has(String(cur?.id || '')));
-          if (phaseNow === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent && !forcePlacement) {
-            return;
-          }
-        } catch {}
         selectedPlayer = cur;
         try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}

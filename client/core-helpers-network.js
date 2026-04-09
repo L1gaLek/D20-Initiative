@@ -3290,13 +3290,11 @@ async function sendMessage(msg) {
           const p = (next.players || []).find(pp => String(pp.id) === String(msg.id));
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
-          if (next.phase === "initiative" && !isGM) return;
 
           if (next.phase === "combat" && !isGM) {
             const currentId = next.turnOrder?.[next.currentTurnIndex];
             const notPlacedYet = (p.x === null || p.y === null);
-            const ignoreTurnOrderForPlacement = !!msg.ignoreTurnOrderForPlacement && notPlacedYet;
-            if (p.id !== currentId && !ignoreTurnOrderForPlacement) return;
+            if (p.id !== currentId && !notPlacedYet) return;
           }
 
           const preferredMonsterSize = getMonsterPreferredTokenSize(p);
