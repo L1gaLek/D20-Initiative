@@ -33,6 +33,9 @@ const tavernChatBadgeDirect = document.getElementById('tavern-hotspot-chat-badge
 const tavernBartenderModal = document.getElementById('tavernBartenderModal');
 const tavernBartenderClose = document.getElementById('tavernBartenderClose');
 const tavernBartenderNote = document.getElementById('tavern-bartender-note');
+const tavernBartenderLicenseBtn = document.getElementById('tavernBartenderLicenseBtn');
+const tavernLicenseModal = document.getElementById('tavernLicenseModal');
+const tavernLicenseClose = document.getElementById('tavernLicenseClose');
 const tavernBoardModal = document.getElementById('tavernBoardModal');
 const tavernBoardClose = document.getElementById('tavernBoardClose');
 const tavernBoardList = document.getElementById('tavern-board-list');
@@ -516,7 +519,7 @@ function applyRoleToUI() {
   if (gmQuickToolbar) gmQuickToolbar.style.display = spectator ? 'none' : 'flex';
   if (gmQuickPhaseBtn) gmQuickPhaseBtn.style.display = gm ? '' : 'none';
   if (gmQuickToolsBtn) gmQuickToolsBtn.style.display = gm ? '' : 'none';
-  if (gmQuickMusicBtn) gmQuickMusicBtn.style.display = gm ? '' : 'none';
+  if (gmQuickMusicBtn) gmQuickMusicBtn.style.display = spectator ? 'none' : '';
   if (gmQuickSaveBtn) gmQuickSaveBtn.style.display = gm ? '' : 'none';
   if (gmQuickMapBtn) gmQuickMapBtn.style.display = spectator ? 'none' : '';
   if (!gm) setActiveGmQuickPanel('');
