@@ -907,23 +907,11 @@ function rollTokenMiniWeapon(player, weaponIdx, kind) {
     const dice = String(weapon?.dmgDice || 'к6').trim().toLowerCase();
     const sides = Math.max(1, safeNum(dice.replace('к', ''), 6) ?? 6);
     const bonus = (typeof calcWeaponDamageBonus === 'function') ? calcWeaponDamageBonus(sheet, weapon) : tokenMiniStatMod(sheet, weapon?.ability);
-    window.DicePanel.roll({
-      sides,
-      count,
-      bonus,
-      kindText: `Урон: ${count}d${sides} ${formatSignedValue(bonus, '+0')}`,
-      actorName: String(current?.name || '').trim()
-    });
+    window.DicePanel.roll({ sides, count, bonus, kindText: `Урон: ${count}d${sides} ${formatSignedValue(bonus, '+0')}` });
     return;
   }
   const bonus = (typeof calcWeaponAttackBonus === 'function') ? calcWeaponAttackBonus(sheet, weapon) : (safeNum(weapon?.extraAtk, 0) ?? 0);
-  window.DicePanel.roll({
-    sides: 20,
-    count: 1,
-    bonus,
-    kindText: `Атака: d20 ${formatSignedValue(bonus, '+0')}`,
-    actorName: String(current?.name || '').trim()
-  });
+  window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `Атака: d20 ${formatSignedValue(bonus, '+0')}` });
 }
 
 function useTokenMiniPower(player, defId, subId, mode) {
@@ -951,13 +939,7 @@ function useTokenMiniPower(player, defId, subId, mode) {
   const title = String(sub?.name || def?.name || 'Способность').trim() || 'Способность';
   if (mode === 'roll') {
     const bonus = tokenMiniStatMod(sheet, sub?.stat);
-    window.DicePanel?.roll?.({
-      sides: 20,
-      count: 1,
-      bonus,
-      kindText: `${title}: d20${formatSignedValue(bonus, '+0')}`,
-      actorName: String(current?.name || '').trim()
-    });
+    window.DicePanel?.roll?.({ sides: 20, count: 1, bonus, kindText: `${title}: d20${formatSignedValue(bonus, '+0')}` });
   } else {
     try {
       if (typeof sendMessage === 'function') {
@@ -1642,9 +1624,6 @@ function setPlayerPosition(player) {
             const phaseNow = String(lastState?.phase || '');
             const mine = String(cur?.ownerId || '') === String(myId || '');
             const isCurrent = String(cur?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
-            if (phaseNow === 'initiative' && String(myRole || '') !== 'GM' && mine) {
-              return;
-            }
             if (phaseNow === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent) {
               return;
             }
@@ -1873,7 +1852,6 @@ function findFirstFreeSpotClient(size) {
   }
   return null;
 }
-try { window.findFirstFreeSpotClient = findFirstFreeSpotClient; } catch {}
 
 // ================== ADD PLAYER ==================
 addPlayerBtn.addEventListener('click', () => {
@@ -2837,17 +2815,6 @@ addPlayerBtn.addEventListener('click', () => {
 // ================== MOVE PLAYER ==================
 board.addEventListener('click', e => {
   if (!selectedPlayer) return;
-  try {
-    const phaseNow = String(lastState?.phase || '');
-    const mine = String(selectedPlayer?.ownerId || '') === String(myId || '');
-    if (phaseNow === 'initiative' && String(myRole || '') !== 'GM' && mine) {
-      return;
-    }
-    const isCurrent = String(selectedPlayer?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
-    if (phaseNow === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent) {
-      return;
-    }
-  } catch {}
   const cell = e.target.closest('.cell');
   if (!cell) return;
 
@@ -3537,14 +3504,7 @@ window.DicePanel = window.DicePanel || {};
 // Programmatic dice roll used by InfoModal etc.
 // If silent=true, it will only animate/update the local dice panel UI and will NOT send log/diceEvent.
 // Returns: {sides,count,bonus,rolls,sum,total}
-window.DicePanel.roll = async ({
-  sides = 20,
-  count = 1,
-  bonus = 0,
-  kindText = null,
-  silent = false,
-  actorName = ''
-} = {}) => {
+window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false } = {}) => {
   if (diceAnimBusy) return;
   diceAnimBusy = true;
 
@@ -3598,12 +3558,11 @@ if (critType) {
   if (!silent) {
     try {
       if (typeof sendMessage === "function") {
-        const actorNameSafe = String(actorName || '').trim();
         sendMessage({
           type: "diceEvent",
           event: {
             fromId: (typeof myId !== 'undefined') ? String(myId) : '',
-            fromName: actorNameSafe || ((typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : ''),
+            fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
             kindText: kindText ? String(kindText) : `d${S} × ${C}`,
             sides: S,
             count: C,
