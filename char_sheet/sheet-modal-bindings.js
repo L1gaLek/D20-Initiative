@@ -358,7 +358,13 @@ function bindCombatEditors(root, player, canEdit) {
         e.preventDefault();
         const bonus = calcWeaponAttackBonus(sheet, w);
         if (window.DicePanel?.roll) {
-          window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `Атака: d20 ${formatMod(bonus)}` });
+          window.DicePanel.roll({
+            sides: 20,
+            count: 1,
+            bonus,
+            kindText: `Атака: d20 ${formatMod(bonus)}`,
+            actorName: String(player?.name || '').trim()
+          });
         }
       });
     }
@@ -377,7 +383,8 @@ function bindCombatEditors(root, player, canEdit) {
             sides,
             count: cnt,
             bonus,
-            kindText: `Урон: ${cnt}d${sides} ${formatMod(bonus)}`
+            kindText: `Урон: ${cnt}d${sides} ${formatMod(bonus)}`,
+            actorName: String(player?.name || '').trim()
           });
         }
       });
@@ -788,7 +795,13 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
           const bonus = getModForStat(sub.stat);
           const nm = String(sub.name || def.name || 'Способность');
           if (window.DicePanel?.roll) {
-            await window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `${nm}: d20${formatMod(bonus)}` });
+            await window.DicePanel.roll({
+              sides: 20,
+              count: 1,
+              bonus,
+              kindText: `${nm}: d20${formatMod(bonus)}`,
+              actorName: String(player?.name || '').trim()
+            });
           }
 
           scheduleSheetSave(player);
@@ -944,7 +957,13 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
 
         // бросок в общую панель кубиков (и в лог/"Броски других")
         if (window.DicePanel?.roll) {
-          await window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText });
+          await window.DicePanel.roll({
+            sides: 20,
+            count: 1,
+            bonus,
+            kindText,
+            actorName: String(player?.name || '').trim()
+          });
         }
       });
     });
@@ -2242,7 +2261,8 @@ function bindSlotEditors(root, player, canEdit) {
             // Показываем в панели "Бросок" так же, как атака оружием:
             // "Заклинания: d20+X" (X берётся из поля "Бонус атаки" в разделе Заклинаний)
             kindText: `Заклинания: d20${formatMod(uiBonus)}`,
-            silent: true
+            silent: true,
+            actorName: String(curPlayer?.name || '').trim()
           });
         }
 
