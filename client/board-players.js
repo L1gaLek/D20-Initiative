@@ -2836,21 +2836,11 @@ addPlayerBtn.addEventListener('click', () => {
 
 // ================== MOVE PLAYER ==================
 board.addEventListener('click', e => {
-  const pendingPlacementId = String(window.__combatPendingPlacementPlayerId || '');
-  if (!selectedPlayer && !pendingPlacementId) return;
+  if (!selectedPlayer) return;
   try {
-    if (pendingPlacementId) {
-      const pending = (players || []).find(pp => String(pp?.id || '') === pendingPlacementId);
-      if (pending) selectedPlayer = pending;
-    }
     const phaseNow = String(lastState?.phase || '');
     const mine = String(selectedPlayer?.ownerId || '') === String(myId || '');
-    const isManualPlacement = !!pendingPlacementId;
-    if (!isManualPlacement && phaseNow === 'initiative' && String(myRole || '') !== 'GM' && mine) {
-      return;
-    }
-    const isCurrent = String(selectedPlayer?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
-    if (!isManualPlacement && phaseNow === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent) {
+    if (phaseNow === 'initiative' && String(myRole || '') !== 'GM' && mine) {
       return;
     }
     const isCurrent = String(selectedPlayer?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
@@ -2865,7 +2855,6 @@ board.addEventListener('click', e => {
   let y = parseInt(cell.dataset.y, 10);
   if (x + selectedPlayer.size > boardWidth) x = boardWidth - selectedPlayer.size;
   if (y + selectedPlayer.size > boardHeight) y = boardHeight - selectedPlayer.size;
-  const isManualPlacement = !!pendingPlacementId;
 
   // Туман войны: опционально может запрещать движение на неоткрытые клетки.
   try {
@@ -2881,17 +2870,6 @@ board.addEventListener('click', e => {
   const allowWalls = true;
   if (!isAreaFreeClient(selectedPlayer.id, x, y, size, { allowWalls })) {
     alert("Эта клетка занята другим персонажем");
-    return;
-  }
-  if (isManualPlacement) {
-    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
-    try { window.__combatPendingPlacementPlayerId = ''; } catch {}
-    try {
-      selectedPlayer = null;
-      try { window.syncSelectedPlayerUi?.(); } catch {}
-    } catch {}
-    try { window.hideMovePreview?.(); } catch {}
-    try { window.hideCombatMoveOverlay?.(); } catch {}
     return;
   }
 
