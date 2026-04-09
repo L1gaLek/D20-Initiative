@@ -1497,16 +1497,6 @@ function updatePlayerList() {
       indicator.classList.add('placement-indicator');
       const placed = (p.x !== null && p.y !== null);
       indicator.classList.add(placed ? 'placed' : 'not-placed');
-      const phaseNow = String(lastState?.phase || '');
-      const canArmCombatPlacement = (
-        phaseNow === 'combat' &&
-        !placed &&
-        String(myRole || '') !== 'GM' &&
-        String(p.ownerId || '') === String(myId || '')
-      );
-      if (canArmCombatPlacement) {
-        li.classList.add('player-list-item--combat-place-ready');
-      }
 
       const text = document.createElement('span');
       text.classList.add('player-name-text');
@@ -1584,6 +1574,7 @@ function updatePlayerList() {
       actions.appendChild(topActions);
 
       // ===== Выбор инициативы для участника боя (ТОЛЬКО для добавленных в бой во время боя) =====
+      const phaseNow = String(lastState?.phase || '');
       const canPickInit = (phaseNow === 'initiative' || phaseNow === 'combat');
       // В фазе инициативы кнопки "Бросить инициативу"/"Инициатива основы" мешают: они должны
       // появляться только для персонажей, которых добавили в бой уже ПОСЛЕ старта боя.
@@ -1685,11 +1676,6 @@ function updatePlayerList() {
 
       li.addEventListener('click', () => {
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
-        if (canArmCombatPlacement) {
-          try { window.setCombatPlacementPendingPlayerId?.(String(cur?.id || '')); } catch {}
-        } else {
-          try { window.setCombatPlacementPendingPlayerId?.(''); } catch {}
-        }
         selectedPlayer = cur;
         try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
