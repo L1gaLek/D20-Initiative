@@ -559,7 +559,23 @@
 
 .mini-action-btn--secondary{ background: rgba(255,255,255,0.08); }
 
-.mini-action-btn--danger{ background: rgba(255,0,0,0.18); border-color: rgba(255,0,0,0.35); }
+.mini-action-btn--board-off{
+  background: transparent;
+  border-color: rgba(255, 210, 120, 0.95);
+  color: #ffe0a3;
+}
+
+.mini-action-btn--board-on{
+  background: linear-gradient(180deg, rgba(255, 214, 142, 0.45), rgba(255, 183, 79, 0.34));
+  border-color: rgba(255, 214, 142, 0.95);
+  color: #fff7e8;
+}
+
+.mini-action-btn--danger{
+  background: linear-gradient(180deg, rgba(206, 54, 54, 0.92), rgba(151, 22, 22, 0.95));
+  border-color: rgba(255, 122, 122, 0.62);
+  color: #fff2f2;
+}
 
 .player-actions-row--bottom{
   margin-top: 2px;

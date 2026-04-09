@@ -1873,6 +1873,7 @@ function findFirstFreeSpotClient(size) {
   }
   return null;
 }
+try { window.findFirstFreeSpotClient = findFirstFreeSpotClient; } catch {}
 
 // ================== ADD PLAYER ==================
 addPlayerBtn.addEventListener('click', () => {
