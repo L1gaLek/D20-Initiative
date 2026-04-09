@@ -32,11 +32,6 @@
     return ds;
   }
 
-  function getDiceActorNameForPlayer(player) {
-    if (!player || player.isBase) return '';
-    return String(player?.name || '').trim();
-  }
-
   function syncDeathSavesUi(root, sheet, canEditOverride = null) {
     if (!root || !sheet) return;
     const hp = safeInt(sheet?.vitality?.["hp-max"]?.value, 0);
@@ -363,13 +358,7 @@ function bindCombatEditors(root, player, canEdit) {
         e.preventDefault();
         const bonus = calcWeaponAttackBonus(sheet, w);
         if (window.DicePanel?.roll) {
-          window.DicePanel.roll({
-            sides: 20,
-            count: 1,
-            bonus,
-            kindText: `Атака: d20 ${formatMod(bonus)}`,
-            actorName: getDiceActorNameForPlayer(player)
-          });
+          window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `Атака: d20 ${formatMod(bonus)}` });
         }
       });
     }
@@ -388,8 +377,7 @@ function bindCombatEditors(root, player, canEdit) {
             sides,
             count: cnt,
             bonus,
-            kindText: `Урон: ${cnt}d${sides} ${formatMod(bonus)}`,
-            actorName: getDiceActorNameForPlayer(player)
+            kindText: `Урон: ${cnt}d${sides} ${formatMod(bonus)}`
           });
         }
       });
@@ -800,13 +788,7 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
           const bonus = getModForStat(sub.stat);
           const nm = String(sub.name || def.name || 'Способность');
           if (window.DicePanel?.roll) {
-            await window.DicePanel.roll({
-              sides: 20,
-              count: 1,
-              bonus,
-              kindText: `${nm}: d20${formatMod(bonus)}`,
-              actorName: getDiceActorNameForPlayer(player)
-            });
+            await window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `${nm}: d20${formatMod(bonus)}` });
           }
 
           scheduleSheetSave(player);
@@ -962,7 +944,7 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
 
         // бросок в общую панель кубиков (и в лог/"Броски других")
         if (window.DicePanel?.roll) {
-          await window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText, actorName: getDiceActorNameForPlayer(player) });
+          await window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText });
         }
       });
     });
@@ -2260,8 +2242,7 @@ function bindSlotEditors(root, player, canEdit) {
             // Показываем в панели "Бросок" так же, как атака оружием:
             // "Заклинания: d20+X" (X берётся из поля "Бонус атаки" в разделе Заклинаний)
             kindText: `Заклинания: d20${formatMod(uiBonus)}`,
-            silent: true,
-            actorName: getDiceActorNameForPlayer(curPlayer)
+            silent: true
           });
         }
 
