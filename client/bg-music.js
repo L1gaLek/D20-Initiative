@@ -1267,6 +1267,7 @@
       }
     } catch {}
 
+    if (openBtn) openBtn.disabled = !isGM();
     if (toggleBtn) toggleBtn.disabled = !isGM() || !cur;
     if (stopBtn) stopBtn.disabled = !isGM() || !cur;
 

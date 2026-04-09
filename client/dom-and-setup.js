@@ -516,7 +516,7 @@ function applyRoleToUI() {
   if (gmQuickToolbar) gmQuickToolbar.style.display = spectator ? 'none' : 'flex';
   if (gmQuickPhaseBtn) gmQuickPhaseBtn.style.display = gm ? '' : 'none';
   if (gmQuickToolsBtn) gmQuickToolsBtn.style.display = gm ? '' : 'none';
-  if (gmQuickMusicBtn) gmQuickMusicBtn.style.display = gm ? '' : 'none';
+  if (gmQuickMusicBtn) gmQuickMusicBtn.style.display = spectator ? 'none' : '';
   if (gmQuickSaveBtn) gmQuickSaveBtn.style.display = gm ? '' : 'none';
   if (gmQuickMapBtn) gmQuickMapBtn.style.display = spectator ? 'none' : '';
   if (!gm) setActiveGmQuickPanel('');
