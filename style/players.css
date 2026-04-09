@@ -814,6 +814,7 @@
 }
 
 .player-list-item--combat-place-ready{
+  border-color: rgba(74, 201, 120, 0.9);
   box-shadow: 0 0 0 1px rgba(74, 201, 120, 0.86), 0 0 0 3px rgba(74, 201, 120, 0.16);
 }
 
