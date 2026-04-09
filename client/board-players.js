@@ -2843,6 +2843,10 @@ board.addEventListener('click', e => {
     if (phaseNow === 'initiative' && String(myRole || '') !== 'GM' && mine) {
       return;
     }
+    const isCurrent = String(selectedPlayer?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
+    if (phaseNow === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent) {
+      return;
+    }
   } catch {}
   const cell = e.target.closest('.cell');
   if (!cell) return;
