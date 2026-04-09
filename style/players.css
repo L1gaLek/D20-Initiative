@@ -559,7 +559,23 @@
 
 .mini-action-btn--secondary{ background: rgba(255,255,255,0.08); }
 
-.mini-action-btn--danger{ background: rgba(255,0,0,0.18); border-color: rgba(255,0,0,0.35); }
+.mini-action-btn--board-off{
+  background: transparent;
+  border-color: rgba(255, 210, 120, 0.95);
+  color: #ffe0a3;
+}
+
+.mini-action-btn--board-on{
+  background: linear-gradient(180deg, rgba(255, 214, 142, 0.45), rgba(255, 183, 79, 0.34));
+  border-color: rgba(255, 214, 142, 0.95);
+  color: #fff7e8;
+}
+
+.mini-action-btn--danger{
+  background: linear-gradient(180deg, rgba(131, 33, 52, 0.94), rgba(90, 18, 34, 0.96));
+  border-color: rgba(190, 96, 116, 0.62);
+  color: #fff3f5;
+}
 
 .player-actions-row--bottom{
   margin-top: 2px;
@@ -795,6 +811,10 @@
 
 .placement-indicator.not-placed{
   box-shadow: 0 0 0 2px rgba(208, 104, 62, 0.16);
+}
+
+.player-list-item--combat-place-ready{
+  box-shadow: 0 0 0 1px rgba(74, 201, 120, 0.86), 0 0 0 3px rgba(74, 201, 120, 0.16);
 }
 
 /* ===== GM moderation actions (kick / ban) ===== */

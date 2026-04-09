@@ -1575,6 +1575,20 @@ function updatePlayerList() {
 
       // ===== Выбор инициативы для участника боя (ТОЛЬКО для добавленных в бой во время боя) =====
       const phaseNow = String(lastState?.phase || '');
+      const isOwnerToken = String(p?.ownerId || '') === String(myId || '');
+      const currentMapIdForBorder = String(lastState?.currentMapId || '').trim();
+      const tokenMapIdForBorder = String(p?.mapId || '').trim();
+      const hasCoordsForBorder =
+        p?.x !== null && typeof p?.x !== 'undefined' &&
+        p?.y !== null && typeof p?.y !== 'undefined';
+      const onCurrentMapForBorder = !tokenMapIdForBorder || !currentMapIdForBorder || tokenMapIdForBorder === currentMapIdForBorder;
+      const canQuickPlaceByBorder = (
+        phaseNow === 'combat' &&
+        String(myRole || '') !== 'GM' &&
+        isOwnerToken &&
+        !(hasCoordsForBorder && onCurrentMapForBorder)
+      );
+      if (canQuickPlaceByBorder) li.classList.add('player-list-item--combat-place-ready');
       const canPickInit = (phaseNow === 'initiative' || phaseNow === 'combat');
       // В фазе инициативы кнопки "Бросить инициативу"/"Инициатива основы" мешают: они должны
       // появляться только для персонажей, которых добавили в бой уже ПОСЛЕ старта боя.
@@ -1615,6 +1629,19 @@ function updatePlayerList() {
       const midRow = document.createElement('div');
       midRow.className = 'player-actions-row player-actions-row--controls';
 
+      const placePlayerFromListToBoard = () => {
+        const size = Math.max(1, Number(p?.size) || 1);
+        const spot = (typeof window.findFirstFreeSpotClient === 'function')
+          ? window.findFirstFreeSpotClient(size)
+          : null;
+        if (!spot || !Number.isFinite(spot.x) || !Number.isFinite(spot.y)) {
+          alert('Нет свободного места на поле для размещения персонажа.');
+          return false;
+        }
+        sendMessage({ type: 'movePlayer', id: p.id, x: spot.x, y: spot.y });
+        return true;
+      };
+
       if (myRole === "GM" || p.ownerId === myId) {
         // размер
         const sizeSelect = document.createElement('select');
@@ -1647,12 +1674,33 @@ function updatePlayerList() {
       }
       // Быстрые кнопки: "С поля" / "Удалить" — в один ряд с размером/цветом
       if (myRole === "GM" || p.ownerId === myId) {
+        const currentMapId = String(lastState?.currentMapId || '').trim();
+        const tokenMapId = String(p?.mapId || '').trim();
+        const hasCoords =
+          p?.x !== null && typeof p?.x !== 'undefined' &&
+          p?.y !== null && typeof p?.y !== 'undefined' &&
+          Number.isFinite(Number(p.x)) &&
+          Number.isFinite(Number(p.y));
+        const onCurrentMap = !tokenMapId || !currentMapId || tokenMapId === currentMapId;
+        const isPlacedOnBoard = hasCoords && onCurrentMap;
+
         const removeFromBoardBtn = document.createElement('button');
-        removeFromBoardBtn.textContent = 'С поля';
-        removeFromBoardBtn.classList.add('mini-action-btn','mini-action-btn--secondary');
+        removeFromBoardBtn.textContent = isPlacedOnBoard ? 'С поля' : 'На поле';
+        removeFromBoardBtn.classList.add(
+          'mini-action-btn',
+          isPlacedOnBoard ? 'mini-action-btn--board-on' : 'mini-action-btn--board-off'
+        );
+        removeFromBoardBtn.title = isPlacedOnBoard
+          ? 'Убрать персонажа с поля'
+          : 'Поставить персонажа на поле';
         removeFromBoardBtn.onclick = (e) => {
           e.stopPropagation();
-          sendMessage({ type: 'removePlayerFromBoard', id: p.id });
+          if (isPlacedOnBoard) {
+            sendMessage({ type: 'removePlayerFromBoard', id: p.id });
+            return;
+          }
+
+          if (!placePlayerFromListToBoard()) return;
         };
 
         const removeCompletelyBtn = document.createElement('button');
@@ -1674,7 +1722,16 @@ function updatePlayerList() {
 
       actions.appendChild(midRow);
 
-      li.addEventListener('click', () => {
+      li.addEventListener('click', (e) => {
+        try {
+          if (canQuickPlaceByBorder && e?.target === li) {
+            const ok = confirm(`Разместить "${p?.name || 'персонажа'}" на поле?`);
+            if (ok) {
+              placePlayerFromListToBoard();
+              return;
+            }
+          }
+        } catch {}
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
         selectedPlayer = cur;
         try { syncSelectedPlayerUi(); } catch {}

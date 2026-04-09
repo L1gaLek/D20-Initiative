@@ -1561,7 +1561,13 @@
           : `${statLabel}: Проверка d20${bonus ? signed(bonus) : ''}`;
 
         if (window.DicePanel?.roll) {
-          await window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText });
+          await window.DicePanel.roll({
+            sides: 20,
+            count: 1,
+            bonus,
+            kindText,
+            actorName: String(player?.name || '').trim()
+          });
         }
       });
     });
