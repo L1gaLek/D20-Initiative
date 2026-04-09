@@ -1649,7 +1649,11 @@ function updatePlayerList() {
       if (myRole === "GM" || p.ownerId === myId) {
         const currentMapId = String(lastState?.currentMapId || '').trim();
         const tokenMapId = String(p?.mapId || '').trim();
-        const hasCoords = Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y));
+        const hasCoords =
+          p?.x !== null && typeof p?.x !== 'undefined' &&
+          p?.y !== null && typeof p?.y !== 'undefined' &&
+          Number.isFinite(Number(p.x)) &&
+          Number.isFinite(Number(p.y));
         const onCurrentMap = !tokenMapId || !currentMapId || tokenMapId === currentMapId;
         const isPlacedOnBoard = hasCoords && onCurrentMap;
 
