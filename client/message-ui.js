@@ -1641,6 +1641,15 @@ function updatePlayerList() {
         sendMessage({ type: 'movePlayer', id: p.id, x: spot.x, y: spot.y });
         return true;
       };
+      const armManualPlacementFromList = () => {
+        const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
+        selectedPlayer = cur;
+        try { window.__combatPendingPlacementPlayerId = String(cur?.id || ''); } catch {}
+        try { syncSelectedPlayerUi(); } catch {}
+        try { window.updateMovePreview?.(); } catch {}
+        try { window.renderCombatMoveOverlay?.(); } catch {}
+        alert('Выберите клетку на поле: персонаж будет размещён в выбранной точке.');
+      };
 
       if (myRole === "GM" || p.ownerId === myId) {
         // размер
@@ -1724,13 +1733,22 @@ function updatePlayerList() {
 
       li.addEventListener('click', (e) => {
         try {
-          if (canQuickPlaceByBorder && e?.target === li) {
+          const targetEl = e?.target instanceof Element ? e.target : null;
+          const clickedControl = !!targetEl?.closest?.('button,input,select,textarea,a,label,.player-actions');
+          if (canQuickPlaceByBorder && !clickedControl) {
             const ok = confirm(`Разместить "${p?.name || 'персонажа'}" на поле?`);
             if (ok) {
-              placePlayerFromListToBoard();
+              armManualPlacementFromList();
               return;
             }
           }
+        } catch {}
+        try {
+          const phase = String(lastState?.phase || '');
+          const mine = String(p?.ownerId || '') === String(myId || '');
+          const isCurrent = String(p?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
+          if (phase === 'initiative' && String(myRole || '') !== 'GM' && mine) return;
+          if (phase === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent) return;
         } catch {}
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
         selectedPlayer = cur;

@@ -572,8 +572,8 @@
 }
 
 .mini-action-btn--danger{
-  background: linear-gradient(180deg, rgba(131, 33, 52, 0.94), rgba(90, 18, 34, 0.96));
-  border-color: rgba(190, 96, 116, 0.62);
+  background: linear-gradient(180deg, rgba(108, 32, 42, 0.96), rgba(68, 18, 28, 0.98));
+  border-color: rgba(181, 88, 104, 0.58);
   color: #fff3f5;
 }
 
