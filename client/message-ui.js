@@ -1647,12 +1647,37 @@ function updatePlayerList() {
       }
       // Быстрые кнопки: "С поля" / "Удалить" — в один ряд с размером/цветом
       if (myRole === "GM" || p.ownerId === myId) {
+        const currentMapId = String(lastState?.currentMapId || '').trim();
+        const tokenMapId = String(p?.mapId || '').trim();
+        const hasCoords = Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y));
+        const onCurrentMap = !tokenMapId || !currentMapId || tokenMapId === currentMapId;
+        const isPlacedOnBoard = hasCoords && onCurrentMap;
+
         const removeFromBoardBtn = document.createElement('button');
-        removeFromBoardBtn.textContent = 'С поля';
-        removeFromBoardBtn.classList.add('mini-action-btn','mini-action-btn--secondary');
+        removeFromBoardBtn.textContent = isPlacedOnBoard ? 'С поля' : 'На поле';
+        removeFromBoardBtn.classList.add(
+          'mini-action-btn',
+          isPlacedOnBoard ? 'mini-action-btn--board-on' : 'mini-action-btn--board-off'
+        );
+        removeFromBoardBtn.title = isPlacedOnBoard
+          ? 'Убрать персонажа с поля'
+          : 'Поставить персонажа на поле';
         removeFromBoardBtn.onclick = (e) => {
           e.stopPropagation();
-          sendMessage({ type: 'removePlayerFromBoard', id: p.id });
+          if (isPlacedOnBoard) {
+            sendMessage({ type: 'removePlayerFromBoard', id: p.id });
+            return;
+          }
+
+          const size = Math.max(1, Number(p?.size) || 1);
+          const spot = (typeof window.findFirstFreeSpotClient === 'function')
+            ? window.findFirstFreeSpotClient(size)
+            : null;
+          if (!spot || !Number.isFinite(spot.x) || !Number.isFinite(spot.y)) {
+            alert('Нет свободного места на поле для размещения персонажа.');
+            return;
+          }
+          sendMessage({ type: 'movePlayer', id: p.id, x: spot.x, y: spot.y });
         };
 
         const removeCompletelyBtn = document.createElement('button');
