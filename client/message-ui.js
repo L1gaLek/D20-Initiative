@@ -1642,6 +1642,15 @@ function updatePlayerList() {
         sendMessage({ type: 'movePlayer', id: p.id, x: spot.x, y: spot.y });
         return true;
       };
+      const armManualPlacementFromList = () => {
+        const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
+        selectedPlayer = cur;
+        try { window.__combatPendingPlacementPlayerId = String(cur?.id || ''); } catch {}
+        try { syncSelectedPlayerUi(); } catch {}
+        try { window.updateMovePreview?.(); } catch {}
+        try { window.renderCombatMoveOverlay?.(); } catch {}
+        alert('Выберите клетку на поле: персонаж будет размещён в выбранной точке.');
+      };
 
       if (myRole === "GM" || p.ownerId === myId) {
         // размер
@@ -1730,7 +1739,7 @@ function updatePlayerList() {
           if (canQuickPlaceByBorder && !clickedControl) {
             const ok = confirm(`Разместить "${p?.name || 'персонажа'}" на поле?`);
             if (ok) {
-              placePlayerFromListToBoard();
+              armManualPlacementFromList();
               return;
             }
           }
