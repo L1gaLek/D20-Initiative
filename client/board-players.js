@@ -2832,6 +2832,13 @@ board.addEventListener('click', e => {
   const cell = e.target.closest('.cell');
   if (!cell) return;
   const placementPendingId = getCombatPlacementPendingPlayerId();
+  const isInitialCombatPlacement = (
+    String(myRole || '') !== 'GM' &&
+    !!placementPendingId &&
+    String(selectedPlayer?.id || '') === placementPendingId &&
+    String(lastState?.phase || '') === 'combat' &&
+    (selectedPlayer?.x === null || selectedPlayer?.y === null)
+  );
   if (String(myRole || '') !== 'GM' && placementPendingId && String(selectedPlayer?.id || '') !== placementPendingId) {
     alert('Сначала завершите постановку выбранного нового персонажа на поле.');
     return;
@@ -2843,12 +2850,14 @@ board.addEventListener('click', e => {
   if (y + selectedPlayer.size > boardHeight) y = boardHeight - selectedPlayer.size;
 
   // Туман войны: опционально может запрещать движение на неоткрытые клетки.
-  try {
-    if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
-      alert('Нельзя перемещаться в неоткрытую область (включено "Движение по открытому")');
-      return;
-    }
-  } catch {}
+  if (!isInitialCombatPlacement) {
+    try {
+      if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
+        alert('Нельзя перемещаться в неоткрытую область (включено "Движение по открытому")');
+        return;
+      }
+    } catch {}
+  }
 
   // быстрый локальный чек (сервер всё равно проверит)
   const size = Number(selectedPlayer.size) || 1;
@@ -2856,6 +2865,16 @@ board.addEventListener('click', e => {
   const allowWalls = true;
   if (!isAreaFreeClient(selectedPlayer.id, x, y, size, { allowWalls })) {
     alert("Эта клетка занята другим персонажем");
+    return;
+  }
+
+  if (isInitialCombatPlacement) {
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
+    selectedPlayer = null;
+    setCombatPlacementPendingPlayerId('');
+    try { window.syncSelectedPlayerUi?.(); } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
     return;
   }
 
