@@ -132,7 +132,8 @@ function canCurrentUserMovePlayerNow(player, { forInitialPlacement = false } = {
     const isCurrent = String(player.id) === currentId;
     if (isCurrent) return true;
     if (!forInitialPlacement) return false;
-    return (player.x === null || player.y === null);
+    const unplaced = (player.x === null || typeof player.x === 'undefined' || player.y === null || typeof player.y === 'undefined');
+    return unplaced;
   } catch {
     return false;
   }
@@ -149,8 +150,9 @@ function rememberCombatPlacementCandidates(prevIds, stateLike) {
     const isNew = !prevIds.has(pid);
     const createdInCombat = String(st?.phase || '') === 'combat';
     const mine = String(p?.ownerId || '') === String(myId || '');
-    const unplaced = (p?.x === null || p?.y === null);
-    if (isNew && createdInCombat && mine && unplaced) __combatPlacementReady.add(pid);
+    const isGmNow = String(myRole || '') === 'GM';
+    const unplaced = (p?.x === null || typeof p?.x === 'undefined' || p?.y === null || typeof p?.y === 'undefined');
+    if (isNew && createdInCombat && mine && !isGmNow && unplaced) __combatPlacementReady.add(pid);
     if (!unplaced) __combatPlacementReady.delete(pid);
   });
   Array.from(__combatPlacementReady).forEach((pid) => {
