@@ -1870,6 +1870,20 @@ addPlayerBtn.addEventListener('click', () => {
     isEnemy
   };
 
+  try {
+    const phaseNow = String(lastState?.phase || '');
+    if (phaseNow === 'combat' && String(myRole || '') !== 'GM') {
+      if (!Array.isArray(window.__combatPlacementCreateIntents)) window.__combatPlacementCreateIntents = [];
+      window.__combatPlacementCreateIntents.push({
+        name: String(name || '').trim().toLowerCase(),
+        ts: Date.now()
+      });
+      if (window.__combatPlacementCreateIntents.length > 20) {
+        window.__combatPlacementCreateIntents.splice(0, window.__combatPlacementCreateIntents.length - 20);
+      }
+    }
+  } catch {}
+
   sendMessage({ type: 'addPlayer', player });
 
   playerNameInput.value = '';
@@ -2823,6 +2837,22 @@ board.addEventListener('click', e => {
   if (x + selectedPlayer.size > boardWidth) x = boardWidth - selectedPlayer.size;
   if (y + selectedPlayer.size > boardHeight) y = boardHeight - selectedPlayer.size;
 
+  const canMoveNow = !!window.canCurrentUserMovePlayerNow?.(selectedPlayer, { forInitialPlacement: true });
+  if (!canMoveNow) {
+    return;
+  }
+
+  const isPlacementReady = !!window.isCombatPlacementPendingForPlayer?.(selectedPlayer);
+  if (isPlacementReady) {
+    try { window.consumeCombatPlacementForPlayer?.(selectedPlayer); } catch {}
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
+    selectedPlayer = null;
+    try { window.syncSelectedPlayerUi?.(); } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
+    return;
+  }
+
   // Туман войны: опционально может запрещать движение на неоткрытые клетки.
   try {
     if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
@@ -2848,6 +2878,7 @@ board.addEventListener('click', e => {
     }
 
     try { window.consumeCombatTeleportTo?.(selectedPlayer, x, y); } catch {}
+    try { window.consumeCombatPlacementForPlayer?.(selectedPlayer); } catch {}
     sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
 
     try {
@@ -2878,6 +2909,7 @@ board.addEventListener('click', e => {
   if (combatRestricted) {
     if (moveInfo?.dash?.active) {
       try { window.commitCombatDashMove?.(selectedPlayer, x, y); } catch {}
+      try { window.consumeCombatPlacementForPlayer?.(selectedPlayer); } catch {}
       sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: true });
       try {
         selectedPlayer = null;
@@ -2889,6 +2921,7 @@ board.addEventListener('click', e => {
     }
 
     try { window.commitCombatMove?.(selectedPlayer, x, y); } catch {}
+    try { window.consumeCombatPlacementForPlayer?.(selectedPlayer); } catch {}
     sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: false });
     try {
       const beforeSpent = Number(moveInfo?.spentFeet) || 0;
@@ -2915,6 +2948,7 @@ board.addEventListener('click', e => {
     return;
   }
 
+  try { window.consumeCombatPlacementForPlayer?.(selectedPlayer); } catch {}
   sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: !!dashActive });
 
   selectedPlayer = null;
