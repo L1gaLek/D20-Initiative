@@ -2829,6 +2829,17 @@ board.addEventListener('click', e => {
     return;
   }
 
+  const isPlacementReady = !!window.isCombatPlacementPendingForPlayer?.(selectedPlayer);
+  if (isPlacementReady) {
+    try { window.consumeCombatPlacementForPlayer?.(selectedPlayer); } catch {}
+    sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y });
+    selectedPlayer = null;
+    try { window.syncSelectedPlayerUi?.(); } catch {}
+    try { window.hideMovePreview?.(); } catch {}
+    try { window.hideCombatMoveOverlay?.(); } catch {}
+    return;
+  }
+
   // Туман войны: опционально может запрещать движение на неоткрытые клетки.
   try {
     if (window.FogWar?.isEnabled?.() && !window.FogWar?.canMoveToCell?.(x, y, selectedPlayer)) {
