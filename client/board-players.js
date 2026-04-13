@@ -1870,6 +1870,20 @@ addPlayerBtn.addEventListener('click', () => {
     isEnemy
   };
 
+  try {
+    const phaseNow = String(lastState?.phase || '');
+    if (phaseNow === 'combat' && String(myRole || '') !== 'GM') {
+      if (!Array.isArray(window.__combatPlacementCreateIntents)) window.__combatPlacementCreateIntents = [];
+      window.__combatPlacementCreateIntents.push({
+        name: String(name || '').trim().toLowerCase(),
+        ts: Date.now()
+      });
+      if (window.__combatPlacementCreateIntents.length > 20) {
+        window.__combatPlacementCreateIntents.splice(0, window.__combatPlacementCreateIntents.length - 20);
+      }
+    }
+  } catch {}
+
   sendMessage({ type: 'addPlayer', player });
 
   playerNameInput.value = '';
@@ -2825,7 +2839,6 @@ board.addEventListener('click', e => {
 
   const canMoveNow = !!window.canCurrentUserMovePlayerNow?.(selectedPlayer, { forInitialPlacement: true });
   if (!canMoveNow) {
-    alert('Сейчас нельзя перемещать этого персонажа: дождитесь его хода в фазе боя.');
     return;
   }
 

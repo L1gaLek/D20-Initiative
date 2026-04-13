@@ -140,6 +140,28 @@ function canCurrentUserMovePlayerNow(player, { forInitialPlacement = false } = {
 }
 
 function rememberCombatPlacementCandidates(prevIds, stateLike) {
+  const consumeCreateIntent = (playerLike) => {
+    const intents = Array.isArray(window.__combatPlacementCreateIntents) ? window.__combatPlacementCreateIntents : [];
+    if (!intents.length) return false;
+    const now = Date.now();
+    const playerName = String(playerLike?.name || '').trim().toLowerCase();
+    let idx = -1;
+    for (let i = 0; i < intents.length; i++) {
+      const it = intents[i] || {};
+      const ts = Number(it.ts) || 0;
+      if ((now - ts) > 30000) continue;
+      const inName = String(it.name || '').trim().toLowerCase();
+      if (!playerName || !inName || inName === playerName) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx < 0) return false;
+    intents.splice(idx, 1);
+    window.__combatPlacementCreateIntents = intents;
+    return true;
+  };
+
   const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
   const list = Array.isArray(st?.players) ? st.players : [];
   const nowIds = new Set();
@@ -152,7 +174,7 @@ function rememberCombatPlacementCandidates(prevIds, stateLike) {
     const mine = String(p?.ownerId || '') === String(myId || '');
     const isGmNow = String(myRole || '') === 'GM';
     const unplaced = (p?.x === null || typeof p?.x === 'undefined' || p?.y === null || typeof p?.y === 'undefined');
-    if (isNew && createdInCombat && mine && !isGmNow && unplaced) __combatPlacementReady.add(pid);
+    if (isNew && createdInCombat && mine && !isGmNow && unplaced && consumeCreateIntent(p)) __combatPlacementReady.add(pid);
     if (!unplaced) __combatPlacementReady.delete(pid);
   });
   Array.from(__combatPlacementReady).forEach((pid) => {
@@ -1739,12 +1761,7 @@ function updatePlayerList() {
       li.addEventListener('click', () => {
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
         const canMoveNow = !!window.canCurrentUserMovePlayerNow?.(cur, { forInitialPlacement: true });
-        if (!canMoveNow) {
-          if (String(lastState?.phase || '') === 'combat' && String(cur?.ownerId || '') === String(myId || '') && String(myRole || '') !== 'GM') {
-            alert('Сейчас нельзя перемещать этого персонажа: дождитесь его хода в фазе боя.');
-          }
-          return;
-        }
+        if (!canMoveNow) return;
         selectedPlayer = cur;
         try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
