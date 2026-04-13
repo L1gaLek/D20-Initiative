@@ -114,10 +114,68 @@ function isPlayerVisibleToMe(p, state) {
 }
 
 let __mapTokensReloadSeq = 0;
+const __combatPlacementReady = new Set(); // playerId, local marker for "created during combat, should be placed once"
 
 function isMapScopedPlayerForUi(player) {
   return !!(player && player.isEnemy && !player.isBase);
 }
+
+function canCurrentUserMovePlayerNow(player, { forInitialPlacement = false } = {}) {
+  try {
+    if (!player || !player.id) return false;
+    if (String(myRole || '') === 'GM') return true;
+    const mine = String(player?.ownerId || '') === String(myId || '');
+    if (!mine) return false;
+    const phaseNow = String(lastState?.phase || '');
+    if (phaseNow !== 'combat') return true;
+    const currentId = String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
+    const isCurrent = String(player.id) === currentId;
+    if (isCurrent) return true;
+    if (!forInitialPlacement) return false;
+    const unplaced = (player.x === null || typeof player.x === 'undefined' || player.y === null || typeof player.y === 'undefined');
+    return unplaced;
+  } catch {
+    return false;
+  }
+}
+
+function rememberCombatPlacementCandidates(prevIds, stateLike) {
+  const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
+  const list = Array.isArray(st?.players) ? st.players : [];
+  const nowIds = new Set();
+  list.forEach((p) => {
+    const pid = String(p?.id || '').trim();
+    if (!pid) return;
+    nowIds.add(pid);
+    const isNew = !prevIds.has(pid);
+    const createdInCombat = String(st?.phase || '') === 'combat';
+    const mine = String(p?.ownerId || '') === String(myId || '');
+    const isGmNow = String(myRole || '') === 'GM';
+    const unplaced = (p?.x === null || typeof p?.x === 'undefined' || p?.y === null || typeof p?.y === 'undefined');
+    if (isNew && createdInCombat && mine && !isGmNow && unplaced) __combatPlacementReady.add(pid);
+    if (!unplaced) __combatPlacementReady.delete(pid);
+  });
+  Array.from(__combatPlacementReady).forEach((pid) => {
+    if (!nowIds.has(pid)) __combatPlacementReady.delete(pid);
+  });
+  if (String(st?.phase || '') !== 'combat') __combatPlacementReady.clear();
+}
+
+window.canCurrentUserMovePlayerNow = canCurrentUserMovePlayerNow;
+window.isCombatPlacementPendingForPlayer = (playerOrId) => {
+  const pid = (typeof playerOrId === 'object')
+    ? String(playerOrId?.id || '').trim()
+    : String(playerOrId || '').trim();
+  if (!pid) return false;
+  return __combatPlacementReady.has(pid);
+};
+window.consumeCombatPlacementForPlayer = (playerOrId) => {
+  const pid = (typeof playerOrId === 'object')
+    ? String(playerOrId?.id || '').trim()
+    : String(playerOrId || '').trim();
+  if (!pid) return;
+  __combatPlacementReady.delete(pid);
+};
 
 const __pendingCombatSelectionOverlay = new Map(); // playerId -> { inCombat, updatedAt }
 
@@ -499,6 +557,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       // - wipe the action log (state.log is intentionally empty)
       // - temporarily reset token positions to null until room_tokens catches up
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
+      const prevPlayerIds = new Set((lastState?.players || []).map((p) => String(p?.id || '').trim()).filter(Boolean));
       const prevPhase = String(lastState?.phase || '');
       const prevInitiativeEpoch = Number(lastState?.initiativeEpoch) || 0;
       const prevMapId = String(lastState?.currentMapId || '').trim();
@@ -694,6 +753,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // Apply visibility rules (GM-only ally, GM NPC visibility, per-map list scoping)
       syncVisiblePlayersState(normalized);
+      rememberCombatPlacementCandidates(prevPlayerIds, normalized);
 
       renderBoard(normalized);
       updatePhaseUI(normalized);
@@ -1488,6 +1548,8 @@ function updatePlayerList() {
       const li = document.createElement('li');
       li.className = 'player-list-item';
       li.setAttribute('data-player-id', String(p?.id || ''));
+      const isCombatPlacementReady = !!window.isCombatPlacementPendingForPlayer?.(p);
+      if (isCombatPlacementReady) li.classList.add('player-list-item--combat-place-ready');
 
       if (currentTurnId && p.id === currentTurnId) {
         li.classList.add('is-current-turn');
@@ -1676,6 +1738,13 @@ function updatePlayerList() {
 
       li.addEventListener('click', () => {
         const cur = (players || []).find(pp => String(pp?.id) === String(p?.id)) || p;
+        const canMoveNow = !!window.canCurrentUserMovePlayerNow?.(cur, { forInitialPlacement: true });
+        if (!canMoveNow) {
+          if (String(lastState?.phase || '') === 'combat' && String(cur?.ownerId || '') === String(myId || '') && String(myRole || '') !== 'GM') {
+            alert('Сейчас нельзя перемещать этого персонажа: дождитесь его хода в фазе боя.');
+          }
+          return;
+        }
         selectedPlayer = cur;
         try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
