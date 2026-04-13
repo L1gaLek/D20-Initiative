@@ -1665,11 +1665,6 @@ updateTavernHotspotBadges();
 });
 if (tavernChatHotspot) tavernChatHotspot.addEventListener('click', openTavernChat);
 if (tavernBartenderHotspot) tavernBartenderHotspot.addEventListener('click', openTavernBartender);
-if (tavernBartenderFeedbackBtn) {
-  tavernBartenderFeedbackBtn.addEventListener('click', () => {
-    window.open('https://t.me/Initiative_help_bot', '_blank', 'noopener,noreferrer');
-  });
-}
 if (tavernBartenderLicenseBtn) tavernBartenderLicenseBtn.addEventListener('click', openTavernLicense);
 if (tavernBoardHotspot) tavernBoardHotspot.addEventListener('click', () => { void openTavernBoard(); });
 if (tavernAdventuresHotspot) tavernAdventuresHotspot.addEventListener('click', openTavernAdventures);

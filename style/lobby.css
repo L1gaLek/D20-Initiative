@@ -504,7 +504,8 @@ body.lobby-active #lobby-scene {
   border-color: rgba(255, 195, 98, 0.48);
   box-shadow: 0 0 0 3px rgba(255, 176, 81, 0.14);
 }
-.tavern-modal button{
+.tavern-modal button,
+.tavern-modal .tavern-menu-btn{
   border: 1px solid rgba(255, 200, 117, 0.28);
   background: linear-gradient(180deg, rgba(116, 72, 25, 0.95) 0%, rgba(74, 44, 15, 0.98) 100%);
   color: #fff3dd;
@@ -512,8 +513,15 @@ body.lobby-active #lobby-scene {
   letter-spacing: 0.02em;
   box-shadow: 0 10px 25px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
 }
-.tavern-modal button:hover{ filter: brightness(1.07); }
-.tavern-modal button:active{ transform: translateY(1px); }
+.tavern-modal .tavern-menu-btn{
+  display:flex;
+  align-items:center;
+  text-decoration:none;
+}
+.tavern-modal button:hover,
+.tavern-modal .tavern-menu-btn:hover{ filter: brightness(1.07); }
+.tavern-modal button:active,
+.tavern-modal .tavern-menu-btn:active{ transform: translateY(1px); }
 .tavern-chat-body{
   display:flex;
   flex-direction:column;
