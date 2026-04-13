@@ -33,6 +33,7 @@ const tavernChatBadgeDirect = document.getElementById('tavern-hotspot-chat-badge
 const tavernBartenderModal = document.getElementById('tavernBartenderModal');
 const tavernBartenderClose = document.getElementById('tavernBartenderClose');
 const tavernBartenderNote = document.getElementById('tavern-bartender-note');
+const tavernBartenderFeedbackBtn = document.getElementById('tavernBartenderFeedbackBtn');
 const tavernBartenderLicenseBtn = document.getElementById('tavernBartenderLicenseBtn');
 const tavernLicenseModal = document.getElementById('tavernLicenseModal');
 const tavernLicenseClose = document.getElementById('tavernLicenseClose');

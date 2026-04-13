@@ -127,6 +127,7 @@ function canCurrentUserMovePlayerNow(player, { forInitialPlacement = false } = {
     const mine = String(player?.ownerId || '') === String(myId || '');
     if (!mine) return false;
     const phaseNow = String(lastState?.phase || '');
+    if (phaseNow === 'initiative') return false;
     if (phaseNow !== 'combat') return true;
     const currentId = String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
     const isCurrent = String(player.id) === currentId;
