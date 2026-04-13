@@ -1766,9 +1766,6 @@ function updatePlayerList() {
         try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
         try { window.renderCombatMoveOverlay?.(); } catch {}
-        if (isCombatPlacementReady && (cur?.x === null || cur?.y === null)) {
-          alert('Персонаж создан во время фазы боя. Выберите клетку на поле, чтобы разместить токен.');
-        }
       });
 
       // Нижний ряд больше не нужен — кнопки перенесены в ряд управления
