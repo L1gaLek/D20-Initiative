@@ -1,18 +1,4 @@
 // ================== BOARD ==================
-function getCombatPlacementPendingPlayerId() {
-  try { return String(window.__combatPlacementPendingPlayerId || '').trim(); } catch { return ''; }
-}
-
-function setCombatPlacementPendingPlayerId(id) {
-  try {
-    const next = String(id || '').trim();
-    window.__combatPlacementPendingPlayerId = next || '';
-  } catch {}
-}
-
-try { window.getCombatPlacementPendingPlayerId = getCombatPlacementPendingPlayerId; } catch {}
-try { window.setCombatPlacementPendingPlayerId = setCombatPlacementPendingPlayerId; } catch {}
-
 function renderBoard(state) {
   const CELL = 50;
   const bw = Number(state?.boardWidth) || boardWidth || 10;
@@ -2831,11 +2817,6 @@ board.addEventListener('click', e => {
   if (!selectedPlayer) return;
   const cell = e.target.closest('.cell');
   if (!cell) return;
-  const placementPendingId = getCombatPlacementPendingPlayerId();
-  if (String(myRole || '') !== 'GM' && placementPendingId && String(selectedPlayer?.id || '') !== placementPendingId) {
-    alert('Сначала завершите постановку выбранного нового персонажа на поле.');
-    return;
-  }
 
   let x = parseInt(cell.dataset.x, 10);
   let y = parseInt(cell.dataset.y, 10);
@@ -2871,7 +2852,6 @@ board.addEventListener('click', e => {
 
     try {
       selectedPlayer = null;
-      if (placementPendingId) setCombatPlacementPendingPlayerId('');
       try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
@@ -2901,7 +2881,6 @@ board.addEventListener('click', e => {
       sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: true });
       try {
         selectedPlayer = null;
-        if (placementPendingId) setCombatPlacementPendingPlayerId('');
         try { window.syncSelectedPlayerUi?.(); } catch {}
       } catch {}
       try { window.hideMovePreview?.(); } catch {}
@@ -2929,7 +2908,6 @@ board.addEventListener('click', e => {
     } catch {}
     try {
       selectedPlayer = null;
-      if (placementPendingId) setCombatPlacementPendingPlayerId('');
       try { window.syncSelectedPlayerUi?.(); } catch {}
     } catch {}
     try { window.hideMovePreview?.(); } catch {}
@@ -2940,7 +2918,6 @@ board.addEventListener('click', e => {
   sendMessage({ type: 'movePlayer', id: selectedPlayer.id, x, y, usedDash: !!dashActive });
 
   selectedPlayer = null;
-  if (placementPendingId) setCombatPlacementPendingPlayerId('');
   try { window.syncSelectedPlayerUi?.(); } catch {}
   try { window.hideMovePreview?.(); } catch {}
   try { window.hideCombatMoveOverlay?.(); } catch {}
@@ -2951,7 +2928,6 @@ document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!selectedPlayer) return;
     selectedPlayer = null;
-    try { setCombatPlacementPendingPlayerId(''); } catch {}
     try { window.syncSelectedPlayerUi?.(); } catch {}
     try { window.hideMovePreview?.(); } catch {}
     try { window.hideCombatMoveOverlay?.(); } catch {}
