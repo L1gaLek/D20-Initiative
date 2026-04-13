@@ -127,6 +127,7 @@ function canCurrentUserMovePlayerNow(player, { forInitialPlacement = false } = {
     const mine = String(player?.ownerId || '') === String(myId || '');
     if (!mine) return false;
     const phaseNow = String(lastState?.phase || '');
+    if (phaseNow === 'initiative') return false;
     if (phaseNow !== 'combat') return true;
     const currentId = String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
     const isCurrent = String(player.id) === currentId;
@@ -1766,9 +1767,6 @@ function updatePlayerList() {
         try { syncSelectedPlayerUi(); } catch {}
         try { window.updateMovePreview?.(); } catch {}
         try { window.renderCombatMoveOverlay?.(); } catch {}
-        if (isCombatPlacementReady && (cur?.x === null || cur?.y === null)) {
-          alert('Персонаж создан во время фазы боя. Выберите клетку на поле, чтобы разместить токен.');
-        }
       });
 
       // Нижний ряд больше не нужен — кнопки перенесены в ряд управления

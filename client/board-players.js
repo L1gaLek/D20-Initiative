@@ -3538,7 +3538,7 @@ window.DicePanel = window.DicePanel || {};
 // Programmatic dice roll used by InfoModal etc.
 // If silent=true, it will only animate/update the local dice panel UI and will NOT send log/diceEvent.
 // Returns: {sides,count,bonus,rolls,sum,total}
-window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false } = {}) => {
+window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false, actorName = null } = {}) => {
   if (diceAnimBusy) return;
   diceAnimBusy = true;
 
@@ -3592,11 +3592,15 @@ if (critType) {
   if (!silent) {
     try {
       if (typeof sendMessage === "function") {
+        const actor = String(actorName || '').trim();
+        const fallbackName = (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent)
+          ? String(myNameSpan.textContent)
+          : '';
         sendMessage({
           type: "diceEvent",
           event: {
             fromId: (typeof myId !== 'undefined') ? String(myId) : '',
-            fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
+            fromName: actor || fallbackName,
             kindText: kindText ? String(kindText) : `d${S} × ${C}`,
             sides: S,
             count: C,
