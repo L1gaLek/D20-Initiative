@@ -171,6 +171,36 @@ body.lobby-active #lobby-scene {
   gap: 10px;
 }
 
+.lobby-ambient-volume {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 214, 148, 0.2);
+}
+
+.lobby-ambient-volume__icon {
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.92;
+}
+
+.lobby-ambient-volume__label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(247, 225, 182, 0.86);
+}
+
+.lobby-ambient-volume__slider {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: #d9a247;
+  cursor: pointer;
+}
+
 .lobby-label {
   font-size: 12px;
   font-weight: 700;
@@ -382,9 +412,34 @@ body.lobby-active #lobby-scene {
   border:1px solid rgba(255,224,183,0.25);
 }
 .tavern-topbar__subtitle{
-  margin-top:4px;
-  font-size:13px;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(56, 40, 24, 0.5) 0%, rgba(30, 22, 16, 0.58) 100%);
+  border: 1px solid rgba(255, 212, 139, 0.18);
   color:#d7c5a0;
+  font-size:13px;
+  line-height: 1.35;
+}
+.tavern-topbar__welcome-label{
+  color: rgba(236, 214, 169, 0.92);
+}
+.tavern-topbar__welcome-name{
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 197, 105, 0.15);
+  border: 1px solid rgba(255, 211, 139, 0.36);
+  color: #ffe8c4;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.lobby-ambient-volume--tavern {
+  margin-top: 12px;
+  padding-top: 10px;
 }
 .tavern-toolbar{
   display:flex;

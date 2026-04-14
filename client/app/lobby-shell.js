@@ -150,6 +150,7 @@ const lobbyAmbientAudio = (() => {
   const LS_VOL = 'int_lobby_ambient_volume';
   const LS_VOL_LEGACY = (typeof legacyAppKey === 'function' ? legacyAppKey('bg_music_volume') : ['d', 'n', 'd', '_', 'b', 'g', '_', 'm', 'u', 's', 'i', 'c', '_', 'v', 'o', 'l', 'u', 'm', 'e'].join(''));
   const LS_LAST_TAVERN = 'int_last_tavern_ambient_file';
+  const volumeSliderIds = ['lobby-ambient-volume-slider', 'tavern-ambient-volume-slider'];
   const lobbyTrack = 'lobby.mp3';
   const tavernTracks = ['taverna.mp3', 'taverna1.mp3', 'taverna2.mp3'];
   const failedTavernTracks = new Set();
@@ -185,12 +186,48 @@ const lobbyAmbientAudio = (() => {
     return 0.4;
   }
 
+  function saveVolume(v) {
+    const normalized = clamp01(v);
+    try {
+      if (typeof setAppStorageItem === 'function') setAppStorageItem(LS_VOL, String(normalized));
+      else localStorage.setItem(LS_VOL, String(normalized));
+    } catch {}
+    return normalized;
+  }
+
+  function getVolumeSliders() {
+    return volumeSliderIds
+      .map((id) => document.getElementById(id))
+      .filter((el) => el && el.tagName === 'INPUT');
+  }
+
+  function syncVolumeSliders(volume01) {
+    const sliderValue = String(Math.round(clamp01(volume01) * 100));
+    getVolumeSliders().forEach((slider) => {
+      if (slider.value !== sliderValue) slider.value = sliderValue;
+    });
+  }
+
   function applyVolume() {
     const vol = loadVolume();
     try { audio.muted = false; } catch {}
     try { audio.defaultMuted = false; } catch {}
     try { audio.volume = vol; } catch {}
+    syncVolumeSliders(vol);
     return vol;
+  }
+
+  function bindVolumeSliders() {
+    getVolumeSliders().forEach((slider) => {
+      if (slider._lobbyAmbientBound) return;
+      slider._lobbyAmbientBound = true;
+      slider.addEventListener('input', () => {
+        const vv = clamp01(Number(slider.value) / 100);
+        saveVolume(vv);
+        applyVolume();
+      });
+    });
+    applyVolume();
   }
 
   function chooseTavernTrack() {
@@ -461,8 +498,8 @@ const lobbyAmbientAudio = (() => {
   });
 
   bindGlobalUnlock();
+  bindVolumeSliders();
   applyVolume();
 
   return { sync, start, stop, nudgeFromGesture, audio };
 })();
-
