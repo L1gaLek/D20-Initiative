@@ -441,6 +441,10 @@ body.lobby-active #lobby-scene {
   margin-top: 12px;
   padding-top: 10px;
 }
+.lobby-ambient-volume--tavern {
+  margin-top: 12px;
+  padding-top: 10px;
+}
 .tavern-toolbar{
   display:flex;
   align-items:center;
