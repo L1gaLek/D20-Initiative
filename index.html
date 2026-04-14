@@ -41,6 +41,11 @@
       <option value="Spectator">Зритель</option>
     </select>
     <button id="joinBtn">Войти</button>
+    <div class="lobby-ambient-volume" aria-label="Громкость музыки на стартовом экране">
+      <span class="lobby-ambient-volume__icon" aria-hidden="true">🎵</span>
+      <label class="lobby-ambient-volume__label" for="lobby-ambient-volume-slider">Громкость музыки</label>
+      <input id="lobby-ambient-volume-slider" class="lobby-ambient-volume__slider" type="range" min="0" max="100" step="1" value="40" />
+    </div>
     <p id="loginError" class="lobby-error"></p>
   </div>
 </div>
@@ -73,6 +78,11 @@
       <div class="tavern-topbar__title">Таверна «Инициатива»</div>
       <img class="tavern-topbar__banner" src="token/banner_in.png" alt="Баннер таверны «Инициатива»">
       <div class="tavern-topbar__subtitle">Добро пожаловать, <span id="tavern-my-name">путник</span></div>
+      <div class="lobby-ambient-volume lobby-ambient-volume--tavern" aria-label="Громкость музыки в таверне">
+        <span class="lobby-ambient-volume__icon" aria-hidden="true">🎵</span>
+        <label class="lobby-ambient-volume__label" for="tavern-ambient-volume-slider">Громкость музыки</label>
+        <input id="tavern-ambient-volume-slider" class="lobby-ambient-volume__slider" type="range" min="0" max="100" step="1" value="40" />
+      </div>
     </div>
 
     <div class="tavern-toolbar" aria-label="Навигация по таверне">
