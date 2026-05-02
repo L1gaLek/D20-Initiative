@@ -278,12 +278,13 @@ async function applyInitiativeAtomic(roomId, myUserId, updates, options = {}) {
     try {
       const check = await fetchRoomStateSnapshot(roomId);
       const cpls = Array.isArray(check?.players) ? check.players : [];
-      const ok = applicableUpdates.every(u => {
+      const applied = applicableUpdates.map(u => {
         const pid = String(u?.playerId || "");
         const cp = cpls.find(pp => String(pp?.id) === pid);
-        return !!cp && cp.hasRolledInitiative && Number(cp.initiative) === Number(u.total);
-      });
-      if (ok) return applicableUpdates;
+        if (!cp || !cp.hasRolledInitiative) return null;
+        return { ...u, total: Number(cp.initiative) || 0 };
+      }).filter(Boolean);
+      if (applied.length === applicableUpdates.length) return applied;
     } catch {}
     await delayMs(35 + attempt * 25);
   }
@@ -411,6 +412,28 @@ async function upsertRoomState(roomId, nextState) {
     state: syncedState,
     updated_at: new Date().toISOString()
   };
+  try {
+    const publicState = stripRoomSecretsFromState(syncedState);
+    if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+      const userId = String(window.getVpsActorUserId?.() || (typeof getAppStorageItem === 'function' ? getAppStorageItem('int_user_id') : '') || '').trim();
+      const response = await window.vpsApi(`/rooms/${encodeURIComponent(roomId)}/state`, {
+        method: 'POST',
+        body: { userId, state: publicState }
+      });
+      if (response?.state && typeof response.state === 'object') syncedState = response.state;
+    } else {
+      const sent = (typeof sendWsEnvelope === 'function')
+        ? sendWsEnvelope({ type: 'state', roomId, state: publicState }, { optimisticApplied: true })
+        : false;
+      if (!sent) throw new Error('VPS state channel is unavailable');
+    }
+    try { rememberRoomStateShadow(roomId, syncedState); } catch {}
+    return;
+  } catch (error) {
+    console.warn('server-side room_state update failed', error);
+    throw error;
+  }
+
   const { error } = await sbClient.from("room_state").upsert(payload);
   if (error) throw error;
   try { rememberRoomStateShadow(roomId, syncedState); } catch {}
