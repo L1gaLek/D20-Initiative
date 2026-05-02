@@ -438,6 +438,83 @@ try { window.connectRoomWs = connectRoomWs; } catch {}
 try { window.disconnectRoomWs = disconnectRoomWs; } catch {}
 try { window.getWsRoomId = () => String(wsRoomId || ''); } catch {}
 
+const VPS_API_BASE = (() => {
+  try {
+    const wsUrl = String(typeof WS_URL !== 'undefined' ? WS_URL : '').trim();
+    if (wsUrl) {
+      return wsUrl
+        .replace(/^wss:\/\//i, 'https://')
+        .replace(/^ws:\/\//i, 'http://')
+        .replace(/\/ws\/?$/i, '/api')
+        .replace(/\/+$/g, '');
+    }
+  } catch {}
+  return 'https://ws.d20-initiative.fun/api';
+})();
+
+function getVpsActorUserId() {
+  try {
+    const stable = (typeof getCurrentStableUserId === 'function') ? getCurrentStableUserId() : '';
+    return String(stable || getAppStorageItem?.('int_user_id') || myId || '').trim();
+  } catch {
+    return String(myId || '').trim();
+  }
+}
+
+function getVpsActorName() {
+  try {
+    if (typeof safeGetUserName === 'function') return String(safeGetUserName() || '').trim();
+  } catch {}
+  try { return String(getAppStorageItem?.('int_user_name') || myNameSpan?.textContent || '').trim(); } catch {}
+  return '';
+}
+
+function getVpsApiErrorMessage(error, fallback = 'Server request failed') {
+  const raw = String(error?.payload?.error || error?.message || '').trim();
+  if (/already owns/i.test(raw)) return 'User already owns a room.';
+  if (/Only room owner/i.test(raw)) return 'Only the room owner can do this.';
+  if (/Invalid room password/i.test(raw)) return 'Invalid room password.';
+  if (/GM already/i.test(raw)) return 'GM already joined this room.';
+  if (/Only room owner can join as GM/i.test(raw)) return 'Only the room owner can join as GM.';
+  if (/banned/i.test(raw)) return 'You are banned in this room.';
+  if (/required/i.test(raw)) return 'Required room data is missing.';
+  return raw || fallback;
+}
+
+async function vpsApi(path, options = {}) {
+  const cleanPath = String(path || '').startsWith('/') ? String(path || '') : `/${String(path || '')}`;
+  const headers = { ...(options.headers || {}) };
+  let body = options.body;
+  const canJsonBody = body
+    && typeof body === 'object'
+    && !(typeof FormData !== 'undefined' && body instanceof FormData)
+    && !(typeof Blob !== 'undefined' && body instanceof Blob);
+  if (canJsonBody) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    body = JSON.stringify(body);
+  }
+
+  const res = await fetch(`${VPS_API_BASE}${cleanPath}`, {
+    ...options,
+    headers,
+    body
+  });
+
+  let payload = null;
+  try { payload = await res.json(); } catch {}
+  if (!res.ok || payload?.ok === false) {
+    const error = new Error(String(payload?.error || `VPS API ${res.status}`));
+    error.status = res.status;
+    error.payload = payload;
+    throw error;
+  }
+  return payload || {};
+}
+
+try { window.vpsApi = vpsApi; } catch {}
+try { window.getVpsActorUserId = getVpsActorUserId; } catch {}
+try { window.getVpsApiErrorMessage = getVpsApiErrorMessage; } catch {}
+
 function _isMissingColumnError(error, columnName = '') {
   try {
     const needle = String(columnName || '').trim().toLowerCase();
@@ -1518,12 +1595,24 @@ function isPlayerEligibleForCurrentMapCombat(player, stateLike) {
 
 async function insertRoomLog(roomId, text) {
   try {
-    await ensureSupabaseReady();
     const t = String(text || '').trim();
-    if (!roomId || !t) return;
+    const rid = String(roomId || '').trim();
+    if (!rid || !t) return null;
+    if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+      const userId = String(window.getVpsActorUserId?.() || getAppStorageItem?.('int_user_id') || '').trim();
+      const payload = await window.vpsApi(`/rooms/${encodeURIComponent(rid)}/log`, {
+        method: 'POST',
+        body: { userId, text: t }
+      });
+      return payload?.row || null;
+    }
+    throw new Error('VPS log API is unavailable');
+
+    await ensureSupabaseReady();
     await sbClient.from('room_log').insert({ room_id: roomId, text: t });
   } catch (e) {
     console.warn('room_log insert failed', e);
+    return null;
   }
 }
 
@@ -1533,9 +1622,9 @@ async function appendRoomLogEntry(roomId, text, options = {}) {
   if (!rid || !line) return;
 
   const noOptimistic = !!options?.noOptimistic;
-  const row = { text: line, created_at: new Date().toISOString() };
-
-  await insertRoomLog(rid, line);
+  const savedRow = await insertRoomLog(rid, line);
+  if (!savedRow) return;
+  const row = savedRow || { text: line, created_at: new Date().toISOString() };
   try {
     sendWsEnvelope({ type: 'logRow', roomId: rid, row }, { optimisticApplied: !noOptimistic });
   } catch {}
@@ -1544,6 +1633,7 @@ async function appendRoomLogEntry(roomId, text, options = {}) {
     try { handleMessage({ type: 'logRow', row }); } catch {}
   }
 }
+try { window.appendRoomLogEntry = appendRoomLogEntry; } catch {}
 
 
 function buildDiceLogText(ev) {
@@ -1570,8 +1660,21 @@ try { window.buildDiceLogText = buildDiceLogText; } catch {}
 
 async function insertDiceEvent(roomId, ev) {
   try {
-    await ensureSupabaseReady();
     if (!roomId || !ev) return;
+    if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+      const userId = String(window.getVpsActorUserId?.() || getAppStorageItem?.('int_user_id') || '').trim();
+      const payload = await window.vpsApi(`/rooms/${encodeURIComponent(String(roomId || ''))}/dice`, {
+        method: 'POST',
+        body: { userId, event: ev }
+      });
+      if (payload?.event && typeof payload.event === 'object') {
+        Object.assign(ev, payload.event);
+      }
+      return payload || null;
+    }
+    throw new Error('VPS dice API is unavailable');
+
+    await ensureSupabaseReady();
     // Prefer RPC (transaction: dice + log)
     const args = {
       p_room_id: roomId,
@@ -1628,10 +1731,9 @@ async function broadcastDiceEventOnly(event) {
     if (typeof myId !== 'undefined' && !ev.fromId) ev.fromId = String(myId);
     if (myNameSpan?.textContent && !ev.fromName) ev.fromName = String(myNameSpan.textContent);
 
+    const insertResult = await insertDiceEvent(currentRoomId, ev);
     const line = buildDiceLogText(ev);
-    const logRow = line ? { text: line, created_at: new Date().toISOString() } : null;
-
-    await insertDiceEvent(currentRoomId, ev);
+    const logRow = insertResult?.logRow || (line ? { text: line, created_at: new Date().toISOString() } : null);
 
     if (logRow) {
       try { handleMessage({ type: 'logRow', row: logRow }); } catch {}
@@ -1741,6 +1843,22 @@ async function sendMessage(msg) {
     switch (type) {
       // ===== Rooms =====
       case "listRooms": {
+        {
+          try {
+            const userId = getVpsActorUserId();
+            const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+            const payload = await vpsApi(`/rooms${query}`, { method: 'GET' });
+            handleMessage({
+              type: "rooms",
+              rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
+              totalUsers: Number(payload.totalUsers) || 0
+            });
+          } catch (e) {
+            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
+          }
+          break;
+        }
+
         const { data, error } = await sbClient
           .from("rooms")
           .select("id,name,scenario,created_at,has_password,password_hash")
@@ -1804,6 +1922,38 @@ async function sendMessage(msg) {
       }
 
       case "createRoom": {
+        {
+          const userId = getVpsActorUserId();
+          if (!userId) {
+            handleMessage({ type: 'roomsError', message: 'Login is required before creating a room.' });
+            break;
+          }
+          try {
+            const initState = createInitialGameState();
+            const payload = await vpsApi('/rooms', {
+              method: 'POST',
+              body: {
+                userId,
+                userName: getVpsActorName(),
+                name: msg.name,
+                scenario: msg.scenario,
+                password: msg.password || '',
+                state: initState
+              }
+            });
+            try {
+              const createdRoomId = String(payload?.room?.id || '');
+              if (createdRoomId) await ensureDetachedBootstrap(createdRoomId, payload.state || initState);
+            } catch (e) {
+              console.warn('detached bootstrap createRoom failed', e);
+            }
+            await sendMessage({ type: "listRooms" });
+          } catch (e) {
+            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room create failed') });
+          }
+          break;
+        }
+
         const userId = getCurrentStableUserId();
         if (!userId) {
           handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
@@ -1852,6 +2002,46 @@ async function sendMessage(msg) {
       }
 
       case "updateRoom": {
+        {
+          const roomId = String(msg.roomId || '').trim();
+          const userId = getVpsActorUserId();
+          if (!roomId) break;
+          if (!userId) {
+            handleMessage({ type: 'roomsError', message: 'Login is required before updating a room.' });
+            break;
+          }
+          try {
+            const payload = await vpsApi(`/rooms/${encodeURIComponent(roomId)}/update`, {
+              method: 'POST',
+              body: {
+                userId,
+                name: msg.name,
+                scenario: msg.scenario,
+                password: msg.password || ''
+              }
+            });
+            const roomPayload = payload.room || {
+              id: roomId,
+              name: String(msg.name || ''),
+              scenario: String(msg.scenario || '')
+            };
+            if (String(currentRoomId || '') === roomId) {
+              try {
+                if (myRoomSpan) myRoomSpan.textContent = String(roomPayload.name || msg.name || '');
+                if (myScenarioSpan) myScenarioSpan.textContent = String(roomPayload.scenario || msg.scenario || '-');
+              } catch {}
+              if (payload.state) {
+                try { handleMessage({ type: 'state', state: payload.state }); } catch {}
+              }
+            }
+            try { handleMessage({ type: 'roomUpdated', room: roomPayload }); } catch {}
+            await sendMessage({ type: 'listRooms' });
+          } catch (e) {
+            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room update failed') });
+          }
+          break;
+        }
+
         const roomId = String(msg.roomId || '').trim();
         const userId = getCurrentStableUserId();
         if (!roomId) return;
@@ -1930,6 +2120,35 @@ async function sendMessage(msg) {
       }
 
       case "deleteRoom": {
+        {
+          const roomId = String(msg.roomId || '').trim();
+          const userId = getVpsActorUserId();
+          if (!roomId) break;
+          if (!userId) {
+            handleMessage({ type: 'roomsError', message: 'Login is required before deleting a room.' });
+            break;
+          }
+          try {
+            await vpsApi(`/rooms/${encodeURIComponent(roomId)}?userId=${encodeURIComponent(userId)}`, {
+              method: 'DELETE'
+            });
+
+            if (String(currentRoomId || '') === roomId) {
+              try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('deleteRoom cleanup failed', e); }
+              try { stopHeartbeat(); } catch {}
+              try { stopMembersPolling(); } catch {}
+              try { await stopSupabaseRealtimeChannels(); } catch {}
+              try { window.stopRoomChatSync?.(); } catch {}
+              currentRoomId = null;
+            }
+
+            await sendMessage({ type: 'listRooms' });
+          } catch (e) {
+            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room delete failed') });
+          }
+          break;
+        }
+
         const roomId = String(msg.roomId || '').trim();
         const userId = getCurrentStableUserId();
         if (!roomId) return;
@@ -1976,6 +2195,34 @@ async function sendMessage(msg) {
       }
 
       case "kickRoomUser": {
+        {
+          const roomId = String(currentRoomId || msg.roomId || '').trim();
+          const targetUserId = String(msg.targetUserId || '').trim();
+          const actorUserId = getVpsActorUserId();
+          if (!roomId || !targetUserId || !actorUserId) break;
+          try {
+            const payload = await vpsApi(`/rooms/${encodeURIComponent(roomId)}/kick`, {
+              method: 'POST',
+              body: { actorUserId, targetUserId }
+            });
+            if (payload.state) {
+              try { rememberRoomStateShadow(roomId, payload.state); } catch {}
+              try { handleMessage({ type: 'state', state: payload.state }); } catch {}
+            }
+            if (payload.moderationEvent) {
+              try { handleMessage({ type: 'moderationEvent', event: payload.moderationEvent }); } catch {}
+            }
+            const removedIds = Array.isArray(payload.removedTokenIds) ? payload.removedTokenIds.filter(Boolean) : [];
+            removedIds.forEach((tokenId) => {
+              try { handleMessage({ type: 'tokenRowDeleted', row: { room_id: roomId, token_id: String(tokenId) } }); } catch {}
+            });
+            await refreshRoomMembers(roomId, { broadcast: false });
+          } catch (e) {
+            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Kick failed') });
+          }
+          break;
+        }
+
         const roomId = String(currentRoomId || msg.roomId || '').trim();
         const targetUserId = String(msg.targetUserId || '').trim();
         if (!roomId || !targetUserId) return;
@@ -2050,6 +2297,42 @@ async function sendMessage(msg) {
       }
 
       case "banRoomUser": {
+        {
+          const roomId = String(currentRoomId || msg.roomId || '').trim();
+          const targetUserId = String(msg.targetUserId || '').trim();
+          const actorUserId = getVpsActorUserId();
+          if (!roomId || !targetUserId || !actorUserId) break;
+
+          const hoursRaw = Number(msg.hours);
+          const minutesRaw = Number(msg.minutes);
+          const hours = Math.max(0, Math.min(24, Math.trunc(Number.isFinite(hoursRaw) ? hoursRaw : 0)));
+          const minutes = Math.max(0, Math.min(59, Math.trunc(Number.isFinite(minutesRaw) ? minutesRaw : 0)));
+          const totalMinutes = Math.max(1, (hours * 60) + minutes);
+          const reason = String(msg.reason || '').trim();
+
+          try {
+            const payload = await vpsApi(`/rooms/${encodeURIComponent(roomId)}/ban`, {
+              method: 'POST',
+              body: { actorUserId, targetUserId, hours, minutes, totalMinutes, reason }
+            });
+            if (payload.state) {
+              try { rememberRoomStateShadow(roomId, payload.state); } catch {}
+              try { handleMessage({ type: 'state', state: payload.state }); } catch {}
+            }
+            if (payload.moderationEvent) {
+              try { handleMessage({ type: 'moderationEvent', event: payload.moderationEvent }); } catch {}
+            }
+            const removedIds = Array.isArray(payload.removedTokenIds) ? payload.removedTokenIds.filter(Boolean) : [];
+            removedIds.forEach((tokenId) => {
+              try { handleMessage({ type: 'tokenRowDeleted', row: { room_id: roomId, token_id: String(tokenId) } }); } catch {}
+            });
+            await refreshRoomMembers(roomId, { broadcast: false });
+          } catch (e) {
+            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Ban failed') });
+          }
+          break;
+        }
+
         const roomId = String(currentRoomId || msg.roomId || '').trim();
         const targetUserId = String(msg.targetUserId || '').trim();
         if (!roomId || !targetUserId) return;
@@ -2159,6 +2442,97 @@ async function sendMessage(msg) {
       }
 
       case "joinRoom": {
+        {
+          const roomId = String(msg.roomId || "").trim();
+          if (!roomId) return;
+
+          const userId = getVpsActorUserId();
+          const role = normalizeRoleForDb(getAppStorageItem("int_user_role") || myRole || "");
+          if (!userId || !role) {
+            handleMessage({ type: 'roomsError', message: 'Login and role are required before joining a room.' });
+            break;
+          }
+
+          let payload = null;
+          try {
+            payload = await vpsApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
+              method: 'POST',
+              body: {
+                userId,
+                userName: getVpsActorName(),
+                role,
+                password: msg.password || ''
+              }
+            });
+          } catch (e) {
+            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room join failed') });
+            break;
+          }
+
+          const room = payload.room || { id: roomId };
+          const state = payload.state || createInitialGameState();
+
+          currentRoomId = roomId;
+          connectRoomWs(roomId);
+          handleMessage({ type: "joinedRoom", room });
+
+          startHeartbeat();
+          try { await ensureDetachedBootstrap(roomId, state); } catch (e) { console.warn('detached bootstrap joinRoom failed', e); }
+
+          if (USE_SUPABASE_REALTIME) {
+            await subscribeRoomDb(roomId);
+            try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
+            try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
+            try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
+            try { await subscribeDetachedRoomTables(roomId); } catch (e) { console.warn('detached subscribe failed', e); }
+            await subscribeRoomMembersDb(roomId);
+          } else {
+            try { await stopSupabaseRealtimeChannels(); } catch (e) { console.warn('disable supabase realtime failed', e); }
+          }
+
+          try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
+          if (Array.isArray(payload.members)) {
+            try {
+              usersById.clear();
+              payload.members.forEach((row) => {
+                const uid = String(row?.userId || row?.id || '');
+                if (!uid) return;
+                usersById.set(uid, {
+                  name: row?.name || 'Unknown',
+                  role: normalizeRoleForUi(row?.role)
+                });
+              });
+              updatePlayerList();
+              try { window.RoomChat?.refreshUsers?.(); } catch {}
+            } catch (e) {
+              console.warn('joinRoom members snapshot failed', e);
+              await refreshRoomMembers(roomId, { broadcast: false });
+            }
+          } else {
+            await refreshRoomMembers(roomId, { broadcast: false });
+          }
+          startRoomMembersPolling(roomId);
+          const __initialStateApplied = applyDetachedPayloadToState(state);
+          try { rememberRoomStateShadow(roomId, __initialStateApplied); } catch {}
+          handleMessage({ type: "state", state: stripRoomSecretsFromState(__initialStateApplied) });
+
+          try {
+            const logRows = await loadRoomLog(roomId, 200);
+            handleMessage({ type: 'logInit', rows: logRows });
+          } catch (e) { console.warn('log init failed', e); }
+          try {
+            const mapId = String(state?.currentMapId || '');
+            const tokenRows = await loadRoomTokens(roomId, mapId);
+            handleMessage({ type: 'tokensInit', rows: tokenRows, mapId });
+          } catch (e) { console.warn('tokens init failed', e); }
+
+          try {
+            const diceRows = await loadRoomDice(roomId, 50);
+            handleMessage({ type: 'diceInit', rows: diceRows });
+          } catch (e) { console.warn('dice init failed', e); }
+          break;
+        }
+
         const roomId = String(msg.roomId || "");
         if (!roomId) return;
 
@@ -2331,9 +2705,9 @@ async function sendMessage(msg) {
         if (!currentRoomId) return;
         // v4: dice events are append-only in room_dice_events (and log is append-only in room_log)
         const ev = msg.event || {};
+        const insertResult = await insertDiceEvent(currentRoomId, ev);
         const diceLogText = buildDiceLogText(ev);
-        const logRow = diceLogText ? { text: diceLogText, created_at: new Date().toISOString() } : null;
-        await insertDiceEvent(currentRoomId, ev);
+        const logRow = insertResult?.logRow || (diceLogText ? { text: diceLogText, created_at: new Date().toISOString() } : null);
         try {
           sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true });
         } catch {}
@@ -3510,7 +3884,7 @@ async function sendMessage(msg) {
           }
 
           // IMPORTANT: movement is NOT persisted via room_state.
-          const moved = (prevX !== nx) || (prevY !== ny);
+          const moved = false && ((prevX !== nx) || (prevY !== ny));
           if (moved) {
             try { await appendRoomLogEntry(currentRoomId, `${p.name} переместил токен`); } catch {}
           }

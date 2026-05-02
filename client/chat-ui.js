@@ -1506,10 +1506,25 @@ function hydrateRoomChatFromRows(rows) {
 async function persistRoomChatMessage(message) {
   if (!message || !sbClient || !currentRoomId) return;
   try {
-    await sbClient.from('room_log').insert({ room_id: currentRoomId, text: encodeRoomChatLogRow(message) });
+    const encoded = encodeRoomChatLogRow(message);
+    if (typeof window.vpsApi === 'function') {
+      const payload = await window.vpsApi(`/rooms/${encodeURIComponent(currentRoomId)}/log`, {
+        method: 'POST',
+        body: {
+          userId: String(getAppStorageItem('int_user_id') || myId || ''),
+          text: encoded
+        }
+      });
+      void cleanupExpiredRoomChatMessagesDb();
+      return payload?.row || null;
+    }
+    throw new Error('VPS log API is unavailable');
+
+    await sbClient.from('room_log').insert({ room_id: currentRoomId, text: encoded });
     void cleanupExpiredRoomChatMessagesDb();
   } catch (e) {
     console.warn('persistRoomChatMessage failed', e);
+    return null;
   }
 }
 async function sendRoomChatMessage() {
@@ -1546,15 +1561,14 @@ async function sendRoomChatMessage() {
     created_at: new Date(message.ts || Date.now()).toISOString()
   };
 
+  const savedRow = await persistRoomChatMessage(message);
   try {
-    if (typeof sendWsEnvelope === 'function') {
-      sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: wsRow }, { optimisticApplied: true });
+    if (typeof sendWsEnvelope === 'function' && savedRow) {
+      sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: savedRow || wsRow }, { optimisticApplied: true });
     }
   } catch (e) {
     console.warn('room chat ws relay failed', e);
   }
-
-  await persistRoomChatMessage(message);
 }
 function openRoomChat() {
   if (!currentRoomId) return;
@@ -1579,8 +1593,12 @@ async function returnToTavernFromRoom(options = null) {
   }
   if (!opts.skipMemberCleanup) {
     try {
-      if (sbClient && myId) {
-        await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', myId);
+      const sent = window.sendWsEnvelope?.({ type: 'leaveRoom', roomId }, { optimisticApplied: true });
+      if (!sent && typeof window.vpsApi === 'function' && myId) {
+        await window.vpsApi(`/rooms/${encodeURIComponent(roomId)}/leave`, {
+          method: 'POST',
+          body: { userId: myId }
+        });
       }
     } catch (e) {
       console.warn('leave room member cleanup failed', e);

@@ -1131,13 +1131,15 @@ async function handleRoomPresenceFailure(reason) {
   const rid = String(currentRoomId || '').trim();
   if (reason === 'idle-timeout' && rid && myId) {
     try {
-      await sbClient
-        .from("room_members")
-        .delete()
-        .eq("room_id", rid)
-        .eq("user_id", myId);
+      const sent = window.sendWsEnvelope?.({ type: 'leaveRoom', roomId: rid }, { optimisticApplied: true });
+      if (!sent && typeof window.vpsApi === 'function') {
+        await window.vpsApi(`/rooms/${encodeURIComponent(rid)}/leave`, {
+          method: 'POST',
+          body: { userId: myId }
+        });
+      }
     } catch (e) {
-      console.warn('[heartbeat] idle kick delete failed', e);
+      console.warn('[heartbeat] idle leave failed', e);
     }
   }
 
@@ -1198,7 +1200,6 @@ function stopHeartbeat() {
 
 async function updateLastSeen() {
   try {
-    await ensureSupabaseReady();
     if (!currentRoomId || !myId) return;
 
     const nowMs = Date.now();
@@ -1208,6 +1209,15 @@ async function updateLastSeen() {
       await handleRoomPresenceFailure('idle-timeout');
       return;
     }
+
+    const sent = window.sendWsEnvelope?.({ type: 'presenceTouch', roomId: currentRoomId }, { optimisticApplied: true });
+    if (!sent && typeof window.vpsApi === 'function') {
+      await window.vpsApi(`/rooms/${encodeURIComponent(currentRoomId)}/touch`, {
+        method: 'POST',
+        body: { userId: myId }
+      });
+    }
+    return;
 
     const ts = new Date(lastRoomActivityMs).toISOString();
 
