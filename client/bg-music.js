@@ -109,6 +109,16 @@
   return "";
 }
 
+  function getCurrentUserId() {
+    try {
+      const fromStorage = (typeof getAppStorageItem === "function") ? getAppStorageItem("int_user_id") : localStorage.getItem("int_user_id");
+      if (String(fromStorage || "").trim()) return String(fromStorage).trim();
+    } catch {}
+    try { if (typeof myId !== "undefined" && String(myId || "").trim()) return String(myId).trim(); } catch {}
+    try { if (String(window.myId || "").trim()) return String(window.myId).trim(); } catch {}
+    return "";
+  }
+
   function isSupabaseLegacyTrack(track) {
     const source = String(track?.source || '').trim().toLowerCase();
     const path = String(track?.path || '').trim();
@@ -171,6 +181,8 @@
     const trackId = String(track?.id || '').trim();
     if (path) url.searchParams.set('path', path);
     if (roomId) url.searchParams.set('roomId', roomId);
+    const userId = getCurrentUserId();
+    if (userId) url.searchParams.set('userId', userId);
     if (fileName) url.searchParams.set('fileName', fileName);
     if (trackId) url.searchParams.set('trackId', trackId);
     return url.toString();
@@ -1014,6 +1026,7 @@
         const form = new FormData();
         form.append('file', file, safeName);
         form.append('roomId', roomId);
+        form.append('userId', getCurrentUserId());
         form.append('trackId', id);
         return form;
       },
@@ -1022,6 +1035,7 @@
         const form = new FormData();
         form.append('audio', file, safeName);
         form.append('room_id', roomId);
+        form.append('user_id', getCurrentUserId());
         form.append('track_id', id);
         return form;
       },
@@ -1032,6 +1046,8 @@
         form.append('audio', file, safeName);
         form.append('roomId', roomId);
         form.append('room_id', roomId);
+        form.append('userId', getCurrentUserId());
+        form.append('user_id', getCurrentUserId());
         form.append('trackId', id);
         form.append('track_id', id);
         return form;

@@ -258,6 +258,7 @@ function connectRoomWs(roomId) {
 
   const sock = new WebSocket(WS_URL);
   sock.__roomId = rid;
+  sock.__joined = false;
   wsClient = sock;
 
   sock.onopen = () => {
@@ -267,11 +268,12 @@ function connectRoomWs(roomId) {
       sock.send(JSON.stringify({
         type: 'joinRoom',
         roomId: rid,
+        userId: String(getAppStorageItem?.('int_user_id') || myId || ''),
+        name: String(getAppStorageItem?.('int_user_name') || myNameSpan?.textContent || ''),
         clientId: WS_CLIENT_ID,
         transport: 'ws'
       }));
     } catch {}
-    flushWsPendingEnvelopes(sock);
   };
 
   sock.onmessage = (event) => {
@@ -308,6 +310,7 @@ function connectRoomWs(roomId) {
       }
       if (msg.type === 'joinedWsRoom') {
         markWsAlive();
+        try { sock.__joined = true; } catch {}
         flushWsPendingEnvelopes(sock);
         return;
       }
@@ -413,7 +416,7 @@ function sendWsEnvelope(msg, opts = {}) {
     };
     wsRememberNonce(nonce);
 
-    if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+    if (wsClient && wsClient.readyState === WebSocket.OPEN && wsClient.__joined === true) {
       wsClient.send(JSON.stringify(payload));
       return true;
     }
@@ -708,15 +711,17 @@ function applyTokenRowToLocalState(row) {
             if (!retryTs || (Date.now() - retryTs) > 350) {
               guard.retryAtMs = Date.now();
               try {
-                Promise.resolve(upsertTokenPositionDirect(String(currentRoomId || ''), {
-                  id: tokenId,
+                sendWsEnvelope({
+                  type: 'moveToken',
+                  roomId: String(currentRoomId || ''),
                   mapId: gMapId || rowMapId || lastState?.currentMapId || '',
+                  tokenId,
                   x: gx,
                   y: gy,
                   size: Number.isFinite(Number(guard.size)) ? Math.max(1, Number(guard.size)) : undefined,
-                  color: (typeof guard.color === 'string') ? guard.color : undefined,
-                  isPublic: (typeof guard.isPublic === 'boolean') ? guard.isPublic : undefined
-                })).catch(() => {});
+                  isPublic: (typeof guard.isPublic === 'boolean') ? guard.isPublic : undefined,
+                  client_ts: Date.now()
+                }, { optimisticApplied: true });
               } catch {}
             }
           }
@@ -939,6 +944,9 @@ async function upsertRoomMapMetaRow(roomId, map) {
     wall_alpha: Number.isFinite(Number(m.wallAlpha)) ? clamp(Number(m.wallAlpha), 0, 1) : 1,
     updated_at: new Date().toISOString()
   };
+  _cacheMapMeta(row);
+  try { sendWsEnvelope({ type: 'mapMetaRow', roomId: String(roomId || ''), row }, { optimisticApplied: true }); } catch {}
+  return;
   const { error } = await sbClient.from('room_map_meta').upsert(row, { onConflict: 'room_id,map_id' });
   if (error) throw error;
   _cacheMapMeta(row);
@@ -950,6 +958,12 @@ async function deleteRoomMapCascade(roomId, mapId) {
   const rid = String(roomId || '');
   const mid = String(mapId || '');
   if (!rid || !mid) return;
+  __roomDetachedCache.mapMetaById.delete(mid);
+  __roomDetachedCache.wallsByMap.delete(mid);
+  __roomDetachedCache.marksByMap.delete(mid);
+  __roomDetachedCache.fogByMap.delete(mid);
+  try { sendWsEnvelope({ type: 'mapMetaDelete', roomId: rid, row: { map_id: mid } }, { optimisticApplied: true }); } catch {}
+  return;
   await Promise.all([
     sbClient.from('room_map_meta').delete().eq('room_id', rid).eq('map_id', mid),
     sbClient.from('room_walls').delete().eq('room_id', rid).eq('map_id', mid),
@@ -1001,6 +1015,38 @@ async function clearRoomMapPlayfield(roomId, mapLike, opts = {}) {
     tasks.push(sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' }));
     _cacheUpsertFogRow(row);
   }
+
+  if (clearWalls) __roomDetachedCache.wallsByMap.set(mid, []);
+  if (clearMarks) __roomDetachedCache.marksByMap.set(mid, []);
+  if (clearWalls) {
+    prevWalls.forEach((w) => {
+      try {
+        sendWsEnvelope({ type: 'wallDelete', roomId: rid, row: { map_id: mid, x: Number(w?.x) || 0, y: Number(w?.y) || 0, dir: String(w?.dir || '').toUpperCase() } }, { optimisticApplied: true });
+      } catch {}
+    });
+  }
+  if (clearMarks) {
+    try { sendWsEnvelope({ type: 'marksReplace', roomId: rid, mapId: mid, rows: [] }, { optimisticApplied: true }); } catch {}
+  }
+  if (resetFog) {
+    try {
+      const emptyFogRow = buildDetachedFogRow(rid, mid, {
+        enabled: false,
+        mode: 'manual',
+        manualBase: 'hide',
+        manualStamps: [],
+        visionRadius: 8,
+        useWalls: true,
+        exploredEnabled: true,
+        gmViewMode: 'gm',
+        gmOpen: false,
+        moveOnlyExplored: false,
+        explored: []
+      }, boardW, boardH);
+      sendWsEnvelope({ type: 'fogRow', roomId: rid, row: emptyFogRow }, { optimisticApplied: true });
+    } catch {}
+  }
+  return;
 
   await Promise.all(tasks);
 
@@ -1062,6 +1108,18 @@ async function upsertRoomWallsEdges(roomId, mapId, mode, edges) {
   }
   if (!clean.length) return;
   if (String(mode) === 'remove') {
+    clean.forEach((row) => {
+      _cacheDeleteWallRow(row);
+      try { sendWsEnvelope({ type: 'wallDelete', roomId: rid, row }, { optimisticApplied: true }); } catch {}
+    });
+  } else {
+    clean.forEach((row) => {
+      _cacheUpsertWallRow(row);
+      try { sendWsEnvelope({ type: 'wallRow', roomId: rid, row }, { optimisticApplied: true }); } catch {}
+    });
+  }
+  return;
+  if (String(mode) === 'remove') {
     for (const row of clean) {
       const { error } = await sbClient.from('room_walls').delete().eq('room_id', rid).eq('map_id', mid).eq('x', row.x).eq('y', row.y).eq('dir', row.dir);
       if (error) throw error;
@@ -1106,6 +1164,9 @@ async function upsertRoomFogState(roomId, mapId, fog, boardW, boardH) {
   await ensureSupabaseReady();
   const row = buildDetachedFogRow(roomId, mapId, fog, boardW, boardH);
   if (!row.room_id || !row.map_id) return;
+  _cacheUpsertFogRow(row);
+  try { sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
+  return;
   const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
   if (error) throw error;
   _cacheUpsertFogRow(row);
@@ -1123,6 +1184,10 @@ function scheduleRoomFogUpsert(roomId, mapId, fog, boardW, boardH, delay = 180) 
     __pendingFogRow = null;
     try {
       if (!row?.room_id || !row?.map_id) return;
+      _cacheUpsertFogRow(row);
+      try { sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
+      _refreshDetachedRoomView();
+      return;
       const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
       if (error) throw error;
       _cacheUpsertFogRow(row);
@@ -1147,6 +1212,9 @@ async function upsertRoomMarkRow(roomId, mark) {
     updated_at: new Date().toISOString()
   };
   if (!row.room_id || !row.map_id || !row.mark_id || !row.kind) return;
+  _cacheUpsertMarkRow(row);
+  try { sendWsEnvelope({ type: 'markRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
+  return;
   const { error } = await sbClient.from('room_marks').upsert(row, { onConflict: 'room_id,map_id,mark_id' });
   if (error) {
     if (_isMissingColumnError(error, 'payload')) {
@@ -1164,6 +1232,10 @@ async function deleteRoomMarkRow(roomId, mapId, markId) {
   const mid = String(mapId || '');
   const id = String(markId || '');
   if (!rid || !mid || !id) return;
+  const deletedRow = { map_id: mid, mark_id: id };
+  _cacheDeleteMarkRow(deletedRow);
+  try { sendWsEnvelope({ type: 'markDelete', roomId: rid, row: deletedRow }, { optimisticApplied: true }); } catch {}
+  return;
   const { error } = await sbClient.from('room_marks').delete().eq('room_id', rid).eq('map_id', mid).eq('mark_id', id);
   if (error) throw error;
   const row = { map_id: mid, mark_id: id };
@@ -1173,6 +1245,25 @@ async function deleteRoomMarkRow(roomId, mapId, markId) {
 
 async function clearRoomMarks(roomId, mapId, ownerId = null) {
   await ensureSupabaseReady();
+  if (ownerId) {
+    const list = Array.isArray(__roomDetachedCache.marksByMap.get(String(mapId || ''))) ? __roomDetachedCache.marksByMap.get(String(mapId || '')) : [];
+    __roomDetachedCache.marksByMap.set(String(mapId || ''), list.filter(m => String(m?.ownerId || '') !== String(ownerId)));
+  } else {
+    __roomDetachedCache.marksByMap.set(String(mapId || ''), []);
+  }
+  try {
+    const rows = (Array.isArray(__roomDetachedCache.marksByMap.get(String(mapId || ''))) ? __roomDetachedCache.marksByMap.get(String(mapId || '')) : []).map((m) => ({
+      room_id: String(roomId || ''),
+      map_id: String(mapId || ''),
+      mark_id: String(m?.id || ''),
+      owner_id: String(m?.ownerId || '') || null,
+      kind: String(m?.kind || ''),
+      payload: deepClone(m),
+      updated_at: new Date().toISOString()
+    }));
+    sendWsEnvelope({ type: 'marksReplace', roomId: String(roomId || ''), mapId: String(mapId || ''), rows }, { optimisticApplied: true });
+  } catch {}
+  return;
   let q = sbClient.from('room_marks').delete().eq('room_id', String(roomId || '')).eq('map_id', String(mapId || ''));
   if (ownerId) q = q.eq('owner_id', String(ownerId));
   const { error } = await q;
@@ -1205,6 +1296,9 @@ async function upsertRoomMusicState(roomId, bgMusic) {
     updated_at: new Date().toISOString()
   };
   if (!row.room_id) return;
+  _cacheMusicRow(row);
+  try { sendWsEnvelope({ type: 'musicRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
+  return;
   const { error } = await sbClient.from('room_music_state').upsert(row, { onConflict: 'room_id' });
   if (error) throw error;
   _cacheMusicRow(row);
@@ -1299,6 +1393,21 @@ async function ensureDetachedBootstrap(roomId, fullState) {
 
 async function upsertTokenVisibility(roomId, tokenId, isPublic) {
   try {
+    const rid = String(roomId || '').trim();
+    const tid = String(tokenId || '').trim();
+    const visibilityPlayer = (lastState?.players || []).find(pp => String(pp?.id || '') === tid);
+    const vpsMapId = String(visibilityPlayer?.mapId || lastState?.currentMapId || '').trim();
+    if (rid && tid && vpsMapId) {
+      sendWsEnvelope({
+        type: 'setTokenVisibility',
+        roomId: rid,
+        mapId: vpsMapId,
+        tokenId: tid,
+        isPublic: !!isPublic
+      }, { optimisticApplied: true });
+    }
+    return;
+
     await ensureSupabaseReady();
     if (!roomId || !tokenId) return;
     const pub = !!isPublic;
@@ -1334,10 +1443,25 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
 
 async function upsertTokenPositionDirect(roomId, token) {
   try {
-    await ensureSupabaseReady();
     const rid = String(roomId || '').trim();
     const tokenId = String(token?.id || token?.token_id || '').trim();
     const mapId = String(token?.mapId || token?.map_id || lastState?.currentMapId || '').trim();
+    if (rid && tokenId && mapId) {
+      sendWsEnvelope({
+        type: 'moveToken',
+        roomId: rid,
+        mapId,
+        tokenId,
+        x: (token?.x === null || typeof token?.x === 'undefined') ? null : Number(token.x),
+        y: (token?.y === null || typeof token?.y === 'undefined') ? null : Number(token.y),
+        size: Math.max(1, Number(token?.size) || 1),
+        isPublic: !!token?.isPublic,
+        client_ts: Date.now()
+      }, { optimisticApplied: true });
+    }
+    return;
+
+    await ensureSupabaseReady();
     if (!rid || !tokenId || !mapId) return;
 
     const payload = {
@@ -1895,7 +2019,7 @@ async function sendMessage(msg) {
           const removedIds = Array.isArray(removedKick?.removedPlayerIds) ? removedKick.removedPlayerIds.filter(Boolean) : [];
           for (const tokenId of removedIds) {
             try {
-              await sbClient.from('room_tokens').delete().eq('room_id', roomId).eq('token_id', String(tokenId));
+              sendWsEnvelope({ type: 'tokenRowDeleted', roomId, row: { room_id: roomId, token_id: String(tokenId) } }, { optimisticApplied: true });
             } catch (e) {
               console.warn('kickRoomUser room_tokens delete failed', e);
             }
@@ -2004,7 +2128,7 @@ async function sendMessage(msg) {
           const removedIds = Array.isArray(removedBan?.removedPlayerIds) ? removedBan.removedPlayerIds.filter(Boolean) : [];
           for (const tokenId of removedIds) {
             try {
-              await sbClient.from('room_tokens').delete().eq('room_id', roomId).eq('token_id', String(tokenId));
+              sendWsEnvelope({ type: 'tokenRowDeleted', roomId, row: { room_id: roomId, token_id: String(tokenId) } }, { optimisticApplied: true });
             } catch (e) {
               console.warn('banRoomUser room_tokens delete failed', e);
             }
@@ -3378,17 +3502,8 @@ async function sendMessage(msg) {
               client_ts: Date.now()
             }, { optimisticApplied: true });
 
-            // Hard guarantee path: persist token coordinates directly to room_tokens.
-            // This prevents rare WS race cases and keeps size/color/public in sync in one write.
-            Promise.resolve(upsertTokenPositionDirect(String(currentRoomId || ''), {
-              id: String(p?.id || ''),
-              mapId: String(next?.currentMapId || ''),
-              x: nx,
-              y: ny,
-              size: Number(p?.size) || 1,
-              color: p?.color || null,
-              isPublic: !!p?.isPublic
-            })).catch(() => {});
+            // Authoritative persistence is handled by VPS. The client keeps only the
+            // optimistic UI position until tokenRow comes back from the server.
           } catch (e) {
             console.warn('moveToken ws send failed', e);
             handleMessage({ type: 'error', message: 'Не удалось отправить перемещение на сервер' });
@@ -3473,13 +3588,12 @@ async function sendMessage(msg) {
 
           // v4: also remove any room_tokens rows for this token (all maps)
           try {
-            await ensureSupabaseReady();
             if (currentRoomId) {
-              await sbClient
-                .from('room_tokens')
-                .delete()
-                .eq('room_id', currentRoomId)
-                .eq('token_id', String(p.id));
+              sendWsEnvelope({
+                type: 'tokenRowDeleted',
+                roomId: String(currentRoomId || ''),
+                row: { room_id: String(currentRoomId || ''), token_id: String(p.id) }
+              }, { optimisticApplied: true });
             }
           } catch (e) {
             console.warn('removePlayerCompletely: room_tokens delete failed', e);

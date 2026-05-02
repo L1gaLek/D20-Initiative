@@ -771,6 +771,7 @@ async function ensureMonstersLibrary() {
 // ================== MAP BACKGROUND (GM) ==================
 const BOARD_BG_BUCKET = 'room-board-bg';
 const BOARD_BG_PREFIX = 'board-bg';
+const BOARD_BG_UPLOAD_ENDPOINT = 'https://ws.d20-initiative.fun/api/uploads/room-board-bg';
 const BOARD_BG_MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 const BOARD_BG_ALLOWED_TYPES = new Set([
   'image/png',
@@ -801,12 +802,36 @@ function isAllowedBoardBgFile(file) {
 }
 
 async function uploadBoardBackgroundToStorage(file) {
-  if (!sbClient || !sbClient.storage) {
+  if (false && (!sbClient || !sbClient.storage)) {
     throw new Error('Supabase client не инициализирован.');
   }
   if (!currentRoomId) {
     throw new Error('Комната не выбрана.');
   }
+
+  const form = new FormData();
+  form.append('file', file, sanitizeStorageName(file?.name || 'board-bg'));
+  form.append('roomId', String(currentRoomId || ''));
+  form.append('userId', String(getAppStorageItem('int_user_id') || myId || ''));
+
+  const resp = await fetch(BOARD_BG_UPLOAD_ENDPOINT, {
+    method: 'POST',
+    body: form,
+    credentials: 'omit',
+    mode: 'cors'
+  });
+  const payload = await resp.json().catch(() => null);
+  if (!resp.ok || !payload?.ok || !payload?.url) {
+    throw new Error(String(payload?.error || payload?.message || `HTTP ${resp.status}`));
+  }
+
+  return {
+    url: String(payload.url || ''),
+    path: String(payload.path || payload.storageKey || payload.deleteKey || ''),
+    bucket: String(payload.bucket || 's3-timeweb-board-bg'),
+    mime: String(file?.type || ''),
+    fileName: String(payload.fileName || file?.name || 'board-bg')
+  };
 
   const id = (crypto?.randomUUID ? crypto.randomUUID() : ('bg-' + Math.random().toString(16).slice(2)));
   const safeName = sanitizeStorageName(file?.name || 'board-bg');
@@ -842,10 +867,26 @@ async function uploadBoardBackgroundToStorage(file) {
 
 async function removeBoardBackgroundFromStorage(bucket, path) {
   try {
-    if (!sbClient || !sbClient.storage) return;
+    if (false && (!sbClient || !sbClient.storage)) return;
     const b = String(bucket || '').trim();
     const p = String(path || '').trim();
     if (!b || !p) return;
+    if (b === 's3-timeweb-board-bg' || p.startsWith('room-board-bg/')) {
+      const url = new URL(BOARD_BG_UPLOAD_ENDPOINT, window.location.origin);
+      url.searchParams.set('path', p);
+      url.searchParams.set('roomId', String(currentRoomId || ''));
+      url.searchParams.set('userId', String(getAppStorageItem('int_user_id') || myId || ''));
+      const resp = await fetch(url.toString(), {
+        method: 'DELETE',
+        credentials: 'omit',
+        mode: 'cors'
+      });
+      if (!resp.ok && resp.status !== 404) {
+        const payload = await resp.json().catch(() => null);
+        console.warn('Board background VPS delete failed:', payload || resp.status);
+      }
+      return;
+    }
     const rm = await sbClient.storage.from(b).remove([p]);
     if (rm?.error) {
       console.warn('Board background remove failed:', rm.error);
