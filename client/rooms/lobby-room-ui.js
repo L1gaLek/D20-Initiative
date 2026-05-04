@@ -252,14 +252,57 @@ window.clearLastJoinAttempt = function () { lastJoinAttempt = { roomId: '', role
 
 let pendingJoinRoomId = null;
 let pendingJoinRoomHasPassword = false;
+let pendingJoinGmUnavailable = false;
+
+function isGmUnavailableForRoom(room) {
+  const hasGM = !!(room?.hasGM ?? room?.has_gm ?? room?.gmPresent ?? room?.gm_present);
+  const isMyGMSeat = !!(room?.isMyGMSeat ?? room?.is_my_gm_seat);
+  return hasGM && !isMyGMSeat;
+}
+
+function syncRoleModalGmAvailability() {
+  const pickGm = document.getElementById('rolePickGM');
+  const hint = document.getElementById('rolePickGMHint');
+  const unavailable = !!pendingJoinGmUnavailable;
+  if (pickGm) {
+    pickGm.disabled = unavailable;
+    pickGm.classList.toggle('is-unavailable', unavailable);
+    pickGm.title = unavailable ? 'ГМ уже в комнате' : '';
+    if (unavailable) pickGm.setAttribute('aria-describedby', 'rolePickGMHint');
+    else pickGm.removeAttribute('aria-describedby');
+  }
+  if (hint) {
+    hint.hidden = !unavailable;
+    hint.textContent = unavailable ? 'ГМ уже в комнате' : '';
+  }
+}
+
+async function refreshRoleModalGmAvailability(roomId) {
+  try {
+    if (typeof vpsApi !== 'function') return;
+    const rid = String(roomId || '').trim();
+    if (!rid) return;
+    const userId = (typeof getVpsActorUserId === 'function') ? getVpsActorUserId() : '';
+    const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    const payload = await vpsApi(`/rooms${query}`, { method: 'GET' });
+    const rooms = Array.isArray(payload?.rooms) ? payload.rooms : [];
+    const freshRoom = rooms.find((room) => String(room?.id || '') === rid);
+    if (!freshRoom || String(pendingJoinRoomId || '') !== rid) return;
+    pendingJoinGmUnavailable = isGmUnavailableForRoom(freshRoom);
+    syncRoleModalGmAvailability();
+  } catch {}
+}
+
 function openRoleModalForRoom(room) {
   pendingJoinRoomId = String(room?.id || '');
   pendingJoinRoomHasPassword = !!room?.hasPassword;
+  pendingJoinGmUnavailable = isGmUnavailableForRoom(room);
   const modal = document.getElementById('roleModal');
   const err = document.getElementById('roleModalError');
   const rn = document.getElementById('roleModalRoomName');
   if (err) err.textContent = '';
   if (rn) rn.textContent = String(room?.name || 'Комната');
+  syncRoleModalGmAvailability();
 
   // Inject password input if needed (we do not rely on hardcoded HTML).
   try {
@@ -289,6 +332,7 @@ function openRoleModalForRoom(room) {
 
   try { tavernAdventuresModal?.classList.add('hidden'); } catch {}
   if (modal) modal.classList.remove('hidden');
+  refreshRoleModalGmAvailability(pendingJoinRoomId);
 }
 
 function closeRoleModal() {
@@ -298,11 +342,18 @@ function closeRoleModal() {
   if (modal) modal.classList.add('hidden');
   pendingJoinRoomId = null;
   pendingJoinRoomHasPassword = false;
+  pendingJoinGmUnavailable = false;
+  syncRoleModalGmAvailability();
 }
 
 function pickRoleAndJoin(roleDb) {
   const rid = String(pendingJoinRoomId || '');
   if (!rid) return;
+  if (normalizeRoleForDb(roleDb) === 'GM' && pendingJoinGmUnavailable) {
+    const err = document.getElementById('roleModalError');
+    if (err) err.textContent = 'ГМ уже в комнате.';
+    return;
+  }
   const needsPw = !!pendingJoinRoomHasPassword;
   try {
     // store role for this session
