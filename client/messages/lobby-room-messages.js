@@ -1,5 +1,15 @@
 // Room / lobby specific incoming message handlers extracted from client/message-ui.js.
 
+function isGmAlreadyRoomError(text) {
+  const raw = String(text || '');
+  return /GM already|uq_one_gm_per_room|ГМ.*(уже|присутств)|уже.*ГМ/i.test(raw);
+}
+
+function normalizeRoomsErrorText(text) {
+  if (isGmAlreadyRoomError(text)) return 'В комнате уже присутствует ГМ. Вы не можете войти как ГМ.';
+  return String(text || 'Ошибка');
+}
+
 function handleRoomsMessage(msg) {
   if (!(msg?.type === 'rooms' && Array.isArray(msg.rooms))) return false;
   try { window.SERVER_TOTAL_USERS = Number(msg.totalUsers || 0) || 0; } catch {}
@@ -61,7 +71,7 @@ function handleRoomDeletedMessage(msg) {
 
 function handleRoomsErrorMessage(msg) {
   if (msg?.type !== 'roomsError') return false;
-  const text = String(msg.message || 'Ошибка');
+  const text = normalizeRoomsErrorText(msg.message);
   if (roomsError) roomsError.textContent = text;
   if (typeof window.isTavernVisible === 'function' && window.isTavernVisible() && tavernRoomsError) tavernRoomsError.textContent = text;
 
@@ -73,8 +83,8 @@ function handleRoomsErrorMessage(msg) {
       window.showRoomAccessPopup?.(text, 'Неверный пароль');
     } else if (lower.includes('лимит') || lower.includes('одной комнат') || lower.includes('1 комнат')) {
       window.showRoomAccessPopup?.(text, 'Лимит комнат');
-    } else if (lower.includes('gm') || lower.includes('гм')) {
-      window.showRoomAccessPopup?.(text, 'GM уже в комнате');
+    } else if (isGmAlreadyRoomError(text)) {
+      window.showRoomAccessPopup?.(text, 'ГМ уже в комнате');
     } else {
       window.showRoomAccessPopup?.(text, 'Ошибка входа');
     }
