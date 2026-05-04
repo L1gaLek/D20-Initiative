@@ -1060,6 +1060,7 @@
       for (let i = 0; i < formVariants.length; i++) {
         const resp = await fetch(endpoint, {
           method: 'POST',
+          headers: (typeof window.getVpsAuthHeaders === 'function') ? window.getVpsAuthHeaders() : {},
           body: formVariants[i](),
           credentials: 'omit',
           mode: 'cors'
@@ -1122,6 +1123,7 @@
       try {
         const resp = await fetch(buildTrackDeleteUrl(track), {
           method: 'DELETE',
+          headers: (typeof window.getVpsAuthHeaders === 'function') ? window.getVpsAuthHeaders() : {},
           credentials: 'omit',
           mode: 'cors'
         });

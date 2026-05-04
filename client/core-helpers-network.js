@@ -261,19 +261,26 @@ function connectRoomWs(roomId) {
   sock.__joined = false;
   wsClient = sock;
 
-  sock.onopen = () => {
+  sock.onopen = async () => {
     markWsAlive();
     startWsHeartbeat(sock);
     try {
+      const session = await ensureVpsSession(String(getAppStorageItem?.('int_user_name') || myNameSpan?.textContent || ''));
+      const authToken = String(session?.token || getVpsAuthToken() || '').trim();
+      if (!authToken) throw new Error('VPS auth token is missing');
       sock.send(JSON.stringify({
         type: 'joinRoom',
         roomId: rid,
-        userId: String(getAppStorageItem?.('int_user_id') || myId || ''),
+        authToken,
+        userId: String(session?.userId || getAppStorageItem?.('int_user_id') || myId || ''),
         name: String(getAppStorageItem?.('int_user_name') || myNameSpan?.textContent || ''),
         clientId: WS_CLIENT_ID,
         transport: 'ws'
       }));
-    } catch {}
+    } catch (e) {
+      console.warn('[WS] auth join failed', e);
+      try { sock.close(); } catch {}
+    }
   };
 
   sock.onmessage = (event) => {
@@ -452,6 +459,93 @@ const VPS_API_BASE = (() => {
   return 'https://ws.d20-initiative.fun/api';
 })();
 
+const VPS_AUTH_TOKEN_KEY = 'int_auth_token';
+const VPS_AUTH_EXPIRES_KEY = 'int_auth_expires_at';
+
+function getStoredValue(key) {
+  try {
+    if (typeof getAppStorageItem === 'function') return String(getAppStorageItem(key) || '').trim();
+  } catch {}
+  try { return String(localStorage.getItem(key) || '').trim(); } catch {}
+  return '';
+}
+
+function setStoredValue(key, value) {
+  try {
+    if (typeof setAppStorageItem === 'function') {
+      setAppStorageItem(key, String(value || ''));
+      return;
+    }
+  } catch {}
+  try { localStorage.setItem(key, String(value || '')); } catch {}
+}
+
+function removeStoredValue(key) {
+  try { localStorage.removeItem(key); } catch {}
+  try {
+    if (typeof setAppStorageItem === 'function') setAppStorageItem(key, '');
+  } catch {}
+}
+
+function getVpsAuthToken() {
+  return getStoredValue(VPS_AUTH_TOKEN_KEY);
+}
+
+function getVpsAuthHeaders(headers = {}) {
+  const next = { ...(headers || {}) };
+  const token = getVpsAuthToken();
+  if (token && !next.Authorization && !next.authorization) next.Authorization = `Bearer ${token}`;
+  return next;
+}
+
+function rememberVpsSession(payload) {
+  const data = payload && typeof payload === 'object' ? payload : {};
+  const token = String(data.token || '').trim();
+  const userId = String(data.userId || data.user_id || '').trim();
+  if (token) setStoredValue(VPS_AUTH_TOKEN_KEY, token);
+  if (data.expiresAt || data.expires_at) setStoredValue(VPS_AUTH_EXPIRES_KEY, data.expiresAt || data.expires_at);
+  if (userId) setStoredValue('int_user_id', userId);
+  return { token, userId, expiresAt: String(data.expiresAt || data.expires_at || '') };
+}
+
+async function ensureVpsSession(userName = '') {
+  const legacyUserId = getStoredValue('int_user_id');
+  const body = {
+    userName: String(userName || getStoredValue('int_user_name') || '').trim(),
+    legacyUserId
+  };
+
+  async function requestSession(useStoredToken) {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = useStoredToken ? getVpsAuthToken() : '';
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${VPS_API_BASE}/session`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      credentials: 'omit',
+      mode: 'cors'
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || payload?.ok === false) {
+      const error = new Error(String(payload?.error || `VPS session ${res.status}`));
+      error.status = res.status;
+      error.payload = payload;
+      throw error;
+    }
+    return payload || {};
+  }
+
+  try {
+    return rememberVpsSession(await requestSession(true));
+  } catch (error) {
+    if (Number(error?.status) !== 401 && Number(error?.status) !== 403) throw error;
+    removeStoredValue(VPS_AUTH_TOKEN_KEY);
+    removeStoredValue(VPS_AUTH_EXPIRES_KEY);
+    return rememberVpsSession(await requestSession(false));
+  }
+}
+
 function getVpsActorUserId() {
   try {
     const stable = (typeof getCurrentStableUserId === 'function') ? getCurrentStableUserId() : '';
@@ -483,6 +577,16 @@ function getVpsApiErrorMessage(error, fallback = 'Server request failed') {
 async function vpsApi(path, options = {}) {
   const cleanPath = String(path || '').startsWith('/') ? String(path || '') : `/${String(path || '')}`;
   const headers = { ...(options.headers || {}) };
+  if (!headers.Authorization && !headers.authorization && cleanPath !== '/session') {
+    let token = getVpsAuthToken();
+    if (!token) {
+      try {
+        const session = await ensureVpsSession(getVpsActorName());
+        token = String(session?.token || getVpsAuthToken() || '').trim();
+      } catch {}
+    }
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
   let body = options.body;
   const canJsonBody = body
     && typeof body === 'object'
@@ -513,6 +617,9 @@ async function vpsApi(path, options = {}) {
 try { window.vpsApi = vpsApi; } catch {}
 try { window.getVpsActorUserId = getVpsActorUserId; } catch {}
 try { window.getVpsApiErrorMessage = getVpsApiErrorMessage; } catch {}
+try { window.ensureVpsSession = ensureVpsSession; } catch {}
+try { window.getVpsAuthToken = getVpsAuthToken; } catch {}
+try { window.getVpsAuthHeaders = getVpsAuthHeaders; } catch {}
 
 function _isMissingColumnError(error, columnName = '') {
   try {
@@ -2743,52 +2850,38 @@ async function sendMessage(msg) {
 
       // ===== Saved bases (characters) =====
       case "listSavedBases": {
-        const userId = String(getAppStorageItem("int_user_id") || "");
-        const { data, error } = await sbClient
-          .from("characters")
-          .select("id,name,updated_at")
-          .eq("user_id", userId)
-          .order("updated_at", { ascending: false });
-        if (error) throw error;
-        handleMessage({ type: "savedBasesList", list: (data || []).map(x => ({ id: x.id, name: x.name, updatedAt: x.updated_at })) });
+        const payload = await vpsApi('/characters', { method: 'GET' });
+        handleMessage({ type: "savedBasesList", list: Array.isArray(payload.list) ? payload.list : [] });
         break;
       }
 
       case "saveSavedBase": {
-        const userId = String(getAppStorageItem("int_user_id") || "");
         const sheet = msg.sheet;
         const name = String(sheet?.parsed?.name?.value ?? sheet?.parsed?.name ?? sheet?.parsed?.profile?.name ?? "Персонаж").trim() || "Персонаж";
-        const { data, error } = await sbClient
-          .from("characters")
-          .insert({
-            user_id: userId,
+        const payload = await vpsApi('/characters', {
+          method: 'POST',
+          body: {
             name,
-            state: { schemaVersion: 1, savedAt: new Date().toISOString(), data: sheet },
-            updated_at: new Date().toISOString()
-          })
-          .select("id");
-        if (error) throw error;
-        handleMessage({ type: "savedBaseSaved", id: data?.[0]?.id, name });
+            state: { schemaVersion: 1, savedAt: new Date().toISOString(), data: sheet }
+          }
+        });
+        handleMessage({ type: "savedBaseSaved", id: payload?.character?.id, name: payload?.character?.name || name });
         break;
       }
 
       case "deleteSavedBase": {
-        const userId = String(getAppStorageItem("int_user_id") || "");
         const savedId = String(msg.savedId || "");
         if (!savedId) return;
-        const { error } = await sbClient.from("characters").delete().eq("id", savedId).eq("user_id", userId);
-        if (error) throw error;
+        await vpsApi(`/characters/${encodeURIComponent(savedId)}`, { method: 'DELETE' });
         handleMessage({ type: "savedBaseDeleted", savedId });
         break;
       }
 
       case "applySavedBase": {
-        const userId = String(getAppStorageItem("int_user_id") || "");
         const savedId = String(msg.savedId || "");
         if (!currentRoomId || !lastState) return;
-        const { data, error } = await sbClient.from("characters").select("state").eq("id", savedId).eq("user_id", userId).single();
-        if (error) throw error;
-        const savedSheet = data?.state?.data;
+        const payload = await vpsApi(`/characters/${encodeURIComponent(savedId)}`, { method: 'GET' });
+        const savedSheet = payload?.character?.state?.data;
         if (!savedSheet) throw new Error("Пустой файл персонажа");
 
         const next = deepClone(lastState);

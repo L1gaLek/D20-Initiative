@@ -816,6 +816,7 @@ async function uploadBoardBackgroundToStorage(file) {
 
   const resp = await fetch(BOARD_BG_UPLOAD_ENDPOINT, {
     method: 'POST',
+    headers: (typeof window.getVpsAuthHeaders === 'function') ? window.getVpsAuthHeaders() : {},
     body: form,
     credentials: 'omit',
     mode: 'cors'
@@ -878,6 +879,7 @@ async function removeBoardBackgroundFromStorage(bucket, path) {
       url.searchParams.set('userId', String(getAppStorageItem('int_user_id') || myId || ''));
       const resp = await fetch(url.toString(), {
         method: 'DELETE',
+        headers: (typeof window.getVpsAuthHeaders === 'function') ? window.getVpsAuthHeaders() : {},
         credentials: 'omit',
         mode: 'cors'
       });
@@ -1292,7 +1294,7 @@ let usersOrder = []; // array of userId (master order)
 const userMissingTicks = new Map(); // userId -> missing polls count
 
 // ================== JOIN GAME ==================
-joinBtn.addEventListener('click', () => {
+joinBtn.addEventListener('click', async () => {
   const name = usernameInput.value.trim();
   const role = '';
 
@@ -1311,13 +1313,23 @@ sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANO
 
 window.SUPABASE_FETCH_FN = "fetch";
   
-  // stable identity (doesn't depend on nickname)
+  let session = null;
+  try {
+    if (typeof window.ensureVpsSession === 'function') {
+      session = await window.ensureVpsSession(name);
+    }
+  } catch (error) {
+    loginError.textContent = String(error?.message || 'VPS session failed');
+    return;
+  }
+
+  // stable identity (server-issued anonymous session, does not depend on nickname)
   const savedUserId = getAppStorageItem("int_user_id") || "";
-  const userId = savedUserId || ("xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  }));
+  const userId = String(session?.userId || savedUserId || "");
+  if (!userId) {
+    loginError.textContent = "VPS session did not return userId";
+    return;
+  }
 
   setAppStorageItem("int_user_id", String(userId));
   setAppStorageItem("int_user_name", String(name));
