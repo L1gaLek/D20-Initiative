@@ -471,11 +471,10 @@ function getVpsActorName() {
 
 function getVpsApiErrorMessage(error, fallback = 'Server request failed') {
   const raw = String(error?.payload?.error || error?.message || '').trim();
-  if (/Only room owner can join as GM/i.test(raw)) return 'Вы не хост данной комнаты, вы не можете войти как ГМ.';
   if (/already owns/i.test(raw)) return 'User already owns a room.';
   if (/Only room owner/i.test(raw)) return 'Only the room owner can do this.';
   if (/Invalid room password/i.test(raw)) return 'Invalid room password.';
-  if (/GM already/i.test(raw)) return 'GM already joined this room.';
+  if (/GM already/i.test(raw)) return 'ГМ уже в комнате.';
   if (/banned/i.test(raw)) return 'You are banned in this room.';
   if (/required/i.test(raw)) return 'Required room data is missing.';
   return raw || fallback;
