@@ -73,6 +73,8 @@ function handleRoomsErrorMessage(msg) {
       window.showRoomAccessPopup?.(text, 'Неверный пароль');
     } else if (lower.includes('лимит') || lower.includes('одной комнат') || lower.includes('1 комнат')) {
       window.showRoomAccessPopup?.(text, 'Лимит комнат');
+    } else if (lower.includes('не хост') || lower.includes('не можете войти как гм') || lower.includes('only room owner can join as gm')) {
+      window.showRoomAccessPopup?.(text, 'Доступ запрещён');
     } else if (lower.includes('gm') || lower.includes('гм')) {
       window.showRoomAccessPopup?.(text, 'GM уже в комнате');
     } else {
