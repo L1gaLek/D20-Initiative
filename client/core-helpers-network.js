@@ -461,6 +461,7 @@ const VPS_API_BASE = (() => {
 
 const VPS_AUTH_TOKEN_KEY = 'int_auth_token';
 const VPS_AUTH_EXPIRES_KEY = 'int_auth_expires_at';
+const VPS_LEGACY_USER_ID_KEY = 'int_legacy_user_id';
 
 function getStoredValue(key) {
   try {
@@ -502,10 +503,32 @@ function rememberVpsSession(payload) {
   const data = payload && typeof payload === 'object' ? payload : {};
   const token = String(data.token || '').trim();
   const userId = String(data.userId || data.user_id || '').trim();
+  const previousUserId = getStoredValue('int_user_id');
   if (token) setStoredValue(VPS_AUTH_TOKEN_KEY, token);
   if (data.expiresAt || data.expires_at) setStoredValue(VPS_AUTH_EXPIRES_KEY, data.expiresAt || data.expires_at);
+  if (previousUserId && userId && previousUserId !== userId && !getStoredValue(VPS_LEGACY_USER_ID_KEY)) {
+    setStoredValue(VPS_LEGACY_USER_ID_KEY, previousUserId);
+  }
   if (userId) setStoredValue('int_user_id', userId);
   return { token, userId, expiresAt: String(data.expiresAt || data.expires_at || '') };
+}
+
+async function migrateLegacyCharactersIfNeeded() {
+  const legacyUserId = getStoredValue(VPS_LEGACY_USER_ID_KEY);
+  const currentUserId = getStoredValue('int_user_id');
+  if (!legacyUserId || !currentUserId || legacyUserId === currentUserId) return 0;
+  try {
+    const payload = await vpsApi('/characters/migrate-legacy', {
+      method: 'POST',
+      body: { legacyUserId }
+    });
+    const migrated = Number(payload?.migrated) || 0;
+    if (migrated >= 0) removeStoredValue(VPS_LEGACY_USER_ID_KEY);
+    return migrated;
+  } catch (error) {
+    if (Number(error?.status) === 403 || Number(error?.status) === 404) return 0;
+    throw error;
+  }
 }
 
 async function ensureVpsSession(userName = '') {
@@ -620,6 +643,7 @@ try { window.getVpsApiErrorMessage = getVpsApiErrorMessage; } catch {}
 try { window.ensureVpsSession = ensureVpsSession; } catch {}
 try { window.getVpsAuthToken = getVpsAuthToken; } catch {}
 try { window.getVpsAuthHeaders = getVpsAuthHeaders; } catch {}
+try { window.migrateLegacyCharactersIfNeeded = migrateLegacyCharactersIfNeeded; } catch {}
 
 function _isMissingColumnError(error, columnName = '') {
   try {
@@ -2850,6 +2874,7 @@ async function sendMessage(msg) {
 
       // ===== Saved bases (characters) =====
       case "listSavedBases": {
+        try { await migrateLegacyCharactersIfNeeded(); } catch (e) { console.warn('legacy characters migration failed', e); }
         const payload = await vpsApi('/characters', { method: 'GET' });
         handleMessage({ type: "savedBasesList", list: Array.isArray(payload.list) ? payload.list : [] });
         break;
