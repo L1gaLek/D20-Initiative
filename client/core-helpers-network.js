@@ -1891,11 +1891,12 @@ async function sendMessage(msg) {
         try {
           const { data: m, error: me } = await sbClient
             .from("room_members")
-            .select("room_id,user_id");
+            .select("room_id,user_id,role");
           if (!me) members = m || [];
         } catch {}
 
         const perRoom = new Map(); // roomId -> Set(userId)
+        const gmByRoom = new Map(); // roomId -> userId
         const allUsers = new Set();
         for (const row of (members || [])) {
           const rid = String(row?.room_id || '');
@@ -1904,14 +1905,19 @@ async function sendMessage(msg) {
           allUsers.add(uid);
           if (!perRoom.has(rid)) perRoom.set(rid, new Set());
           perRoom.get(rid).add(uid);
+          if (normalizeRoleForDb(row?.role) === 'GM' && !gmByRoom.has(rid)) gmByRoom.set(rid, uid);
         }
 
         const rooms = (data || []).map(r => {
           const rid = String(r.id);
           const s = perRoom.get(rid);
+          const gmUserId = String(gmByRoom.get(rid) || '');
           return {
             ...r,
             uniqueUsers: s ? s.size : 0,
+            hasGM: !!gmUserId,
+            has_gm: !!gmUserId,
+            isMyGMSeat: !!myUserId && !!gmUserId && gmUserId === myUserId,
             hasPassword: !!passwordByRoomId.get(rid),
             ownerId: String(ownership.get(rid)?.ownerId || ''),
             ownerName: String(ownership.get(rid)?.ownerName || ''),
