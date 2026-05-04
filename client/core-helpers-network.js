@@ -474,7 +474,7 @@ function getVpsApiErrorMessage(error, fallback = 'Server request failed') {
   if (/already owns/i.test(raw)) return 'User already owns a room.';
   if (/Only room owner/i.test(raw)) return 'Only the room owner can do this.';
   if (/Invalid room password/i.test(raw)) return 'Invalid room password.';
-  if (/GM already/i.test(raw)) return 'ГМ уже в комнате.';
+  if (/GM already|uq_one_gm_per_room|ГМ.*(уже|присутств)|уже.*ГМ/i.test(raw)) return 'В комнате уже присутствует ГМ. Вы не можете войти как ГМ.';
   if (/banned/i.test(raw)) return 'You are banned in this room.';
   if (/required/i.test(raw)) return 'Required room data is missing.';
   return raw || fallback;
@@ -2634,7 +2634,7 @@ async function sendMessage(msg) {
             if (gmId && gmId !== userId) {
               handleMessage({
                 type: "roomsError",
-                message: "В этой комнате уже присутствует ГМ. Вы не можете зайти как ГМ."
+                message: "В комнате уже присутствует ГМ. Вы не можете войти как ГМ."
               });
               return;
             }
@@ -2651,7 +2651,7 @@ async function sendMessage(msg) {
           if (mErr) {
             // Unique violation (second GM) => Postgres code 23505
             if (role === "GM" && (mErr.code === "23505" || String(mErr.message || "").includes("uq_one_gm_per_room"))) {
-              handleMessage({ type: "roomsError", message: "ГМ уже в комнате" });
+              handleMessage({ type: "roomsError", message: "В комнате уже присутствует ГМ. Вы не можете войти как ГМ." });
               return;
             }
             throw mErr;
