@@ -46,9 +46,7 @@ function handleErrorSurfaceMessage(msg) {
   if (msg?.type !== 'error') return false;
   const rawText = String(msg.message || '');
   if (/^GM role required$/i.test(rawText.trim())) return true;
-  const text = /Only room owner can join as GM/i.test(rawText)
-    ? 'Вы не хост данной комнаты, вы не можете войти как ГМ.'
-    : String(msg.message || 'Ошибка');
+  const text = String(msg.message || 'Ошибка');
 
   if (loginDiv && loginDiv.style.display !== 'none') {
     loginError.textContent = text;
