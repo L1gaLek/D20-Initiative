@@ -3592,6 +3592,8 @@ if (critType) {
   if (!silent) {
     try {
       if (typeof sendMessage === "function") {
+        const localNonce = `n_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        try { window._lastSentDiceNonce = localNonce; } catch {}
         const actor = String(actorName || '').trim();
         const fallbackName = (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent)
           ? String(myNameSpan.textContent)
@@ -3599,6 +3601,7 @@ if (critType) {
         sendMessage({
           type: "diceEvent",
           event: {
+            localNonce,
             fromId: (typeof myId !== 'undefined') ? String(myId) : '',
             fromName: actor || fallbackName,
             kindText: kindText ? String(kindText) : `d${S} × ${C}`,
