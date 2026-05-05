@@ -4,7 +4,6 @@
 
 // ================== Detached table query helpers ==================
 async function loadRoomScopedRows(table, roomId, opts = {}) {
-  await ensureSupabaseReady();
   if (!roomId) return opts.maybeSingle ? null : [];
 
   const {
@@ -17,6 +16,22 @@ async function loadRoomScopedRows(table, roomId, opts = {}) {
     missingColumn = ''
   } = opts || {};
 
+  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+    const params = new URLSearchParams();
+    if (mapId) params.set('mapId', String(mapId));
+    if (Number.isFinite(Number(limit)) && Number(limit) > 0) params.set('limit', String(Number(limit)));
+
+    try {
+      const path = `/rooms/${encodeURIComponent(String(roomId))}/rows/${encodeURIComponent(String(table))}`;
+      const payload = await window.vpsApi(`${path}${params.toString() ? `?${params.toString()}` : ''}`);
+      if (maybeSingle) return payload?.row ?? (Array.isArray(payload?.rows) ? (payload.rows[0] || null) : null);
+      return Array.isArray(payload?.rows) ? payload.rows : [];
+    } catch (error) {
+      console.warn(`${table} VPS load failed, falling back to Supabase`, error);
+    }
+  }
+
+  await ensureSupabaseReady();
   let query = sbClient.from(table).select(select).eq('room_id', roomId);
   if (mapId) query = query.eq('map_id', mapId);
   if (orderBy) query = query.order(orderBy, { ascending: !!ascending });

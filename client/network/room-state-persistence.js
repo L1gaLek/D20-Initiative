@@ -225,8 +225,17 @@ function getRoomStateShadow(roomId) {
 
 // Fetch latest room_state.state snapshot from DB (source of truth for low-frequency state)
 async function fetchRoomStateSnapshot(roomId) {
-  await ensureSupabaseReady();
   if (!roomId) return null;
+  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+    try {
+      const payload = await window.vpsApi(`/rooms/${encodeURIComponent(String(roomId))}/state`);
+      return payload?.state || null;
+    } catch (error) {
+      console.warn('room_state VPS load failed, falling back to Supabase', error);
+    }
+  }
+
+  await ensureSupabaseReady();
   const { data, error } = await sbClient
     .from("room_state")
     .select("state,updated_at")
@@ -475,6 +484,16 @@ function scheduleRoomStateUpsert(roomId, nextState, delayMs = 180) {
 // Сохранения кампаний НЕ привязаны к комнате, а привязаны к "ключу владельца" (owner_key),
 // который хранится в localStorage у ГМа. Тогда ГМ может зайти в любую комнату и загрузить кампанию.
 async function listCampaignSavesByOwner(ownerKey) {
+  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+    try {
+      const params = new URLSearchParams({ ownerKey: String(ownerKey || '') });
+      const payload = await window.vpsApi(`/campaign-saves?${params.toString()}`);
+      return Array.isArray(payload?.saves) ? payload.saves : [];
+    } catch (error) {
+      console.warn('campaign_saves VPS list failed, falling back to Supabase', error);
+    }
+  }
+
   await ensureSupabaseReady();
   const { data, error } = await sbClient
     .from('campaign_saves')
@@ -487,7 +506,6 @@ async function listCampaignSavesByOwner(ownerKey) {
 }
 
 async function createCampaignSave(ownerKey, name, state) {
-  await ensureSupabaseReady();
   let payloadState = state;
   try {
     const roomId = String(arguments?.[3] || currentRoomId || '').trim();
@@ -504,13 +522,38 @@ async function createCampaignSave(ownerKey, name, state) {
     console.warn('createCampaignSave: detached snapshot failed, fallback to plain state', e);
     payloadState = state;
   }
+
+  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+    try {
+      await window.vpsApi('/campaign-saves', {
+        method: 'POST',
+        body: { ownerKey, name, state: payloadState }
+      });
+      return;
+    } catch (error) {
+      console.warn('campaign_saves VPS create failed, falling back to Supabase', error);
+    }
+  }
+
+  await ensureSupabaseReady();
   const { error } = await sbClient
     .from('campaign_saves')
     .insert({ owner_key: ownerKey, name, state: payloadState });
   if (error) throw error;
 }
 
-async function getCampaignSaveState(saveId) {
+async function getCampaignSaveState(saveId, ownerKey = null) {
+  const key = ownerKey || (typeof getCampaignOwnerKey === 'function' ? getCampaignOwnerKey() : '');
+  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+    try {
+      const params = new URLSearchParams({ ownerKey: String(key || '') });
+      const payload = await window.vpsApi(`/campaign-saves/${encodeURIComponent(String(saveId || ''))}?${params.toString()}`);
+      return payload?.state || null;
+    } catch (error) {
+      console.warn('campaign_saves VPS read failed, falling back to Supabase', error);
+    }
+  }
+
   await ensureSupabaseReady();
   const { data, error } = await sbClient
     .from('campaign_saves')
@@ -536,11 +579,37 @@ function _normalizeCampaignPayload(raw) {
 }
 
 async function snapshotCampaignDetachedData(roomId, stateLike = null) {
-  await ensureSupabaseReady();
   const rid = String(roomId || '').trim();
   if (!rid) return null;
   const st = ensureStateHasMaps(deepClone(stateLike || lastState || {}));
   const mapIds = new Set((Array.isArray(st.maps) ? st.maps : []).map((m) => String(m?.id || '').trim()).filter(Boolean));
+
+  if (typeof loadRoomMapMeta === 'function'
+    && typeof loadRoomWalls === 'function'
+    && typeof loadRoomMarks === 'function'
+    && typeof loadRoomFog === 'function'
+    && typeof loadRoomScopedRows === 'function') {
+    try {
+      const [roomMapMeta, roomWalls, roomMarks, roomFog, roomTokens] = await Promise.all([
+        loadRoomMapMeta(rid),
+        loadRoomWalls(rid),
+        loadRoomMarks(rid),
+        loadRoomFog(rid),
+        loadRoomScopedRows('room_tokens', rid)
+      ]);
+      return {
+        roomMapMeta: (roomMapMeta || []).filter((r) => mapIds.has(String(r?.map_id || '').trim())),
+        roomWalls: (roomWalls || []).filter((r) => mapIds.has(String(r?.map_id || '').trim())),
+        roomMarks: (roomMarks || []).filter((r) => mapIds.has(String(r?.map_id || '').trim())),
+        roomFog: (roomFog || []).filter((r) => mapIds.has(String(r?.map_id || '').trim())),
+        roomTokens: (roomTokens || []).filter((r) => mapIds.has(String(r?.map_id || '').trim()))
+      };
+    } catch (error) {
+      console.warn('campaign detached VPS snapshot failed, falling back to Supabase', error);
+    }
+  }
+
+  await ensureSupabaseReady();
   const [mapMetaRes, wallsRes, marksRes, fogRes, tokensRes] = await Promise.all([
     sbClient.from('room_map_meta').select('*').eq('room_id', rid),
     sbClient.from('room_walls').select('*').eq('room_id', rid),
@@ -639,7 +708,6 @@ function _deriveDetachedFromState(stateLike) {
 }
 
 async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
-  await ensureSupabaseReady();
   const rid = String(roomId || '').trim();
   if (!rid) return;
   const payload = _normalizeCampaignPayload(rawSavePayload);
@@ -668,39 +736,61 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
     })
     .filter((r) => mapIds.has(String(r?.map_id || '').trim()));
 
-  await Promise.all([
-    sbClient.from('room_map_meta').delete().eq('room_id', rid),
-    sbClient.from('room_walls').delete().eq('room_id', rid),
-    sbClient.from('room_marks').delete().eq('room_id', rid),
-    sbClient.from('room_fog').delete().eq('room_id', rid),
-    sbClient.from('room_tokens').delete().eq('room_id', rid)
-  ]);
+  let mapMetaRows = withRoom(detached?.roomMapMeta, { dropId: true });
+  let wallRows = withRoom(detached?.roomWalls, { dropId: true });
+  let markRows = withRoom(detached?.roomMarks, { dropId: true });
+  let fogRows = withRoom(detached?.roomFog, { dropId: true });
+  let tokenRows = withRoom(detached?.roomTokens, { dropId: true });
+  let restoredViaVps = false;
 
-  const mapMetaRows = withRoom(detached?.roomMapMeta, { dropId: true });
-  const wallRows = withRoom(detached?.roomWalls, { dropId: true });
-  const markRows = withRoom(detached?.roomMarks, { dropId: true });
-  const fogRows = withRoom(detached?.roomFog, { dropId: true });
-  const tokenRows = withRoom(detached?.roomTokens, { dropId: true });
+  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+    try {
+      const response = await window.vpsApi(`/rooms/${encodeURIComponent(rid)}/detached/replace`, {
+        method: 'POST',
+        body: { detached, state: normalized }
+      });
+      const saved = response?.detached && typeof response.detached === 'object' ? response.detached : {};
+      mapMetaRows = Array.isArray(saved.roomMapMeta) ? saved.roomMapMeta : mapMetaRows;
+      wallRows = Array.isArray(saved.roomWalls) ? saved.roomWalls : wallRows;
+      markRows = Array.isArray(saved.roomMarks) ? saved.roomMarks : markRows;
+      fogRows = Array.isArray(saved.roomFog) ? saved.roomFog : fogRows;
+      tokenRows = Array.isArray(saved.roomTokens) ? saved.roomTokens : tokenRows;
+      restoredViaVps = true;
+    } catch (error) {
+      console.warn('campaign detached VPS restore failed, falling back to Supabase', error);
+    }
+  }
 
-  if (mapMetaRows.length) {
-    const { error } = await sbClient.from('room_map_meta').upsert(mapMetaRows, { onConflict: 'room_id,map_id' });
-    if (error) throw error;
-  }
-  if (wallRows.length) {
-    const { error } = await sbClient.from('room_walls').upsert(wallRows, { onConflict: 'room_id,map_id,x,y,dir' });
-    if (error) throw error;
-  }
-  if (markRows.length) {
-    const { error } = await sbClient.from('room_marks').upsert(markRows, { onConflict: 'room_id,map_id,mark_id' });
-    if (error) throw error;
-  }
-  if (fogRows.length) {
-    const { error } = await sbClient.from('room_fog').upsert(fogRows, { onConflict: 'room_id,map_id' });
-    if (error) throw error;
-  }
-  if (tokenRows.length) {
-    const { error } = await sbClient.from('room_tokens').upsert(tokenRows);
-    if (error) throw error;
+  if (!restoredViaVps) {
+    await ensureSupabaseReady();
+    await Promise.all([
+      sbClient.from('room_map_meta').delete().eq('room_id', rid),
+      sbClient.from('room_walls').delete().eq('room_id', rid),
+      sbClient.from('room_marks').delete().eq('room_id', rid),
+      sbClient.from('room_fog').delete().eq('room_id', rid),
+      sbClient.from('room_tokens').delete().eq('room_id', rid)
+    ]);
+
+    if (mapMetaRows.length) {
+      const { error } = await sbClient.from('room_map_meta').upsert(mapMetaRows, { onConflict: 'room_id,map_id' });
+      if (error) throw error;
+    }
+    if (wallRows.length) {
+      const { error } = await sbClient.from('room_walls').upsert(wallRows, { onConflict: 'room_id,map_id,x,y,dir' });
+      if (error) throw error;
+    }
+    if (markRows.length) {
+      const { error } = await sbClient.from('room_marks').upsert(markRows, { onConflict: 'room_id,map_id,mark_id' });
+      if (error) throw error;
+    }
+    if (fogRows.length) {
+      const { error } = await sbClient.from('room_fog').upsert(fogRows, { onConflict: 'room_id,map_id' });
+      if (error) throw error;
+    }
+    if (tokenRows.length) {
+      const { error } = await sbClient.from('room_tokens').upsert(tokenRows);
+      if (error) throw error;
+    }
   }
 
   // Apply detached snapshot immediately in the current client (GM) without page reload.
@@ -748,6 +838,19 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
 }
 
 async function deleteCampaignSave(saveId) {
+  const ownerKey = typeof getCampaignOwnerKey === 'function' ? getCampaignOwnerKey() : '';
+  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+    try {
+      await window.vpsApi(`/campaign-saves/${encodeURIComponent(String(saveId || ''))}`, {
+        method: 'DELETE',
+        body: { ownerKey }
+      });
+      return;
+    } catch (error) {
+      console.warn('campaign_saves VPS delete failed, falling back to Supabase', error);
+    }
+  }
+
   await ensureSupabaseReady();
   const { error } = await sbClient
     .from('campaign_saves')
