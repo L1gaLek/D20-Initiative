@@ -695,6 +695,10 @@ function renderTavernChat() {
 }
 
 async function cleanupExpiredTavernMessagesDb(force = false) {
+  // RLS lockdown intentionally blocks browser-side DELETE on room_log.
+  // History loading already filters old tavern messages by TTL.
+  // Database cleanup should run from a server/admin job, not from anon client.
+  return;
   if (!sbClient) return;
   const now = Date.now();
   if (!force && (now - _lastTavernCleanupAt) < CHAT_CLEANUP_THROTTLE_MS) return;
