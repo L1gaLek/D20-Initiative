@@ -1888,17 +1888,30 @@ try { window.broadcastDiceEventOnly = broadcastDiceEventOnly; } catch {}
 let roomMembersDbChannel = null;
 
 async function refreshRoomMembers(roomId, opts = {}) {
-  await ensureSupabaseReady();
   if (!roomId) return [];
 
-  const { data, error } = await sbClient
-    .from("room_members")
-    .select("user_id,name,role")
-    .eq("room_id", roomId);
+  let data = null;
+  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+    try {
+      const payload = await window.vpsApi(`/rooms/${encodeURIComponent(String(roomId))}/rows/room_members`);
+      data = Array.isArray(payload?.rows) ? payload.rows : [];
+    } catch (error) {
+      console.warn("room_members VPS load failed, falling back to Supabase", error);
+    }
+  }
 
-  if (error) {
-    console.error("room_members load error", error);
-    return [];
+  if (!Array.isArray(data)) {
+    await ensureSupabaseReady();
+    const { data: supabaseData, error } = await sbClient
+      .from("room_members")
+      .select("user_id,name,role")
+      .eq("room_id", roomId);
+
+    if (error) {
+      console.error("room_members load error", error);
+      return [];
+    }
+    data = supabaseData || [];
   }
 
   usersById.clear();
