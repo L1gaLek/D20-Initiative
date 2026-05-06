@@ -17,6 +17,26 @@
     return window.__sheetCtx || null;
   }
 
+  function getMyUserId() {
+    const ctx = getCtx();
+    try {
+      if (typeof ctx?.getMyId === 'function') {
+        const id = String(ctx.getMyId() ?? '').trim();
+        if (id) return id;
+      }
+    } catch {}
+    try {
+      if (typeof window.getAppStorageItem === 'function') {
+        const id = String(window.getAppStorageItem('int_user_id') || '').trim();
+        if (id) return id;
+      }
+    } catch {}
+    try {
+      return String(window.myId || '').trim();
+    } catch {}
+    return '';
+  }
+
   function getAllPlayers() {
     const ctx = getCtx();
     try {
@@ -28,19 +48,13 @@
     return [];
   }
 
-  function ownsPlayer(player) {
-    const ctx = getCtx();
-    const myRole = (typeof ctx?.getMyRole === 'function') ? String(ctx.getMyRole() || '') : '';
-    const myId = (typeof ctx?.getMyId === 'function') ? String(ctx.getMyId() ?? '') : '';
-    if (myRole === 'GM') return true;
-    return String(player?.ownerId || '') === myId;
-  }
-
   function isMinePlayerId(playerId) {
     const pid = String(playerId || '').trim();
     if (!pid) return false;
+    const myId = getMyUserId();
+    if (!myId) return false;
     const pl = getAllPlayers().find((p) => String(p?.id || '') === pid);
-    return !!pl && ownsPlayer(pl);
+    return !!pl && String(pl?.ownerId || '') === myId;
   }
 
   function buildBasePlayerOptions(fromPlayerId) {
@@ -233,7 +247,8 @@
 
   function openIncomingOfferModal(offer) {
     if (!offer) return;
-    const allowed = ownsPlayer({ ownerId: offer?.toOwnerId }) || isMinePlayerId(offer?.toPlayerId);
+    const myId = getMyUserId();
+    const allowed = (!!myId && String(offer?.toOwnerId || '') === myId) || isMinePlayerId(offer?.toPlayerId);
     if (!allowed) return;
 
     const wrap = document.createElement('div');
@@ -277,8 +292,7 @@
   function onTransferOffer(msg) {
     const offer = msg?.offer;
     if (!offer) return;
-    const ctx = getCtx();
-    const myId = (typeof ctx?.getMyId === 'function') ? String(ctx.getMyId() ?? '') : '';
+    const myId = getMyUserId();
     const byOwnerId = !!myId && String(offer?.toOwnerId || '') === myId;
     const byPlayerOwnership = isMinePlayerId(offer?.toPlayerId);
     if (!byOwnerId && !byPlayerOwnership) return;
@@ -288,9 +302,8 @@
   function onTransferResult(msg) {
     const result = msg?.result;
     if (!result) return;
-    const ctx = getCtx();
-    const myId = (typeof ctx?.getMyId === 'function') ? String(ctx.getMyId() ?? '') : '';
-    const byOwnerId = String(result?.fromOwnerId || '') === myId || String(result?.toOwnerId || '') === myId;
+    const myId = getMyUserId();
+    const byOwnerId = !!myId && (String(result?.fromOwnerId || '') === myId || String(result?.toOwnerId || '') === myId);
     const byPlayerOwnership = isMinePlayerId(result?.fromPlayerId) || isMinePlayerId(result?.toPlayerId);
     if (!byOwnerId && !byPlayerOwnership) return;
     const text = String(result?.message || '').trim();
@@ -300,9 +313,8 @@
   function onCoinsTransferResult(msg) {
     const result = msg?.result;
     if (!result) return;
-    const ctx = getCtx();
-    const myId = (typeof ctx?.getMyId === 'function') ? String(ctx.getMyId() ?? '') : '';
-    const byOwnerId = String(result?.fromOwnerId || '') === myId || String(result?.toOwnerId || '') === myId;
+    const myId = getMyUserId();
+    const byOwnerId = !!myId && (String(result?.fromOwnerId || '') === myId || String(result?.toOwnerId || '') === myId);
     const byPlayerOwnership = isMinePlayerId(result?.fromPlayerId) || isMinePlayerId(result?.toPlayerId);
     if (!byOwnerId && !byPlayerOwnership) return;
     const text = String(result?.message || '').trim();
