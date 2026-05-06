@@ -72,6 +72,8 @@
   border-right: none;
   padding: 0;
   gap: 0;
+  align-self: stretch;
+  min-height: 0;
 }
 
 #action-log,
@@ -91,6 +93,8 @@
   gap: 0;
   position: relative;
   align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #action-bottom-row::after{
@@ -109,7 +113,8 @@
   display: flex;
   flex-direction: column;
   width: var(--pm-w);
-  border-right: 2px solid rgba(178, 136, 66, 0.95);
+  border-right: none;
+  min-height: 100%;
 }
 
 #player-management{
@@ -119,6 +124,7 @@
 #player-side-stack{
   gap: 0;
   border-left: none;
+  min-height: 100%;
 }
 
 #player-list-container{

@@ -1979,7 +1979,10 @@
 }
 
 #gm-panel-map .board-settings-box{
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   flex-wrap: wrap;
   justify-content: flex-start;
   padding: 4px 6px;
@@ -1989,7 +1992,9 @@
 }
 
 #gm-panel-map .board-settings-box label{
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   justify-content: space-between;
   gap: 4px;
   font-size: 11px;
@@ -1999,6 +2004,8 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  max-width: 100%;
+  flex: 0 1 auto;
 }
 
 #gm-panel-map .board-stepper__btn{
@@ -2033,6 +2040,38 @@
 #gm-panel-map #cell-feet-player-wrap{
   margin: 4px 0;
   font-size: 11px;
+}
+
+#right-panel,
+#right-panel *,
+#gm-panel-map .env-bg-controls,
+#gm-panel-map .campaign-maps-controls{
+  box-sizing: border-box;
+}
+
+#gm-panel-map .gm-side-box,
+#gm-panel-map .env-bg-controls,
+#gm-panel-map .campaign-maps-controls,
+#gm-panel-map .board-view-mode-box{
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+#right-panel #gm-panel-map .env-bg-url-row{
+  flex-wrap: wrap;
+}
+
+#right-panel #gm-panel-map .env-bg-url-row input{
+  flex: 1 1 130px;
+  min-width: 0;
+}
+
+#right-panel #gm-panel-map .env-bg-url-row button{
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
 }
 
 #right-panel .side-box h3{
