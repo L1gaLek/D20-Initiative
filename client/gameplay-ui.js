@@ -51,22 +51,25 @@ if (critType) {
   clearCritUI();
 }
 
+const event = {
+  localNonce,
+  fromId: (typeof myId !== 'undefined') ? String(myId) : '',
+  fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
+  kindText: `d${sides} × ${count}`,
+  sides,
+  count,
+  bonus: 0,
+  rolls: finals,
+  total: sum,
+  crit: (sides === 20 && count === 1)
+    ? (finals[0] === 1 ? "crit-fail" : finals[0] === 20 ? "crit-success" : "")
+    : ""
+};
+try { window.rememberLocalDiceAnimation?.(event); } catch {}
+
   sendMessage({
   type: "diceEvent",
-  event: {
-    localNonce,
-    fromId: (typeof myId !== 'undefined') ? String(myId) : '',
-    fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
-    kindText: `d${sides} × ${count}`,
-    sides,
-    count,
-    bonus: 0,
-    rolls: finals,
-    total: sum,
-    crit: (sides === 20 && count === 1)
-      ? (finals[0] === 1 ? "crit-fail" : finals[0] === 20 ? "crit-success" : "")
-      : ""
-  }
+  event
 });
 
   diceAnimBusy = false;

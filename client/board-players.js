@@ -3221,6 +3221,34 @@ const diceCtx = diceCanvas?.getContext?.("2d");
 let diceAnimFrame = null;
 let diceAnimBusy = false;
 
+function getDiceEventSignature(ev) {
+  const rolls = Array.isArray(ev?.rolls) ? ev.rolls.map(n => Number(n) || 0) : [];
+  return JSON.stringify({
+    fromId: String(ev?.fromId || ''),
+    kindText: String(ev?.kindText || ''),
+    sides: Number(ev?.sides) || null,
+    count: Number(ev?.count) || 1,
+    bonus: Number(ev?.bonus) || 0,
+    total: Number(ev?.total) || 0,
+    rolls
+  });
+}
+
+function rememberLocalDiceAnimation(ev) {
+  try {
+    const now = Date.now();
+    const signature = getDiceEventSignature(ev);
+    const recent = Array.isArray(window._recentLocalDiceAnimations)
+      ? window._recentLocalDiceAnimations
+      : [];
+    window._recentLocalDiceAnimations = recent
+      .filter(item => (now - Number(item?.at || 0)) < 6000)
+      .concat([{ at: now, signature }])
+      .slice(-8);
+  } catch {}
+}
+try { window.rememberLocalDiceAnimation = rememberLocalDiceAnimation; } catch {}
+
 // ===== Other players dice feed (right of dice panel) =====
 let othersDiceWrap = null;
 
@@ -3285,8 +3313,21 @@ async function applyDiceEventToMain(ev) {
   // а затем прилетает echo diceEvent. Чтобы не было ДВОЙНОЙ анимации — пропускаем её по localNonce.
   const lastNonce = (() => { try { return window._lastSentDiceNonce; } catch { return null; } })();
   const isEchoOfLocal = !!(ev.localNonce && lastNonce && String(ev.localNonce) === String(lastNonce));
+  const isRecentLocalEcho = (() => {
+    try {
+      const now = Date.now();
+      const signature = getDiceEventSignature(ev);
+      const recent = Array.isArray(window._recentLocalDiceAnimations)
+        ? window._recentLocalDiceAnimations
+        : [];
+      window._recentLocalDiceAnimations = recent.filter(item => (now - Number(item?.at || 0)) < 6000);
+      return window._recentLocalDiceAnimations.some(item => item?.signature === signature);
+    } catch {
+      return false;
+    }
+  })();
 
-  if (!isEchoOfLocal && !diceAnimBusy && diceCtx && diceCanvas && sides && rolls.length) {
+  if (!isEchoOfLocal && !isRecentLocalEcho && !diceAnimBusy && diceCtx && diceCanvas && sides && rolls.length) {
     diceAnimBusy = true;
     try {
       for (const r of rolls) {
@@ -3598,20 +3639,22 @@ if (critType) {
         const fallbackName = (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent)
           ? String(myNameSpan.textContent)
           : '';
+        const event = {
+          localNonce,
+          fromId: (typeof myId !== 'undefined') ? String(myId) : '',
+          fromName: actor || fallbackName,
+          kindText: kindText ? String(kindText) : `d${S} × ${C}`,
+          sides: S,
+          count: C,
+          bonus: B,
+          rolls: finals,
+          total: total,
+          crit: critType
+        };
+        rememberLocalDiceAnimation(event);
         sendMessage({
           type: "diceEvent",
-          event: {
-            localNonce,
-            fromId: (typeof myId !== 'undefined') ? String(myId) : '',
-            fromName: actor || fallbackName,
-            kindText: kindText ? String(kindText) : `d${S} × ${C}`,
-            sides: S,
-            count: C,
-            bonus: B,
-            rolls: finals,
-            total: total,
-            crit: critType
-          }
+          event
         });
       }
     } catch {}
