@@ -2996,8 +2996,7 @@ async function sendMessage(msg) {
       case "inventoryTransferRespond": {
         if (!currentRoomId || !lastState) return;
         const next = deepClone(lastState);
-        const isGm = (String(myRole || "") === "GM");
-        const myUserId = String(getAppStorageItem("int_user_id") || "");
+        const myUserId = String(getAppStorageItem("int_user_id") || myId || "");
         const offer = (msg && typeof msg.offer === 'object') ? msg.offer : null;
         const accepted = !!msg.accepted;
         if (!offer) return;
@@ -3014,7 +3013,7 @@ async function sendMessage(msg) {
         if (!fromPlayer || !toPlayer || !toPlayer.isBase) return;
 
         const ownsTo = String(toPlayer?.ownerId || '') === myUserId;
-        if (!isGm && !ownsTo) return;
+        if (!ownsTo) return;
 
         const notify = (message) => {
           const result = {
