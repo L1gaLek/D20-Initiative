@@ -1302,6 +1302,10 @@ joinBtn.addEventListener('click', async () => {
     loginError.textContent = "Введите имя";
     return;
   }
+  if (name.length < 2 || name.length > 20) {
+    loginError.textContent = "Имя должно содержать от 2 до 20 символов";
+    return;
+  }
 
   // ===== Supabase init (GitHub Pages) =====
   if (!window.supabase || !window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
