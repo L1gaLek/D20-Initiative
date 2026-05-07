@@ -3,6 +3,7 @@
 // Опирается на уже инициализированные DOM-элементы и глобальные переменные из dom-and-setup.js.
 
 let tavernChannel = null;
+let tavernChannelReadyPromise = null;
 let tavernPresenceCount = 0;
 let tavernMessageSeq = 0;
 const TAVERN_ROOM_LOG_ID = '__tavern_lobby__';
@@ -466,6 +467,25 @@ function pushTavernMessage(entry, options = null) {
   saveTavernChatUiState();
 }
 
+function receiveTavernRealtimeRow(row) {
+  const msg = decodeTavernLogRow(row?.text || row);
+  if (!msg) return;
+  pushTavernMessage(msg, { revealTab: true });
+}
+
+async function broadcastTavernRealtimeRow(row) {
+  if (!tavernChannel || !row) return;
+  try {
+    await tavernChannel.send({
+      type: 'broadcast',
+      event: 'tavernLogRow',
+      payload: { row }
+    });
+  } catch (e) {
+    console.warn('tavern broadcast failed', e);
+  }
+}
+
 function syncTavernPresenceUsers() {
   try {
     const state = tavernChannel?.presenceState?.() || {};
@@ -718,6 +738,12 @@ async function loadTavernChatHistory() {
   if (!sbClient) return;
   try {
     void cleanupExpiredTavernMessagesDb(true);
+    const pendingMessages = [];
+    tavernChatState.chats.forEach((messages) => {
+      (Array.isArray(messages) ? messages : []).forEach((msg) => {
+        if (msg && msg.id && !msg.system) pendingMessages.push(msg);
+      });
+    });
     const { data, error } = await sbClient
       .from('room_log')
       .select('id,text,created_at')
@@ -743,6 +769,11 @@ async function loadTavernChatHistory() {
       const reveal = normalized?.chatKey ? tavernChatState.tabs.some((tab) => String(tab.key) === String(normalized.chatKey)) : true;
       pushTavernMessage(msg, { revealTab: reveal });
     });
+    pendingMessages.forEach((msg) => {
+      const normalized = normalizeTavernMessage(msg);
+      const reveal = normalized?.chatKey ? tavernChatState.tabs.some((tab) => String(tab.key) === String(normalized.chatKey)) : true;
+      pushTavernMessage(msg, { revealTab: reveal });
+    });
     tavernChatState.loadedHistory = true;
     if (!tavernChatState.chats.has(String(tavernChatState.activeChatKey || 'global'))) {
       tavernChatState.activeChatKey = 'global';
@@ -758,28 +789,55 @@ async function loadTavernChatHistory() {
 
 async function ensureTavernChannel() {
   if (!sbClient) return null;
-  if (typeof connectRoomWs === 'function') {
-    try { connectRoomWs(TAVERN_ROOM_LOG_ID); } catch (e) { console.warn('tavern ws connect failed', e); }
+  if (tavernChannel) {
+    if (tavernChannelReadyPromise) await tavernChannelReadyPromise;
+    return tavernChannel;
   }
-  if (tavernChannel) return tavernChannel;
   const userId = getTavernMyUserId();
   const userName = getTavernMyUserName();
   rememberTavernUser(userId, userName, { online: true });
   tavernChannel = sbClient
-    .channel('tavern:lobby', { config: { presence: { key: userId } } })
+    .channel('tavern:lobby', { config: { presence: { key: userId }, broadcast: { self: false } } })
     .on('presence', { event: 'sync' }, () => {
       syncTavernPresenceUsers();
+    })
+    .on('broadcast', { event: 'tavernLogRow' }, (payload) => {
+      receiveTavernRealtimeRow(payload?.payload?.row || payload?.row || payload?.payload || payload);
+    })
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'room_log',
+      filter: `room_id=eq.${TAVERN_ROOM_LOG_ID}`
+    }, (payload) => {
+      receiveTavernRealtimeRow(payload?.new || payload?.record || payload);
     });
-  await tavernChannel.subscribe(async (status) => {
-    tavernChatState.wsConnected = (status === 'SUBSCRIBED');
-    if (status === 'SUBSCRIBED') {
-      try {
-        await tavernChannel.track({ userId, userName, joinedAt: Date.now() });
-      } catch {}
-      await loadTavernChatHistory();
-      syncTavernPresenceUsers();
-    }
+
+  tavernChannelReadyPromise = new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve(tavernChannel);
+    };
+    const timer = setTimeout(finish, 3000);
+    tavernChannel.subscribe(async (status) => {
+      tavernChatState.wsConnected = (status === 'SUBSCRIBED');
+      if (status === 'SUBSCRIBED') {
+        try {
+          await tavernChannel.track({ userId, userName, joinedAt: Date.now() });
+        } catch {}
+        await loadTavernChatHistory();
+        syncTavernPresenceUsers();
+        clearTimeout(timer);
+        finish();
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        clearTimeout(timer);
+        finish();
+      }
+    });
   });
+  await tavernChannelReadyPromise;
   return tavernChannel;
 }
 
@@ -789,6 +847,7 @@ async function stopTavernChannel() {
     try { await tavernChannel.unsubscribe(); } catch {}
     tavernChannel = null;
   }
+  tavernChannelReadyPromise = null;
   try {
     if (typeof getWsRoomId === 'function' && typeof disconnectRoomWs === 'function' && String(getWsRoomId() || '') === TAVERN_ROOM_LOG_ID) {
       disconnectRoomWs();
@@ -804,11 +863,21 @@ async function stopTavernChannel() {
 
 async function persistTavernMessage(message) {
   if (!message || !sbClient) return;
+  const row = {
+    id: String(message.id || ''),
+    text: encodeTavernLogRow(message),
+    created_at: new Date(message.ts || Date.now()).toISOString()
+  };
   try {
-    await sbClient.from('room_log').insert({ room_id: TAVERN_ROOM_LOG_ID, text: encodeTavernLogRow(message) });
+    const { error } = await sbClient
+      .from('room_log')
+      .insert({ room_id: TAVERN_ROOM_LOG_ID, text: row.text });
+    if (error) throw error;
     void cleanupExpiredTavernMessagesDb();
+    return row;
   } catch (e) {
     console.warn('persistTavernMessage failed', e);
+    return null;
   }
 }
 
@@ -839,26 +908,12 @@ async function sendTavernChatMessage() {
     };
   }
 
+  await ensureTavernChannel();
   pushTavernMessage(message);
   try { if (tavernChatInput) tavernChatInput.value = ''; } catch {}
   clearTavernQuoteDraft();
-  await ensureTavernChannel();
-
-  const wsRow = {
-    id: String(message.id || ''),
-    text: encodeTavernLogRow(message),
-    created_at: new Date(message.ts || Date.now()).toISOString()
-  };
-
-  try {
-    if (typeof sendWsEnvelope === 'function') {
-      sendWsEnvelope({ type: 'tavernLogRow', roomId: TAVERN_ROOM_LOG_ID, row: wsRow }, { optimisticApplied: true });
-    }
-  } catch (e) {
-    console.warn('tavern chat ws relay failed', e);
-  }
-
-  await persistTavernMessage(message);
+  const savedRow = await persistTavernMessage(message);
+  if (savedRow) await broadcastTavernRealtimeRow(savedRow);
 }
 
 function openTavernChat() {
@@ -1652,8 +1707,7 @@ window.TavernChat = {
     renderTavernChat();
   },
   receiveRealtime: (payload) => {
-    const msg = decodeTavernLogRow(payload?.row?.text || payload?.text || payload);
-    if (msg) pushTavernMessage(msg);
+    receiveTavernRealtimeRow(payload?.payload?.row || payload?.row || payload?.new || payload?.record || payload?.text || payload);
   }
 };
 window.openRoomChat = openRoomChat;
