@@ -185,6 +185,59 @@ try {
   window.deleteTokenSnapshotCached = deleteTokenSnapshotCached;
 } catch {}
 
+function getPendingPlayerCreateStateWrites() {
+  try {
+    if (typeof window !== 'undefined') {
+      if (!(window.__pendingPlayerCreateStateWrites instanceof Map)) {
+        window.__pendingPlayerCreateStateWrites = new Map();
+      }
+      return window.__pendingPlayerCreateStateWrites;
+    }
+  } catch {}
+  if (!(getPendingPlayerCreateStateWrites._map instanceof Map)) {
+    getPendingPlayerCreateStateWrites._map = new Map();
+  }
+  return getPendingPlayerCreateStateWrites._map;
+}
+
+function markPendingPlayerCreateStateWrite(playerId) {
+  const id = String(playerId || '').trim();
+  if (!id) return () => {};
+  const pending = getPendingPlayerCreateStateWrites();
+  let resolveDone = null;
+  const promise = new Promise((resolve) => { resolveDone = resolve; });
+  const entry = { promise, startedAt: Date.now() };
+  pending.set(id, entry);
+  let finished = false;
+  return () => {
+    if (finished) return;
+    finished = true;
+    try { resolveDone?.(); } catch {}
+    try {
+      if (pending.get(id) === entry) pending.delete(id);
+    } catch {}
+  };
+}
+
+async function waitForPendingPlayerCreateStateWrite(playerId, timeoutMs = 5000) {
+  const id = String(playerId || '').trim();
+  if (!id) return;
+  const entry = getPendingPlayerCreateStateWrites().get(id);
+  const promise = entry?.promise;
+  if (!promise || typeof promise.then !== 'function') return;
+  let timer = null;
+  try {
+    await Promise.race([
+      promise,
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, Math.max(100, Number(timeoutMs) || 5000));
+      })
+    ]);
+  } finally {
+    try { clearTimeout(timer); } catch {}
+  }
+}
+
 function startWsHeartbeat(sock = wsClient) {
   stopWsHeartbeat();
   markWsAlive();
@@ -3053,45 +3106,6 @@ async function sendMessage(msg) {
           break;
         }
 
-        if (!toPlayer.sheet || typeof toPlayer.sheet !== 'object') toPlayer.sheet = { parsed: {} };
-        if (!toPlayer.sheet.parsed || typeof toPlayer.sheet.parsed !== 'object') toPlayer.sheet.parsed = {};
-        if (!toPlayer.sheet.parsed.inventory || typeof toPlayer.sheet.parsed.inventory !== 'object') toPlayer.sheet.parsed.inventory = { activeTab: tabId };
-        if (!Array.isArray(toPlayer.sheet.parsed.inventory[tabId])) toPlayer.sheet.parsed.inventory[tabId] = [];
-
-        const targetArr = toPlayer.sheet.parsed.inventory[tabId];
-        const same = targetArr.find((it) => String(it?.id || '') && String(it?.id || '') === String(fromItem?.id || ''));
-        if (same) {
-          same.qty = Math.max(1, Number(same?.qty) || 1) + qty;
-        } else {
-          const cloned = deepClone(fromItem);
-          cloned.qty = qty;
-          targetArr.push(cloned);
-        }
-
-        fromItem.qty = currentQty - qty;
-        if (fromItem.qty <= 0) {
-          fromItems.splice(idx, 1);
-          try {
-            if (tabId === 'weapons' && Array.isArray(fromPlayer?.sheet?.parsed?.weaponsList)) {
-              const invId = String(fromItem?.id || '').trim();
-              if (invId) {
-                fromPlayer.sheet.parsed.weaponsList = fromPlayer.sheet.parsed.weaponsList.filter((w) => String(w?.invId || '') !== invId);
-              }
-            }
-          } catch {}
-        }
-
-        try {
-          fromPlayer.sheetUpdatedAt = Date.now();
-          toPlayer.sheetUpdatedAt = Date.now();
-        } catch {}
-
-        try {
-          handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
-        } catch {}
-
-        await upsertRoomState(currentRoomId, next);
-
         const result = {
           id: String(offer.id || ''),
           accepted: true,
@@ -3099,6 +3113,11 @@ async function sendMessage(msg) {
           toPlayerId: String(toPlayer?.id || ''),
           fromOwnerId: String(fromPlayer?.ownerId || ''),
           toOwnerId: String(toPlayer?.ownerId || ''),
+          tabId,
+          itemIdx: idx,
+          itemId: String(offer.itemId || fromItem?.id || ''),
+          itemName: String(offer?.itemName || fromItem?.name_ru || fromItem?.name || fromItem?.name_en || 'предмет'),
+          qty,
           message: `Передано ${qty} × ${String(offer?.itemName || 'предмет')} игроку ${String(toPlayer?.name || 'получатель')}.`
         };
         try {
@@ -3237,6 +3256,7 @@ async function sendMessage(msg) {
 
         const type = msg.type;
         let handled = false;
+        let pendingCreatedPlayerId = "";
 
         // ===== Campaign maps + sections (GM) =====
         if (type === "createMapSection") {
@@ -3643,6 +3663,7 @@ async function sendMessage(msg) {
             }
           }
           const id = player.id || (crypto?.randomUUID ? crypto.randomUUID() : ("p-" + Math.random().toString(16).slice(2)));
+          pendingCreatedPlayerId = String(id);
           const defaultTokenBaseUrl = isEnemy
             ? DEFAULT_MONSTER_BASE_URL
             : ((isAlly || (!isBase && ownerRole !== 'GM')) ? DEFAULT_ALLY_BASE_URL : '');
@@ -3997,6 +4018,10 @@ async function sendMessage(msg) {
               window.FogWar?.onTokenPositionsChanged?.(stNow);
               (stNow?.players || []).forEach(pp => { try { setPlayerPosition?.(pp); } catch {} });
             } catch {}
+          } catch {}
+
+          try {
+            await waitForPendingPlayerCreateStateWrite(String(p.id));
           } catch {}
 
           try {
@@ -4723,6 +4748,12 @@ async function sendMessage(msg) {
         }
 
         let optimisticState = null;
+        let finishPendingPlayerCreateStateWrite = null;
+        try {
+          if (pendingCreatedPlayerId) {
+            finishPendingPlayerCreateStateWrite = markPendingPlayerCreateStateWrite(pendingCreatedPlayerId);
+          }
+        } catch {}
         try {
           // Supabase Realtime is disabled, so the local client must see state changes
           // immediately without waiting for a WS echo from the VPS.
@@ -4749,7 +4780,11 @@ async function sendMessage(msg) {
           }
         }
 
-        await upsertRoomState(currentRoomId, next);
+        try {
+          await upsertRoomState(currentRoomId, next);
+        } finally {
+          try { finishPendingPlayerCreateStateWrite?.(); } catch {}
+        }
 
 		// v4+: mirror GM "eye" visibility into room_tokens for reliable realtime visibility updates.
 		if (type === 'setPlayerPublic') {
