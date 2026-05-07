@@ -134,19 +134,57 @@
       return lines.join('\n').trim();
     };
 
+    const decodeHtmlEntities = (value) => String(value || '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#039;/gi, "'")
+      .replace(/&apos;/gi, "'")
+      .replace(/&#(\d+);/g, (_, code) => {
+        const n = Number(code);
+        return Number.isFinite(n) ? String.fromCharCode(n) : _;
+      })
+      .replace(/&#x([0-9a-f]+);/gi, (_, code) => {
+        const n = parseInt(code, 16);
+        return Number.isFinite(n) ? String.fromCharCode(n) : _;
+      });
+
+    const plainTextFromString = (value) => {
+      let text = String(value || '');
+      const hasHtmlTags = /<\/?[a-z][\s\S]*?>/i.test(text);
+      if (hasHtmlTags) {
+        text = text
+          .replace(/\r\n?/g, '\n')
+          .replace(/<\s*br\s*\/?>/gi, '\n')
+          .replace(/<\s*li\b[^>]*>/gi, '- ')
+          .replace(/<\/\s*(p|div|li|h[1-6]|tr|section|article|blockquote)\s*>/gi, '\n')
+          .replace(/<[^>]+>/g, '');
+      }
+      return decodeHtmlEntities(text)
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+    };
+
     const textNodeToString = (node) => {
       if (node == null) return "";
-      if (typeof node === 'string') return node.trim();
+      if (typeof node === 'string') return plainTextFromString(node);
       if (typeof node === 'number' || typeof node === 'boolean') return String(node);
       if (typeof node !== 'object') return "";
-      if (typeof node.value === 'string') return node.value.trim();
+      if (typeof node.value === 'string') return plainTextFromString(node.value);
       if (node.value && typeof node.value === 'object' && node.value.type === 'doc' && Array.isArray(node.value.content)) {
         return tiptapToText(node.value);
       }
       if (node.value && typeof node.value === 'object' && node.value.data) {
+        if (typeof node.value.data === 'string') return plainTextFromString(node.value.data);
         return tiptapToText(node.value.data);
       }
       if (node.type === 'doc' && Array.isArray(node.content)) return tiptapToText(node);
+      if (typeof node.data === 'string') return plainTextFromString(node.data);
       if (node.data && typeof node.data === 'object') return tiptapToText(node.data);
       return "";
     };
@@ -206,9 +244,9 @@
 
     // Импорт заметок/личности из legacy-ключей text.* (если в personality/notes пусто).
     const personalityMap = {
-      backstory: ['backstory', 'bio', 'history', 'story', 'предыст'],
+      backstory: ['backstory', 'background', 'bio', 'history', 'story', 'предыст'],
       allies: ['allies', 'contacts', 'союз'],
-      traits: ['traits', 'черты'],
+      traits: ['personality', 'personalitytrait', 'personality_trait', 'charactertrait', 'character_trait', 'характер', 'личность'],
       ideals: ['ideals', 'идеал'],
       bonds: ['bonds', 'привязан'],
       flaws: ['flaws', 'weakness', 'слабост', 'недостат']
@@ -219,6 +257,7 @@
       const val = pickFirstNonEmpty(
         sheet[field],
         sheet?.info?.[field],
+        field === 'traits' ? sheet.personality : null,
         findTextByKeyHints(hints),
         findHarvestedByHints(hints)
       );
