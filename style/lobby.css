@@ -412,9 +412,12 @@ body.lobby-active #lobby-scene {
   border:1px solid rgba(255,224,183,0.25);
 }
 .tavern-topbar__subtitle{
+  box-sizing: border-box;
+  width: 100%;
   margin-top: 8px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
   padding: 8px 10px;
@@ -424,6 +427,7 @@ body.lobby-active #lobby-scene {
   color:#d7c5a0;
   font-size:13px;
   line-height: 1.35;
+  text-align: center;
 }
 .tavern-topbar__welcome-label{
   color: rgba(236, 214, 169, 0.92);
