@@ -10,6 +10,7 @@ function getRoomPasswordBadge(hasPassword) {
 let roomEditorMode = 'create';
 let editingRoomId = '';
 let ownedRoomRecord = null;
+let roomMutationPending = false;
 
 function setCreateRoomButtonsHint(message = '') {
   [createRoomBtn, tavernCreateRoomBtn].filter(Boolean).forEach((btn) => {
@@ -412,7 +413,8 @@ if (createRoomBtn) createRoomBtn.addEventListener('click', openCreateRoomModal);
 if (createRoomClose) createRoomClose.addEventListener('click', closeCreateRoomModal);
 if (createRoomCancel) createRoomCancel.addEventListener('click', closeCreateRoomModal);
 
-if (createRoomSubmit) createRoomSubmit.addEventListener('click', () => {
+if (createRoomSubmit) createRoomSubmit.addEventListener('click', async () => {
+  if (roomMutationPending) return;
   const name = roomNameInput.value.trim();
   const password = roomPasswordInput.value || '';
   const scenario = roomScenarioInput.value.trim();
@@ -422,10 +424,17 @@ if (createRoomSubmit) createRoomSubmit.addEventListener('click', () => {
     return;
   }
 
-  if (roomEditorMode === 'edit' && editingRoomId) {
-    sendMessage({ type: 'updateRoom', roomId: editingRoomId, name, password, scenario });
-  } else {
-    sendMessage({ type: 'createRoom', name, password, scenario });
+  roomMutationPending = true;
+  createRoomSubmit.disabled = true;
+  try {
+    if (roomEditorMode === 'edit' && editingRoomId) {
+      await sendMessage({ type: 'updateRoom', roomId: editingRoomId, name, password, scenario });
+    } else {
+      await sendMessage({ type: 'createRoom', name, password, scenario });
+    }
+    closeCreateRoomModal();
+  } finally {
+    roomMutationPending = false;
+    createRoomSubmit.disabled = false;
   }
-  closeCreateRoomModal();
 });
