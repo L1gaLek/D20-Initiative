@@ -515,6 +515,11 @@ const VPS_API_BASE = (() => {
 const VPS_AUTH_TOKEN_KEY = 'int_auth_token';
 const VPS_AUTH_EXPIRES_KEY = 'int_auth_expires_at';
 const VPS_LEGACY_USER_ID_KEY = 'int_legacy_user_id';
+const VPS_API_TIMEOUT_MS = 10000;
+const VPS_SESSION_TIMEOUT_MS = 9000;
+const VPS_RETRY_DELAYS_MS = [350, 900];
+let pendingVpsSessionPromise = null;
+let pendingVpsSessionKey = '';
 
 function getStoredValue(key) {
   try {
@@ -566,6 +571,67 @@ function rememberVpsSession(payload) {
   return { token, userId, expiresAt: String(data.expiresAt || data.expires_at || '') };
 }
 
+function delayVpsRetry(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
+function isTransientVpsError(error) {
+  const status = Number(error?.status || 0);
+  if ([408, 425, 429, 500, 502, 503, 504].includes(status)) return true;
+  const name = String(error?.name || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  return name === 'aborterror'
+    || message.includes('failed to fetch')
+    || message.includes('networkerror')
+    || message.includes('network request failed')
+    || message.includes('connection')
+    || message.includes('timeout')
+    || message.includes('timed out');
+}
+
+async function fetchVpsJson(url, options = {}, retryOptions = {}) {
+  const retries = Math.max(0, Number(retryOptions.retries) || 0);
+  const timeoutMs = Math.max(0, Number(retryOptions.timeoutMs) || 0);
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    let controller = null;
+    let timer = null;
+    const fetchOptions = { ...(options || {}) };
+
+    if (!fetchOptions.signal && timeoutMs > 0 && typeof AbortController !== 'undefined') {
+      controller = new AbortController();
+      fetchOptions.signal = controller.signal;
+      timer = setTimeout(() => {
+        try { controller.abort(); } catch {}
+      }, timeoutMs);
+    }
+
+    try {
+      const res = await fetch(url, fetchOptions);
+      let payload = null;
+      try { payload = await res.json(); } catch {}
+      if (!res.ok || payload?.ok === false) {
+        const error = new Error(String(payload?.error || `VPS API ${res.status}`));
+        error.status = res.status;
+        error.payload = payload;
+        throw error;
+      }
+      return payload || {};
+    } catch (error) {
+      lastError = error?.name === 'AbortError'
+        ? Object.assign(new Error('VPS request timed out'), { name: 'AbortError', cause: error })
+        : error;
+      if (attempt >= retries || !isTransientVpsError(lastError)) throw lastError;
+      await delayVpsRetry(VPS_RETRY_DELAYS_MS[Math.min(attempt, VPS_RETRY_DELAYS_MS.length - 1)]);
+    } finally {
+      try { clearTimeout(timer); } catch {}
+    }
+  }
+
+  throw lastError || new Error('VPS request failed');
+}
+
 async function migrateLegacyCharactersIfNeeded() {
   const legacyUserId = getStoredValue(VPS_LEGACY_USER_ID_KEY);
   const currentUserId = getStoredValue('int_user_id');
@@ -590,35 +656,43 @@ async function ensureVpsSession(userName = '') {
     userName: String(userName || getStoredValue('int_user_name') || '').trim(),
     legacyUserId
   };
+  const sessionKey = JSON.stringify(body);
+  if (pendingVpsSessionPromise && pendingVpsSessionKey === sessionKey) {
+    return pendingVpsSessionPromise;
+  }
 
   async function requestSession(useStoredToken) {
     const headers = { 'Content-Type': 'application/json' };
     const token = useStoredToken ? getVpsAuthToken() : '';
     if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(`${VPS_API_BASE}/session`, {
+    return fetchVpsJson(`${VPS_API_BASE}/session`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
       credentials: 'omit',
       mode: 'cors'
-    });
-    const payload = await res.json().catch(() => null);
-    if (!res.ok || payload?.ok === false) {
-      const error = new Error(String(payload?.error || `VPS session ${res.status}`));
-      error.status = res.status;
-      error.payload = payload;
-      throw error;
-    }
-    return payload || {};
+    }, { retries: 2, timeoutMs: VPS_SESSION_TIMEOUT_MS });
   }
 
+  pendingVpsSessionKey = sessionKey;
+  pendingVpsSessionPromise = (async () => {
+    try {
+      return rememberVpsSession(await requestSession(true));
+    } catch (error) {
+      if (Number(error?.status) !== 401 && Number(error?.status) !== 403) throw error;
+      removeStoredValue(VPS_AUTH_TOKEN_KEY);
+      removeStoredValue(VPS_AUTH_EXPIRES_KEY);
+      return rememberVpsSession(await requestSession(false));
+    }
+  })();
+
   try {
-    return rememberVpsSession(await requestSession(true));
-  } catch (error) {
-    if (Number(error?.status) !== 401 && Number(error?.status) !== 403) throw error;
-    removeStoredValue(VPS_AUTH_TOKEN_KEY);
-    removeStoredValue(VPS_AUTH_EXPIRES_KEY);
-    return rememberVpsSession(await requestSession(false));
+    return await pendingVpsSessionPromise;
+  } finally {
+    if (pendingVpsSessionKey === sessionKey) {
+      pendingVpsSessionPromise = null;
+      pendingVpsSessionKey = '';
+    }
   }
 }
 
@@ -641,17 +715,19 @@ function getVpsActorName() {
 
 function getVpsApiErrorMessage(error, fallback = 'Server request failed') {
   const raw = String(error?.payload?.error || error?.message || '').trim();
-  if (/already owns/i.test(raw)) return 'User already owns a room.';
-  if (/Only room owner/i.test(raw)) return 'Only the room owner can do this.';
-  if (/Invalid room password/i.test(raw)) return 'Invalid room password.';
+  if (/already owns/i.test(raw)) return 'У вас уже есть своя комната. Можно управлять только одной комнатой на пользователя.';
+  if (/Only room owner/i.test(raw)) return 'Только владелец комнаты может это сделать.';
+  if (/Invalid room password/i.test(raw)) return 'Неверный пароль комнаты.';
   if (/GM already|uq_one_gm_per_room|ГМ.*(уже|присутств)|уже.*ГМ/i.test(raw)) return 'В комнате уже присутствует ГМ. Вы не можете войти как ГМ.';
-  if (/banned/i.test(raw)) return 'You are banned in this room.';
-  if (/required/i.test(raw)) return 'Required room data is missing.';
+  if (/banned/i.test(raw)) return 'Вы заблокированы в этой комнате.';
+  if (/required/i.test(raw)) return 'Не хватает данных комнаты.';
+  if (isTransientVpsError(error)) return 'Сервер таверны временно не ответил. Попробуйте ещё раз.';
   return raw || fallback;
 }
 
 async function vpsApi(path, options = {}) {
   const cleanPath = String(path || '').startsWith('/') ? String(path || '') : `/${String(path || '')}`;
+  const method = String(options.method || 'GET').toUpperCase();
   const headers = { ...(options.headers || {}) };
   if (!headers.Authorization && !headers.authorization && cleanPath !== '/session') {
     let token = getVpsAuthToken();
@@ -673,21 +749,36 @@ async function vpsApi(path, options = {}) {
     body = JSON.stringify(body);
   }
 
-  const res = await fetch(`${VPS_API_BASE}${cleanPath}`, {
+  const requestOptions = {
     ...options,
     headers,
     body
-  });
+  };
+  const retries = method === 'GET' || method === 'HEAD' ? 2 : 0;
 
-  let payload = null;
-  try { payload = await res.json(); } catch {}
-  if (!res.ok || payload?.ok === false) {
-    const error = new Error(String(payload?.error || `VPS API ${res.status}`));
-    error.status = res.status;
-    error.payload = payload;
+  try {
+    return await fetchVpsJson(`${VPS_API_BASE}${cleanPath}`, requestOptions, {
+      retries,
+      timeoutMs: Number(options.timeoutMs) || VPS_API_TIMEOUT_MS
+    });
+  } catch (error) {
+    if (cleanPath !== '/session' && Number(error?.status) === 401) {
+      removeStoredValue(VPS_AUTH_TOKEN_KEY);
+      removeStoredValue(VPS_AUTH_EXPIRES_KEY);
+      const session = await ensureVpsSession(getVpsActorName());
+      const token = String(session?.token || getVpsAuthToken() || '').trim();
+      if (token) {
+        return fetchVpsJson(`${VPS_API_BASE}${cleanPath}`, {
+          ...requestOptions,
+          headers: { ...headers, Authorization: `Bearer ${token}` }
+        }, {
+          retries,
+          timeoutMs: Number(options.timeoutMs) || VPS_API_TIMEOUT_MS
+        });
+      }
+    }
     throw error;
   }
-  return payload || {};
 }
 
 try { window.vpsApi = vpsApi; } catch {}
@@ -2154,6 +2245,9 @@ async function sendMessage(msg) {
             }
             await sendMessage({ type: "listRooms" });
           } catch (e) {
+            if (Number(e?.status) === 409) {
+              try { await sendMessage({ type: "listRooms" }); } catch {}
+            }
             handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room create failed') });
           }
           break;

@@ -1294,7 +1294,13 @@ let usersOrder = []; // array of userId (master order)
 const userMissingTicks = new Map(); // userId -> missing polls count
 
 // ================== JOIN GAME ==================
+let loginSubmitInFlight = false;
+
 joinBtn.addEventListener('click', async () => {
+  if (loginSubmitInFlight) return;
+  loginSubmitInFlight = true;
+  if (joinBtn) joinBtn.disabled = true;
+  try {
   const name = usernameInput.value.trim();
   const role = '';
 
@@ -1313,7 +1319,7 @@ joinBtn.addEventListener('click', async () => {
     return;
   }
 
-sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+if (!sbClient) sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 window.SUPABASE_FETCH_FN = "fetch";
   
@@ -1344,8 +1350,10 @@ window.SUPABASE_FETCH_FN = "fetch";
   try { lobbyAmbientAudio.nudgeFromGesture?.(); } catch {}
   handleMessage({ type: "registered", id: userId, name, role: '' });
 
-  // list rooms from DB
-  sendMessage({ type: 'listRooms' });
+  } finally {
+    loginSubmitInFlight = false;
+    if (joinBtn) joinBtn.disabled = false;
+  }
 });
 
 
