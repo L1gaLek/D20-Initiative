@@ -2138,14 +2138,19 @@ async function sendMessage(msg) {
           try {
             const userId = getVpsActorUserId();
             const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
-            const payload = await vpsApi(`/rooms${query}`, { method: 'GET', timeoutMs: 6000, retries: 0 });
+            const timeoutMs = Number(msg.timeoutMs) || 8000;
+            const retries = Number.isFinite(Number(msg.retries))
+              ? Math.max(0, Math.min(3, Math.trunc(Number(msg.retries))))
+              : (msg.silent ? 1 : 0);
+            const payload = await vpsApi(`/rooms${query}`, { method: 'GET', timeoutMs, retries });
             handleMessage({
               type: "rooms",
               rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
               totalUsers: Number(payload.totalUsers) || 0
             });
           } catch (e) {
-            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
+            if (msg.silent) console.warn('background listRooms failed', e);
+            else handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
           }
           break;
         }
@@ -2238,16 +2243,32 @@ async function sendMessage(msg) {
                 state: initState
               }
             });
+            const createdRoom = payload?.room && typeof payload.room === 'object' ? payload.room : null;
+            const createdRoomId = String(createdRoom?.id || '').trim();
+            if (createdRoom) {
+              try {
+                window.mergeLobbyRoomSnapshot?.(createdRoom, { totalUsers: Number(payload?.totalUsers || 0) || 0 });
+              } catch {}
+            }
             try {
-              const createdRoomId = String(payload?.room?.id || '');
-              if (createdRoomId) await ensureDetachedBootstrap(createdRoomId, payload.state || initState);
+              if (createdRoomId) {
+                Promise.resolve()
+                  .then(() => ensureDetachedBootstrap(createdRoomId, payload.state || initState))
+                  .catch((e) => console.warn('detached bootstrap createRoom failed', e));
+              }
             } catch (e) {
               console.warn('detached bootstrap createRoom failed', e);
             }
-            await sendMessage({ type: "listRooms" });
+            setTimeout(() => {
+              try {
+                sendMessage({ type: "listRooms", silent: true, retries: 1, timeoutMs: 10000 });
+              } catch (e) {
+                console.warn('background rooms refresh schedule failed', e);
+              }
+            }, 250);
           } catch (e) {
             if (Number(e?.status) === 409) {
-              try { await sendMessage({ type: "listRooms" }); } catch {}
+              try { sendMessage({ type: "listRooms", silent: true, retries: 1, timeoutMs: 10000 }); } catch {}
             }
             handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room create failed') });
           }
