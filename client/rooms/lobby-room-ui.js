@@ -285,7 +285,7 @@ async function refreshRoleModalGmAvailability(roomId) {
     if (!rid) return;
     const userId = (typeof getVpsActorUserId === 'function') ? getVpsActorUserId() : '';
     const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
-    const payload = await vpsApi(`/rooms${query}`, { method: 'GET' });
+    const payload = await vpsApi(`/rooms${query}`, { method: 'GET', timeoutMs: 6000, retries: 0 });
     const rooms = Array.isArray(payload?.rooms) ? payload.rooms : [];
     const freshRoom = rooms.find((room) => String(room?.id || '') === rid);
     if (!freshRoom || String(pendingJoinRoomId || '') !== rid) return;
