@@ -239,7 +239,6 @@ function safeJsonParse(raw, fallback = null) {
 }
 
 const TAVERN_BOARD_SEEN_STORAGE_KEY = 'int_tavern_board_seen_ids_v1';
-const TAVERN_BOARD_TABLE = 'tavern_announcements';
 const TAVERN_BOARD_MAX_PER_USER = 2;
 const TAVERN_BOARD_MAX_MS_AHEAD = 10.5 * 24 * 60 * 60 * 1000;
 const tavernBoardState = {
@@ -267,26 +266,28 @@ function normalizeAnnouncementRow(row = {}) {
 }
 
 async function fetchTavernAnnouncements({ purgeExpired = false } = {}) {
-  if (!sbClient) {
+  if (typeof window.vpsApi !== 'function') {
     tavernBoardState.items = [];
     return [];
   }
-  const nowIso = new Date().toISOString();
-  if (purgeExpired) {
-    try { await sbClient.from(TAVERN_BOARD_TABLE).delete().lt('start_at', nowIso); } catch {}
-  }
-  const { data, error } = await sbClient
-    .from(TAVERN_BOARD_TABLE)
-    .select('id,author_id,author_name,scenario,adventure_type,level,max_players,needed_players,start_at,contact,description,created_at,updated_at')
-    .gt('start_at', nowIso)
-    .order('start_at', { ascending: true });
-  if (error) {
-    console.warn('tavern board fetch failed', error);
-    if (tavernBoardError) tavernBoardError.textContent = 'Не удалось загрузить объявления. Проверьте таблицу tavern_announcements в Supabase.';
+  const params = new URLSearchParams();
+  if (purgeExpired) params.set('purgeExpired', '1');
+  try {
+    const payload = await window.vpsApi(`/tavern/announcements${params.toString() ? `?${params.toString()}` : ''}`, {
+      method: 'GET',
+      auth: false,
+      timeoutMs: 6000,
+      retries: 0
+    });
+    tavernBoardState.items = (Array.isArray(payload?.announcements) ? payload.announcements : []).map(normalizeAnnouncementRow);
+    if (tavernBoardError && String(tavernBoardError.textContent || '').startsWith('Не удалось загрузить объявления')) {
+      tavernBoardError.textContent = '';
+    }
+  } catch (error) {
+    console.warn('tavern board VPS fetch failed', error);
+    if (tavernBoardError) tavernBoardError.textContent = 'Не удалось загрузить объявления через сервер таверны.';
     tavernBoardState.items = [];
-    return [];
   }
-  tavernBoardState.items = (Array.isArray(data) ? data : []).map(normalizeAnnouncementRow);
   return tavernBoardState.items;
 }
 
@@ -474,19 +475,26 @@ function receiveTavernRealtimeRow(row) {
 }
 
 async function broadcastTavernRealtimeRow(row) {
-  if (!tavernChannel || !row) return;
+  if (!row) return;
   try {
-    await tavernChannel.send({
-      type: 'broadcast',
-      event: 'tavernLogRow',
-      payload: { row }
-    });
+    if (typeof sendWsEnvelope === 'function') {
+      sendWsEnvelope({ type: 'tavernLogRow', roomId: TAVERN_ROOM_LOG_ID, row }, { optimisticApplied: true });
+    }
   } catch (e) {
     console.warn('tavern broadcast failed', e);
   }
 }
 
 function syncTavernPresenceUsers() {
+  if (tavernChannel?.transport === 'vps') {
+    const selfId = getTavernMyUserId();
+    if (selfId) rememberTavernUser(selfId, getTavernMyUserName(), { online: true, joinedAt: Date.now() });
+    tavernPresenceCount = Array.from(tavernChatState.knownUsers.values()).filter((user) => !!user?.online).length;
+    renderTavernUsersList();
+    renderTavernSubtitle();
+    updateTavernHotspotBadges();
+    return;
+  }
   try {
     const state = tavernChannel?.presenceState?.() || {};
     const seen = new Set();
@@ -718,24 +726,12 @@ async function cleanupExpiredTavernMessagesDb(force = false) {
   // RLS lockdown intentionally blocks browser-side DELETE on room_log.
   // History loading already filters old tavern messages by TTL.
   // Database cleanup should run from a server/admin job, not from anon client.
+  void force;
   return;
-  if (!sbClient) return;
-  const now = Date.now();
-  if (!force && (now - _lastTavernCleanupAt) < CHAT_CLEANUP_THROTTLE_MS) return;
-  _lastTavernCleanupAt = now;
-  try {
-    await sbClient.from('room_log')
-      .delete()
-      .eq('room_id', TAVERN_ROOM_LOG_ID)
-      .like('text', `${TAVERN_LOG_PREFIX}%`)
-      .lt('created_at', new Date(getChatTtlCutoffMs(now)).toISOString());
-  } catch (e) {
-    console.warn('cleanupExpiredTavernMessagesDb failed', e);
-  }
 }
 
 async function loadTavernChatHistory() {
-  if (!sbClient) return;
+  if (typeof window.vpsApi !== 'function') return;
   try {
     void cleanupExpiredTavernMessagesDb(true);
     const pendingMessages = [];
@@ -744,15 +740,15 @@ async function loadTavernChatHistory() {
         if (msg && msg.id && !msg.system) pendingMessages.push(msg);
       });
     });
-    const { data, error } = await sbClient
-      .from('room_log')
-      .select('id,text,created_at')
-      .eq('room_id', TAVERN_ROOM_LOG_ID)
-      .like('text', `${TAVERN_LOG_PREFIX}%`)
-      .gte('created_at', new Date(getChatTtlCutoffMs()).toISOString())
-      .order('created_at', { ascending: true })
-      .limit(300);
-    if (error) throw error;
+    const params = new URLSearchParams({
+      limit: '300',
+      since: new Date(getChatTtlCutoffMs()).toISOString()
+    });
+    const payload = await window.vpsApi(`/tavern/chat?${params.toString()}`, {
+      method: 'GET',
+      timeoutMs: 6000,
+      retries: 0
+    });
 
     tavernChatState.chats = new Map([['global', []]]);
     tavernChatState.unreadGlobal = 0;
@@ -761,7 +757,7 @@ async function loadTavernChatHistory() {
     tavernChatState.messageIds = new Set();
     tavernChatState.loadedHistory = false;
     applyTavernChatUiPrefs();
-    const rows = Array.isArray(data) ? data : [];
+    const rows = Array.isArray(payload?.rows) ? payload.rows : [];
     rows.forEach((row) => {
       const msg = decodeTavernLogRow(row?.text);
       if (!msg) return;
@@ -788,7 +784,6 @@ async function loadTavernChatHistory() {
 }
 
 async function ensureTavernChannel() {
-  if (!sbClient) return null;
   if (tavernChannel) {
     if (tavernChannelReadyPromise) await tavernChannelReadyPromise;
     return tavernChannel;
@@ -796,47 +791,24 @@ async function ensureTavernChannel() {
   const userId = getTavernMyUserId();
   const userName = getTavernMyUserName();
   rememberTavernUser(userId, userName, { online: true });
-  tavernChannel = sbClient
-    .channel('tavern:lobby', { config: { presence: { key: userId }, broadcast: { self: false } } })
-    .on('presence', { event: 'sync' }, () => {
-      syncTavernPresenceUsers();
-    })
-    .on('broadcast', { event: 'tavernLogRow' }, (payload) => {
-      receiveTavernRealtimeRow(payload?.payload?.row || payload?.row || payload?.payload || payload);
-    })
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'room_log',
-      filter: `room_id=eq.${TAVERN_ROOM_LOG_ID}`
-    }, (payload) => {
-      receiveTavernRealtimeRow(payload?.new || payload?.record || payload);
-    });
-
-  tavernChannelReadyPromise = new Promise((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve(tavernChannel);
-    };
-    const timer = setTimeout(finish, 3000);
-    tavernChannel.subscribe(async (status) => {
-      tavernChatState.wsConnected = (status === 'SUBSCRIBED');
-      if (status === 'SUBSCRIBED') {
-        try {
-          await tavernChannel.track({ userId, userName, joinedAt: Date.now() });
-        } catch {}
-        await loadTavernChatHistory();
-        syncTavernPresenceUsers();
-        clearTimeout(timer);
-        finish();
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        clearTimeout(timer);
-        finish();
+  tavernChannel = { transport: 'vps' };
+  tavernChannelReadyPromise = (async () => {
+    try {
+      if (typeof connectRoomWs === 'function') {
+        connectRoomWs(TAVERN_ROOM_LOG_ID);
+        tavernChatState.wsConnected = true;
       }
-    });
-  });
+    } catch (error) {
+      tavernChatState.wsConnected = false;
+      console.warn('tavern VPS WS connect failed', error);
+    }
+    await loadTavernChatHistory();
+    tavernPresenceCount = tavernChatState.wsConnected ? 1 : 0;
+    renderTavernUsersList();
+    renderTavernSubtitle();
+    updateTavernHotspotBadges();
+    return tavernChannel;
+  })();
   await tavernChannelReadyPromise;
   return tavernChannel;
 }
@@ -862,19 +834,20 @@ async function stopTavernChannel() {
 }
 
 async function persistTavernMessage(message) {
-  if (!message || !sbClient) return;
+  if (!message || typeof window.vpsApi !== 'function') return null;
   const row = {
     id: String(message.id || ''),
     text: encodeTavernLogRow(message),
     created_at: new Date(message.ts || Date.now()).toISOString()
   };
   try {
-    const { error } = await sbClient
-      .from('room_log')
-      .insert({ room_id: TAVERN_ROOM_LOG_ID, text: row.text });
-    if (error) throw error;
+    const payload = await window.vpsApi('/tavern/chat', {
+      method: 'POST',
+      body: { text: row.text },
+      timeoutMs: 6000
+    });
     void cleanupExpiredTavernMessagesDb();
-    return row;
+    return payload?.row || row;
   } catch (e) {
     console.warn('persistTavernMessage failed', e);
     return null;
@@ -941,8 +914,9 @@ async function renderTavernBoard() {
     .sort((a, b) => Number(a.startAtTs || 0) - Number(b.startAtTs || 0));
   const myCount = getMyAnnouncementCount(announcements);
   if (tavernBoardHint) tavernBoardHint.textContent = `Активных объявлений: ${announcements.length}. Ваших: ${myCount}/${TAVERN_BOARD_MAX_PER_USER}.`;
-  if (tavernBoardError && tavernBoardError.textContent !== 'Не удалось загрузить объявления. Проверьте таблицу tavern_announcements в Supabase.') {
-    tavernBoardError.textContent = '';
+  if (tavernBoardError) {
+    const errorText = String(tavernBoardError.textContent || '');
+    if (errorText && !errorText.startsWith('Не удалось загрузить объявления')) tavernBoardError.textContent = '';
   }
 
   if (!announcements.length) {
@@ -1034,8 +1008,8 @@ async function openCreateAnnouncementModal(item = null) {
 
 async function saveAnnouncementFromForm() {
   if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = '';
-  if (!sbClient) {
-    if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = 'Supabase не подключен. Объявления недоступны.';
+  if (typeof window.vpsApi !== 'function') {
+    if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = 'Сервер таверны недоступен. Объявления недоступны.';
     return;
   }
   const scenario = String(announcementScenarioInput?.value || '').trim();
@@ -1085,23 +1059,28 @@ async function saveAnnouncementFromForm() {
   };
 
   if (isEditing) {
-    const { error } = await sbClient
-      .from(TAVERN_BOARD_TABLE)
-      .update({ ...payload, updated_at: new Date().toISOString() })
-      .eq('id', tavernBoardState.editingId)
-      .eq('author_id', getTavernMyUserId());
-    if (error) {
-      if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = `Не удалось сохранить объявление: ${error.message || 'ошибка Supabase'}`;
+    try {
+      await window.vpsApi(`/tavern/announcements/${encodeURIComponent(tavernBoardState.editingId)}`, {
+        method: 'POST',
+        body: payload,
+        timeoutMs: 6000
+      });
+    } catch (error) {
+      if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = `Не удалось сохранить объявление: ${error.message || 'ошибка сервера таверны'}`;
       return;
     }
   } else {
-    const { error } = await sbClient.from(TAVERN_BOARD_TABLE).insert({
-      ...payload,
-      author_id: getTavernMyUserId(),
-      author_name: getTavernMyUserName()
-    });
-    if (error) {
-      if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = `Не удалось создать объявление: ${error.message || 'ошибка Supabase'}`;
+    try {
+      await window.vpsApi('/tavern/announcements', {
+        method: 'POST',
+        body: {
+          ...payload,
+          author_name: getTavernMyUserName()
+        },
+        timeoutMs: 6000
+      });
+    } catch (error) {
+      if (tavernCreateAnnouncementError) tavernCreateAnnouncementError.textContent = `Не удалось создать объявление: ${error.message || 'ошибка сервера таверны'}`;
       return;
     }
   }
@@ -1194,22 +1173,20 @@ async function syncRoomChatFromDb(forceHydrate = false) {
   if (!currentRoomId) return;
   const cachedMessages = readRoomChatCache(currentRoomId);
 
-  if (!sbClient) {
+  if (typeof window.vpsApi !== 'function') {
     if (forceHydrate || !roomChatState.loadedHistory) hydrateRoomChatFromRows(cachedMessages);
     return;
   }
 
   try {
     void cleanupExpiredRoomChatMessagesDb(forceHydrate);
-    const { data, error } = await sbClient
-      .from('room_log')
-      .select('id,text,created_at')
-      .eq('room_id', currentRoomId)
-      .like('text', `${ROOM_CHAT_LOG_PREFIX}%`)
-      .order('created_at', { ascending: true })
-      .limit(500);
-    if (error) throw error;
-    const rows = Array.isArray(data) ? data : [];
+    const payload = await window.vpsApi(`/rooms/${encodeURIComponent(String(currentRoomId))}/rows/room_log?limit=500`, {
+      method: 'GET',
+      timeoutMs: 6000,
+      retries: 0
+    });
+    const rows = (Array.isArray(payload?.rows) ? payload.rows : [])
+      .filter((row) => String(row?.text || '').startsWith(ROOM_CHAT_LOG_PREFIX));
     const decodedRows = rows.map((row) => decodeRoomChatLogRow(row?.text || row)).filter(Boolean);
     const merged = new Map();
     decodedRows.forEach((msg) => { if (msg?.id) merged.set(String(msg.id), msg); });
@@ -1578,9 +1555,6 @@ async function persistRoomChatMessage(message) {
       return payload?.row || null;
     }
     throw new Error('VPS log API is unavailable');
-
-    await sbClient.from('room_log').insert({ room_id: currentRoomId, text: encoded });
-    void cleanupExpiredRoomChatMessagesDb();
   } catch (e) {
     console.warn('persistRoomChatMessage failed', e);
     return null;
@@ -1850,17 +1824,17 @@ if (tavernBoardList) tavernBoardList.addEventListener('click', async (e) => {
   const deleteBtn = e.target?.closest?.('[data-announcement-delete]');
   if (!deleteBtn) return;
   const id = String(deleteBtn.getAttribute('data-announcement-delete') || '');
-  if (!sbClient) {
-    if (tavernBoardError) tavernBoardError.textContent = 'Supabase не подключен. Удаление недоступно.';
+  if (typeof window.vpsApi !== 'function') {
+    if (tavernBoardError) tavernBoardError.textContent = 'Сервер таверны недоступен. Удаление недоступно.';
     return;
   }
-  const { error } = await sbClient
-    .from(TAVERN_BOARD_TABLE)
-    .delete()
-    .eq('id', id)
-    .eq('author_id', getTavernMyUserId());
-  if (error && tavernBoardError) {
-    tavernBoardError.textContent = `Не удалось удалить объявление: ${error.message || 'ошибка Supabase'}`;
+  try {
+    await window.vpsApi(`/tavern/announcements/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      timeoutMs: 6000
+    });
+  } catch (error) {
+    if (tavernBoardError) tavernBoardError.textContent = `Не удалось удалить объявление: ${error.message || 'ошибка сервера таверны'}`;
     return;
   }
   await renderTavernBoard();

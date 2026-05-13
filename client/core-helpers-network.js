@@ -321,8 +321,9 @@ function connectRoomWs(roomId) {
       const session = await ensureVpsSession(String(getAppStorageItem?.('int_user_name') || myNameSpan?.textContent || ''));
       const authToken = String(session?.token || getVpsAuthToken() || '').trim();
       if (!authToken) throw new Error('VPS auth token is missing');
+      const isTavernSocket = rid === '__tavern_lobby__';
       sock.send(JSON.stringify({
-        type: 'joinRoom',
+        type: isTavernSocket ? 'joinTavern' : 'joinRoom',
         roomId: rid,
         authToken,
         userId: String(session?.userId || getAppStorageItem?.('int_user_id') || myId || ''),
@@ -729,7 +730,8 @@ async function vpsApi(path, options = {}) {
   const cleanPath = String(path || '').startsWith('/') ? String(path || '') : `/${String(path || '')}`;
   const method = String(options.method || 'GET').toUpperCase();
   const headers = { ...(options.headers || {}) };
-  if (!headers.Authorization && !headers.authorization && cleanPath !== '/session') {
+  const wantsAuth = options.auth !== false;
+  if (wantsAuth && !headers.Authorization && !headers.authorization && cleanPath !== '/session') {
     let token = getVpsAuthToken();
     if (!token) {
       try {
@@ -754,7 +756,9 @@ async function vpsApi(path, options = {}) {
     headers,
     body
   };
-  const retries = method === 'GET' || method === 'HEAD' ? 2 : 0;
+  const retries = Number.isFinite(Number(options.retries))
+    ? Math.max(0, Math.min(5, Math.trunc(Number(options.retries))))
+    : (method === 'GET' || method === 'HEAD' ? 2 : 0);
 
   try {
     return await fetchVpsJson(`${VPS_API_BASE}${cleanPath}`, requestOptions, {
@@ -762,7 +766,7 @@ async function vpsApi(path, options = {}) {
       timeoutMs: Number(options.timeoutMs) || VPS_API_TIMEOUT_MS
     });
   } catch (error) {
-    if (cleanPath !== '/session' && Number(error?.status) === 401) {
+    if (wantsAuth && cleanPath !== '/session' && Number(error?.status) === 401) {
       removeStoredValue(VPS_AUTH_TOKEN_KEY);
       removeStoredValue(VPS_AUTH_EXPIRES_KEY);
       const session = await ensureVpsSession(getVpsActorName());
@@ -1884,9 +1888,6 @@ async function insertRoomLog(roomId, text) {
       return payload?.row || null;
     }
     throw new Error('VPS log API is unavailable');
-
-    await ensureSupabaseReady();
-    await sbClient.from('room_log').insert({ room_id: roomId, text: t });
   } catch (e) {
     console.warn('room_log insert failed', e);
     return null;
@@ -2137,7 +2138,7 @@ async function sendMessage(msg) {
           try {
             const userId = getVpsActorUserId();
             const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
-            const payload = await vpsApi(`/rooms${query}`, { method: 'GET' });
+            const payload = await vpsApi(`/rooms${query}`, { method: 'GET', timeoutMs: 6000, retries: 0 });
             handleMessage({
               type: "rooms",
               rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
