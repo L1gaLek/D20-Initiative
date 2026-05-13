@@ -521,6 +521,9 @@ const VPS_SESSION_TIMEOUT_MS = 9000;
 const VPS_RETRY_DELAYS_MS = [350, 900];
 let pendingVpsSessionPromise = null;
 let pendingVpsSessionKey = '';
+let pendingRoomsListPromise = null;
+let pendingRoomsListKey = '';
+let lastRoomsListLoadedAt = 0;
 
 function getStoredValue(key) {
   try {
@@ -549,6 +552,47 @@ function removeStoredValue(key) {
 
 function getVpsAuthToken() {
   return getStoredValue(VPS_AUTH_TOKEN_KEY);
+}
+
+function decodeVpsAuthPayload(tokenRaw) {
+  try {
+    const payloadPart = String(tokenRaw || '').split('.')[0] || '';
+    if (!payloadPart) return null;
+    const raw = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = raw + '='.repeat((4 - (raw.length % 4)) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function getStoredVpsSessionExpiresAt(tokenRaw = '') {
+  const stored = getStoredValue(VPS_AUTH_EXPIRES_KEY);
+  const storedMs = stored ? Date.parse(stored) : 0;
+  if (Number.isFinite(storedMs) && storedMs > 0) return { iso: stored, ms: storedMs };
+
+  const payload = decodeVpsAuthPayload(tokenRaw || getVpsAuthToken());
+  const expMs = Math.trunc(Number(payload?.exp || 0)) * 1000;
+  if (Number.isFinite(expMs) && expMs > 0) {
+    return { iso: new Date(expMs).toISOString(), ms: expMs };
+  }
+
+  return { iso: '', ms: 0 };
+}
+
+function getCachedVpsSession(minTtlMs = 5 * 60 * 1000) {
+  const token = getVpsAuthToken();
+  const userId = getStoredValue('int_user_id');
+  if (!token || !userId) return null;
+
+  const expires = getStoredVpsSessionExpiresAt(token);
+  if (expires.ms && expires.ms <= Date.now() + Math.max(0, Number(minTtlMs) || 0)) return null;
+
+  return {
+    token,
+    userId,
+    expiresAt: expires.iso || getStoredValue(VPS_AUTH_EXPIRES_KEY)
+  };
 }
 
 function getVpsAuthHeaders(headers = {}) {
@@ -652,6 +696,9 @@ async function migrateLegacyCharactersIfNeeded() {
 }
 
 async function ensureVpsSession(userName = '') {
+  const cached = getCachedVpsSession();
+  if (cached) return cached;
+
   const legacyUserId = getStoredValue('int_user_id');
   const body = {
     userName: String(userName || getStoredValue('int_user_name') || '').trim(),
@@ -2135,22 +2182,46 @@ async function sendMessage(msg) {
       // ===== Rooms =====
       case "listRooms": {
         {
+          const userId = getVpsActorUserId();
+          const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+          const requestKey = query || '?';
+          const now = Date.now();
+          if (!msg.force && msg.silent && lastRoomsListLoadedAt && (now - lastRoomsListLoadedAt) < 2000) {
+            break;
+          }
+          if (pendingRoomsListPromise && pendingRoomsListKey === requestKey) {
+            try {
+              await pendingRoomsListPromise;
+            } catch (e) {
+              if (!msg.silent) handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
+            }
+            break;
+          }
+
           try {
-            const userId = getVpsActorUserId();
-            const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
             const timeoutMs = Number(msg.timeoutMs) || 8000;
             const retries = Number.isFinite(Number(msg.retries))
               ? Math.max(0, Math.min(3, Math.trunc(Number(msg.retries))))
               : (msg.silent ? 1 : 0);
-            const payload = await vpsApi(`/rooms${query}`, { method: 'GET', timeoutMs, retries });
-            handleMessage({
-              type: "rooms",
-              rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
-              totalUsers: Number(payload.totalUsers) || 0
-            });
+            pendingRoomsListKey = requestKey;
+            pendingRoomsListPromise = (async () => {
+              const payload = await vpsApi(`/rooms${query}`, { method: 'GET', timeoutMs, retries });
+              handleMessage({
+                type: "rooms",
+                rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
+                totalUsers: Number(payload.totalUsers) || 0
+              });
+              lastRoomsListLoadedAt = Date.now();
+            })();
+            await pendingRoomsListPromise;
           } catch (e) {
             if (msg.silent) console.warn('background listRooms failed', e);
             else handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
+          } finally {
+            if (pendingRoomsListKey === requestKey) {
+              pendingRoomsListPromise = null;
+              pendingRoomsListKey = '';
+            }
           }
           break;
         }
