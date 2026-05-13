@@ -10,9 +10,56 @@ function normalizeRoomsErrorText(text) {
   return String(text || 'Ошибка');
 }
 
+function getLobbyRoomId(room) {
+  return String(room?.id || room?.roomId || room?.room_id || '').trim();
+}
+
+function getLobbyRoomsSnapshot() {
+  try {
+    const snapshot = window.__lastRoomsSnapshot || {};
+    return {
+      rooms: Array.isArray(snapshot.rooms) ? snapshot.rooms.slice() : [],
+      totalUsers: Number(snapshot.totalUsers || 0) || 0
+    };
+  } catch {
+    return { rooms: [], totalUsers: 0 };
+  }
+}
+
+function rememberLobbyRoomsSnapshot(rooms, totalUsers) {
+  try {
+    window.__lastRoomsSnapshot = {
+      rooms: Array.isArray(rooms) ? rooms.slice() : [],
+      totalUsers: Number(totalUsers || 0) || 0,
+      updatedAt: Date.now()
+    };
+  } catch {}
+}
+
+function mergeLobbyRoomSnapshot(room, options = {}) {
+  const roomId = getLobbyRoomId(room);
+  if (!roomId) return false;
+  const snapshot = getLobbyRoomsSnapshot();
+  const nextRooms = [
+    room,
+    ...snapshot.rooms.filter((item) => getLobbyRoomId(item) !== roomId)
+  ];
+  const requestedTotal = Number(options?.totalUsers);
+  const totalUsers = Number.isFinite(requestedTotal)
+    ? Math.max(Number(snapshot.totalUsers || 0) || 0, requestedTotal)
+    : snapshot.totalUsers;
+  handleMessage({ type: 'rooms', rooms: nextRooms, totalUsers });
+  return true;
+}
+
+try { window.getLobbyRoomsSnapshot = getLobbyRoomsSnapshot; } catch {}
+try { window.mergeLobbyRoomSnapshot = mergeLobbyRoomSnapshot; } catch {}
+
 function handleRoomsMessage(msg) {
   if (!(msg?.type === 'rooms' && Array.isArray(msg.rooms))) return false;
-  try { window.SERVER_TOTAL_USERS = Number(msg.totalUsers || 0) || 0; } catch {}
+  const totalUsers = Number(msg.totalUsers || 0) || 0;
+  try { window.SERVER_TOTAL_USERS = totalUsers; } catch {}
+  rememberLobbyRoomsSnapshot(msg.rooms, totalUsers);
   renderRooms(msg.rooms);
   if (!currentRoomId && diceViz) diceViz.style.display = 'none';
   return true;
