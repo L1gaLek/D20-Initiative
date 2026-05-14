@@ -1072,7 +1072,7 @@ function openTokenMini(playerId) {
   card.dataset.sidePanel = '';
   card.innerHTML = `
     <div class="token-mini-main">
-      <div class="title">${String(p.name || 'Персонаж')}</div>
+      <div class="title">${escapeHtmlLocal(String(p.name || 'Персонаж'))}</div>
       <div class="section">
         <div class="section-title">Здоровье</div>
         <div class="hp-fields">

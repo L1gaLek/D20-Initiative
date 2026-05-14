@@ -1,4 +1,13 @@
 // ================== DICE (from the bottom-left panel) ==================
+function escapeGameplayHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 rollBtn?.addEventListener('click', async () => {
   if (diceAnimBusy) return;
   diceAnimBusy = true;
@@ -245,14 +254,15 @@ function openCampaignSavesOverlay(list, onPick) {
     const row = document.createElement('div');
     row.className = 'saved-bases-row';
     const created = it.created_at ? new Date(it.created_at).toLocaleString() : '';
+    const saveId = escapeGameplayHtml(it.id);
     row.innerHTML = `
       <div class="saved-bases-row-main" style="flex:1;">
-        <div class="saved-bases-row-name">${String(it.name || 'Без названия')}</div>
-        <div class="saved-bases-row-meta">${created}</div>
+        <div class="saved-bases-row-name">${escapeGameplayHtml(it.name || 'Без названия')}</div>
+        <div class="saved-bases-row-meta">${escapeGameplayHtml(created)}</div>
       </div>
       <div style="display:flex; gap:8px;">
-        <button type="button" data-pick="${it.id}">Загрузить</button>
-        <button type="button" data-del="${it.id}">Удалить</button>
+        <button type="button" data-pick="${saveId}">Загрузить</button>
+        <button type="button" data-del="${saveId}">Удалить</button>
       </div>
     `;
 
