@@ -771,7 +771,7 @@ async function ensureMonstersLibrary() {
 // ================== MAP BACKGROUND (GM) ==================
 const BOARD_BG_BUCKET = 'room-board-bg';
 const BOARD_BG_PREFIX = 'board-bg';
-const BOARD_BG_UPLOAD_ENDPOINT = 'https://ws.d20-initiative.fun/api/uploads/room-board-bg';
+const BOARD_BG_UPLOAD_ENDPOINT = String(window.D20_CONFIG?.boardBgUploadEndpoint || window.BOARD_BG_UPLOAD_ENDPOINT || '').trim();
 const BOARD_BG_MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 const BOARD_BG_ALLOWED_TYPES = new Set([
   'image/png',
@@ -1315,13 +1315,11 @@ joinBtn.addEventListener('click', async () => {
 
   // ===== Supabase init (GitHub Pages) =====
   if (!window.supabase || !window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
-    loginError.textContent = "Supabase не настроен. Проверьте SUPABASE_URL и SUPABASE_ANON_KEY в index.html";
+    loginError.textContent = "Supabase не настроен. Проверьте client/app-config.js";
     return;
   }
 
 if (!sbClient) sbClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-
-window.SUPABASE_FETCH_FN = "fetch";
   
   let session = null;
   try {

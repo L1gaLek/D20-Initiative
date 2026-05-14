@@ -13,7 +13,7 @@
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
   const BUCKET = "room-audio"; // legacy fallback для старых path-треков
   const SIGNED_URL_TTL_SEC = 60 * 60 * 6; // 6h (legacy fallback)
-  const DEFAULT_UPLOAD_ENDPOINT = "https://ws.d20-initiative.fun/api/uploads/room-audio";
+  const DEFAULT_UPLOAD_ENDPOINT = String(window.D20_CONFIG?.bgmUploadEndpoint || window.BGM_UPLOAD_ENDPOINT || "").trim();
   const DIAG_KEY = "int_bg_music_diag";
 
   function isDiagEnabled() {

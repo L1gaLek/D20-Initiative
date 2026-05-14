@@ -501,6 +501,10 @@ try { window.getWsRoomId = () => String(wsRoomId || ''); } catch {}
 
 const VPS_API_BASE = (() => {
   try {
+    const configured = String(window.D20_CONFIG?.vpsApiBase || window.VPS_API_BASE || '').trim();
+    if (configured) return configured.replace(/\/+$/g, '');
+  } catch {}
+  try {
     const wsUrl = String(typeof WS_URL !== 'undefined' ? WS_URL : '').trim();
     if (wsUrl) {
       return wsUrl
@@ -510,7 +514,7 @@ const VPS_API_BASE = (() => {
         .replace(/\/+$/g, '');
     }
   } catch {}
-  return 'https://ws.d20-initiative.fun/api';
+  return '';
 })();
 
 const VPS_AUTH_TOKEN_KEY = 'int_auth_token';
