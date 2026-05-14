@@ -864,7 +864,7 @@ async function deleteCampaignSave(saveId) {
 // ================== OPTIONAL VPS WEBSOCKET RELAY ==================
 // Supabase remains the source of truth for DB/storage.
 // This WS layer is used as a low-latency relay via the user's VPS.
-const WS_URL = "wss://ws.d20-initiative.fun/ws/";
+const WS_URL = String(window.D20_CONFIG?.wsUrl || window.WS_URL || "").trim();
 const USE_SUPABASE_REALTIME = false; // realtime идет через VPS WS, не через Supabase Realtime
 let roomMembersPollTimer = null;
 const WS_CLIENT_ID = (() => {
