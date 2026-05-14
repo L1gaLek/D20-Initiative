@@ -1,4 +1,13 @@
 // ================== ROOMS LOBBY UI ==================
+function escapeRoomHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function getRoomPasswordBadge(hasPassword) {
   const protectedRoom = !!hasPassword;
   const icon = protectedRoom ? '🔒' : '🔓';
@@ -117,8 +126,8 @@ function renderRooms(rooms) {
       meta.className = 'lobby-room-card__meta';
       meta.innerHTML =
         `Пользователей: ${Number(r.uniqueUsers) || 0} • Пароль: ${getRoomPasswordBadge(!!r.hasPassword)}`
-        + (r.scenario ? ` • Сценарий: ${escapeHtmlLite(r.scenario)}` : '')
-        + (r.ownerName ? ` • Владелец: ${escapeHtmlLite(r.ownerName)}` : '')
+        + (r.scenario ? ` • Сценарий: ${escapeRoomHtml(r.scenario)}` : '')
+        + (r.ownerName ? ` • Владелец: ${escapeRoomHtml(r.ownerName)}` : '')
         + (r.isMine ? ' • <strong>Моя комната</strong>' : '');
 
       left.appendChild(title);
@@ -174,36 +183,20 @@ function renderRooms(rooms) {
 const ROOM_PASSWORDS_LS_KEY = 'int_room_passwords_cache';
 let lastJoinAttempt = { roomId: '', role: '', password: '', hadPassword: false, roomName: '' };
 
-function readRoomPasswordsCache() {
+function clearRoomPasswordsCache() {
   try {
-    const raw = (typeof getAppStorageItem === 'function' ? getAppStorageItem(ROOM_PASSWORDS_LS_KEY) : localStorage.getItem(ROOM_PASSWORDS_LS_KEY));
-    const data = raw ? JSON.parse(raw) : {};
-    return (data && typeof data === 'object') ? data : {};
-  } catch {
-    return {};
-  }
+    if (typeof removeAppStorageItem === 'function') removeAppStorageItem(ROOM_PASSWORDS_LS_KEY);
+    else localStorage.removeItem(ROOM_PASSWORDS_LS_KEY);
+  } catch {}
 }
 
 function getRememberedRoomPassword(roomId) {
-  try {
-    const rid = String(roomId || '').trim();
-    if (!rid) return '';
-    const cache = readRoomPasswordsCache();
-    return String(cache[rid] || '');
-  } catch {
-    return '';
-  }
+  clearRoomPasswordsCache();
+  return '';
 }
 
 function rememberRoomPassword(roomId, password) {
-  try {
-    const rid = String(roomId || '').trim();
-    const pw = String(password || '');
-    if (!rid || !pw) return;
-    const cache = readRoomPasswordsCache();
-    cache[rid] = pw;
-    (typeof setAppStorageItem === 'function' ? setAppStorageItem(ROOM_PASSWORDS_LS_KEY, JSON.stringify(cache)) : localStorage.setItem(ROOM_PASSWORDS_LS_KEY, JSON.stringify(cache)));
-  } catch {}
+  clearRoomPasswordsCache();
 }
 
 function showRoomAccessPopup(message, title = 'Ошибка входа') {
