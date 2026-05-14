@@ -874,21 +874,9 @@
   </div>
 </div>
 
-<!-- Supabase (realtime + DB). Configure in the block below. -->
+<!-- App config + Supabase client. -->
+<script src="client/app-config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-  // === SUPABASE CONFIG (fill these) ===
-  // Project URL: Supabase Dashboard -> Project Settings -> API -> Project URL
-  window.SUPABASE_URL = "https://iwtxisgxikbddzqwpzsk.supabase.co";
-  // anon public key: Supabase Dashboard -> Project Settings -> API -> anon public
-  window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3dHhpc2d4aWtiZGR6cXdwenNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1ODM5ODEsImV4cCI6MjA4NjE1OTk4MX0.gLCl7G-J8WvEVMcfQgzDRe-NCfrzCMLOFZ-51Ph5QRM";
-  // Optional: Edge Function URL for CORS proxy ( spell pages)
-  // Example: https://<project-ref>.functions.supabase.co/fetch
-  window.SUPABASE_FETCH_FN = "fetch";
-  // Optional: VPS endpoint for room audio uploads/deletes (multipart POST / DELETE)
-  // Важно для GitHub Pages: здесь должен быть URL backend/VPS, а не относительный путь.
-  window.BGM_UPLOAD_ENDPOINT = "https://ws.d20-initiative.fun/api/uploads/room-audio";
-</script>
 
   <script src="controlbox.js"></script>
   <script src="monsters-library.js"></script>
