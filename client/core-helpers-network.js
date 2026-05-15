@@ -1589,12 +1589,8 @@ async function insertRoomLog(roomId, text) {
     const t = String(text || '').trim();
     const rid = String(roomId || '').trim();
     if (!rid || !t) return null;
-    if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
-      const userId = String(window.getVpsActorUserId?.() || getAppStorageItem?.('int_user_id') || '').trim();
-      const payload = await window.vpsApi(`/rooms/${encodeURIComponent(rid)}/log`, {
-        method: 'POST',
-        body: { userId, text: t }
-      });
+    if (typeof window !== 'undefined' && typeof window.RoomRowsApi?.insertLog === 'function') {
+      const payload = await window.RoomRowsApi.insertLog(rid, { text: t });
       return payload?.row || null;
     }
     throw new Error('VPS log API is unavailable');
@@ -1649,63 +1645,14 @@ try { window.buildDiceLogText = buildDiceLogText; } catch {}
 async function insertDiceEvent(roomId, ev) {
   try {
     if (!roomId || !ev) return;
-    if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
-      const userId = String(window.getVpsActorUserId?.() || getAppStorageItem?.('int_user_id') || '').trim();
-      const payload = await window.vpsApi(`/rooms/${encodeURIComponent(String(roomId || ''))}/dice`, {
-        method: 'POST',
-        body: { userId, event: ev }
-      });
+    if (typeof window !== 'undefined' && typeof window.RoomRowsApi?.insertDiceEvent === 'function') {
+      const payload = await window.RoomRowsApi.insertDiceEvent(roomId, { event: ev });
       if (payload?.event && typeof payload.event === 'object') {
         Object.assign(ev, payload.event);
       }
       return payload || null;
     }
     throw new Error('VPS dice API is unavailable');
-
-    await ensureSupabaseReady();
-    // Prefer RPC (transaction: dice + log)
-    const args = {
-      p_room_id: roomId,
-      p_from_id: String(ev.fromId || ''),
-      p_from_name: String(ev.fromName || ''),
-      p_kind_text: String(ev.kindText || ''),
-      p_sides: Number(ev.sides) || null,
-      p_count: Number(ev.count) || null,
-      p_bonus: Number(ev.bonus) || 0,
-      p_rolls: Array.isArray(ev.rolls) ? ev.rolls.map(n => Number(n) || 0) : [],
-      p_total: Number(ev.total) || null,
-      p_crit: String(ev.crit || '')
-    };
-    try {
-      const { error } = await sbClient.rpc('add_dice_event', args);
-      if (!error) return;
-    } catch {}
-    // fallback (no RPC): insert dice row + a matching log line
-    await sbClient.from('room_dice_events').insert({
-      room_id: roomId,
-      from_id: args.p_from_id,
-      from_name: args.p_from_name,
-      kind_text: args.p_kind_text,
-      sides: args.p_sides,
-      count: args.p_count,
-      bonus: args.p_bonus,
-      rolls: args.p_rolls,
-      total: args.p_total,
-      crit: args.p_crit
-    });
-
-    // log line (roughly same as RPC)
-    try {
-      const who = (args.p_from_name || '').trim() || 'Игрок';
-      const kind = (args.p_kind_text || '').trim() || (args.p_sides ? `d${args.p_sides}` : 'Бросок');
-      const rollsTxt = (Array.isArray(args.p_rolls) && args.p_rolls.length) ? args.p_rolls.join(',') : '';
-      const bonusTxt = (Number(args.p_bonus) === 0) ? '' : (Number(args.p_bonus) > 0 ? `+${Number(args.p_bonus)}` : String(Number(args.p_bonus)));
-      const totalTxt = (args.p_total === null || args.p_total === undefined) ? '' : ` = ${args.p_total}`;
-      const critTxt = (args.p_crit === 'crit-success') ? ' (КРИТ)' : (args.p_crit === 'crit-fail') ? ' (ПРОВАЛ)' : '';
-      const body = rollsTxt ? `${rollsTxt}${bonusTxt}${totalTxt}` : String(args.p_total ?? '');
-      const line = `${who}: ${kind}: ${body}${critTxt}`.trim();
-      if (line) await insertRoomLog(roomId, line);
-    } catch {}
   } catch (e) {
     console.warn('dice insert failed', e);
   }
@@ -1746,9 +1693,9 @@ async function refreshRoomMembers(roomId, opts = {}) {
   if (!roomId) return [];
 
   let data = null;
-  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
+  if (typeof window !== 'undefined' && typeof window.RoomRowsApi?.loadRoomMembers === 'function') {
     try {
-      const payload = await window.vpsApi(`/rooms/${encodeURIComponent(String(roomId))}/rows/room_members`);
+      const payload = await window.RoomRowsApi.loadRoomMembers(roomId);
       data = Array.isArray(payload?.rows) ? payload.rows : [];
     } catch (error) {
       console.warn("room_members VPS load failed, falling back to Supabase", error);
