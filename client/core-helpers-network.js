@@ -2181,7 +2181,7 @@ async function sendMessage(msg) {
       // ===== Saved bases (characters) =====
       case "listSavedBases": {
         try { await migrateLegacyCharactersIfNeeded(); } catch (e) { console.warn('legacy characters migration failed', e); }
-        const payload = await vpsApi('/characters', { method: 'GET' });
+        const payload = await window.CharactersApi.listSavedBases();
         handleMessage({ type: "savedBasesList", list: Array.isArray(payload.list) ? payload.list : [] });
         break;
       }
@@ -2189,12 +2189,9 @@ async function sendMessage(msg) {
       case "saveSavedBase": {
         const sheet = msg.sheet;
         const name = String(sheet?.parsed?.name?.value ?? sheet?.parsed?.name ?? sheet?.parsed?.profile?.name ?? "Персонаж").trim() || "Персонаж";
-        const payload = await vpsApi('/characters', {
-          method: 'POST',
-          body: {
-            name,
-            state: { schemaVersion: 1, savedAt: new Date().toISOString(), data: sheet }
-          }
+        const payload = await window.CharactersApi.saveSavedBase({
+          name,
+          state: { schemaVersion: 1, savedAt: new Date().toISOString(), data: sheet }
         });
         handleMessage({ type: "savedBaseSaved", id: payload?.character?.id, name: payload?.character?.name || name });
         break;
@@ -2203,7 +2200,7 @@ async function sendMessage(msg) {
       case "deleteSavedBase": {
         const savedId = String(msg.savedId || "");
         if (!savedId) return;
-        await vpsApi(`/characters/${encodeURIComponent(savedId)}`, { method: 'DELETE' });
+        await window.CharactersApi.deleteSavedBase(savedId);
         handleMessage({ type: "savedBaseDeleted", savedId });
         break;
       }
@@ -2211,7 +2208,7 @@ async function sendMessage(msg) {
       case "applySavedBase": {
         const savedId = String(msg.savedId || "");
         if (!currentRoomId || !lastState) return;
-        const payload = await vpsApi(`/characters/${encodeURIComponent(savedId)}`, { method: 'GET' });
+        const payload = await window.CharactersApi.getSavedBase(savedId);
         const savedSheet = payload?.character?.state?.data;
         if (!savedSheet) throw new Error("Пустой файл персонажа");
 
