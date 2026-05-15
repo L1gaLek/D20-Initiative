@@ -1846,8 +1846,7 @@ async function sendMessage(msg) {
       case "listRooms": {
         {
           const userId = getVpsActorUserId();
-          const query = userId ? `?userId=${encodeURIComponent(userId)}` : '';
-          const requestKey = query || '?';
+          const requestKey = userId || '?';
           const now = Date.now();
           if (!msg.force && msg.silent && lastRoomsListLoadedAt && (now - lastRoomsListLoadedAt) < 2000) {
             break;
@@ -1868,7 +1867,7 @@ async function sendMessage(msg) {
               : (msg.silent ? 1 : 0);
             pendingRoomsListKey = requestKey;
             pendingRoomsListPromise = (async () => {
-              const payload = await vpsApi(`/rooms${query}`, { method: 'GET', timeoutMs, retries });
+              const payload = await window.RoomsApi.listRooms({ userId, timeoutMs, retries });
               handleMessage({
                 type: "rooms",
                 rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
@@ -1966,16 +1965,13 @@ async function sendMessage(msg) {
           }
           try {
             const initState = createInitialGameState();
-            const payload = await vpsApi('/rooms', {
-              method: 'POST',
-              body: {
-                userId,
-                userName: getVpsActorName(),
-                name: msg.name,
-                scenario: msg.scenario,
-                password: msg.password || '',
-                state: initState
-              }
+            const payload = await window.RoomsApi.createRoom({
+              userId,
+              userName: getVpsActorName(),
+              name: msg.name,
+              scenario: msg.scenario,
+              password: msg.password || '',
+              state: initState
             });
             const createdRoom = payload?.room && typeof payload.room === 'object' ? payload.room : null;
             const createdRoomId = String(createdRoom?.id || '').trim();
@@ -2066,14 +2062,11 @@ async function sendMessage(msg) {
             break;
           }
           try {
-            const payload = await vpsApi(`/rooms/${encodeURIComponent(roomId)}/update`, {
-              method: 'POST',
-              body: {
-                userId,
-                name: msg.name,
-                scenario: msg.scenario,
-                password: msg.password || ''
-              }
+            const payload = await window.RoomsApi.updateRoom(roomId, {
+              userId,
+              name: msg.name,
+              scenario: msg.scenario,
+              password: msg.password || ''
             });
             const roomPayload = payload.room || {
               id: roomId,
@@ -2184,9 +2177,7 @@ async function sendMessage(msg) {
             break;
           }
           try {
-            await vpsApi(`/rooms/${encodeURIComponent(roomId)}?userId=${encodeURIComponent(userId)}`, {
-              method: 'DELETE'
-            });
+            await window.RoomsApi.deleteRoom(roomId, { userId });
 
             if (String(currentRoomId || '') === roomId) {
               try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('deleteRoom cleanup failed', e); }
@@ -2256,10 +2247,7 @@ async function sendMessage(msg) {
           const actorUserId = getVpsActorUserId();
           if (!roomId || !targetUserId || !actorUserId) break;
           try {
-            const payload = await vpsApi(`/rooms/${encodeURIComponent(roomId)}/kick`, {
-              method: 'POST',
-              body: { actorUserId, targetUserId }
-            });
+            const payload = await window.RoomsApi.kickRoomMember(roomId, { actorUserId, targetUserId });
             if (payload.state) {
               try { rememberRoomStateShadow(roomId, payload.state); } catch {}
               try { handleMessage({ type: 'state', state: payload.state }); } catch {}
@@ -2366,10 +2354,7 @@ async function sendMessage(msg) {
           const reason = String(msg.reason || '').trim();
 
           try {
-            const payload = await vpsApi(`/rooms/${encodeURIComponent(roomId)}/ban`, {
-              method: 'POST',
-              body: { actorUserId, targetUserId, hours, minutes, totalMinutes, reason }
-            });
+            const payload = await window.RoomsApi.banRoomMember(roomId, { actorUserId, targetUserId, hours, minutes, totalMinutes, reason });
             if (payload.state) {
               try { rememberRoomStateShadow(roomId, payload.state); } catch {}
               try { handleMessage({ type: 'state', state: payload.state }); } catch {}
@@ -2510,14 +2495,11 @@ async function sendMessage(msg) {
 
           let payload = null;
           try {
-            payload = await vpsApi(`/rooms/${encodeURIComponent(roomId)}/join`, {
-              method: 'POST',
-              body: {
-                userId,
-                userName: getVpsActorName(),
-                role,
-                password: msg.password || ''
-              }
+            payload = await window.RoomsApi.joinRoom(roomId, {
+              userId,
+              userName: getVpsActorName(),
+              role,
+              password: msg.password || ''
             });
           } catch (e) {
             handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room join failed') });
