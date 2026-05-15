@@ -16,14 +16,9 @@ async function loadRoomScopedRows(table, roomId, opts = {}) {
     missingColumn = ''
   } = opts || {};
 
-  if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
-    const params = new URLSearchParams();
-    if (mapId) params.set('mapId', String(mapId));
-    if (Number.isFinite(Number(limit)) && Number(limit) > 0) params.set('limit', String(Number(limit)));
-
+  if (typeof window !== 'undefined' && typeof window.RoomRowsApi?.loadRows === 'function') {
     try {
-      const path = `/rooms/${encodeURIComponent(String(roomId))}/rows/${encodeURIComponent(String(table))}`;
-      const payload = await window.vpsApi(`${path}${params.toString() ? `?${params.toString()}` : ''}`);
+      const payload = await window.RoomRowsApi.loadRows(roomId, table, { mapId, limit });
       if (maybeSingle) return payload?.row ?? (Array.isArray(payload?.rows) ? (payload.rows[0] || null) : null);
       return Array.isArray(payload?.rows) ? payload.rows : [];
     } catch (error) {
