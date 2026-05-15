@@ -152,6 +152,7 @@
       const extra = getBoardViewExtraTransform();
       board.style.transform = extra ? `${extra} scale(${zoom})` : `scale(${zoom})`;
       try { window.refreshOpenTokenMini?.(); } catch {}
+      try { window.BoardMarks?.refreshLocators?.(); } catch {}
     }
     applyZoom();
     window.addEventListener('board-view-mode-changed', () => {
