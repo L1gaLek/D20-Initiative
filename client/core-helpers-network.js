@@ -1844,866 +1844,255 @@ async function sendMessage(msg) {
     switch (type) {
       // ===== Rooms =====
       case "listRooms": {
-        {
-          const userId = getVpsActorUserId();
-          const requestKey = userId || '?';
-          const now = Date.now();
-          if (!msg.force && msg.silent && lastRoomsListLoadedAt && (now - lastRoomsListLoadedAt) < 2000) {
-            break;
-          }
-          if (pendingRoomsListPromise && pendingRoomsListKey === requestKey) {
-            try {
-              await pendingRoomsListPromise;
-            } catch (e) {
-              if (!msg.silent) handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
-            }
-            break;
-          }
-
+        const userId = getVpsActorUserId();
+        const requestKey = userId || '?';
+        const now = Date.now();
+        if (!msg.force && msg.silent && lastRoomsListLoadedAt && (now - lastRoomsListLoadedAt) < 2000) {
+          break;
+        }
+        if (pendingRoomsListPromise && pendingRoomsListKey === requestKey) {
           try {
-            const timeoutMs = Number(msg.timeoutMs) || 8000;
-            const retries = Number.isFinite(Number(msg.retries))
-              ? Math.max(0, Math.min(3, Math.trunc(Number(msg.retries))))
-              : (msg.silent ? 1 : 0);
-            pendingRoomsListKey = requestKey;
-            pendingRoomsListPromise = (async () => {
-              const payload = await window.RoomsApi.listRooms({ userId, timeoutMs, retries });
-              handleMessage({
-                type: "rooms",
-                rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
-                totalUsers: Number(payload.totalUsers) || 0
-              });
-              lastRoomsListLoadedAt = Date.now();
-            })();
             await pendingRoomsListPromise;
           } catch (e) {
-            if (msg.silent) console.warn('background listRooms failed', e);
-            else handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
-          } finally {
-            if (pendingRoomsListKey === requestKey) {
-              pendingRoomsListPromise = null;
-              pendingRoomsListKey = '';
-            }
+            if (!msg.silent) handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
           }
           break;
         }
 
-        const { data, error } = await sbClient
-          .from("rooms")
-          .select("id,name,scenario,created_at,has_password,password_hash")
-          .order("created_at", { ascending: false });
-        if (error) throw error;
-        const myUserId = getCurrentStableUserId();
-
-        const passwordByRoomId = new Map();
         try {
-          (data || []).forEach((row) => {
-            const rid = String(row?.id || '');
-            if (!rid) return;
-            passwordByRoomId.set(rid, !!(row?.has_password || row?.password_hash));
-          });
+          const timeoutMs = Number(msg.timeoutMs) || 8000;
+          const retries = Number.isFinite(Number(msg.retries))
+            ? Math.max(0, Math.min(3, Math.trunc(Number(msg.retries))))
+            : (msg.silent ? 1 : 0);
+          pendingRoomsListKey = requestKey;
+          pendingRoomsListPromise = (async () => {
+            const payload = await window.RoomsApi.listRooms({ userId, timeoutMs, retries });
+            handleMessage({
+              type: "rooms",
+              rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
+              totalUsers: Number(payload.totalUsers) || 0
+            });
+            lastRoomsListLoadedAt = Date.now();
+          })();
+          await pendingRoomsListPromise;
         } catch (e) {
-          console.warn('listRooms password lookup failed', e);
+          if (msg.silent) console.warn('background listRooms failed', e);
+          else handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Rooms list failed') });
+        } finally {
+          if (pendingRoomsListKey === requestKey) {
+            pendingRoomsListPromise = null;
+            pendingRoomsListKey = '';
+          }
         }
-
-        let ownership = new Map();
-        try {
-          ownership = await loadRoomOwnershipMap();
-        } catch (e) {
-          console.warn('listRooms ownership lookup failed', e);
-        }
-
-        // Unique users per room + total unique users on server (across all rooms)
-        let members = [];
-        try {
-          const { data: m, error: me } = await sbClient
-            .from("room_members")
-            .select("room_id,user_id,role");
-          if (!me) members = m || [];
-        } catch {}
-
-        const perRoom = new Map(); // roomId -> Set(userId)
-        const gmByRoom = new Map(); // roomId -> userId
-        const allUsers = new Set();
-        for (const row of (members || [])) {
-          const rid = String(row?.room_id || '');
-          const uid = String(row?.user_id || '');
-          if (!rid || !uid) continue;
-          allUsers.add(uid);
-          if (!perRoom.has(rid)) perRoom.set(rid, new Set());
-          perRoom.get(rid).add(uid);
-          if (normalizeRoleForDb(row?.role) === 'GM' && !gmByRoom.has(rid)) gmByRoom.set(rid, uid);
-        }
-
-        const rooms = (data || []).map(r => {
-          const rid = String(r.id);
-          const s = perRoom.get(rid);
-          const gmUserId = String(gmByRoom.get(rid) || '');
-          return {
-            ...r,
-            uniqueUsers: s ? s.size : 0,
-            hasGM: !!gmUserId,
-            has_gm: !!gmUserId,
-            isMyGMSeat: !!myUserId && !!gmUserId && gmUserId === myUserId,
-            hasPassword: !!passwordByRoomId.get(rid),
-            ownerId: String(ownership.get(rid)?.ownerId || ''),
-            ownerName: String(ownership.get(rid)?.ownerName || ''),
-            isMine: !!myUserId && String(ownership.get(rid)?.ownerId || '') === myUserId
-          };
-        });
-
-        handleMessage({ type: "rooms", rooms, totalUsers: allUsers.size });
         break;
       }
 
       case "createRoom": {
-        {
-          const userId = getVpsActorUserId();
-          if (!userId) {
-            handleMessage({ type: 'roomsError', message: 'Login is required before creating a room.' });
-            break;
-          }
-          try {
-            const initState = createInitialGameState();
-            const payload = await window.RoomsApi.createRoom({
-              userId,
-              userName: getVpsActorName(),
-              name: msg.name,
-              scenario: msg.scenario,
-              password: msg.password || '',
-              state: initState
-            });
-            const createdRoom = payload?.room && typeof payload.room === 'object' ? payload.room : null;
-            const createdRoomId = String(createdRoom?.id || '').trim();
-            if (createdRoom) {
-              try {
-                window.mergeLobbyRoomSnapshot?.(createdRoom, { totalUsers: Number(payload?.totalUsers || 0) || 0 });
-              } catch {}
-            }
-            try {
-              if (createdRoomId) {
-                Promise.resolve()
-                  .then(() => ensureDetachedBootstrap(createdRoomId, payload.state || initState))
-                  .catch((e) => console.warn('detached bootstrap createRoom failed', e));
-              }
-            } catch (e) {
-              console.warn('detached bootstrap createRoom failed', e);
-            }
-            setTimeout(() => {
-              try {
-                sendMessage({ type: "listRooms", silent: true, retries: 1, timeoutMs: 10000 });
-              } catch (e) {
-                console.warn('background rooms refresh schedule failed', e);
-              }
-            }, 250);
-          } catch (e) {
-            if (Number(e?.status) === 409) {
-              try { sendMessage({ type: "listRooms", silent: true, retries: 1, timeoutMs: 10000 }); } catch {}
-            }
-            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room create failed') });
-          }
+        const userId = getVpsActorUserId();
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Login is required before creating a room.' });
           break;
         }
-
-        const userId = getCurrentStableUserId();
-        if (!userId) {
-          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
-          return;
+        try {
+          const initState = createInitialGameState();
+          const payload = await window.RoomsApi.createRoom({
+            userId,
+            userName: getVpsActorName(),
+            name: msg.name,
+            scenario: msg.scenario,
+            password: msg.password || '',
+            state: initState
+          });
+          const createdRoom = payload?.room && typeof payload.room === 'object' ? payload.room : null;
+          const createdRoomId = String(createdRoom?.id || '').trim();
+          if (createdRoom) {
+            try {
+              window.mergeLobbyRoomSnapshot?.(createdRoom, { totalUsers: Number(payload?.totalUsers || 0) || 0 });
+            } catch {}
+          }
+          try {
+            if (createdRoomId) {
+              Promise.resolve()
+                .then(() => ensureDetachedBootstrap(createdRoomId, payload.state || initState))
+                .catch((e) => console.warn('detached bootstrap createRoom failed', e));
+            }
+          } catch (e) {
+            console.warn('detached bootstrap createRoom failed', e);
+          }
+          setTimeout(() => {
+            try {
+              sendMessage({ type: "listRooms", silent: true, retries: 1, timeoutMs: 10000 });
+            } catch (e) {
+              console.warn('background rooms refresh schedule failed', e);
+            }
+          }, 250);
+        } catch (e) {
+          if (Number(e?.status) === 409) {
+            try { sendMessage({ type: "listRooms", silent: true, retries: 1, timeoutMs: 10000 }); } catch {}
+          }
+          handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room create failed') });
         }
-        const existingOwnedRoom = await findOwnedRoomByUserId(userId);
-        if (existingOwnedRoom) {
-          handleMessage({ type: 'roomsError', message: 'Вы уже создали комнату. Можно управлять только одной комнатой на пользователя.' });
-          return;
-        }
-
-        const roomId = (crypto?.randomUUID ? crypto.randomUUID() : ("r-" + Math.random().toString(16).slice(2)));
-        const name = String(msg.name || "Комната").trim() || "Комната";
-        const scenario = String(msg.scenario || "");
-        const password = normalizeRoomPassword(msg.password || '');
-        const roomPasswordHash = password ? await sha256Hex(password) : '';
-        const { error: e1 } = await sbClient.from("rooms").insert({
-          id: roomId,
-          name,
-          scenario,
-          has_password: !!password,
-          password_hash: roomPasswordHash || null
-        });
-        if (e1) throw e1;
-
-        const initState = createInitialGameState();
-        initState.roomAccess = await buildRoomAccessState(password, initState);
-        initState.roomMeta = {
-          ownerId: userId,
-          ownerName: safeGetUserName(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        const { error: e2 } = await sbClient.from("room_state").insert({
-          room_id: roomId,
-          phase: initState.phase,
-          current_actor_id: null,
-          state: initState
-        });
-        if (e2) throw e2;
-        try { await ensureDetachedBootstrap(roomId, initState); } catch (e) { console.warn('detached bootstrap createRoom failed', e); }
-
-        // refresh list
-        await sendMessage({ type: "listRooms" });
         break;
       }
 
       case "updateRoom": {
-        {
-          const roomId = String(msg.roomId || '').trim();
-          const userId = getVpsActorUserId();
-          if (!roomId) break;
-          if (!userId) {
-            handleMessage({ type: 'roomsError', message: 'Login is required before updating a room.' });
-            break;
-          }
-          try {
-            const payload = await window.RoomsApi.updateRoom(roomId, {
-              userId,
-              name: msg.name,
-              scenario: msg.scenario,
-              password: msg.password || ''
-            });
-            const roomPayload = payload.room || {
-              id: roomId,
-              name: String(msg.name || ''),
-              scenario: String(msg.scenario || '')
-            };
-            if (String(currentRoomId || '') === roomId) {
-              try {
-                if (myRoomSpan) myRoomSpan.textContent = String(roomPayload.name || msg.name || '');
-                if (myScenarioSpan) myScenarioSpan.textContent = String(roomPayload.scenario || msg.scenario || '-');
-              } catch {}
-              if (payload.state) {
-                try { handleMessage({ type: 'state', state: payload.state }); } catch {}
-              }
-            }
-            try { handleMessage({ type: 'roomUpdated', room: roomPayload }); } catch {}
-            await sendMessage({ type: 'listRooms' });
-          } catch (e) {
-            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room update failed') });
-          }
+        const roomId = String(msg.roomId || '').trim();
+        const userId = getVpsActorUserId();
+        if (!roomId) break;
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Login is required before updating a room.' });
           break;
         }
-
-        const roomId = String(msg.roomId || '').trim();
-        const userId = getCurrentStableUserId();
-        if (!roomId) return;
-        if (!userId) {
-          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
-          return;
-        }
-
-        const ownership = await requireOwnedRoom(roomId, userId);
-        if (!ownership.ok) {
-          handleMessage({ type: 'roomsError', message: ownership.message });
-          return;
-        }
-
-        const name = String(msg.name || 'Комната').trim() || 'Комната';
-        const scenario = String(msg.scenario || '').trim();
-        const password = normalizeRoomPassword(msg.password || '');
-        const roomPasswordHash = password ? await sha256Hex(password) : '';
-
-        const { error: updRoomErr } = await sbClient
-          .from('rooms')
-          .update({
-            name,
-            scenario,
-            has_password: !!password,
-            password_hash: roomPasswordHash || null
-          })
-          .eq('id', roomId);
-        if (updRoomErr) throw updRoomErr;
-
-        const nextState = deepClone(ownership.stateRow?.state || createInitialGameState());
-        if (!nextState.roomAccess || typeof nextState.roomAccess !== 'object') nextState.roomAccess = {};
-        nextState.roomAccess.hasPassword = !!password;
-        nextState.roomAccess.passwordHash = roomPasswordHash || '';
-        if (!nextState.roomMeta || typeof nextState.roomMeta !== 'object') nextState.roomMeta = {};
-        nextState.roomMeta.ownerId = String(ownership.meta?.ownerId || userId);
-        nextState.roomMeta.ownerName = String(ownership.meta?.ownerName || safeGetUserName());
-        nextState.roomMeta.createdAt = String(ownership.meta?.createdAt || nextState.roomMeta.createdAt || new Date().toISOString());
-        nextState.roomMeta.updatedAt = new Date().toISOString();
-
-        const { error: updStateErr } = await sbClient
-          .from('room_state')
-          .update({
-            phase: String(ownership.stateRow?.phase || nextState?.phase || 'lobby'),
-            current_actor_id: (typeof ownership.stateRow?.current_actor_id !== 'undefined')
-              ? ownership.stateRow.current_actor_id
-              : null,
-            state: nextState
-          })
-          .eq('room_id', roomId);
-        if (updStateErr) throw updStateErr;
-
-        if (String(currentRoomId || '') === roomId) {
-          try {
-            if (myRoomSpan) myRoomSpan.textContent = name;
-            if (myScenarioSpan) myScenarioSpan.textContent = scenario || '-';
-          } catch {}
-        }
         try {
-          const roomPayload = {
+          const payload = await window.RoomsApi.updateRoom(roomId, {
+            userId,
+            name: msg.name,
+            scenario: msg.scenario,
+            password: msg.password || ''
+          });
+          const roomPayload = payload.room || {
             id: roomId,
-            name,
-            scenario,
-            hasPassword: !!password,
-            ownerId: String(nextState?.roomMeta?.ownerId || userId),
-            ownerName: String(nextState?.roomMeta?.ownerName || safeGetUserName())
+            name: String(msg.name || ''),
+            scenario: String(msg.scenario || '')
           };
-          handleMessage({ type: 'roomUpdated', room: roomPayload });
-          sendWsEnvelope({ type: 'roomUpdated', roomId, room: roomPayload }, { optimisticApplied: true });
+          if (String(currentRoomId || '') === roomId) {
+            try {
+              if (myRoomSpan) myRoomSpan.textContent = String(roomPayload.name || msg.name || '');
+              if (myScenarioSpan) myScenarioSpan.textContent = String(roomPayload.scenario || msg.scenario || '-');
+            } catch {}
+            if (payload.state) {
+              try { handleMessage({ type: 'state', state: payload.state }); } catch {}
+            }
+          }
+          try { handleMessage({ type: 'roomUpdated', room: roomPayload }); } catch {}
+          await sendMessage({ type: 'listRooms' });
         } catch (e) {
-          console.warn('roomUpdated relay failed', e);
+          handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room update failed') });
         }
-
-        await sendMessage({ type: 'listRooms' });
         break;
       }
 
       case "deleteRoom": {
-        {
-          const roomId = String(msg.roomId || '').trim();
-          const userId = getVpsActorUserId();
-          if (!roomId) break;
-          if (!userId) {
-            handleMessage({ type: 'roomsError', message: 'Login is required before deleting a room.' });
-            break;
-          }
-          try {
-            await window.RoomsApi.deleteRoom(roomId, { userId });
-
-            if (String(currentRoomId || '') === roomId) {
-              try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('deleteRoom cleanup failed', e); }
-              try { stopHeartbeat(); } catch {}
-              try { stopMembersPolling(); } catch {}
-              try { await stopSupabaseRealtimeChannels(); } catch {}
-              try { window.stopRoomChatSync?.(); } catch {}
-              currentRoomId = null;
-            }
-
-            await sendMessage({ type: 'listRooms' });
-          } catch (e) {
-            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room delete failed') });
-          }
+        const roomId = String(msg.roomId || '').trim();
+        const userId = getVpsActorUserId();
+        if (!roomId) break;
+        if (!userId) {
+          handleMessage({ type: 'roomsError', message: 'Login is required before deleting a room.' });
           break;
         }
-
-        const roomId = String(msg.roomId || '').trim();
-        const userId = getCurrentStableUserId();
-        if (!roomId) return;
-        if (!userId) {
-          handleMessage({ type: 'roomsError', message: 'Сначала войдите в таверну.' });
-          return;
-        }
-
-        const ownership = await requireOwnedRoom(roomId, userId);
-        if (!ownership.ok) {
-          handleMessage({ type: 'roomsError', message: ownership.message });
-          return;
-        }
-        const { data: roomRow, error: roomErr } = await sbClient
-          .from('rooms')
-          .select('name')
-          .eq('id', roomId)
-          .maybeSingle();
-        if (roomErr) throw roomErr;
-
         try {
-          const roomName = String(roomRow?.name || msg.roomName || '');
-          sendWsEnvelope({
-            type: 'roomDeleted',
-            roomId,
-            roomName: roomName || String(msg.roomName || 'Комната')
-          }, { optimisticApplied: true });
+          await window.RoomsApi.deleteRoom(roomId, { userId });
+
+          if (String(currentRoomId || '') === roomId) {
+            try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('deleteRoom cleanup failed', e); }
+            try { stopHeartbeat(); } catch {}
+            try { stopMembersPolling(); } catch {}
+            try { await stopSupabaseRealtimeChannels(); } catch {}
+            try { window.stopRoomChatSync?.(); } catch {}
+            currentRoomId = null;
+          }
+
+          await sendMessage({ type: 'listRooms' });
         } catch (e) {
-          console.warn('roomDeleted relay failed', e);
+          handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room delete failed') });
         }
-
-        if (String(currentRoomId || '') === roomId) {
-          try { await window.__leaveCurrentRoomCleanup?.(); } catch (e) { console.warn('deleteRoom cleanup failed', e); }
-          try { stopHeartbeat(); } catch {}
-          try { stopMembersPolling(); } catch {}
-          try { await stopSupabaseRealtimeChannels(); } catch {}
-          try { window.stopRoomChatSync?.(); } catch {}
-          currentRoomId = null;
-        }
-
-        await deleteRoomCascade(roomId);
-        await sendMessage({ type: 'listRooms' });
         break;
       }
 
       case "kickRoomUser": {
-        {
-          const roomId = String(currentRoomId || msg.roomId || '').trim();
-          const targetUserId = String(msg.targetUserId || '').trim();
-          const actorUserId = getVpsActorUserId();
-          if (!roomId || !targetUserId || !actorUserId) break;
-          try {
-            const payload = await window.RoomsApi.kickRoomMember(roomId, { actorUserId, targetUserId });
-            if (payload.state) {
-              try { rememberRoomStateShadow(roomId, payload.state); } catch {}
-              try { handleMessage({ type: 'state', state: payload.state }); } catch {}
-            }
-            if (payload.moderationEvent) {
-              try { handleMessage({ type: 'moderationEvent', event: payload.moderationEvent }); } catch {}
-            }
-            const removedIds = Array.isArray(payload.removedTokenIds) ? payload.removedTokenIds.filter(Boolean) : [];
-            removedIds.forEach((tokenId) => {
-              try { handleMessage({ type: 'tokenRowDeleted', row: { room_id: roomId, token_id: String(tokenId) } }); } catch {}
-            });
-            await refreshRoomMembers(roomId, { broadcast: false });
-          } catch (e) {
-            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Kick failed') });
-          }
-          break;
-        }
-
         const roomId = String(currentRoomId || msg.roomId || '').trim();
         const targetUserId = String(msg.targetUserId || '').trim();
-        if (!roomId || !targetUserId) return;
-        if (String(getAppStorageItem('int_user_role') || myRole || '') !== 'GM') return;
-
-        const { data: room, error: roomErr } = await sbClient.from('rooms').select('id,name').eq('id', roomId).maybeSingle();
-        if (roomErr) throw roomErr;
-        const { data: rs, error: rsErr } = await sbClient.from('room_state').select('*').eq('room_id', roomId).maybeSingle();
-        if (rsErr) throw rsErr;
-        if (!rs) return;
-
-        let nextState = deepClone(rs.state || createInitialGameState());
-        const removedKick = removeRoomUserOwnedPlayers(nextState, targetUserId);
-        nextState = removedKick.state;
-        const moderationEvent = {
-          id: (crypto?.randomUUID ? crypto.randomUUID() : ('mod-' + Math.random().toString(16).slice(2))),
-          type: 'kick',
-          targetUserId,
-          roomId,
-          roomName: String(room?.name || msg.roomName || 'Комната'),
-          reason: '',
-          bannedUntil: null,
-          createdAt: new Date().toISOString(),
-          actorUserId: String(getAppStorageItem('int_user_id') || myId || ''),
-          actorName: safeGetUserName()
-        };
-        nextState = withRoomModerationEvent(nextState, moderationEvent);
-
-        const currentActorKick = (typeof nextState?.current_actor_id !== 'undefined')
-          ? nextState.current_actor_id
-          : ((typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null);
-        const { error: updErr } = await sbClient.from('room_state').update({
-          phase: String(rs?.phase || nextState?.phase || 'lobby'),
-          current_actor_id: currentActorKick,
-          state: nextState
-        }).eq('room_id', roomId);
-        if (updErr) throw updErr;
-
+        const actorUserId = getVpsActorUserId();
+        if (!roomId || !targetUserId || !actorUserId) break;
         try {
-          await ensureSupabaseReady();
-          const removedIds = Array.isArray(removedKick?.removedPlayerIds) ? removedKick.removedPlayerIds.filter(Boolean) : [];
-          for (const tokenId of removedIds) {
-            try {
-              sendWsEnvelope({ type: 'tokenRowDeleted', roomId, row: { room_id: roomId, token_id: String(tokenId) } }, { optimisticApplied: true });
-            } catch (e) {
-              console.warn('kickRoomUser room_tokens delete failed', e);
-            }
+          const payload = await window.RoomsApi.kickRoomMember(roomId, { actorUserId, targetUserId });
+          if (payload.state) {
+            try { rememberRoomStateShadow(roomId, payload.state); } catch {}
+            try { handleMessage({ type: 'state', state: payload.state }); } catch {}
           }
-        } catch {}
-
-        const { error: delErr } = await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
-        if (delErr) throw delErr;
-
-        const publicStateKick = stripRoomSecretsFromState(nextState);
-        try { handleMessage({ type: 'state', state: publicStateKick }); } catch {}
-        try {
-          const removedIds = Array.isArray(removedKick?.removedPlayerIds) ? removedKick.removedPlayerIds.filter(Boolean) : [];
+          if (payload.moderationEvent) {
+            try { handleMessage({ type: 'moderationEvent', event: payload.moderationEvent }); } catch {}
+          }
+          const removedIds = Array.isArray(payload.removedTokenIds) ? payload.removedTokenIds.filter(Boolean) : [];
           removedIds.forEach((tokenId) => {
             try { handleMessage({ type: 'tokenRowDeleted', row: { room_id: roomId, token_id: String(tokenId) } }); } catch {}
           });
-        } catch {}
-        try { sendWsEnvelope({ type: 'moderationEvent', roomId, event: moderationEvent }, { optimisticApplied: true }); } catch {}
-        try { sendWsEnvelope({ type: 'state', roomId, state: publicStateKick }, { optimisticApplied: true }); } catch {}
-        try {
-          const removedIds = Array.isArray(removedKick?.removedPlayerIds) ? removedKick.removedPlayerIds.filter(Boolean) : [];
-          removedIds.forEach((tokenId) => {
-            try { sendWsEnvelope({ type: 'tokenRowDeleted', roomId, row: { room_id: roomId, token_id: String(tokenId) } }, { optimisticApplied: true }); } catch {}
-          });
-        } catch {}
-        await refreshRoomMembers(roomId, { broadcast: true });
+          await refreshRoomMembers(roomId, { broadcast: false });
+        } catch (e) {
+          handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Kick failed') });
+        }
         break;
       }
 
       case "banRoomUser": {
-        {
-          const roomId = String(currentRoomId || msg.roomId || '').trim();
-          const targetUserId = String(msg.targetUserId || '').trim();
-          const actorUserId = getVpsActorUserId();
-          if (!roomId || !targetUserId || !actorUserId) break;
-
-          const hoursRaw = Number(msg.hours);
-          const minutesRaw = Number(msg.minutes);
-          const hours = Math.max(0, Math.min(24, Math.trunc(Number.isFinite(hoursRaw) ? hoursRaw : 0)));
-          const minutes = Math.max(0, Math.min(59, Math.trunc(Number.isFinite(minutesRaw) ? minutesRaw : 0)));
-          const totalMinutes = Math.max(1, (hours * 60) + minutes);
-          const reason = String(msg.reason || '').trim();
-
-          try {
-            const payload = await window.RoomsApi.banRoomMember(roomId, { actorUserId, targetUserId, hours, minutes, totalMinutes, reason });
-            if (payload.state) {
-              try { rememberRoomStateShadow(roomId, payload.state); } catch {}
-              try { handleMessage({ type: 'state', state: payload.state }); } catch {}
-            }
-            if (payload.moderationEvent) {
-              try { handleMessage({ type: 'moderationEvent', event: payload.moderationEvent }); } catch {}
-            }
-            const removedIds = Array.isArray(payload.removedTokenIds) ? payload.removedTokenIds.filter(Boolean) : [];
-            removedIds.forEach((tokenId) => {
-              try { handleMessage({ type: 'tokenRowDeleted', row: { room_id: roomId, token_id: String(tokenId) } }); } catch {}
-            });
-            await refreshRoomMembers(roomId, { broadcast: false });
-          } catch (e) {
-            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Ban failed') });
-          }
-          break;
-        }
-
         const roomId = String(currentRoomId || msg.roomId || '').trim();
         const targetUserId = String(msg.targetUserId || '').trim();
-        if (!roomId || !targetUserId) return;
-        if (String(getAppStorageItem('int_user_role') || myRole || '') !== 'GM') return;
+        const actorUserId = getVpsActorUserId();
+        if (!roomId || !targetUserId || !actorUserId) break;
 
         const hoursRaw = Number(msg.hours);
         const minutesRaw = Number(msg.minutes);
         const hours = Math.max(0, Math.min(24, Math.trunc(Number.isFinite(hoursRaw) ? hoursRaw : 0)));
         const minutes = Math.max(0, Math.min(59, Math.trunc(Number.isFinite(minutesRaw) ? minutesRaw : 0)));
         const totalMinutes = Math.max(1, (hours * 60) + minutes);
-        const reason = String(msg.reason || '').trim() || 'Не указана';
-
-        const { data: room, error: roomErr } = await sbClient.from('rooms').select('id,name').eq('id', roomId).maybeSingle();
-        if (roomErr) throw roomErr;
-        const { data: rs, error: rsErr } = await sbClient.from('room_state').select('*').eq('room_id', roomId).maybeSingle();
-        if (rsErr) throw rsErr;
-        if (!rs) return;
-
-        const bannedUntilIso = new Date(Date.now() + totalMinutes * 60 * 1000).toISOString();
-        try {
-          const { error: banTblErr } = await sbClient
-            .from('room_bans')
-            .upsert({
-              room_id: roomId,
-              user_id: targetUserId,
-              reason,
-              banned_until: bannedUntilIso,
-              banned_by_user_id: String(getAppStorageItem('int_user_id') || myId || ''),
-              banned_by_name: safeGetUserName(),
-              created_at: new Date().toISOString()
-            }, { onConflict: 'room_id,user_id' });
-          if (banTblErr) throw banTblErr;
-        } catch (e) {
-          console.warn('banRoomUser room_bans upsert failed', e);
-        }
-
-        let nextState = deepClone(rs.state || createInitialGameState());
-        const removedBan = removeRoomUserOwnedPlayers(nextState, targetUserId);
-        nextState = removedBan.state;
-        nextState = withRoomBanUser(nextState, targetUserId, {
-          reason,
-          hours,
-          minutes,
-          totalMinutes,
-          bannedAt: new Date().toISOString(),
-          bannedUntil: bannedUntilIso,
-          bannedByUserId: String(getAppStorageItem('int_user_id') || myId || ''),
-          bannedByName: safeGetUserName()
-        });
-        const moderationEvent = {
-          id: (crypto?.randomUUID ? crypto.randomUUID() : ('mod-' + Math.random().toString(16).slice(2))),
-          type: 'ban',
-          targetUserId,
-          roomId,
-          roomName: String(room?.name || msg.roomName || 'Комната'),
-          reason,
-          bannedUntil: bannedUntilIso,
-          createdAt: new Date().toISOString(),
-          actorUserId: String(getAppStorageItem('int_user_id') || myId || ''),
-          actorName: safeGetUserName()
-        };
-        nextState = withRoomModerationEvent(nextState, moderationEvent);
-
-        const currentActorBan = (typeof nextState?.current_actor_id !== 'undefined')
-          ? nextState.current_actor_id
-          : ((typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null);
-        const { error: updErr } = await sbClient.from('room_state').update({
-          phase: String(rs?.phase || nextState?.phase || 'lobby'),
-          current_actor_id: currentActorBan,
-          state: nextState
-        }).eq('room_id', roomId);
-        if (updErr) throw updErr;
+        const reason = String(msg.reason || '').trim();
 
         try {
-          await ensureSupabaseReady();
-          const removedIds = Array.isArray(removedBan?.removedPlayerIds) ? removedBan.removedPlayerIds.filter(Boolean) : [];
-          for (const tokenId of removedIds) {
-            try {
-              sendWsEnvelope({ type: 'tokenRowDeleted', roomId, row: { room_id: roomId, token_id: String(tokenId) } }, { optimisticApplied: true });
-            } catch (e) {
-              console.warn('banRoomUser room_tokens delete failed', e);
-            }
+          const payload = await window.RoomsApi.banRoomMember(roomId, { actorUserId, targetUserId, hours, minutes, totalMinutes, reason });
+          if (payload.state) {
+            try { rememberRoomStateShadow(roomId, payload.state); } catch {}
+            try { handleMessage({ type: 'state', state: payload.state }); } catch {}
           }
-        } catch {}
-
-        const { error: delErr } = await sbClient.from('room_members').delete().eq('room_id', roomId).eq('user_id', targetUserId);
-        if (delErr) throw delErr;
-
-        const publicStateBan = stripRoomSecretsFromState(nextState);
-        try { handleMessage({ type: 'state', state: publicStateBan }); } catch {}
-        try {
-          const removedIds = Array.isArray(removedBan?.removedPlayerIds) ? removedBan.removedPlayerIds.filter(Boolean) : [];
+          if (payload.moderationEvent) {
+            try { handleMessage({ type: 'moderationEvent', event: payload.moderationEvent }); } catch {}
+          }
+          const removedIds = Array.isArray(payload.removedTokenIds) ? payload.removedTokenIds.filter(Boolean) : [];
           removedIds.forEach((tokenId) => {
             try { handleMessage({ type: 'tokenRowDeleted', row: { room_id: roomId, token_id: String(tokenId) } }); } catch {}
           });
-        } catch {}
-        try { sendWsEnvelope({ type: 'moderationEvent', roomId, event: moderationEvent }, { optimisticApplied: true }); } catch {}
-        try { sendWsEnvelope({ type: 'state', roomId, state: publicStateBan }, { optimisticApplied: true }); } catch {}
-        try {
-          const removedIds = Array.isArray(removedBan?.removedPlayerIds) ? removedBan.removedPlayerIds.filter(Boolean) : [];
-          removedIds.forEach((tokenId) => {
-            try { sendWsEnvelope({ type: 'tokenRowDeleted', roomId, row: { room_id: roomId, token_id: String(tokenId) } }, { optimisticApplied: true }); } catch {}
-          });
-        } catch {}
-        await refreshRoomMembers(roomId, { broadcast: true });
+          await refreshRoomMembers(roomId, { broadcast: false });
+        } catch (e) {
+          handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Ban failed') });
+        }
         break;
       }
 
       case "joinRoom": {
-        {
-          const roomId = String(msg.roomId || "").trim();
-          if (!roomId) return;
+        const roomId = String(msg.roomId || "").trim();
+        if (!roomId) return;
 
-          const userId = getVpsActorUserId();
-          const role = normalizeRoleForDb(getAppStorageItem("int_user_role") || myRole || "");
-          if (!userId || !role) {
-            handleMessage({ type: 'roomsError', message: 'Login and role are required before joining a room.' });
-            break;
-          }
-
-          let payload = null;
-          try {
-            payload = await window.RoomsApi.joinRoom(roomId, {
-              userId,
-              userName: getVpsActorName(),
-              role,
-              password: msg.password || ''
-            });
-          } catch (e) {
-            handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room join failed') });
-            break;
-          }
-
-          const room = payload.room || { id: roomId };
-          const state = payload.state || createInitialGameState();
-
-          currentRoomId = roomId;
-          connectRoomWs(roomId);
-          handleMessage({ type: "joinedRoom", room });
-
-          startHeartbeat();
-          try { await ensureDetachedBootstrap(roomId, state); } catch (e) { console.warn('detached bootstrap joinRoom failed', e); }
-
-          if (USE_SUPABASE_REALTIME) {
-            await subscribeRoomDb(roomId);
-            try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
-            try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
-            try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
-            try { await subscribeDetachedRoomTables(roomId); } catch (e) { console.warn('detached subscribe failed', e); }
-            await subscribeRoomMembersDb(roomId);
-          } else {
-            try { await stopSupabaseRealtimeChannels(); } catch (e) { console.warn('disable supabase realtime failed', e); }
-          }
-
-          try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
-          if (Array.isArray(payload.members)) {
-            try {
-              usersById.clear();
-              payload.members.forEach((row) => {
-                const uid = String(row?.userId || row?.id || '');
-                if (!uid) return;
-                usersById.set(uid, {
-                  name: row?.name || 'Unknown',
-                  role: normalizeRoleForUi(row?.role)
-                });
-              });
-              updatePlayerList();
-              try { window.RoomChat?.refreshUsers?.(); } catch {}
-            } catch (e) {
-              console.warn('joinRoom members snapshot failed', e);
-              await refreshRoomMembers(roomId, { broadcast: false });
-            }
-          } else {
-            await refreshRoomMembers(roomId, { broadcast: false });
-          }
-          startRoomMembersPolling(roomId);
-          const __initialStateApplied = applyDetachedPayloadToState(state);
-          try { rememberRoomStateShadow(roomId, __initialStateApplied); } catch {}
-          handleMessage({ type: "state", state: stripRoomSecretsFromState(__initialStateApplied) });
-
-          try {
-            const logRows = await loadRoomLog(roomId, 200);
-            handleMessage({ type: 'logInit', rows: logRows });
-          } catch (e) { console.warn('log init failed', e); }
-          try {
-            const mapId = String(state?.currentMapId || '');
-            const tokenRows = await loadRoomTokens(roomId, mapId);
-            handleMessage({ type: 'tokensInit', rows: tokenRows, mapId });
-          } catch (e) { console.warn('tokens init failed', e); }
-
-          try {
-            const diceRows = await loadRoomDice(roomId, 50);
-            handleMessage({ type: 'diceInit', rows: diceRows });
-          } catch (e) { console.warn('dice init failed', e); }
+        const userId = getVpsActorUserId();
+        const role = normalizeRoleForDb(getAppStorageItem("int_user_role") || myRole || "");
+        if (!userId || !role) {
+          handleMessage({ type: 'roomsError', message: 'Login and role are required before joining a room.' });
           break;
         }
 
-        const roomId = String(msg.roomId || "");
-        if (!roomId) return;
-
-        const { data: room, error: er } = await sbClient.from("rooms").select("*").eq("id", roomId).single();
-        if (er) throw er;
-
-        let { data: rs, error: ers } = await sbClient.from("room_state").select("*").eq("room_id", roomId).maybeSingle();
-        if (ers) throw ers;
-        if (!rs) {
-          const initState = createInitialGameState();
-          await sbClient.from("room_state").insert({ room_id: roomId, phase: initState.phase, current_actor_id: null, state: initState });
-          rs = { state: initState };
-        }
-
-        const providedPassword = normalizeRoomPassword(msg.password || '');
-
-        // ===== Enforce roles: register membership + prevent multiple GMs =====
-        const userId = String(getAppStorageItem("int_user_id") || myId || "");
-        const role = normalizeRoleForDb(getAppStorageItem("int_user_role") || myRole || "");
-
+        let payload = null;
         try {
-          await cleanupExpiredRoomBansTable(roomId, userId);
-        } catch (e) {
-          console.warn('joinRoom room_bans cleanup failed', e);
-        }
-
-        try {
-          const cleanup = cleanupExpiredRoomBans(rs?.state);
-          if (cleanup.changed) {
-            rs.state = cleanup.state;
-            await sbClient
-              .from('room_state')
-              .update({
-                phase: String(rs?.phase || rs?.state?.phase || 'lobby'),
-                current_actor_id: (typeof rs?.current_actor_id !== 'undefined') ? rs.current_actor_id : null,
-                state: rs.state
-              })
-              .eq('room_id', roomId);
-          }
-        } catch (e) {
-          console.warn('joinRoom ban cleanup failed', e);
-        }
-
-        const activeBanRow = await getActiveRoomBanRow(roomId, userId);
-        if (activeBanRow) {
-          const remaining = formatBanRemainingMs((Number(activeBanRow.bannedUntilMs) || Date.now()) - Date.now());
-          const reason = String(activeBanRow.reason || '').trim() || 'Не указана';
-          handleMessage({
-            type: 'roomsError',
-            message: `Вы забанены в комнате. Причина: ${reason}. До снятия бана: ${remaining}`
+          payload = await window.RoomsApi.joinRoom(roomId, {
+            userId,
+            userName: getVpsActorName(),
+            role,
+            password: msg.password || ''
           });
-          return;
+        } catch (e) {
+          handleMessage({ type: 'roomsError', message: getVpsApiErrorMessage(e, 'Room join failed') });
+          break;
         }
 
-        const activeBan = getActiveRoomBanForUser(rs?.state, userId);
-        if (activeBan) {
-          const remaining = formatBanRemainingMs((Number(activeBan.bannedUntilMs) || Date.now()) - Date.now());
-          const reason = String(activeBan.reason || '').trim() || 'Не указана';
-          handleMessage({
-            type: 'roomsError',
-            message: `Вы забанены в комнате. Причина: ${reason}. До снятия бана: ${remaining}`
-          });
-          return;
-        }
-
-        const roomPasswordHash = String(room?.password_hash || '').trim();
-        const roomHasPassword = !!(room?.has_password || roomPasswordHash);
-        try {
-          if (!rs.state || typeof rs.state !== 'object') rs.state = createInitialGameState();
-          if (!rs.state.roomAccess || typeof rs.state.roomAccess !== 'object') rs.state.roomAccess = {};
-          rs.state.roomAccess.hasPassword = roomHasPassword;
-          delete rs.state.roomAccess.password;
-          delete rs.state.roomAccess.passwordHash;
-          delete rs.state.roomAccess.authorizedUsers;
-        } catch {}
-        if (roomHasPassword) {
-          const isValidPassword = !!roomPasswordHash && !!providedPassword && (await sha256Hex(providedPassword)) === roomPasswordHash;
-          if (!isValidPassword) {
-            handleMessage({
-              type: 'roomsError',
-              message: 'Неверный пароль комнаты.'
-            });
-            return;
-          }
-        }
-
-        // ✅ Мягкая проверка до upsert (чтобы сразу показать текстовое предупреждение)
-        if (role === "GM" && userId) {
-          const { data: existingGm, error: gmErr } = await sbClient
-            .from("room_members")
-            .select("user_id")
-            .eq("room_id", roomId)
-            .eq("role", "GM")
-            .limit(1);
-          if (!gmErr && Array.isArray(existingGm) && existingGm.length) {
-            const gmId = String(existingGm[0]?.user_id || "");
-            if (gmId && gmId !== userId) {
-              handleMessage({
-                type: "roomsError",
-                message: "В комнате уже присутствует ГМ. Вы не можете войти как ГМ."
-              });
-              return;
-            }
-          }
-        }
-        if (userId && role) {
-          const { error: mErr } = await sbClient.from("room_members").upsert({
-            room_id: roomId,
-            user_id: userId,
-            name: safeGetUserName(),
-            role: normalizeRoleForDb(role),
-            last_seen: new Date().toISOString()
-          }, { onConflict: 'room_id,user_id' });
-          if (mErr) {
-            // Unique violation (second GM) => Postgres code 23505
-            if (role === "GM" && (mErr.code === "23505" || String(mErr.message || "").includes("uq_one_gm_per_room"))) {
-              handleMessage({ type: "roomsError", message: "В комнате уже присутствует ГМ. Вы не можете войти как ГМ." });
-              return;
-            }
-            throw mErr;
-          }
-        }
+        const room = payload.room || { id: roomId };
+        const state = payload.state || createInitialGameState();
 
         currentRoomId = roomId;
         connectRoomWs(roomId);
         handleMessage({ type: "joinedRoom", room });
 
-
         startHeartbeat();
-        try { await ensureDetachedBootstrap(roomId, rs.state); } catch (e) { console.warn('detached bootstrap joinRoom failed', e); }
+        try { await ensureDetachedBootstrap(roomId, state); } catch (e) { console.warn('detached bootstrap joinRoom failed', e); }
 
         if (USE_SUPABASE_REALTIME) {
           await subscribeRoomDb(roomId);
-          // v4: dedicated realtime tables
           try { await subscribeRoomTokensDb(roomId); } catch (e) { console.warn('tokens subscribe failed', e); }
           try { await subscribeRoomLogDb(roomId); } catch (e) { console.warn('log subscribe failed', e); }
           try { await subscribeRoomDiceDb(roomId); } catch (e) { console.warn('dice subscribe failed', e); }
@@ -2712,20 +2101,39 @@ async function sendMessage(msg) {
         } else {
           try { await stopSupabaseRealtimeChannels(); } catch (e) { console.warn('disable supabase realtime failed', e); }
         }
+
         try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
-        await refreshRoomMembers(roomId, { broadcast: true });
+        if (Array.isArray(payload.members)) {
+          try {
+            usersById.clear();
+            payload.members.forEach((row) => {
+              const uid = String(row?.userId || row?.id || '');
+              if (!uid) return;
+              usersById.set(uid, {
+                name: row?.name || 'Unknown',
+                role: normalizeRoleForUi(row?.role)
+              });
+            });
+            updatePlayerList();
+            try { window.RoomChat?.refreshUsers?.(); } catch {}
+          } catch (e) {
+            console.warn('joinRoom members snapshot failed', e);
+            await refreshRoomMembers(roomId, { broadcast: false });
+          }
+        } else {
+          await refreshRoomMembers(roomId, { broadcast: false });
+        }
         startRoomMembersPolling(roomId);
-        const __initialStateApplied = applyDetachedPayloadToState(rs.state);
+        const __initialStateApplied = applyDetachedPayloadToState(state);
         try { rememberRoomStateShadow(roomId, __initialStateApplied); } catch {}
         handleMessage({ type: "state", state: stripRoomSecretsFromState(__initialStateApplied) });
 
-        // v4 init: load logs + tokens snapshot after state is applied
         try {
           const logRows = await loadRoomLog(roomId, 200);
           handleMessage({ type: 'logInit', rows: logRows });
         } catch (e) { console.warn('log init failed', e); }
         try {
-          const mapId = String(rs?.state?.currentMapId || '');
+          const mapId = String(state?.currentMapId || '');
           const tokenRows = await loadRoomTokens(roomId, mapId);
           handleMessage({ type: 'tokensInit', rows: tokenRows, mapId });
         } catch (e) { console.warn('tokens init failed', e); }
