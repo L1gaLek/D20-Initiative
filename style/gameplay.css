@@ -915,16 +915,59 @@
   gap:10px;
   margin-bottom:8px;
 }
+.marks-toolbar__title-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-right:auto;
+}
 .marks-toolbar__title{
   font-weight:700;
   color:#eee;
-  margin-right:auto;
+  margin-right:0;
   background: transparent;
   border: 0;
   padding: 0;
   cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
 }
 .marks-toolbar__title:hover{ text-decoration: underline; }
+.marks-pin-tool{
+  width:30px;
+  height:30px;
+  min-width:30px;
+  border:1px solid rgba(255,255,255,0.16);
+  border-radius:10px;
+  background: rgba(255,255,255,0.05);
+  color:#e9f8dd;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+.marks-pin-tool:hover,
+.marks-pin-tool.is-active{
+  border-color:rgba(83,217,120,0.74);
+  background:rgba(83,217,120,0.16);
+  box-shadow:0 0 12px rgba(83,217,120,0.18);
+}
+.marks-pin-tool__icon{
+  position:relative;
+  width:14px;
+  height:14px;
+  border:2px solid currentColor;
+  border-radius:50%;
+}
+.marks-pin-tool__icon::before,
+.marks-pin-tool__icon::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  background:currentColor;
+}
+.marks-pin-tool__icon::before{ width:4px; height:4px; border-radius:50%; }
+.marks-pin-tool__icon::after{ width:2px; height:18px; opacity:.75; }
 .marks-toolbar.is-collapsed .marks-toolbar__body{ display:none; }
 .marks-toolbar.is-collapsed .marks-toolbar__head{ margin-bottom:0; }
 .marks-switch{ display:flex; align-items:center; gap:8px; font-size:12px; opacity:.95; }
@@ -951,12 +994,89 @@
   height:100%;
   z-index: 20; /* выше сетки/стен, ниже fog-layer (30) */
 }
+#marks-pin-locators{
+  position:absolute;
+  inset:0;
+  z-index:40;
+  pointer-events:none;
+}
 .marks-svg{ width:100%; height:100%; }
 .mark-shape.is-selected{ filter: drop-shadow(0 0 4px rgba(255,165,0,0.85)); }
 .mark-preview{ filter: drop-shadow(0 0 3px rgba(255,165,0,0.65)); }
+.mark-pin{
+  filter: drop-shadow(0 0 7px rgba(83,217,120,0.62));
+}
+.mark-pin__ring{
+  fill: rgba(83,217,120,0.16);
+  stroke: rgba(190,255,205,0.92);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: markPinPulse 1.6s ease-out infinite;
+}
+.mark-pin__dot{
+  fill: rgba(83,217,120,0.96);
+  stroke: rgba(255,255,255,0.95);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.mark-pin.is-selected .mark-pin__dot,
+.mark-pin.is-hover .mark-pin__dot{
+  fill: rgba(255,214,120,0.98);
+}
+.mark-pin-locator{
+  position:absolute;
+  width:0;
+  height:0;
+  border-left:10px solid transparent;
+  border-right:10px solid transparent;
+  border-bottom:16px solid rgba(83,217,120,0.97);
+  transform-origin:50% 60%;
+  z-index:999998;
+  pointer-events:none;
+  filter:drop-shadow(0 0 7px rgba(0,0,0,0.78));
+}
+.mark-pin-beacon{
+  position:absolute;
+  width:24px;
+  height:24px;
+  transform:translate(-50%,-50%);
+  border:2px solid rgba(190,255,205,0.92);
+  border-radius:50%;
+  background:rgba(83,217,120,0.16);
+  box-shadow:0 0 14px rgba(83,217,120,0.34);
+  pointer-events:none;
+}
+.mark-pin-beacon::before{
+  content:"";
+  position:absolute;
+  inset:-8px;
+  border:2px solid rgba(83,217,120,0.58);
+  border-radius:50%;
+  animation: markPinPulse 1.6s ease-out infinite;
+}
+.mark-pin-beacon::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:8px;
+  height:8px;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:rgba(83,217,120,0.98);
+  box-shadow:0 0 0 2px rgba(255,255,255,0.9);
+}
+
+@keyframes markPinPulse{
+  0%{ transform:scale(.55); opacity:.95; }
+  72%{ transform:scale(1.65); opacity:.18; }
+  100%{ transform:scale(1.85); opacity:0; }
+}
 
 /* spectators: hide draw controls visually */
-.marks-toolbar.is-spectator{ opacity:.55; }
+.marks-toolbar.is-spectator{ display:none; }
 .marks-toolbar.is-spectator .marks-switch{ display:none; }
 
 

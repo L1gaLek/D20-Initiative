@@ -42,6 +42,11 @@
   font-weight: 700;
 }
 
+.room-details-master{
+  color: #53d978;
+  font-weight: 800;
+}
+
 /* строка: цвет + размер */
 .pm-row{ display:flex; align-items:center; gap: 10px; }
 
