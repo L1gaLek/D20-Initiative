@@ -252,6 +252,7 @@ async function buildRoomAccessState(password, previousState) {
   const prevAccess = getRoomAccessState(previousState);
   const next = {
     hasPassword: !!normalized,
+    passwordDisplay: normalized,
     bannedUsers: {},
     moderationEvent: (prevAccess.moderationEvent && typeof prevAccess.moderationEvent === 'object') ? deepClone(prevAccess.moderationEvent) : null
   };
@@ -363,6 +364,7 @@ function createInitialGameState() {
 
     roomAccess: {
       hasPassword: false,
+      passwordDisplay: '',
       passwordHash: '',
       authorizedUsers: {},
       bannedUsers: {},

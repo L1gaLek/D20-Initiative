@@ -407,6 +407,7 @@ async function upsertRoomState(roomId, nextState) {
       const latestAccess = getRoomAccessState(latestRoomState);
       if (!stSafe.roomAccess || typeof stSafe.roomAccess !== 'object') stSafe.roomAccess = {};
       stSafe.roomAccess.hasPassword = !!latestAccess.hasPassword;
+      stSafe.roomAccess.passwordDisplay = String(latestAccess.passwordDisplay || latestAccess.displayPassword || '');
     }
   } catch {}
 
