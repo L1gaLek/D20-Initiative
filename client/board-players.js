@@ -3580,6 +3580,7 @@ window.DicePanel = window.DicePanel || {};
 // If silent=true, it will only animate/update the local dice panel UI and will NOT send log/diceEvent.
 // Returns: {sides,count,bonus,rolls,sum,total}
 window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false, actorName = null } = {}) => {
+  if (typeof isSpectator === 'function' && isSpectator()) return null;
   if (diceAnimBusy) return;
   diceAnimBusy = true;
 

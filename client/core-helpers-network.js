@@ -1662,6 +1662,7 @@ try { window.insertDiceEvent = insertDiceEvent; } catch {}
 async function broadcastDiceEventOnly(event) {
   try {
     if (!event || !currentRoomId) return;
+    if (typeof isSpectator === 'function' && isSpectator()) return;
     const ev = { ...(event || {}) };
     if (typeof myId !== 'undefined' && !ev.fromId) ev.fromId = String(myId);
     if (myNameSpan?.textContent && !ev.fromName) ev.fromName = String(myNameSpan.textContent);
@@ -2095,6 +2096,7 @@ async function sendMessage(msg) {
       // ===== Dice live events =====
       case "diceEvent": {
         if (!currentRoomId) return;
+        if (typeof isSpectator === 'function' && isSpectator()) return;
         // v4: dice events are append-only in room_dice_events (and log is append-only in room_log)
         const ev = msg.event || {};
         const insertResult = await insertDiceEvent(currentRoomId, ev);
@@ -3495,6 +3497,7 @@ async function sendMessage(msg) {
         // ===== Marks / Areas (everyone can draw; GM can remove all) =====
         // ===== Marks / Areas (everyone can draw; GM can remove all) =====
         else if (type === 'addMark') {
+          if (typeof isSpectator === 'function' && isSpectator()) return;
           const raw = msg.mark;
           if (!raw || typeof raw !== 'object') return;
           const m = getActiveMap(next);
@@ -3510,6 +3513,7 @@ async function sendMessage(msg) {
         }
 
         else if (type === 'removeMark') {
+          if (typeof isSpectator === 'function' && isSpectator()) return;
           const id = String(msg.id || '').trim();
           if (!id) return;
           const m = getActiveMap(next);
@@ -3526,6 +3530,7 @@ async function sendMessage(msg) {
         }
 
         else if (type === 'moveMark') {
+          if (typeof isSpectator === 'function' && isSpectator()) return;
           const raw = msg.mark;
           if (!raw || typeof raw !== 'object') return;
           const id = String(raw.id || '').trim();
@@ -3544,6 +3549,9 @@ async function sendMessage(msg) {
           } else if (String(mark.kind || '') === 'circle') {
             safe.cx = Number(raw.cx) || 0;
             safe.cy = Number(raw.cy) || 0;
+          } else if (String(mark.kind || '') === 'pin') {
+            safe.x = Number(raw.x) || 0;
+            safe.y = Number(raw.y) || 0;
           } else if (String(mark.kind || '') === 'poly' && Array.isArray(raw.pts) && raw.pts.length >= 3) {
             safe.pts = raw.pts.map((p) => ({
               x: Number(p?.x) || 0,
@@ -3556,6 +3564,7 @@ async function sendMessage(msg) {
         }
 
         else if (type === 'clearMarks') {
+          if (typeof isSpectator === 'function' && isSpectator()) return;
           const m = getActiveMap(next);
           if (!m) return;
           const mapId = String(next.currentMapId || m.id || '');

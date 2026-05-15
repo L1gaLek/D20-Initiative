@@ -78,6 +78,7 @@ function syncUsersSnapshot(users) {
 
 function refreshUsersUi() {
   updatePlayerList();
+  try { window.refreshRoomDetailsInfo?.(); } catch {}
   try { window.RoomChat?.refreshUsers?.(); } catch {}
   try { window.TavernChat?.refreshUsers?.(); } catch {}
 }
@@ -784,6 +785,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       updateCurrentPlayer(normalized);
       renderTurnOrderBox(normalized);
       renderInitiativePlayersBox(normalized);
+      try { window.refreshRoomDetailsInfo?.(); } catch {}
 
       // v4: log is append-only in room_log.
       // Do NOT clear the UI log on every room_state snapshot update.

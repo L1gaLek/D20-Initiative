@@ -60,9 +60,11 @@
 
   let ctx = null;
   let board = null;
+  let boardWrapper = null;
   let toolbar = null;
   let svg = null;
   let marksLayer = null;
+  let locatorLayer = null;
   let previewEl = null;
 
   let tool = 'select';
@@ -81,12 +83,41 @@
 
   const LS_KEY = 'int_marks_toolbar';
   const LS_COLLAPSE_KEY = 'int_marks_toolbar_collapsed';
+  const PIN_COLOR = '#53d978';
 
   function isGM() { try { return !!ctx?.isGM?.(); } catch { return false; } }
   function isSpectator() { try { return !!ctx?.isSpectator?.(); } catch { return false; } }
   function myId() { try { return String(window.myId || getAppStorageItem('int_user_id') || ''); } catch { return ''; } }
   function getState() { try { return ctx?.getState?.() || window.lastState || null; } catch { return window.lastState || null; } }
   function curMapId() { return String(getState()?.currentMapId || ''); }
+
+  function persistToolbarState() {
+    try {
+      const storedTool = (tool === 'pin') ? 'select' : tool;
+      localStorage.setItem(LS_KEY, JSON.stringify({ tool: storedTool, drawMode, color, fillPct, strokePct, strokeW }));
+    } catch {}
+  }
+
+  function syncToolbarToolState() {
+    if (!toolbar) return;
+    toolbar.querySelectorAll('[data-tool]').forEach(btn => {
+      btn.classList.toggle('is-active', String(btn.getAttribute('data-tool')) === tool);
+    });
+    const pinBtn = toolbar.querySelector('#marks-pin-tool');
+    if (pinBtn) pinBtn.classList.toggle('is-active', tool === 'pin');
+    const enabled = toolbar.querySelector('#marks-enabled');
+    if (enabled) enabled.checked = !!drawMode;
+  }
+
+  function setTool(nextTool, { persist = true } = {}) {
+    tool = String(nextTool || 'select');
+    selectedId = null;
+    dragState = null;
+    clearPreview();
+    syncPointerEvents();
+    syncToolbarToolState();
+    if (persist) persistToolbarState();
+  }
 
   function canEditMark(m) {
     if (!m) return false;
@@ -117,6 +148,9 @@
     } else if (kind === 'circle') {
       moved.cx = +(Number(mark.cx) + dx).toFixed(4);
       moved.cy = +(Number(mark.cy) + dy).toFixed(4);
+    } else if (kind === 'pin') {
+      moved.x = +(Number(mark.x) + dx).toFixed(4);
+      moved.y = +(Number(mark.y) + dy).toFixed(4);
     } else if (kind === 'poly') {
       const pts = Array.isArray(mark.pts) ? mark.pts : [];
       moved.pts = pts.map((p) => ({
@@ -162,7 +196,12 @@
     toolbar.className = 'marks-toolbar';
     toolbar.innerHTML = `
       <div class="marks-toolbar__head">
-        <button class="marks-toolbar__title" id="marks-toolbar-toggle" type="button" aria-expanded="true">Обозначение</button>
+        <div class="marks-toolbar__title-row">
+          <button class="marks-toolbar__title" id="marks-toolbar-toggle" type="button" aria-expanded="true">Обозначение</button>
+          <button class="marks-pin-tool" type="button" id="marks-pin-tool" title="Метка" aria-label="Метка">
+            <span class="marks-pin-tool__icon" aria-hidden="true"></span>
+          </button>
+        </div>
         <label class="marks-switch"><input type="checkbox" id="marks-enabled"> <span>Рисовать</span></label>
         <button class="marks-btn" type="button" id="marks-clear" title="Удалить выбранную метку (или все ваши)">Очистить</button>
       </div>
@@ -210,7 +249,7 @@
       if (raw) {
         const s = JSON.parse(raw);
         if (s && typeof s === 'object') {
-          if (typeof s.tool === 'string') tool = s.tool;
+          if (['select', 'rect', 'circle', 'poly'].includes(String(s.tool || ''))) tool = String(s.tool);
           if (typeof s.drawMode === 'boolean') drawMode = s.drawMode;
           if (typeof s.color === 'string') color = s.color;
           if (Number.isFinite(Number(s.fillPct))) fillPct = clamp(Number(s.fillPct), 0, 90);
@@ -222,6 +261,7 @@
 
     const enabled = toolbar.querySelector('#marks-enabled');
     const clearBtn = toolbar.querySelector('#marks-clear');
+    const pinBtn = toolbar.querySelector('#marks-pin-tool');
     const colorInp = toolbar.querySelector('#marks-color');
     const fillInp = toolbar.querySelector('#marks-fill');
     const strokeInp = toolbar.querySelector('#marks-stroke');
@@ -234,25 +274,21 @@
     if (strokeInp) strokeInp.value = String(strokePct);
     if (strokeWInp) strokeWInp.value = String(strokeW);
 
-    toolbar.querySelectorAll('[data-tool]').forEach(btn => {
-      btn.classList.toggle('is-active', String(btn.getAttribute('data-tool')) === tool);
-    });
-
-    const persist = () => {
-      try { localStorage.setItem(LS_KEY, JSON.stringify({ tool, drawMode, color, fillPct, strokePct, strokeW })); } catch {}
-    };
+    syncToolbarToolState();
 
     toolbar.addEventListener('click', (e) => {
       const tBtn = e.target?.closest?.('[data-tool]');
       if (tBtn) {
-        tool = String(tBtn.getAttribute('data-tool') || 'select');
-        toolbar.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('is-active', b === tBtn));
-        selectedId = null;
-        dragState = null;
-        clearPreview();
-        syncPointerEvents();
-        persist();
+        setTool(String(tBtn.getAttribute('data-tool') || 'select'));
       }
+    });
+
+    if (pinBtn) pinBtn.addEventListener('click', () => {
+      if (isSpectator()) return;
+      drawMode = true;
+      const enabledNow = toolbar.querySelector('#marks-enabled');
+      if (enabledNow) enabledNow.checked = true;
+      setTool('pin', { persist: false });
     });
 
     if (enabled) enabled.addEventListener('change', () => {
@@ -261,17 +297,19 @@
         drawMode = false;
         enabled.checked = false;
       }
+      if (!drawMode && tool === 'pin') tool = 'select';
       selectedId = null;
       dragState = null;
       clearPreview();
       syncPointerEvents();
-      persist();
+      syncToolbarToolState();
+      persistToolbarState();
     });
 
-    if (colorInp) colorInp.addEventListener('input', () => { color = String(colorInp.value || '#ffa500'); persist(); });
-    if (fillInp) fillInp.addEventListener('input', () => { fillPct = clamp(Number(fillInp.value) || 0, 0, 90); persist(); });
-    if (strokeInp) strokeInp.addEventListener('input', () => { strokePct = clamp(Number(strokeInp.value) || 0, 0, 100); persist(); });
-    if (strokeWInp) strokeWInp.addEventListener('change', () => { strokeW = clamp(Number(strokeWInp.value) || 2, 1, 10); persist(); });
+    if (colorInp) colorInp.addEventListener('input', () => { color = String(colorInp.value || '#ffa500'); persistToolbarState(); });
+    if (fillInp) fillInp.addEventListener('input', () => { fillPct = clamp(Number(fillInp.value) || 0, 0, 90); persistToolbarState(); });
+    if (strokeInp) strokeInp.addEventListener('input', () => { strokePct = clamp(Number(strokeInp.value) || 0, 0, 100); persistToolbarState(); });
+    if (strokeWInp) strokeWInp.addEventListener('change', () => { strokeW = clamp(Number(strokeWInp.value) || 2, 1, 10); persistToolbarState(); });
     if (labelInp) labelInp.addEventListener('input', () => { label = String(labelInp.value || ''); });
 
     if (clearBtn) clearBtn.addEventListener('click', () => {
@@ -292,7 +330,10 @@
 
     if (isSpectator()) {
       toolbar.classList.add('is-spectator');
+      drawMode = false;
+      tool = 'select';
       if (enabled) enabled.checked = false;
+      syncToolbarToolState();
     }
     return toolbar;
   }
@@ -318,7 +359,20 @@
     }
     syncLayerSize();
     syncPointerEvents();
+    ensureLocatorLayer();
     return marksLayer;
+  }
+
+  function ensureLocatorLayer() {
+    if (!board) return null;
+    locatorLayer = board.querySelector('#marks-pin-locators');
+    if (!locatorLayer) {
+      locatorLayer = document.createElement('div');
+      locatorLayer.id = 'marks-pin-locators';
+      locatorLayer.setAttribute('aria-hidden', 'true');
+      board.appendChild(locatorLayer);
+    }
+    return locatorLayer;
   }
 
   function syncLayerSize() {
@@ -387,6 +441,30 @@
         shape.setAttribute('cx', String((Number(activeMark.cx) || 0) * CELL));
         shape.setAttribute('cy', String((Number(activeMark.cy) || 0) * CELL));
         shape.setAttribute('r', String((Number(activeMark.r) || 0) * CELL));
+      } else if (kind === 'pin') {
+        const cx = (Number(activeMark.x) || 0) * CELL;
+        const cy = (Number(activeMark.y) || 0) * CELL;
+        const pinColor = activeMark.color || PIN_COLOR;
+        shape = svgEl('g');
+        shape.setAttribute('transform', `translate(${cx},${cy})`);
+        shape.classList.add('mark-pin');
+
+        const ring = svgEl('circle');
+        ring.classList.add('mark-pin__ring');
+        ring.setAttribute('cx', '0');
+        ring.setAttribute('cy', '0');
+        ring.setAttribute('r', '14');
+        ring.setAttribute('fill', parseHexColorToRgba(pinColor, 0.16));
+        ring.setAttribute('stroke', parseHexColorToRgba(pinColor, 0.92));
+        shape.appendChild(ring);
+
+        const dot = svgEl('circle');
+        dot.classList.add('mark-pin__dot');
+        dot.setAttribute('cx', '0');
+        dot.setAttribute('cy', '0');
+        dot.setAttribute('r', '6');
+        dot.setAttribute('fill', parseHexColorToRgba(pinColor, 0.96));
+        shape.appendChild(dot);
       } else if (kind === 'poly') {
         const pts = Array.isArray(activeMark?.pts) ? activeMark.pts : [];
         if (pts.length >= 3) {
@@ -396,11 +474,13 @@
       }
       if (!shape) return;
 
-      const stl = styleForMark(activeMark, false);
-      shape.setAttribute('fill', stl.fill);
-      shape.setAttribute('stroke', stl.stroke);
-      shape.setAttribute('stroke-width', String(stl.strokeWidth));
-      shape.setAttribute('vector-effect', 'non-scaling-stroke');
+      if (kind !== 'pin') {
+        const stl = styleForMark(activeMark, false);
+        shape.setAttribute('fill', stl.fill);
+        shape.setAttribute('stroke', stl.stroke);
+        shape.setAttribute('stroke-width', String(stl.strokeWidth));
+        shape.setAttribute('vector-effect', 'non-scaling-stroke');
+      }
       shape.classList.add('mark-shape');
       shape.dataset.id = id;
       if (id && id === String(selectedId)) shape.classList.add('is-selected');
@@ -424,6 +504,7 @@
         let ax = 0, ay = 0;
         if (kind === 'rect') { ax = (Number(activeMark.x) || 0) + (Number(activeMark.w) || 0) / 2; ay = (Number(activeMark.y) || 0) + (Number(activeMark.h) || 0) / 2; }
         if (kind === 'circle') { ax = Number(activeMark.cx) || 0; ay = Number(activeMark.cy) || 0; }
+        if (kind === 'pin') { ax = Number(activeMark.x) || 0; ay = Number(activeMark.y) || 0; }
         if (kind === 'poly') {
           const pts = Array.isArray(activeMark?.pts) ? activeMark.pts : [];
           if (pts.length) {
@@ -438,6 +519,103 @@
         t.dataset.id = id;
         svg.appendChild(t);
       }
+    });
+    updatePinLocators(st);
+  }
+
+  function getBoardScale() {
+    try {
+      const r = board.getBoundingClientRect();
+      const ow = board.offsetWidth || 1;
+      return (r.width && ow) ? (r.width / ow) : (window.ControlBox?.getZoom?.() || 1);
+    } catch {
+      return 1;
+    }
+  }
+
+  function updatePinLocators(state = null) {
+    const layer = ensureLocatorLayer();
+    const wrap = boardWrapper || ctx?.boardWrapperEl || document.getElementById('board-wrapper');
+    if (!layer || !wrap || !board) return;
+    layer.innerHTML = '';
+
+    const st = state || getState();
+    const pins = getCurrentMapMarks(st).filter((m) => String(m?.kind || '') === 'pin');
+    if (!pins.length) return;
+
+    const wrapRect = wrap.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
+    const scale = Math.max(0.0001, getBoardScale());
+    const edgePad = 14;
+    const left = wrapRect.left + edgePad;
+    const top = wrapRect.top + edgePad;
+    const right = wrapRect.left + (wrap.clientWidth || wrapRect.width || 0) - edgePad;
+    const bottom = wrapRect.top + (wrap.clientHeight || wrapRect.height || 0) - edgePad;
+    if (right <= left || bottom <= top) return;
+
+    const centerX = (left + right) / 2;
+    const centerY = (top + bottom) / 2;
+
+    function considerHit(dx, dy, targetX, targetY, best) {
+      if (Math.abs(dx) > 1e-6) {
+        let t = (left - centerX) / dx;
+        const y = centerY + t * dy;
+        if (t > 0 && t < best.t && y >= top - 0.5 && y <= bottom + 0.5) best = { t, x: left, y };
+        t = (right - centerX) / dx;
+        const y2 = centerY + t * dy;
+        if (t > 0 && t < best.t && y2 >= top - 0.5 && y2 <= bottom + 0.5) best = { t, x: right, y: y2 };
+      }
+      if (Math.abs(dy) > 1e-6) {
+        let t = (top - centerY) / dy;
+        const x = centerX + t * dx;
+        if (t > 0 && t < best.t && x >= left - 0.5 && x <= right + 0.5) best = { t, x, y: top };
+        t = (bottom - centerY) / dy;
+        const x2 = centerX + t * dx;
+        if (t > 0 && t < best.t && x2 >= left - 0.5 && x2 <= right + 0.5) best = { t, x: x2, y: bottom };
+      }
+      return best;
+    }
+
+    function appendBeacon(pin, localX, localY) {
+      const beacon = document.createElement('div');
+      beacon.className = 'mark-pin-beacon';
+      beacon.title = String(pin?.label || 'Метка');
+      beacon.style.left = `${localX}px`;
+      beacon.style.top = `${localY}px`;
+      layer.appendChild(beacon);
+    }
+
+    pins.forEach((pin) => {
+      const x = Number(pin?.x);
+      const y = Number(pin?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+      const targetX = boardRect.left + (x * CELL * scale);
+      const targetY = boardRect.top + (y * CELL * scale);
+      const inside = targetX >= left && targetX <= right && targetY >= top && targetY <= bottom;
+      if (inside) {
+        appendBeacon(pin, x * CELL, y * CELL);
+        return;
+      }
+
+      const dx = targetX - centerX;
+      const dy = targetY - centerY;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy) || (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6)) return;
+
+      const hit = considerHit(dx, dy, targetX, targetY, { t: Infinity, x: centerX, y: centerY });
+      if (!Number.isFinite(hit.t)) return;
+
+      const localX = (hit.x - boardRect.left) / scale;
+      const localY = (hit.y - boardRect.top) / scale;
+      const deg = (Math.atan2(targetY - hit.y, targetX - hit.x) * 180 / Math.PI) + 90;
+
+      const arrow = document.createElement('div');
+      arrow.className = 'mark-pin-locator';
+      arrow.title = String(pin?.label || 'Метка');
+      arrow.style.left = `${localX - 10}px`;
+      arrow.style.top = `${localY - 8}px`;
+      arrow.style.transform = `rotate(${deg}deg)`;
+      layer.appendChild(arrow);
     });
   }
 
@@ -477,6 +655,33 @@
       if ((!drawMode || !drawing) && !dragState) return;
       onUp(e);
     });
+    wireLocatorListeners();
+  }
+
+  let locatorRaf = 0;
+  let locatorWrapped = null;
+  let locatorWindowBound = false;
+  function scheduleLocatorUpdate() {
+    if (locatorRaf) return;
+    locatorRaf = requestAnimationFrame(() => {
+      locatorRaf = 0;
+      try { updatePinLocators(getState()); } catch {}
+    });
+  }
+
+  function wireLocatorListeners() {
+    const wrap = boardWrapper || ctx?.boardWrapperEl || document.getElementById('board-wrapper');
+    if (wrap && wrap !== locatorWrapped) {
+      locatorWrapped = wrap;
+      wrap.addEventListener('scroll', scheduleLocatorUpdate, { passive: true });
+      try { wrap.addEventListener('mouseenter', scheduleLocatorUpdate, { passive: true }); } catch {}
+      try { wrap.addEventListener('mousemove', scheduleLocatorUpdate, { passive: true }); } catch {}
+    }
+    if (!locatorWindowBound) {
+      locatorWindowBound = true;
+      window.addEventListener('resize', scheduleLocatorUpdate);
+      try { window.addEventListener('board-view-mode-changed', scheduleLocatorUpdate); } catch {}
+    }
   }
 
   function onDown(e) {
@@ -502,6 +707,11 @@
         }
       }
       renderFromState(getState());
+      return;
+    }
+    if (tool === 'pin') {
+      const p = cellFromClientXY(board, e.clientX, e.clientY);
+      if (p.inBounds) finalizePin(p);
       return;
     }
     if (hitId) {
@@ -635,6 +845,24 @@
     previewEl.setAttribute('vector-effect', 'non-scaling-stroke');
   }
 
+  function finalizePin(p) {
+    if (!p || isSpectator()) return;
+    const m = {
+      id: uid(),
+      mapId: curMapId(),
+      ownerId: myId(),
+      kind: 'pin',
+      x: +Number(p.x).toFixed(4),
+      y: +Number(p.y).toFixed(4),
+      color: PIN_COLOR,
+      label: String(label || '').trim()
+    };
+    ctx?.sendMessage?.({ type: 'addMark', mark: m });
+    drawMode = false;
+    setTool('select');
+    renderFromState(getState());
+  }
+
   function finishPoly() {
     if (polyPts.length < 3) { clearPreview(); return; }
     const m = {
@@ -703,6 +931,7 @@
   api.onBoardRendered = function (state) {
     try {
       if (!board) board = ctx?.boardEl || document.getElementById('game-board');
+      if (!boardWrapper) boardWrapper = ctx?.boardWrapperEl || document.getElementById('board-wrapper');
       ensureToolbar();
       ensureLayer();
       ensureListeners();
@@ -712,6 +941,10 @@
     }
   };
 
+  api.refreshLocators = function () {
+    try { scheduleLocatorUpdate(); } catch {}
+  };
+
   api.refreshRole = function () {
     try {
       if (!toolbar) return;
@@ -719,10 +952,12 @@
       if (isSpectator()) {
         toolbar.classList.add('is-spectator');
         drawMode = false;
+        tool = 'select';
         if (enabled) enabled.checked = false;
       } else {
         toolbar.classList.remove('is-spectator');
       }
+      syncToolbarToolState();
       syncPointerEvents();
     } catch {}
   };
@@ -736,6 +971,7 @@
     ctx.isSpectator = ctx.isSpectator || (() => normalizeRoleForApp(window.myRole) === 'Spectator');
 
     board = ctx.boardEl || document.getElementById('game-board');
+    boardWrapper = ctx.boardWrapperEl || document.getElementById('board-wrapper');
     ensureToolbar();
     ensureLayer();
     ensureListeners();

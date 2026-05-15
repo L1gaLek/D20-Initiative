@@ -11,6 +11,7 @@ try {
       onViewportChange: () => {
         // При изменении рамки достаточно обновить CSS wrapper (controlbox делает это),
         // а поле/игроки не нужно пересоздавать.
+        try { window.BoardMarks?.refreshLocators?.(); } catch {}
       },
       boardEl: board,
       boardWrapperEl: boardWrapper

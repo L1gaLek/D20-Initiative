@@ -9,6 +9,7 @@ function escapeGameplayHtml(value) {
 }
 
 rollBtn?.addEventListener('click', async () => {
+  if (typeof isSpectator === 'function' && isSpectator()) return;
   if (diceAnimBusy) return;
   diceAnimBusy = true;
   rollBtn.disabled = true;
@@ -90,6 +91,7 @@ endTurnBtn?.addEventListener('click', () => sendMessage({ type: 'endTurn' }));
 
 // ================== INITIATIVE ==================
 rollInitiativeBtn?.addEventListener('click', async () => {
+  if (typeof isSpectator === 'function' && isSpectator()) return;
   // Инициатива считается на сервере (d20 + модификатор Ловкости).
   // Сервер рассылает diceEvent — мы покажем его у себя в панели и у других в "Броски других".
   // UX: сразу показываем визуальную "заглушку" в панели броска, чтобы действие было видно мгновенно.
@@ -101,6 +103,7 @@ rollInitiativeBtn?.addEventListener('click', async () => {
 });
 
 rollInitiativeAllBtn?.addEventListener('click', () => {
+  if (typeof isSpectator === 'function' && isSpectator()) return;
   sendMessage({ type: 'rollInitiativeAllOwned' });
 });
 

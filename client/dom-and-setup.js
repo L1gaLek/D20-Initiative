@@ -104,6 +104,8 @@ const myNameSpan = document.getElementById('myName');
 const myRoleSpan = document.getElementById('myRole');
 const myRoomSpan = document.getElementById('myRoom');
 const myScenarioSpan = document.getElementById('myScenario');
+const myRoomPasswordSpan = document.getElementById('myRoomPassword');
+const myRoomMasterSpan = document.getElementById('myRoomMaster');
 const diceViz = document.getElementById('dice-viz');
 
 
@@ -223,8 +225,55 @@ function initBoardSteppers() {
 
 initBoardSteppers();
 
+function getCurrentRoomPasswordText() {
+  try {
+    const access = (lastState?.roomAccess && typeof lastState.roomAccess === 'object') ? lastState.roomAccess : {};
+    const visiblePassword = String(access.passwordDisplay || access.displayPassword || '').trim();
+    if (visiblePassword) return visiblePassword;
+
+    const roomId = String(currentRoomId || '').trim();
+    const remembered = roomId && typeof window.getRememberedRoomPassword === 'function'
+      ? String(window.getRememberedRoomPassword(roomId) || '').trim()
+      : '';
+    if (remembered) return remembered;
+
+    if (access.hasPassword) return 'Скрыт';
+  } catch {}
+  return 'Нет';
+}
+
+function getCurrentRoomMasterName() {
+  try {
+    if (usersById instanceof Map) {
+      for (const info of usersById.values()) {
+        if (normalizeRoleForApp(info?.role) === 'GM') {
+          const name = String(info?.name || '').trim();
+          if (name) return name;
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const metaName = String(lastState?.roomMeta?.ownerName || '').trim();
+    if (metaName) return metaName;
+  } catch {}
+
+  return '-';
+}
+
+function refreshRoomDetailsInfo() {
+  try {
+    if (myRoomPasswordSpan) myRoomPasswordSpan.textContent = getCurrentRoomPasswordText();
+    if (myRoomMasterSpan) myRoomMasterSpan.textContent = getCurrentRoomMasterName();
+  } catch {}
+}
+
+try { window.refreshRoomDetailsInfo = refreshRoomDetailsInfo; } catch {}
+
 function openRoomDetailsModal() {
   if (!roomDetailsModal) return;
+  try { window.refreshRoomDetailsInfo?.(); } catch {}
   roomDetailsModal.classList.remove('hidden');
 }
 
@@ -528,6 +577,12 @@ function applyRoleToUI() {
   // "Управление игроками" используется всеми, кроме зрителей
   const pm = document.getElementById('player-management');
   if (pm) pm.style.display = spectator ? 'none' : '';
+
+  // Зритель не видит механику бросков кубиков.
+  const diceStackEl = document.getElementById('dice-stack');
+  const showDice = !!currentRoomId && !spectator;
+  if (diceStackEl) diceStackEl.style.display = showDice ? '' : 'none';
+  if (diceViz) diceViz.style.display = showDice ? 'block' : 'none';
 
   // Галочка "Союзник" видна только для ГМ
   try {
