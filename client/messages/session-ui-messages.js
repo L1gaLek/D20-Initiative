@@ -20,6 +20,8 @@ function handleRegisteredMessage(msg) {
   if (diceViz) diceViz.style.display = 'none';
   if (myRoomSpan) myRoomSpan.textContent = '-';
   if (myScenarioSpan) myScenarioSpan.textContent = '-';
+  if (typeof myRoomPasswordSpan !== 'undefined' && myRoomPasswordSpan) myRoomPasswordSpan.textContent = '-';
+  if (typeof myRoomMasterSpan !== 'undefined' && myRoomMasterSpan) myRoomMasterSpan.textContent = '-';
   loginDiv.style.display = 'none';
   roomsDiv.style.display = 'none';
   gameUI.style.display = 'none';

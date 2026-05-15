@@ -61,7 +61,11 @@ function handleRoomsMessage(msg) {
   try { window.SERVER_TOTAL_USERS = totalUsers; } catch {}
   rememberLobbyRoomsSnapshot(msg.rooms, totalUsers);
   renderRooms(msg.rooms);
-  if (!currentRoomId && diceViz) diceViz.style.display = 'none';
+  if (!currentRoomId) {
+    if (diceViz) diceViz.style.display = 'none';
+    const diceStack = document.getElementById('dice-stack');
+    if (diceStack) diceStack.style.display = 'none';
+  }
   return true;
 }
 
@@ -87,6 +91,7 @@ function handleJoinedRoomMessage(msg) {
   if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
   if (diceViz) diceViz.style.display = 'block';
   applyRoleToUI();
+  try { window.refreshRoomDetailsInfo?.(); } catch {}
   startHeartbeat();
   startMembersPolling();
   return true;
@@ -98,6 +103,7 @@ function handleRoomUpdatedMessage(msg) {
   if (roomId && String(currentRoomId || '') === roomId) {
     if (myRoomSpan) myRoomSpan.textContent = msg.room.name || '-';
     if (myScenarioSpan) myScenarioSpan.textContent = msg.room.scenario || '-';
+    try { window.refreshRoomDetailsInfo?.(); } catch {}
   }
   return true;
 }
