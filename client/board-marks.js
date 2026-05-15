@@ -84,6 +84,8 @@
   const LS_KEY = 'int_marks_toolbar';
   const LS_COLLAPSE_KEY = 'int_marks_toolbar_collapsed';
   const PIN_COLOR = '#53d978';
+  const PIN_TTL_MS = 7000;
+  let markExpiryTimer = 0;
 
   function isGM() { try { return !!ctx?.isGM?.(); } catch { return false; } }
   function isSpectator() { try { return !!ctx?.isSpectator?.(); } catch { return false; } }
@@ -125,11 +127,53 @@
     return String(m.ownerId || '') === myId();
   }
 
+  function getPinExpiresAt(mark) {
+    if (String(mark?.kind || '') !== 'pin') return 0;
+    const expiresAt = Number(mark?.expiresAt || mark?.expires_at || 0);
+    return Number.isFinite(expiresAt) ? expiresAt : 0;
+  }
+
+  function isExpiredMark(mark, now = Date.now()) {
+    const expiresAt = getPinExpiresAt(mark);
+    return expiresAt > 0 && expiresAt <= now;
+  }
+
+  function schedulePinExpiryRefresh(marks) {
+    try {
+      if (markExpiryTimer) {
+        clearTimeout(markExpiryTimer);
+        markExpiryTimer = 0;
+      }
+      const now = Date.now();
+      const nextExpiry = (Array.isArray(marks) ? marks : [])
+        .map(getPinExpiresAt)
+        .filter((expiresAt) => expiresAt > now)
+        .sort((a, b) => a - b)[0];
+      if (!nextExpiry) return;
+      markExpiryTimer = setTimeout(() => {
+        markExpiryTimer = 0;
+        try { renderFromState(getState()); } catch {}
+      }, Math.max(80, nextExpiry - now + 40));
+    } catch {}
+  }
+
+  function schedulePinRemoval(mark) {
+    try {
+      const markId = String(mark?.id || '').trim();
+      if (!markId || String(mark?.ownerId || '') !== myId()) return;
+      const expiresAt = getPinExpiresAt(mark) || (Date.now() + PIN_TTL_MS);
+      setTimeout(() => {
+        try { ctx?.sendMessage?.({ type: 'removeMark', id: markId }); } catch {}
+      }, Math.max(80, expiresAt - Date.now() + 60));
+    } catch {}
+  }
+
   function getCurrentMapMarks(state = null) {
     const st = state || getState();
     const all = Array.isArray(st?.marks) ? st.marks : [];
     const mid = curMapId();
-    return all.filter(m => String(m?.mapId || '') === mid);
+    const now = Date.now();
+    return all.filter(m => String(m?.mapId || '') === mid && !isExpiredMark(m, now));
   }
 
   function findMarkById(id, state = null) {
@@ -419,6 +463,7 @@
 
     const st = state || getState();
     const marks = getCurrentMapMarks(st);
+    schedulePinExpiryRefresh(marks);
 
     marks.forEach(m => {
       const id = String(m?.id || '');
@@ -847,6 +892,7 @@
 
   function finalizePin(p) {
     if (!p || isSpectator()) return;
+    const now = Date.now();
     const m = {
       id: uid(),
       mapId: curMapId(),
@@ -855,9 +901,12 @@
       x: +Number(p.x).toFixed(4),
       y: +Number(p.y).toFixed(4),
       color: PIN_COLOR,
+      createdAt: now,
+      expiresAt: now + PIN_TTL_MS,
       label: String(label || '').trim()
     };
     ctx?.sendMessage?.({ type: 'addMark', mark: m });
+    schedulePinRemoval(m);
     drawMode = false;
     setTool('select');
     renderFromState(getState());
