@@ -521,6 +521,24 @@ body.lobby-active #lobby-scene {
 .tavern-toolbar__btn--wide{
   min-width:200px;
 }
+.tavern-credit{
+  position:absolute;
+  right:20px;
+  bottom:18px;
+  z-index:3;
+  padding:7px 12px;
+  border-radius:999px;
+  border:1px solid rgba(255, 211, 139, 0.28);
+  background:rgba(16, 12, 10, 0.56);
+  color:rgba(255, 241, 208, 0.88);
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.02em;
+  text-shadow:0 1px 2px rgba(0,0,0,0.65);
+  box-shadow:0 10px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.05);
+  backdrop-filter:blur(8px);
+  pointer-events:none;
+}
 .tavern-modal{
   width:min(940px, 96vw);
   border-radius:22px;
