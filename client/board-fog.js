@@ -720,10 +720,14 @@
 
       const getCellFromEvent = (e) => {
         const rect = canvas.getBoundingClientRect();
-        const px = (e.clientX - rect.left);
-        const py = (e.clientY - rect.top);
-        const x = clampInt(Math.floor(px / CELL), 0, (Number(this._lastState?.boardWidth) || 10) - 1);
-        const y = clampInt(Math.floor(py / CELL), 0, (Number(this._lastState?.boardHeight) || 10) - 1);
+        const w = Number(this._lastState?.boardWidth) || 10;
+        const h = Number(this._lastState?.boardHeight) || 10;
+        const scaleX = rect.width ? (canvas.width / rect.width) : 1;
+        const scaleY = rect.height ? (canvas.height / rect.height) : 1;
+        const px = (Number(e.clientX) - rect.left) * scaleX;
+        const py = (Number(e.clientY) - rect.top) * scaleY;
+        const x = clampInt(Math.floor(px / CELL), 0, w - 1);
+        const y = clampInt(Math.floor(py / CELL), 0, h - 1);
         return { x, y };
       };
 
