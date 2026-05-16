@@ -170,7 +170,7 @@
 
           <div class="profile-grid">
             <div class="profile-col">
-              <div class="kv"><div class="k">Имя</div><div class="v"><input type="text" data-sheet-path="name.value" maxlength="25" style="width:180px"></div></div>
+              <div class="kv"><div class="k">Имя</div><div class="v"><input type="text" data-sheet-path="name.value" maxlength="35" style="width:180px"></div></div>
               <div class="kv"><div class="k">Класс</div><div class="v"><input type="text" data-sheet-path="info.charClass.value" style="width:180px"></div></div>
               <div class="kv"><div class="k">Архетип класса</div><div class="v"><input type="text" data-sheet-path="info.classArchetype.value" style="width:180px"></div></div>
               <div class="kv"><div class="k">Уровень</div><div class="v"><input type="number" min="1" max="20" data-sheet-path="info.level.value" style="width:90px"></div></div>

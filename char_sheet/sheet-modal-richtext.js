@@ -910,7 +910,7 @@ function upgradeSheetTextareasToRte(root, player, canEdit) {
   });
 }
 
-const SHEET_CHARACTER_NAME_MAX_LENGTH = 25;
+const SHEET_CHARACTER_NAME_MAX_LENGTH = 35;
 function limitSheetCharacterName(value) {
   return Array.from(String(value ?? '')).slice(0, SHEET_CHARACTER_NAME_MAX_LENGTH).join('');
 }
