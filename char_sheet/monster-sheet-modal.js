@@ -777,7 +777,7 @@
       .monster-sheet__title{font-size:30px;font-weight:800;line-height:1.05;color:#fff2df}
       .monster-sheet__title-input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,226,197,.16);color:#fff2df;font-size:30px;font-weight:800;line-height:1.05;padding:0 0 6px;outline:none}
       .monster-sheet__title-input:focus{border-bottom-color:rgba(255,226,197,.42)}
-      .monster-sheet__title-input:disabled{opacity:1;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default}
+      .monster-sheet__title-input:disabled{opacity:1;cursor:url("cursor/normalcursor.cur"), default}
       .monster-sheet__subtitle{margin-top:6px;color:rgba(255,238,215,.82);font-size:14px}
       .monster-sheet__summary{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
@@ -791,7 +791,7 @@
       .monster-hero-cards--embedded .monster-stat__input{min-height:22px;font-size:10px;padding:0 3px}
       .monster-hero-cards--embedded .monster-stat__mod{min-height:22px;font-size:10px}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
-      .monster-hero-card--hp{flex:0 0 306px;min-width:0}
+      .monster-hero-card--hp{display:flex;flex:0 0 306px;min-width:0;flex-direction:column;padding:10px}
       .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:0 0 88px;min-width:88px}
       .monster-hero-card--compact{padding:5px 6px;text-align:center}
       .monster-hero-card--compact .monster-hero-card__label{font-size:9px;line-height:1.05;margin-bottom:4px}
@@ -807,25 +807,32 @@
       .monster-hp-summary-field{display:flex;flex-direction:column;gap:4px;min-width:0}
       .monster-hp-summary-field span{font-size:9px;color:rgba(255,236,212,.72)}
       .monster-hp-summary-value{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:6px 6px;font-size:12px;font-weight:700;line-height:1.12;min-height:34px;display:flex;align-items:center}
-      .monster-hero-card--hp .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
+      .monster-hero-card--hp .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:6px;align-items:end;margin-top:8px}
       .monster-hero-card--hp .monster-die-btn{width:42px;height:42px}
-      .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:10px}
-      .monster-hp-adjust-btn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:none;border-radius:12px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 10px 20px rgba(0,0,0,.24)}
+      .monster-hp-adjust{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:8px;align-items:end;margin-top:8px}
+      .monster-hp-adjust-btn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:none;border-radius:12px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;font-size:24px;cursor:url("cursor/pointer.cur"), pointer;box-shadow:0 10px 20px rgba(0,0,0,.24)}
       .monster-hp-adjust-btn:hover{filter:brightness(1.06)}
-      .monster-hp-adjust-btn:disabled{opacity:.5;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default;filter:none}
+      .monster-hp-adjust-btn:disabled{opacity:.5;cursor:url("cursor/normalcursor.cur"), default;filter:none}
       .monster-hp-adjust .monster-hero-card__mini-field{gap:6px}
       .monster-hero-card__mini-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:end;margin-top:10px}
       .monster-hero-card__mini-field{display:flex;flex-direction:column;gap:4px}
       .monster-hero-card__mini-field span{font-size:11px;color:rgba(255,236,212,.72)}
       .monster-hero-card__mini-field input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:7px 8px;font-size:13px}
-      .monster-die-btn{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border:none;border-radius:14px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;cursor:pointer;box-shadow:0 10px 20px rgba(0,0,0,.3)}
+      .monster-die-btn{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border:none;border-radius:14px;background:linear-gradient(180deg,#c53929,#7d150d);color:#fff;cursor:url("cursor/pointer.cur"), pointer;box-shadow:0 10px 20px rgba(0,0,0,.3)}
       .monster-die-btn:hover{filter:brightness(1.06)}
-      .monster-die-btn:disabled{opacity:.5;cursor:url("/D20-Initiative/cursor/normalcursor.cur"), default;filter:none}
+      .monster-die-btn:disabled{opacity:.5;cursor:url("cursor/normalcursor.cur"), default;filter:none}
       .monster-die-btn svg{display:block;width:28px;height:28px}
       .monster-hero-card input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:19px;font-weight:700}
+      .monster-condition-field{margin-top:auto;min-height:64px;border-radius:10px;border:1px solid rgba(255,230,207,.16);background:rgba(255,255,255,.045);padding:7px 8px;cursor:url("cursor/pointer.cur"), pointer;display:flex;flex-direction:column;gap:4px}
+      .monster-condition-field:hover{background:rgba(255,255,255,.07);border-color:rgba(255,230,207,.28)}
+      .monster-condition-field.has-value{background:rgba(211,98,80,.16);border-color:rgba(211,98,80,.48)}
+      .monster-condition-field__label{font-size:10px;color:rgba(255,236,212,.72);line-height:1}
+      .monster-condition-field__value{flex:1;min-height:0;color:#fff7ed;font-size:10px;font-weight:700;line-height:1.15;overflow:auto;white-space:normal;word-break:break-word}
+      .monster-condition-field__value.is-empty{color:rgba(255,236,212,.45);font-weight:600}
+      .monster-condition-field__store{display:none}
       .monster-layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:14px;min-height:420px}
       .monster-sidebar{display:flex;flex-direction:column;gap:8px}
-      .monster-sidebar__btn{padding:12px 14px;text-align:left;border-radius:14px;border:1px solid rgba(255,226,197,.12);background:rgba(39,20,14,.9);color:#ffe9ce;cursor:pointer;font-weight:700}
+      .monster-sidebar__btn{padding:12px 14px;text-align:left;border-radius:14px;border:1px solid rgba(255,226,197,.12);background:rgba(39,20,14,.9);color:#ffe9ce;cursor:url("cursor/pointer.cur"), pointer;font-weight:700}
       .monster-sidebar__btn.active{background:linear-gradient(180deg,rgba(146,64,44,.95),rgba(104,36,23,.95));border-color:rgba(255,219,180,.28);box-shadow:0 8px 18px rgba(0,0,0,.25)}
       .monster-main{min-height:0;overflow:auto;border-radius:18px;border:1px solid rgba(255,220,188,.12);background:linear-gradient(180deg,rgba(24,14,11,.98),rgba(17,10,8,.98));padding:16px}
       .monster-layout--embedded{grid-template-columns:minmax(0,1fr);gap:10px;min-height:0}
@@ -852,7 +859,7 @@
       .monster-stat__roll-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:4px;padding:3px 5px;border-radius:8px;border:1px solid rgba(255,228,204,.12);background:rgba(0,0,0,.16);min-width:0}
       .monster-stat__roll-label{font-size:9px;letter-spacing:.04em;color:rgba(255,236,219,.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
       .monster-stat__roll-value{font-size:11px;font-weight:700;color:#ffe2b9;line-height:1}
-      .monster-stat__roll-die{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff3de;cursor:url("/D20-Initiative/cursor/pointer.cur"), pointer;padding:0}
+      .monster-stat__roll-die{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:6px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#fff3de;cursor:url("cursor/pointer.cur"), pointer;padding:0}
       .monster-stat__roll-die:hover{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.22)}
       .monster-stat__roll-die:active{transform:translateY(1px)}
       .monster-stat__roll-die svg{display:block;width:12px;height:12px}
@@ -881,7 +888,7 @@
       .monster-manual-card__title-input{width:100%;background:transparent;border:none;color:#fff1de;font-size:15px;font-weight:800;padding:0;outline:none}
       .monster-manual-card__title-input::placeholder{color:rgba(255,241,222,.68)}
       .monster-manual-card__actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-      .monster-manual-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,221,191,.12);background:rgba(255,255,255,.05);color:#ffe6ca;cursor:pointer;font-size:15px}
+      .monster-manual-icon{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,221,191,.12);background:rgba(255,255,255,.05);color:#ffe6ca;cursor:url("cursor/pointer.cur"), pointer;font-size:15px}
       .monster-manual-icon:hover{filter:brightness(1.08)}
       .monster-manual-card__body{display:grid;gap:10px;margin-top:12px}
       .monster-manual-field{display:flex;flex-direction:column;gap:6px}
@@ -1029,6 +1036,7 @@
       damageResistances: monster?.damage_resistances || '',
       damageImmunities: monster?.damage_immunities || '',
       conditionImmunities: monster?.condition_immunities || '',
+      conditions: vm.conditions || '',
       traits: normalizeMonsterEntries(monster?.traits),
       description: monster?.description_ru || '',
       actions: normalizeMonsterEntries(monster?.actions),
@@ -1802,6 +1810,7 @@
 
     const vm = buildMonsterViewModel(player, sheet, monster);
     const isEmbedded = !!options?.embedded;
+    const conditionsText = String(vm.conditions || '').trim();
     rootEl.innerHTML = `
       <div class="monster-sheet">
         ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
@@ -1872,6 +1881,13 @@
                 </label>
                 <button type="button" class="monster-hp-adjust-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust="1" aria-label="Добавить здоровье">+</button>
               </div>
+              ${!isEmbedded ? `
+                <div class="monster-condition-field sheet-chip--cond ${conditionsText ? 'has-value' : ''}" data-cond-open role="button" tabindex="0" title="Состояние">
+                  <div class="monster-condition-field__label">Состояние</div>
+                  <input class="monster-condition-field__store" type="hidden" data-sheet-path="conditions" value="${esc(conditionsText)}">
+                  <div class="monster-condition-field__value ${conditionsText ? '' : 'is-empty'}" data-monster-conditions-display>${esc(conditionsText || '—')}</div>
+                </div>
+              ` : ''}
             </div>
             <div class="monster-hero-card--stack">
               <div class="monster-hero-card monster-hero-card--compact">

@@ -676,10 +676,17 @@ function bindLanguagesUi(root, player, canEdit) {
   function syncConditionsUi(sheet) {
     try {
       const value = String(sheet?.conditions || '');
-      const input = sheetContent?.querySelector('[data-sheet-path="conditions"]');
-      if (input && input instanceof HTMLInputElement) input.value = value;
-      const condChip = sheetContent?.querySelector('[data-cond-open]');
-      if (condChip) condChip.classList.toggle('has-value', !!value.trim());
+      sheetContent?.querySelectorAll('[data-sheet-path="conditions"]').forEach((input) => {
+        if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) input.value = value;
+      });
+      sheetContent?.querySelectorAll('[data-monster-conditions-display]').forEach((display) => {
+        display.textContent = value.trim() ? value : '—';
+        display.classList.toggle('is-empty', !value.trim());
+        display.setAttribute('title', value);
+      });
+      sheetContent?.querySelectorAll('[data-cond-open]').forEach((condChip) => {
+        condChip.classList.toggle('has-value', !!value.trim());
+      });
     } catch {}
     try { window.refreshPlayerConditionIndicators?.(openedSheetPlayerId); } catch {}
   }
@@ -902,6 +909,17 @@ function ensureWiredCloseHandlers() {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         showHpPopup();
+      }
+    });
+
+    sheetContent?.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      const chip = t.closest('[data-cond-open]');
+      if (!chip) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        showCondPopup();
       }
     });
 
