@@ -783,7 +783,7 @@
       .monster-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,224,194,.14);background:rgba(255,255,255,.05);font-size:12px;color:#ffe6ca}
       .monster-hero-cards{display:flex;flex-wrap:nowrap;gap:10px;align-items:stretch}
       .monster-hero-cards--embedded{display:grid;grid-template-columns:minmax(0,1fr) minmax(88px,96px);gap:10px}
-      .monster-hero-cards--embedded .monster-hero-card--hp{grid-column:1;grid-row:1;flex:1 1 auto}
+      .monster-hero-cards--embedded .monster-hero-card-group--hp{grid-column:1;grid-row:1;flex:1 1 auto}
       .monster-hero-cards--embedded .monster-hero-card--stack{grid-column:2;grid-row:1;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:1 1 auto;min-width:0}
       .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:1 / -1;grid-row:2;flex:1 1 auto}
       .monster-hero-cards--embedded .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -791,7 +791,8 @@
       .monster-hero-cards--embedded .monster-stat__input{min-height:22px;font-size:10px;padding:0 3px}
       .monster-hero-cards--embedded .monster-stat__mod{min-height:22px;font-size:10px}
       .monster-hero-card{padding:12px;border-radius:14px;background:rgba(10,8,8,.28);border:1px solid rgba(255,233,205,.11);min-width:0}
-      .monster-hero-card--hp{display:flex;flex:0 0 306px;min-width:0;flex-direction:column;padding:10px}
+      .monster-hero-card-group--hp{display:flex;flex:0 0 306px;min-width:0;flex-direction:column;gap:10px}
+      .monster-hero-card--hp{display:flex;min-width:0;flex-direction:column;padding:10px}
       .monster-hero-card--stack{display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:6px;flex:0 0 88px;min-width:88px}
       .monster-hero-card--compact{padding:5px 6px;text-align:center}
       .monster-hero-card--compact .monster-hero-card__label{font-size:9px;line-height:1.05;margin-bottom:4px}
@@ -823,7 +824,7 @@
       .monster-die-btn:disabled{opacity:.5;cursor:url("cursor/normalcursor.cur"), default;filter:none}
       .monster-die-btn svg{display:block;width:28px;height:28px}
       .monster-hero-card input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,230,207,.16);border-radius:10px;color:#fff8ef;padding:8px 10px;font-size:19px;font-weight:700}
-      .monster-condition-field{margin-top:auto;min-height:64px;border-radius:10px;border:1px solid rgba(255,230,207,.16);background:rgba(255,255,255,.045);padding:7px 8px;cursor:url("cursor/pointer.cur"), pointer;display:flex;flex-direction:column;gap:4px}
+      .monster-condition-field{flex:1 1 auto;min-height:64px;padding:7px 8px;cursor:url("cursor/pointer.cur"), pointer;display:flex;flex-direction:column;gap:4px}
       .monster-condition-field:hover{background:rgba(255,255,255,.07);border-color:rgba(255,230,207,.28)}
       .monster-condition-field.has-value{background:rgba(211,98,80,.16);border-color:rgba(211,98,80,.48)}
       .monster-condition-field__label{font-size:10px;color:rgba(255,236,212,.72);line-height:1}
@@ -908,7 +909,7 @@
       }
       @media (max-width: 760px){
         .monster-hero-cards{flex-direction:column}
-        .monster-hero-card--hp,.monster-hero-card--stack,.monster-hero-card--stats{flex:auto;width:100%}
+        .monster-hero-card-group--hp,.monster-hero-card--hp,.monster-hero-card--stack,.monster-hero-card--stats{flex:auto;width:100%}
         .monster-hero-card--stack{grid-template-columns:1fr;min-width:0}
         .monster-hp-top-grid{grid-template-columns:1fr}
         .monster-hero-card--hp .monster-hero-card__mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -916,10 +917,10 @@
         .monster-import{flex-direction:column;flex-wrap:wrap}
         .monster-import__input{min-width:100%;width:100%}
         .monster-hero-cards--embedded{grid-template-columns:1fr}
-        .monster-hero-cards--embedded .monster-hero-card--hp,
+        .monster-hero-cards--embedded .monster-hero-card-group--hp,
         .monster-hero-cards--embedded .monster-hero-card--stack,
         .monster-hero-cards--embedded .monster-hero-card--stats{grid-column:1}
-        .monster-hero-cards--embedded .monster-hero-card--hp{grid-row:1}
+        .monster-hero-cards--embedded .monster-hero-card-group--hp{grid-row:1}
         .monster-hero-cards--embedded .monster-hero-card--stack{grid-row:2}
         .monster-hero-cards--embedded .monster-hero-card--stats{grid-row:3}
         .monster-hero-cards--embedded .monster-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -1833,56 +1834,58 @@
             </div>
           </div>
           <div class="monster-hero-cards ${isEmbedded ? 'monster-hero-cards--embedded' : ''}">
-            <div class="monster-hero-card monster-hero-card--hp">
-              <div class="monster-hp-top-grid">
-                <label class="monster-hp-summary-field">
-                  <span>Текущее здоровье</span>
-                  <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-current.value" value="${esc(String(vm.currentHp))}">
-                </label>
-                <label class="monster-hp-summary-field">
-                  <span>Макс. здоровье</span>
-                  <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-max.value" value="${esc(String(vm.maxHp))}">
-                </label>
-                <div class="monster-hp-summary-field">
-                  <span>Диапазон HP</span>
-                  <div class="monster-hp-summary-value" data-monster-hp-range>${esc(`${vm.hpRange.min} / ${vm.hpRange.max}`)}</div>
+            <div class="monster-hero-card-group--hp">
+              <div class="monster-hero-card monster-hero-card--hp">
+                <div class="monster-hp-top-grid">
+                  <label class="monster-hp-summary-field">
+                    <span>Текущее здоровье</span>
+                    <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-current.value" value="${esc(String(vm.currentHp))}">
+                  </label>
+                  <label class="monster-hp-summary-field">
+                    <span>Макс. здоровье</span>
+                    <input class="monster-hero-card__input" type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-sheet-path="vitality.hp-max.value" value="${esc(String(vm.maxHp))}">
+                  </label>
+                  <div class="monster-hp-summary-field">
+                    <span>Диапазон HP</span>
+                    <div class="monster-hp-summary-value" data-monster-hp-range>${esc(`${vm.hpRange.min} / ${vm.hpRange.max}`)}</div>
+                  </div>
+                  <div class="monster-hp-summary-field">
+                    <span>Получено</span>
+                    <div class="monster-hp-summary-value" data-monster-hp-received>${esc(String(vm.hpRange.received))}</div>
+                  </div>
                 </div>
-                <div class="monster-hp-summary-field">
-                  <span>Получено</span>
-                  <div class="monster-hp-summary-value" data-monster-hp-received>${esc(String(vm.hpRange.received))}</div>
+                <div class="monster-hero-card__sub">${esc(vm.hpText || 'HP будет выбран после броска кубика')}</div>
+                <div class="monster-hero-card__mini-grid">
+                  <label class="monster-hero-card__mini-field">
+                    <span>Кубики</span>
+                    <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="count" value="${esc(String(vm.hpRoll?.count || 0))}">
+                  </label>
+                  <label class="monster-hero-card__mini-field">
+                    <span>Грани</span>
+                    <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="sides" value="${esc(String(vm.hpRoll?.sides || 0))}">
+                  </label>
+                  <label class="monster-hero-card__mini-field">
+                    <span>Бонус</span>
+                    <input type="number" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="bonus" value="${esc(String(vm.hpRoll?.bonus || 0))}">
+                  </label>
+                  <button type="button" class="monster-die-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-roll title="Бросить HP" aria-label="Бросить HP">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor"></path>
+                      <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.2"></path>
+                    </svg>
+                  </button>
                 </div>
-              </div>
-              <div class="monster-hero-card__sub">${esc(vm.hpText || 'HP будет выбран после броска кубика')}</div>
-              <div class="monster-hero-card__mini-grid">
-                <label class="monster-hero-card__mini-field">
-                  <span>Кубики</span>
-                  <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="count" value="${esc(String(vm.hpRoll?.count || 0))}">
-                </label>
-                <label class="monster-hero-card__mini-field">
-                  <span>Грани</span>
-                  <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="sides" value="${esc(String(vm.hpRoll?.sides || 0))}">
-                </label>
-                <label class="monster-hero-card__mini-field">
-                  <span>Бонус</span>
-                  <input type="number" ${canEdit ? '' : 'disabled'} data-monster-hp-roll-field="bonus" value="${esc(String(vm.hpRoll?.bonus || 0))}">
-                </label>
-                <button type="button" class="monster-die-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-roll title="Бросить HP" aria-label="Бросить HP">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor"></path>
-                    <path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.2"></path>
-                  </svg>
-                </button>
-              </div>
-              <div class="monster-hp-adjust">
-                <button type="button" class="monster-hp-adjust-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust="-1" aria-label="Убавить здоровье">−</button>
-                <label class="monster-hero-card__mini-field">
-                  <span>Изменить здоровье</span>
-                  <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust-value value="1">
-                </label>
-                <button type="button" class="monster-hp-adjust-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust="1" aria-label="Добавить здоровье">+</button>
+                <div class="monster-hp-adjust">
+                  <button type="button" class="monster-hp-adjust-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust="-1" aria-label="Убавить здоровье">−</button>
+                  <label class="monster-hero-card__mini-field">
+                    <span>Изменить здоровье</span>
+                    <input type="number" min="0" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust-value value="1">
+                  </label>
+                  <button type="button" class="monster-hp-adjust-btn" ${canEdit ? '' : 'disabled'} data-monster-hp-adjust="1" aria-label="Добавить здоровье">+</button>
+                </div>
               </div>
               ${!isEmbedded ? `
-                <div class="monster-condition-field sheet-chip--cond ${conditionsText ? 'has-value' : ''}" data-cond-open role="button" tabindex="0" title="Состояние">
+                <div class="monster-hero-card monster-condition-field sheet-chip--cond ${conditionsText ? 'has-value' : ''}" data-cond-open role="button" tabindex="0" title="Состояние">
                   <div class="monster-condition-field__label">Состояние</div>
                   <input class="monster-condition-field__store" type="hidden" data-sheet-path="conditions" value="${esc(conditionsText)}">
                   <div class="monster-condition-field__value ${conditionsText ? '' : 'is-empty'}" data-monster-conditions-display>${esc(conditionsText || '—')}</div>
