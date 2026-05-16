@@ -1821,7 +1821,8 @@ function renderShopTab(vm, canEdit) {
     `;
 
     const shopTab = tabs.find(t => t.id === "shop");
-    const mainTabs = tabs.filter(t => t.id !== "shop");
+    const wildShapeTab = tabs.find(t => t.id === "wildshape");
+    const mainTabs = tabs.filter(t => t.id !== "shop" && t.id !== "wildshape");
 
     const sidebarHtml = `
       <div class="sheet-sidebar">
@@ -1833,6 +1834,15 @@ function renderShopTab(vm, canEdit) {
         `).join("")}
 
         <div class="sheet-tab-sep"></div>
+
+        ${wildShapeTab ? `
+          <button class="sheet-tab sheet-tab--wildshape ${wildShapeTab.id === activeTab ? "active" : ""}" data-tab="${wildShapeTab.id}">
+            <span class="sheet-tab__icon" aria-hidden="true">${escapeHtml(wildShapeTab.icon || "вЂў")}</span>
+            <span class="sheet-tab__label">${escapeHtml(wildShapeTab.label)}</span>
+          </button>
+        ` : ""}
+
+        <div class="sheet-tab-spacer"></div>
 
         ${shopTab ? `
           <button class="sheet-tab sheet-tab--shop ${shopTab.id === activeTab ? "active" : ""}" data-tab="${shopTab.id}">
