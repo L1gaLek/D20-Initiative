@@ -167,7 +167,7 @@ function upgradeSheetTextareasToRte(root, player, canEdit) {
       st.setAttribute('data-rte-link-style', '1');
       st.textContent = `
         .rte-editor a.rte-link, .rte-modal a.rte-link {
-          cursor: pointer;
+          cursor: url("cursor/pointer.cur"), pointer;
           text-decoration: underline;
           font-weight: 700;
         }
@@ -910,6 +910,11 @@ function upgradeSheetTextareasToRte(root, player, canEdit) {
   });
 }
 
+const SHEET_CHARACTER_NAME_MAX_LENGTH = 25;
+function limitSheetCharacterName(value) {
+  return Array.from(String(value ?? '')).slice(0, SHEET_CHARACTER_NAME_MAX_LENGTH).join('');
+}
+
 function bindEditableInputs(root, player, canEdit) {
     if (!root || !player?.sheet?.parsed) return;
 
@@ -1049,6 +1054,11 @@ function bindEditableInputs(root, player, canEdit) {
         else if (isRte) val = inp.innerHTML;
         else val = inp.value;
 
+        if (path === "name.value") {
+          val = limitSheetCharacterName(val);
+          if (!isRte && inp.value !== val) inp.value = val;
+        }
+
         setByPath(player.sheet.parsed, path, val);
 
         // Keep hit dice max (= level) in sync when user changes level.
@@ -1115,7 +1125,7 @@ function bindEditableInputs(root, player, canEdit) {
           setByPath(player.sheet.parsed, "exhaustion", ex);
         }
 
-        if (path === "name.value") player.name = val || player.name;
+        if (path === "name.value") player.name = String(val || '').trim() || player.name;
 
         // keep hp popup synced after re-render
     try {
