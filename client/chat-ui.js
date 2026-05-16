@@ -355,11 +355,16 @@ function rememberTavernUser(id, name, extra = {}) {
   const uid = String(id || '').trim();
   if (!uid) return;
   const prev = tavernChatState.knownUsers.get(uid) || {};
+  const lastSeenAt = Math.max(
+    Number(prev.lastSeenAt || 0) || 0,
+    Number(extra.lastSeenAt || extra.seenAt || 0) || 0
+  );
   tavernChatState.knownUsers.set(uid, {
     id: uid,
     name: String(name || prev.name || 'Путник'),
     online: typeof extra.online === 'boolean' ? extra.online : !!prev.online,
-    joinedAt: Number(extra.joinedAt || prev.joinedAt || 0) || 0
+    joinedAt: Number(extra.joinedAt || prev.joinedAt || 0) || 0,
+    lastSeenAt
   });
 }
 
@@ -420,8 +425,8 @@ function normalizeTavernMessage(entry) {
     } : null
   };
   if (!item.text && !item.system) return null;
-  if (item.fromId) rememberTavernUser(item.fromId, item.fromName);
-  if (item.toId) rememberTavernUser(item.toId, item.toName || item.toId);
+  if (item.fromId) rememberTavernUser(item.fromId, item.fromName, { lastSeenAt: item.ts });
+  if (item.toId) rememberTavernUser(item.toId, item.toName || item.toId, { lastSeenAt: item.ts });
 
   if (chatType === 'direct') {
     if (!item.fromId || !item.toId) return null;
@@ -430,7 +435,7 @@ function normalizeTavernMessage(entry) {
     if (!isMine && !isForMe) return null;
     const otherId = isMine ? item.toId : item.fromId;
     const otherName = isMine ? (item.toName || getDirectChatLabel(otherId, 'Собеседник')) : item.fromName;
-    rememberTavernUser(otherId, otherName);
+    rememberTavernUser(otherId, otherName, { lastSeenAt: item.ts });
     item.chatKey = getDirectChatKey(otherId);
     item.label = otherName;
     item.mine = isMine;
@@ -471,6 +476,14 @@ function pushTavernMessage(entry, options = null) {
 function receiveTavernRealtimeRow(row) {
   const msg = decodeTavernLogRow(row?.text || row);
   if (!msg) return;
+  try {
+    if (msg.fromId) {
+      rememberTavernUser(msg.fromId, msg.fromName || msg.name || 'Путник', {
+        online: true,
+        lastSeenAt: Number(msg.ts || Date.now()) || Date.now()
+      });
+    }
+  } catch {}
   pushTavernMessage(msg, { revealTab: true });
 }
 
@@ -592,23 +605,28 @@ function setActiveTavernUsersView(view) {
 function renderTavernUsersList() {
   if (!tavernChatUsersList) return;
   const myIdLocal = getTavernMyUserId();
+  const isVpsTavern = tavernChannel?.transport === 'vps';
+  const cutoff = getChatTtlCutoffMs();
   const allUsers = Array.from(tavernChatState.knownUsers.values())
     .filter((u) => u && String(u.id) && String(u.id) !== myIdLocal)
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru'));
-  const onlineUsers = allUsers
-    .filter((user) => !!user.online)
-    .map((user) => ({ ...user, hint: 'Сейчас в таверне' }));
+  const tavernUsers = allUsers
+    .filter((user) => !!user.online || (isVpsTavern && (Number(user.lastSeenAt || 0) || 0) >= cutoff))
+    .map((user) => ({
+      ...user,
+      hint: user.online ? 'Сейчас в таверне' : 'Был(а) за общим столом'
+    }));
   const recentUsers = allUsers
     .filter((user) => tavernChatState.chats.has(getDirectChatKey(user.id)))
     .map((user) => ({ ...user, hint: user.online ? 'Есть личный диалог • сейчас онлайн' : 'Есть личный диалог' }));
 
-  if (!onlineUsers.length && !recentUsers.length) {
+  if (!tavernUsers.length && !recentUsers.length) {
     tavernChatUsersList.innerHTML = '<div class="tavern-chat-item tavern-chat-item--system"><div class="tavern-chat-item__text">Пока никто не появился. Когда путники войдут в таверну или вы начнёте личную переписку, они появятся здесь.</div></div>';
     return;
   }
 
   const activeView = String(tavernChatState.usersView || 'tavern') === 'recent' ? 'recent' : 'tavern';
-  const activeUsers = activeView === 'recent' ? recentUsers : onlineUsers;
+  const activeUsers = activeView === 'recent' ? recentUsers : tavernUsers;
   const emptyText = activeView === 'recent'
     ? 'Личных диалогов пока нет.'
     : 'Сейчас в таверне больше никого нет.';
