@@ -1854,8 +1854,22 @@ function findFirstFreeSpotClient(size) {
 }
 
 // ================== ADD PLAYER ==================
+const PLAYER_CREATION_NAME_MAX_LENGTH = 25;
+function limitPlayerCreationName(value) {
+  return Array.from(String(value ?? '')).slice(0, PLAYER_CREATION_NAME_MAX_LENGTH).join('');
+}
+
+if (playerNameInput) {
+  playerNameInput.maxLength = PLAYER_CREATION_NAME_MAX_LENGTH;
+  playerNameInput.addEventListener('input', () => {
+    const limited = limitPlayerCreationName(playerNameInput.value);
+    if (playerNameInput.value !== limited) playerNameInput.value = limited;
+  });
+}
+
 addPlayerBtn.addEventListener('click', () => {
-  const name = playerNameInput.value.trim();
+  const name = limitPlayerCreationName(playerNameInput.value).trim();
+  if (playerNameInput.value !== name) playerNameInput.value = name;
   if (!name) return alert("Введите имя");
   const gmCreating = String(myRole || '') === 'GM';
   const isAlly = !!isAllyCheckbox?.checked;
