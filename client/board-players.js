@@ -1854,7 +1854,7 @@ function findFirstFreeSpotClient(size) {
 }
 
 // ================== ADD PLAYER ==================
-const PLAYER_CREATION_NAME_MAX_LENGTH = 25;
+const PLAYER_CREATION_NAME_MAX_LENGTH = 35;
 function limitPlayerCreationName(value) {
   return Array.from(String(value ?? '')).slice(0, PLAYER_CREATION_NAME_MAX_LENGTH).join('');
 }
