@@ -41,6 +41,40 @@ function shouldSkipDuplicateOtherDice(ev, explicitId) {
   }
 }
 
+function shouldSkipRecentLogRow(text, explicitId) {
+  try {
+    const line = String(text || '').trim();
+    if (!line) return false;
+    const now = Date.now();
+    const ttlMs = 15000;
+    window.__recentLogRowKeys = window.__recentLogRowKeys || new Map();
+    const recent = window.__recentLogRowKeys;
+
+    for (const [key, ts] of recent.entries()) {
+      if ((now - Number(ts || 0)) > ttlMs) recent.delete(key);
+    }
+
+    const id = String(explicitId || '').trim();
+    const idKey = id ? `id:${id}` : '';
+    const textKey = `text:${line}`;
+    if (idKey && recent.has(idKey)) return true;
+    if (recent.has(textKey)) return true;
+    if (idKey) recent.set(idKey, now);
+    recent.set(textKey, now);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function refreshInitiativeRealtimeUi(state) {
+  try { updatePhaseUI?.(state); } catch {}
+  try { updateCurrentPlayer?.(state); } catch {}
+  try { renderTurnOrderBox?.(state); } catch {}
+  try { renderInitiativePlayersBox?.(state); } catch {}
+  try { updatePlayerList?.(); } catch {}
+}
+
 function syncUsersSnapshot(users) {
   const incoming = new Set();
   (Array.isArray(users) ? users : []).forEach((u) => {
@@ -342,8 +376,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
           p.pendingInitiativeChoice = false;
           p.willJoinNextRound = false;
         });
-        updateTurnOrderBoxVisibility(lastState);
-        renderTurnOrderBox(lastState);
+        refreshInitiativeRealtimeUi(lastState);
       }
     }
 
@@ -369,8 +402,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
           p.pendingInitiativeChoice = false;
         });
         try { window.rememberPendingInitiativeOverlay?.(currentRoomId, updates, { epoch: Number(msg?.epoch) || 0 }); } catch {}
-        updateTurnOrderBoxVisibility(lastState);
-        renderTurnOrderBox(lastState);
+        refreshInitiativeRealtimeUi(lastState);
       }
     }
 
@@ -428,15 +460,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
         }
         // Анти-дубль: иногда один и тот же лог приходит дважды подряд (optimistic + realtime или повторный bind).
         // Скрываем повтор, если он совпадает с предыдущей строкой и пришёл почти сразу.
-        try {
-          const now = Date.now();
-          const prev = lastState.log.length ? String(lastState.log[lastState.log.length - 1] || '') : '';
-          if (prev === text) {
-            const lastTs = Number(window.__lastLogRowTs || 0);
-            if (now - lastTs < 1500) return;
-          }
-          window.__lastLogRowTs = now;
-        } catch {}
+        const rowKey = String(msg.row.id || msg.row.localNonce || msg.row.nonce || '').trim();
+        if (shouldSkipRecentLogRow(text, rowKey)) return;
         lastState.log.push(text);
         if (lastState.log.length > 200) lastState.log.splice(0, lastState.log.length - 200);
         renderLog(lastState.log);
@@ -583,6 +608,12 @@ try { handleSessionUiMessage?.(msg); } catch {}
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
       const prevPlayerIds = new Set((lastState?.players || []).map((p) => String(p?.id || '').trim()).filter(Boolean));
       const prevPhase = String(lastState?.phase || '');
+      const prevPhaseSnapshot = (lastState && prevPhase)
+        ? {
+            phase: prevPhase,
+            phaseEpoch: Math.max(0, Number(lastState.phaseEpoch) || 0)
+          }
+        : null;
       const prevInitiativeEpoch = Number(lastState?.initiativeEpoch) || 0;
       const prevMapId = String(lastState?.currentMapId || '').trim();
       const prevTurnSnapshot = (lastState && prevPhase === 'combat')
@@ -629,6 +660,24 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
       try { normalized = applyPendingCombatSelectionOverlay(normalized) || normalized; } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
+      try { normalized = window.applyPendingVisibilityOverlayToState?.(normalized) || normalized; } catch {}
+
+      try {
+        const prevEpoch = Math.max(0, Number(prevPhaseSnapshot?.phaseEpoch) || 0);
+        const incomingEpoch = Math.max(0, Number(normalized?.phaseEpoch) || 0);
+        if (prevEpoch > incomingEpoch && String(prevPhaseSnapshot?.phase || '').trim()) {
+          normalized.phase = String(prevPhaseSnapshot.phase);
+          normalized.phaseEpoch = prevEpoch;
+
+          const activeMapId = String(normalized.currentMapId || '').trim();
+          const maps = Array.isArray(normalized.maps) ? normalized.maps : [];
+          const activeMap = maps.find(m => String(m?.id || '').trim() === activeMapId);
+          if (activeMap) {
+            activeMap.phase = normalized.phase;
+            activeMap.phaseEpoch = normalized.phaseEpoch;
+          }
+        }
+      } catch {}
 
       // Prevent stale room_state snapshots from rolling the visible turn back after
       // an optimistic "Конец хода" update. The authoritative newer state carries a
@@ -688,10 +737,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // Preserve newer local character sheets if an incoming room_state snapshot is older.
       try {
-        const ownUserId = String(getAppStorageItem?.('int_user_id') || window.myId || '').trim();
         (lastState.players || []).forEach(p => {
           if (!p || !p.id) return;
-          if (!ownUserId || String(p.ownerId || '') !== ownUserId) return;
           const prev = prevSheets.get(String(p.id));
           if (!prev) return;
           const incomingTs = Number(p.sheetUpdatedAt) || 0;
@@ -1667,6 +1714,7 @@ function updatePlayerList() {
           e.stopPropagation();
           const next = !p.isPublic;
           // optimistic
+          try { window.setTokenVisibilityOptimisticGuard?.(p.id, next, p.mapId || lastState?.currentMapId || ''); } catch {}
           p.isPublic = next;
           sendMessage({ type: 'setPlayerPublic', id: p.id, isPublic: next });
           updatePlayerList();

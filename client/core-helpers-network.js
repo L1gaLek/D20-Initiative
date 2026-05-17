@@ -726,6 +726,7 @@ function applyTokenRowToLocalState(row) {
     const mapId = String(row.map_id || '').trim();
     const hasPublic = (typeof row.is_public !== 'undefined');
     const isPublic = hasPublic ? !!row.is_public : null;
+    let effectiveIsPublic = isPublic;
     const rowUpdatedAtMs = Number(new Date(String(row?.updated_at || '')).getTime()) || 0;
     try {
       if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
@@ -850,12 +851,21 @@ function applyTokenRowToLocalState(row) {
         // But for GM-created non-allies the default is hidden, and the first placement on the board
         // must not silently flip the token to public if the inserted token row comes back with is_public=true.
         // Accept public=true only if local state is already public (for example after an explicit eye toggle).
-        if (isPublic !== null) {
+        let visibilityGuard = null;
+        if (effectiveIsPublic !== null) {
+          visibilityGuard = getTokenVisibilityOptimisticGuard(tokenId);
+          if (visibilityGuard && effectiveIsPublic !== !!visibilityGuard.isPublic) {
+            effectiveIsPublic = null;
+            reassertTokenVisibilityGuard(tokenId, mapId);
+          }
+        }
+        if (effectiveIsPublic !== null) {
           const ownerRole = String(p?.ownerRole || '').trim();
           const isGmOwnedNonAlly = (ownerRole === 'GM' && !p?.isAlly);
           const localIsPublic = !!p.isPublic;
-          if (!isGmOwnedNonAlly || !isPublic || localIsPublic) {
-            p.isPublic = isPublic;
+          if ((visibilityGuard && effectiveIsPublic === !!visibilityGuard.isPublic) || !isGmOwnedNonAlly || !effectiveIsPublic || localIsPublic) {
+            p.isPublic = effectiveIsPublic;
+            setTokenVisibilityOptimisticGuard(tokenId, p.isPublic, mapId || p?.mapId || lastState?.currentMapId || '');
           }
         }
 
@@ -920,6 +930,85 @@ function setTokenMoveOptimisticGuard(tokenId, x, y, mapId, prevX = null, prevY =
       at: Date.now()
     });
   } catch {}
+}
+
+const TOKEN_VISIBILITY_GUARD_TTL_MS = 8000;
+
+function getTokenVisibilityGuardMap() {
+  if (typeof window === 'undefined') return null;
+  if (!(window.__tokenVisibilityOptimisticGuard instanceof Map)) {
+    window.__tokenVisibilityOptimisticGuard = new Map();
+  }
+  return window.__tokenVisibilityOptimisticGuard;
+}
+
+function setTokenVisibilityOptimisticGuard(tokenId, isPublic, mapId = '') {
+  try {
+    const id = String(tokenId || '').trim();
+    if (!id) return;
+    const guardMap = getTokenVisibilityGuardMap();
+    if (!guardMap) return;
+    guardMap.set(id, {
+      isPublic: !!isPublic,
+      mapId: String(mapId || '').trim(),
+      at: Date.now(),
+      retryAtMs: 0
+    });
+  } catch {}
+}
+
+function getTokenVisibilityOptimisticGuard(tokenId) {
+  try {
+    const id = String(tokenId || '').trim();
+    if (!id) return null;
+    const guardMap = getTokenVisibilityGuardMap();
+    const guard = guardMap?.get(id) || null;
+    if (!guard) return null;
+    const age = Date.now() - (Number(guard.at) || 0);
+    if (age < 0 || age > TOKEN_VISIBILITY_GUARD_TTL_MS) {
+      guardMap.delete(id);
+      return null;
+    }
+    return guard;
+  } catch {
+    return null;
+  }
+}
+
+function reassertTokenVisibilityGuard(tokenId, rowMapId = '') {
+  try {
+    const guard = getTokenVisibilityOptimisticGuard(tokenId);
+    if (!guard || !currentRoomId) return;
+    const now = Date.now();
+    if (now - (Number(guard.retryAtMs) || 0) < 500) return;
+    guard.retryAtMs = now;
+    const mapId = String(guard.mapId || rowMapId || lastState?.currentMapId || '').trim();
+    if (!mapId) return;
+    sendWsEnvelope({
+      type: 'setTokenVisibility',
+      roomId: String(currentRoomId || ''),
+      mapId,
+      tokenId: String(tokenId || ''),
+      isPublic: !!guard.isPublic,
+      client_ts: now
+    }, { optimisticApplied: true });
+  } catch {}
+}
+
+function applyPendingVisibilityOverlayToState(stateLike) {
+  try {
+    const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
+    if (!st || !Array.isArray(st.players)) return st;
+    st.players.forEach((p) => {
+      if (!p || !p.id) return;
+      const guard = getTokenVisibilityOptimisticGuard(p.id);
+      if (!guard) return;
+      p.isPublic = !!guard.isPublic;
+    });
+    return st;
+  } catch {
+    return stateLike;
+  }
 }
 
 
@@ -1465,6 +1554,7 @@ async function upsertTokenVisibility(roomId, tokenId, isPublic) {
     const tid = String(tokenId || '').trim();
     const visibilityPlayer = (lastState?.players || []).find(pp => String(pp?.id || '') === tid);
     const vpsMapId = String(visibilityPlayer?.mapId || lastState?.currentMapId || '').trim();
+    if (tid) setTokenVisibilityOptimisticGuard(tid, !!isPublic, vpsMapId);
     if (rid && tid && vpsMapId) {
       sendWsEnvelope({
         type: 'setTokenVisibility',
@@ -1595,7 +1685,7 @@ async function insertRoomLog(roomId, text) {
     }
     throw new Error('VPS log API is unavailable');
   } catch (e) {
-    console.warn('room_log insert failed', e);
+    try { console.debug?.('room_log deferred insert failed', e); } catch {}
     return null;
   }
 }
@@ -1606,15 +1696,23 @@ async function appendRoomLogEntry(roomId, text, options = {}) {
   if (!rid || !line) return;
 
   const noOptimistic = !!options?.noOptimistic;
-  const savedRow = await insertRoomLog(rid, line);
-  if (!savedRow) return;
-  const row = savedRow || { text: line, created_at: new Date().toISOString() };
+  const row = {
+    text: line,
+    created_at: new Date().toISOString(),
+    localNonce: `log-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  };
   try {
     sendWsEnvelope({ type: 'logRow', roomId: rid, row }, { optimisticApplied: !noOptimistic });
   } catch {}
 
   if (!noOptimistic) {
     try { handleMessage({ type: 'logRow', row }); } catch {}
+  }
+
+  try {
+    insertRoomLog(rid, line).catch((e) => { try { console.debug?.('room_log background insert failed', e); } catch {} });
+  } catch (e) {
+    try { console.debug?.('room_log background insert schedule failed', e); } catch {}
   }
 }
 try { window.appendRoomLogEntry = appendRoomLogEntry; } catch {}
@@ -1642,19 +1740,62 @@ function buildDiceLogText(ev) {
 }
 try { window.buildDiceLogText = buildDiceLogText; } catch {}
 
+function bumpPhaseEpoch(stateLike) {
+  try {
+    if (!stateLike || typeof stateLike !== 'object') return 0;
+    const nextEpoch = Math.max(Date.now(), (Number(stateLike.phaseEpoch) || 0) + 1);
+    stateLike.phaseEpoch = nextEpoch;
+    return nextEpoch;
+  } catch {
+    return 0;
+  }
+}
+
+function ensureDiceEventLocalNonce(ev) {
+  try {
+    if (!ev || typeof ev !== 'object') return '';
+    const existing = String(ev.localNonce || ev.id || '').trim();
+    if (existing) {
+      ev.localNonce = existing;
+      return existing;
+    }
+    const nonce = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `dice-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    ev.localNonce = nonce;
+    return nonce;
+  } catch {
+    return '';
+  }
+}
+
 async function insertDiceEvent(roomId, ev) {
   try {
     if (!roomId || !ev) return;
+    const localNonce = ensureDiceEventLocalNonce(ev);
+    const line = buildDiceLogText(ev);
+    const optimistic = {
+      event: ev,
+      logRow: line ? {
+        text: line,
+        created_at: new Date().toISOString(),
+        localNonce
+      } : null
+    };
     if (typeof window !== 'undefined' && typeof window.RoomRowsApi?.insertDiceEvent === 'function') {
-      const payload = await window.RoomRowsApi.insertDiceEvent(roomId, { event: ev });
-      if (payload?.event && typeof payload.event === 'object') {
-        Object.assign(ev, payload.event);
-      }
-      return payload || null;
+      window.RoomRowsApi.insertDiceEvent(roomId, { event: ev }, { retries: 0 })
+        .then((payload) => {
+          if (payload?.event && typeof payload.event === 'object') {
+            Object.assign(ev, payload.event);
+            if (localNonce) ev.localNonce = localNonce;
+          }
+        })
+        .catch((e) => { try { console.debug?.('dice deferred insert failed', e); } catch {} });
+      return optimistic;
     }
     throw new Error('VPS dice API is unavailable');
   } catch (e) {
-    console.warn('dice insert failed', e);
+    try { console.debug?.('dice deferred insert failed', e); } catch {}
   }
 }
 try { window.insertDiceEvent = insertDiceEvent; } catch {}
@@ -2421,11 +2562,35 @@ async function sendMessage(msg) {
     if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
   } catch {}
 
+  let optimisticSheetState = null;
   try {
-    handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+    optimisticSheetState = syncActiveToMap(deepClone(next));
+    try { syncOptimisticPlayersToLocalState(optimisticSheetState); } catch {}
+    handleMessage({ type: 'state', state: optimisticSheetState });
+    try { applyOptimisticPlayerVisuals(lastState || optimisticSheetState); } catch {}
   } catch {}
 
-  await upsertRoomState(currentRoomId, next);
+  let sheetRelaySent = false;
+  try {
+    if (optimisticSheetState) {
+      sheetRelaySent = !!sendWsEnvelope({
+        type: 'state',
+        roomId: currentRoomId,
+        state: stripRoomSecretsFromState(optimisticSheetState)
+      }, { optimisticApplied: true });
+    }
+  } catch (e) {
+    console.warn('sheet immediate relay failed', e);
+  }
+
+  if (!sheetRelaySent) {
+    try {
+      upsertRoomState(currentRoomId, next)
+        .catch((e) => { try { console.debug?.('sheet background persist failed', e); } catch {} });
+    } catch (e) {
+      try { console.debug?.('sheet background persist schedule failed', e); } catch {}
+    }
+  }
   break;
 }
 
@@ -2676,6 +2841,7 @@ async function sendMessage(msg) {
           if (!isGM) return;
           try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
           next.phase = "initiative";
+          bumpPhaseEpoch(next);
           next.initiativeEpoch = Date.now();
           next.turnOrder = [];
           next.currentTurnIndex = 0;
@@ -2786,6 +2952,7 @@ async function sendMessage(msg) {
         else if (type === "startExploration") {
           if (!isGM) return;
           next.phase = "exploration";
+          bumpPhaseEpoch(next);
           // В исследовании очередь хода не нужна
           next.turnOrder = [];
           next.currentTurnIndex = 0;
@@ -2940,6 +3107,7 @@ async function sendMessage(msg) {
           if (p.isAlly) return;
 
           p.isPublic = !!msg.isPublic;
+          setTokenVisibilityOptimisticGuard(pid, p.isPublic, p.mapId || next.currentMapId || '');
         }
 
         else if (type === "combatInitChoice") {
@@ -3821,37 +3989,42 @@ async function sendMessage(msg) {
           }
 
           // Atomic-ish persist to room_state (retry on collision).
-          // UI is already updated optimistically above.
-          const appliedUpdates = await applyInitiativeAtomic(currentRoomId, myUserId, updates, {
-            expectedEpoch: initiativeEpoch
-          });
-          if (!appliedUpdates.length) return;
-
-          // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
-          // arrives before the DB echo/WS refresh.
-          try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: initiativeEpoch }); } catch {}
+          // UI is already updated optimistically above, so persistence must not block realtime.
           try {
-            // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
-            // does not carry authoritative token x/y positions (they are stored in room_tokens).
-            // If we start from room_state shadow here, src.x/src.y become null and
-            // syncOptimisticPlayersToLocalState(...) can momentarily hide all tokens on the board.
-            const optimisticBase = lastState || getRoomStateShadow(currentRoomId) || next;
-            const optimistic = deepClone(optimisticBase);
-            (optimistic.players || []).forEach((p) => {
-              if (!p || !p.id) return;
-              const u = appliedUpdates.find(x => String(x?.playerId || '') === String(p.id));
-              if (!u) return;
-              p.initiative = Number(u.total);
-              p.hasRolledInitiative = true;
-              p.pendingInitiativeChoice = false;
-            });
-            try { syncOptimisticPlayersToLocalState(optimistic); } catch {}
-            handleMessage({ type: 'state', state: optimistic });
+            applyInitiativeAtomic(currentRoomId, myUserId, updates, {
+              expectedEpoch: initiativeEpoch
+            }).then((appliedUpdates) => {
+              if (!Array.isArray(appliedUpdates) || !appliedUpdates.length) return;
+
+              // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
+              // arrives before the DB echo/WS refresh.
+              try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: initiativeEpoch }); } catch {}
+              try {
+                // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
+                // does not carry authoritative token x/y positions (they are stored in room_tokens).
+                // If we start from room_state shadow here, src.x/src.y become null and
+                // syncOptimisticPlayersToLocalState(...) can momentarily hide all tokens on the board.
+                const optimisticBase = lastState || getRoomStateShadow(currentRoomId) || next;
+                const optimistic = deepClone(optimisticBase);
+                (optimistic.players || []).forEach((p) => {
+                  if (!p || !p.id) return;
+                  const u = appliedUpdates.find(x => String(x?.playerId || '') === String(p.id));
+                  if (!u) return;
+                  p.initiative = Number(u.total);
+                  p.hasRolledInitiative = true;
+                  p.pendingInitiativeChoice = false;
+                });
+                try { syncOptimisticPlayersToLocalState(optimistic); } catch {}
+                handleMessage({ type: 'state', state: optimistic });
+              } catch (e) {
+                console.warn('initiative optimistic apply failed', e);
+              }
+            }).catch((e) => { try { console.debug?.('initiative background persist failed', e); } catch {} });
           } catch (e) {
-            console.warn('initiative optimistic apply failed', e);
+            try { console.debug?.('initiative background persist schedule failed', e); } catch {}
           }
 
-          // IMPORTANT: We already wrote to DB using the latest snapshot inside applyInitiativeAtomic.
+          // IMPORTANT: persistence is scheduled against the latest snapshot inside applyInitiativeAtomic.
           // Do NOT fall through to the generic upsert at the end of the handler (it would use stale 'next').
           return;
         }
@@ -3880,6 +4053,7 @@ async function sendMessage(msg) {
             .map(p => p.id);
           autoPlacePlayers(next);
           next.phase = "combat";
+          bumpPhaseEpoch(next);
           next.currentTurnIndex = 0;
           next.round = 1;
           next.turnEpoch = Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1);
@@ -3926,6 +4100,7 @@ async function sendMessage(msg) {
           next.turnOrder = [];
           next.currentTurnIndex = 0;
           next.turnEpoch = 0;
+          next.phaseEpoch = 0;
           next.log = ["Игра полностью сброшена"];
         }
 
@@ -3976,21 +4151,32 @@ async function sendMessage(msg) {
           console.warn('optimistic state apply failed', e);
         }
 
-        if (type === 'endTurn' && optimisticState) {
+        let stateRelaySent = false;
+        if (optimisticState) {
           try {
-            sendWsEnvelope({
+            stateRelaySent = !!sendWsEnvelope({
               type: 'state',
               roomId: currentRoomId,
               state: stripRoomSecretsFromState(optimisticState)
             }, { optimisticApplied: true });
           } catch (e) {
-            console.warn('endTurn immediate relay failed', e);
+            console.warn('state immediate relay failed', e);
           }
         }
 
-        try {
-          await upsertRoomState(currentRoomId, next);
-        } finally {
+        const needsHttpPersist = !stateRelaySent || !!pendingCreatedPlayerId;
+        if (needsHttpPersist) {
+          try {
+            upsertRoomState(currentRoomId, next)
+              .catch((e) => { try { console.debug?.('room_state background persist failed', e); } catch {} })
+              .finally(() => {
+                try { finishPendingPlayerCreateStateWrite?.(); } catch {}
+              });
+          } catch (e) {
+            try { finishPendingPlayerCreateStateWrite?.(); } catch {}
+            try { console.debug?.('room_state background persist schedule failed', e); } catch {}
+          }
+        } else {
           try { finishPendingPlayerCreateStateWrite?.(); } catch {}
         }
 
@@ -3998,7 +4184,10 @@ async function sendMessage(msg) {
 		if (type === 'setPlayerPublic') {
 			try {
 				const pid = String(msg.id || '');
-				if (pid) await upsertTokenVisibility(currentRoomId, pid, !!msg.isPublic);
+				if (pid) {
+					upsertTokenVisibility(currentRoomId, pid, !!msg.isPublic)
+						.catch((e) => console.warn('token visibility background persist failed', e));
+				}
 			} catch {}
 		}
         break;
@@ -4082,3 +4271,5 @@ try { window.refreshRoomMembers = refreshRoomMembers; } catch {}
 try { window.loadRoomLog = loadRoomLog; } catch {}
 try { window.rememberRoomStateShadow = rememberRoomStateShadow; } catch {}
 try { window.stripRoomSecretsFromState = stripRoomSecretsFromState; } catch {}
+try { window.setTokenVisibilityOptimisticGuard = setTokenVisibilityOptimisticGuard; } catch {}
+try { window.applyPendingVisibilityOverlayToState = applyPendingVisibilityOverlayToState; } catch {}
