@@ -714,6 +714,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { normalized = applyPendingCombatSelectionOverlay(normalized) || normalized; } catch {}
       try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
+      try { normalized = window.applyTokenVisibilityCacheToState?.(normalized) || normalized; } catch {}
       try { normalized = window.applyPendingVisibilityOverlayToState?.(normalized) || normalized; } catch {}
 
       try {

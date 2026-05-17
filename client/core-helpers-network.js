@@ -179,10 +179,64 @@ function deleteTokenSnapshotCached(tokenId, mapId = '') {
   } catch {}
 }
 
+function _tokenVisibilityCacheEnsure() {
+  if (!(window.__tokenVisibilitySnapshotCache instanceof Map)) window.__tokenVisibilitySnapshotCache = new Map();
+  return window.__tokenVisibilitySnapshotCache;
+}
+
+function setTokenVisibilityCached(tokenId, isPublic, mapId = '', updatedAtMs = 0) {
+  try {
+    const id = String(tokenId || '').trim();
+    if (!id) return;
+    const cache = _tokenVisibilityCacheEnsure();
+    const next = {
+      isPublic: !!isPublic,
+      mapId: String(mapId || '').trim(),
+      updatedAtMs: Math.max(0, Number(updatedAtMs) || 0),
+      appliedAtMs: Date.now()
+    };
+    cache.set(id, next);
+  } catch {}
+}
+
+function getTokenVisibilityCached(tokenId) {
+  try {
+    const id = String(tokenId || '').trim();
+    if (!id) return null;
+    const cache = _tokenVisibilityCacheEnsure();
+    return cache.get(id) || null;
+  } catch {
+    return null;
+  }
+}
+
+function applyTokenVisibilityCacheToState(stateLike) {
+  try {
+    const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
+    if (!st || !Array.isArray(st.players)) return st;
+    const activeMapId = String(st.currentMapId || '').trim();
+    st.players.forEach((p) => {
+      if (!p || !p.id) return;
+      const cached = getTokenVisibilityCached(p.id);
+      if (!cached) return;
+      const cacheMapId = String(cached.mapId || '').trim();
+      const playerMapId = String(p.mapId || '').trim();
+      if (cacheMapId && activeMapId && cacheMapId !== activeMapId && (!playerMapId || playerMapId !== cacheMapId)) return;
+      p.isPublic = !!cached.isPublic;
+    });
+    return st;
+  } catch {
+    return stateLike;
+  }
+}
+
 try {
   window.getTokenSnapshotCached = getTokenSnapshotCached;
   window.setTokenSnapshotCached = setTokenSnapshotCached;
   window.deleteTokenSnapshotCached = deleteTokenSnapshotCached;
+  window.getTokenVisibilityCached = getTokenVisibilityCached;
+  window.setTokenVisibilityCached = setTokenVisibilityCached;
+  window.applyTokenVisibilityCacheToState = applyTokenVisibilityCacheToState;
 } catch {}
 
 function getPendingPlayerCreateStateWrites() {
@@ -847,10 +901,9 @@ function applyTokenRowToLocalState(row) {
         // Keep last known map source of this token row.
         if (mapId) p.mapId = mapId;
 
-        // v4+: visibility "eye" can be mirrored into room_tokens for reliable realtime updates.
-        // But for GM-created non-allies the default is hidden, and the first placement on the board
-        // must not silently flip the token to public if the inserted token row comes back with is_public=true.
-        // Accept public=true only if local state is already public (for example after an explicit eye toggle).
+        // v4+: room_tokens.is_public is the authoritative realtime "eye" value.
+        // Older room_state snapshots can lag behind it, so cache accepted token visibility
+        // and re-apply it when full state snapshots arrive.
         let visibilityGuard = null;
         if (effectiveIsPublic !== null) {
           visibilityGuard = getTokenVisibilityOptimisticGuard(tokenId);
@@ -860,11 +913,9 @@ function applyTokenRowToLocalState(row) {
           }
         }
         if (effectiveIsPublic !== null) {
-          const ownerRole = String(p?.ownerRole || '').trim();
-          const isGmOwnedNonAlly = (ownerRole === 'GM' && !p?.isAlly);
-          const localIsPublic = !!p.isPublic;
-          if ((visibilityGuard && effectiveIsPublic === !!visibilityGuard.isPublic) || !isGmOwnedNonAlly || !effectiveIsPublic || localIsPublic) {
-            p.isPublic = effectiveIsPublic;
+          p.isPublic = !!effectiveIsPublic;
+          setTokenVisibilityCached(tokenId, p.isPublic, mapId || p?.mapId || lastState?.currentMapId || '', rowUpdatedAtMs);
+          if (visibilityGuard && effectiveIsPublic === !!visibilityGuard.isPublic) {
             setTokenVisibilityOptimisticGuard(tokenId, p.isPublic, mapId || p?.mapId || lastState?.currentMapId || '');
           }
         }
