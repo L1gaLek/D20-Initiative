@@ -585,6 +585,15 @@ try { handleSessionUiMessage?.(msg); } catch {}
       const prevPhase = String(lastState?.phase || '');
       const prevInitiativeEpoch = Number(lastState?.initiativeEpoch) || 0;
       const prevMapId = String(lastState?.currentMapId || '').trim();
+      const prevTurnSnapshot = (lastState && prevPhase === 'combat')
+        ? {
+            phase: prevPhase,
+            turnOrder: Array.isArray(lastState.turnOrder) ? lastState.turnOrder.map(id => String(id || '')).filter(Boolean) : [],
+            currentTurnIndex: Math.max(0, Number(lastState.currentTurnIndex) || 0),
+            round: Math.max(1, Number(lastState.round) || 1),
+            turnEpoch: Math.max(0, Number(lastState.turnEpoch) || 0)
+          }
+        : null;
       const prevPos = new Map();
       const prevSheets = new Map();
       const prevInitiatives = new Map();
@@ -620,6 +629,31 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
       try { normalized = applyPendingCombatSelectionOverlay(normalized) || normalized; } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
+
+      // Prevent stale room_state snapshots from rolling the visible turn back after
+      // an optimistic "Конец хода" update. The authoritative newer state carries a
+      // higher turnEpoch; old snapshots without it must not overwrite the UI.
+      try {
+        const incomingPhase = String(normalized?.phase || '');
+        const prevTurnEpoch = Math.max(0, Number(prevTurnSnapshot?.turnEpoch) || 0);
+        const incomingTurnEpoch = Math.max(0, Number(normalized?.turnEpoch) || 0);
+        if (prevTurnSnapshot && incomingPhase === 'combat' && prevTurnEpoch > incomingTurnEpoch) {
+          normalized.turnOrder = [...prevTurnSnapshot.turnOrder];
+          normalized.currentTurnIndex = Math.min(prevTurnSnapshot.currentTurnIndex, Math.max(0, normalized.turnOrder.length - 1));
+          normalized.round = prevTurnSnapshot.round;
+          normalized.turnEpoch = prevTurnEpoch;
+
+          const activeMapId = String(normalized.currentMapId || '').trim();
+          const maps = Array.isArray(normalized.maps) ? normalized.maps : [];
+          const activeMap = maps.find(m => String(m?.id || '').trim() === activeMapId);
+          if (activeMap) {
+            activeMap.turnOrder = [...normalized.turnOrder];
+            activeMap.currentTurnIndex = normalized.currentTurnIndex;
+            activeMap.round = normalized.round;
+            activeMap.turnEpoch = normalized.turnEpoch;
+          }
+        }
+      } catch {}
 
       try {
         const prevBg = (lastState && typeof lastState.bgMusic === 'object') ? lastState.bgMusic : null;

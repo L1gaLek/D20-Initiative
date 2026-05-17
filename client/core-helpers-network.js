@@ -2607,6 +2607,7 @@ async function sendMessage(msg) {
             turnOrder: [],
             currentTurnIndex: 0,
             round: 1,
+            turnEpoch: 0,
             playerStates: {},
             playersPos: {}
           });
@@ -2679,6 +2680,7 @@ async function sendMessage(msg) {
           next.turnOrder = [];
           next.currentTurnIndex = 0;
           next.round = 1;
+          next.turnEpoch = 0;
           // Initiative is now per-combatant, not "everyone in the room".
           // Default selection: those already placed on the board.
           (next.players || []).forEach(p => {
@@ -2788,6 +2790,7 @@ async function sendMessage(msg) {
           next.turnOrder = [];
           next.currentTurnIndex = 0;
           next.round = 1;
+          next.turnEpoch = 0;
           logEventToState(next, "GM начал фазу исследования");
         }
 
@@ -3338,6 +3341,7 @@ async function sendMessage(msg) {
             } else {
               next.currentTurnIndex = Math.min(prevCurrentTurnIdx, next.turnOrder.length - 1);
             }
+            next.turnEpoch = Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1);
           }
           logEventToState(next, `Игрок ${p.name} полностью удален`);
         }
@@ -3878,6 +3882,7 @@ async function sendMessage(msg) {
           next.phase = "combat";
           next.currentTurnIndex = 0;
           next.round = 1;
+          next.turnEpoch = Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1);
           const firstId = next.turnOrder[0];
           const first = (next.players || []).find(p => p.id === firstId);
           logEventToState(next, `Бой начался. Первый ход: ${first?.name || '-'}`);
@@ -3908,6 +3913,7 @@ async function sendMessage(msg) {
             }
           }
           next.currentTurnIndex = wrapped ? 0 : nextIndex;
+          next.turnEpoch = Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1);
           const nid = next.turnOrder[next.currentTurnIndex];
           const np = (next.players || []).find(p => p.id === nid);
           logEventToState(next, `Ход игрока ${np?.name || '-'}`);
@@ -3919,6 +3925,7 @@ async function sendMessage(msg) {
           next.walls = [];
           next.turnOrder = [];
           next.currentTurnIndex = 0;
+          next.turnEpoch = 0;
           next.log = ["Игра полностью сброшена"];
         }
 
