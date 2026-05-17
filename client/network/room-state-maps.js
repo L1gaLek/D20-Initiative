@@ -3,6 +3,7 @@
 function getDefaultMapPhaseState() {
   return {
     phase: 'exploration',
+    phaseEpoch: 0,
     turnOrder: [],
     currentTurnIndex: 0,
     round: 1,
@@ -14,6 +15,7 @@ function getDefaultMapPhaseState() {
 function normalizeMapPhaseState(map) {
   if (!map || typeof map !== 'object') return getDefaultMapPhaseState();
   if (typeof map.phase !== 'string' || !map.phase.trim()) map.phase = 'exploration';
+  map.phaseEpoch = Math.max(0, Number(map.phaseEpoch) || 0);
   if (!Array.isArray(map.turnOrder)) map.turnOrder = [];
   map.currentTurnIndex = Math.max(0, Number(map.currentTurnIndex) || 0);
   map.round = Math.max(1, Number(map.round) || 1);
@@ -158,6 +160,7 @@ function ensureStateHasMaps(state) {
     walls: Array.isArray(state.walls) ? state.walls : [],
     marks: Array.isArray(state.marks) ? state.marks : [],
     phase: String(state.phase || 'exploration'),
+    phaseEpoch: Math.max(0, Number(state.phaseEpoch) || 0),
     turnOrder: Array.isArray(state.turnOrder) ? deepClone(state.turnOrder) : [],
     currentTurnIndex: Math.max(0, Number(state.currentTurnIndex) || 0),
     round: Math.max(1, Number(state.round) || 1),
@@ -253,6 +256,7 @@ function syncActiveToMap(state) {
   if (st.fog && typeof st.fog === 'object') m.fog = deepClone(st.fog);
 
   m.phase = String(st.phase || 'exploration');
+  m.phaseEpoch = Math.max(0, Number(st.phaseEpoch) || 0);
   m.turnOrder = Array.isArray(st.turnOrder) ? deepClone(st.turnOrder) : [];
   m.currentTurnIndex = Math.max(0, Number(st.currentTurnIndex) || 0);
   m.round = Math.max(1, Number(st.round) || 1);
@@ -363,6 +367,7 @@ function loadMapToRoot(state, mapId) {
   st.walls = Array.isArray(m.walls) ? m.walls : [];
   st.marks = Array.isArray(m.marks) ? deepClone(m.marks) : [];
   st.phase = String(m.phase || 'exploration');
+  st.phaseEpoch = Math.max(0, Number(m.phaseEpoch) || 0);
   st.turnOrder = Array.isArray(m.turnOrder) ? deepClone(m.turnOrder) : [];
   st.currentTurnIndex = Math.max(0, Number(m.currentTurnIndex) || 0);
   st.round = Math.max(1, Number(m.round) || 1);

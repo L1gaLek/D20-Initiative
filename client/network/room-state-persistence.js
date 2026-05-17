@@ -390,6 +390,13 @@ async function upsertRoomState(roomId, nextState) {
         moveOnlyExplored: false,
         explored: []
       },
+      phase: String(m?.phase || stSafe?.phase || 'exploration'),
+      phaseEpoch: Math.max(0, Number(m?.phaseEpoch ?? stSafe?.phaseEpoch) || 0),
+      turnOrder: Array.isArray(m?.turnOrder) ? m.turnOrder.map(id => String(id || '')).filter(Boolean) : [],
+      currentTurnIndex: Math.max(0, Number(m?.currentTurnIndex) || 0),
+      round: Math.max(1, Number(m?.round) || 1),
+      turnEpoch: Math.max(0, Number(m?.turnEpoch) || 0),
+      playerStates: (m?.playerStates && typeof m.playerStates === 'object') ? deepClone(m.playerStates) : {},
       playersPos: {}
     }));
   } catch {}
@@ -440,8 +447,15 @@ async function upsertRoomState(roomId, nextState) {
     try { rememberRoomStateShadow(roomId, syncedState); } catch {}
     return;
   } catch (error) {
-    console.warn('server-side room_state update failed', error);
-    throw error;
+    try { console.debug?.('server-side room_state deferred update failed', error); } catch {}
+    try {
+      const publicState = stripRoomSecretsFromState(syncedState || stSafe);
+      if (typeof sendWsEnvelope === 'function') {
+        sendWsEnvelope({ type: 'state', roomId, state: publicState }, { optimisticApplied: true });
+      }
+      try { rememberRoomStateShadow(roomId, syncedState || stSafe); } catch {}
+    } catch {}
+    return;
   }
 
   const { error } = await sbClient.from("room_state").upsert(payload);

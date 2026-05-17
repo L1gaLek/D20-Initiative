@@ -327,6 +327,7 @@ function createInitialGameState() {
       explored: []
     },
     phase: "exploration",
+    phaseEpoch: 0,
     turnOrder: [],
     currentTurnIndex: 0,
     round: 1,
@@ -357,6 +358,7 @@ function createInitialGameState() {
     fog: base.fog,
 
     phase: "lobby",
+    phaseEpoch: 0,
     players: [],
     turnOrder: [],
     currentTurnIndex: 0,
