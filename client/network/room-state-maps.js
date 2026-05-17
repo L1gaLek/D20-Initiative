@@ -6,6 +6,7 @@ function getDefaultMapPhaseState() {
     turnOrder: [],
     currentTurnIndex: 0,
     round: 1,
+    turnEpoch: 0,
     playerStates: {}
   };
 }
@@ -16,6 +17,7 @@ function normalizeMapPhaseState(map) {
   if (!Array.isArray(map.turnOrder)) map.turnOrder = [];
   map.currentTurnIndex = Math.max(0, Number(map.currentTurnIndex) || 0);
   map.round = Math.max(1, Number(map.round) || 1);
+  map.turnEpoch = Math.max(0, Number(map.turnEpoch) || 0);
   if (!map.playerStates || typeof map.playerStates !== 'object') map.playerStates = {};
   return map;
 }
@@ -159,6 +161,7 @@ function ensureStateHasMaps(state) {
     turnOrder: Array.isArray(state.turnOrder) ? deepClone(state.turnOrder) : [],
     currentTurnIndex: Math.max(0, Number(state.currentTurnIndex) || 0),
     round: Math.max(1, Number(state.round) || 1),
+    turnEpoch: Math.max(0, Number(state.turnEpoch) || 0),
     playerStates: {},
     fog: (state.fog && typeof state.fog === 'object') ? state.fog : {
       enabled: false,
@@ -253,6 +256,7 @@ function syncActiveToMap(state) {
   m.turnOrder = Array.isArray(st.turnOrder) ? deepClone(st.turnOrder) : [];
   m.currentTurnIndex = Math.max(0, Number(st.currentTurnIndex) || 0);
   m.round = Math.max(1, Number(st.round) || 1);
+  m.turnEpoch = Math.max(0, Number(st.turnEpoch) || 0);
   m.playerStates = {};
   (Array.isArray(st.players) ? st.players : []).forEach((p) => {
     if (!p?.id) return;
@@ -362,6 +366,7 @@ function loadMapToRoot(state, mapId) {
   st.turnOrder = Array.isArray(m.turnOrder) ? deepClone(m.turnOrder) : [];
   st.currentTurnIndex = Math.max(0, Number(m.currentTurnIndex) || 0);
   st.round = Math.max(1, Number(m.round) || 1);
+  st.turnEpoch = Math.max(0, Number(m.turnEpoch) || 0);
   st.fog = (m.fog && typeof m.fog === 'object') ? deepClone(m.fog) : {
     enabled: false,
     mode: 'manual',

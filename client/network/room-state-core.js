@@ -330,6 +330,7 @@ function createInitialGameState() {
     turnOrder: [],
     currentTurnIndex: 0,
     round: 1,
+    turnEpoch: 0,
     playerStates: {},
     playersPos: {} // playerId -> {x,y}
   };
@@ -360,6 +361,7 @@ function createInitialGameState() {
     turnOrder: [],
     currentTurnIndex: 0,
     round: 1,
+    turnEpoch: 0,
     log: [],
 
     roomAccess: {
