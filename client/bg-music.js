@@ -306,10 +306,15 @@
   let currentTrackKey = '';
   let currentResolvedUrl = '';
   let lastPlaybackSync = { trackKey: '', isPlaying: false, startedAt: 0, pausedAt: 0 };
+  let modalInteractionUntil = 0;
 
   function getMutableState() {
     if (!currentState || typeof currentState !== 'object') currentState = {};
     return currentState;
+  }
+
+  function markModalInteraction(ms = 1200) {
+    modalInteractionUntil = Math.max(modalInteractionUntil, Date.now() + ms);
   }
 
   function normalizeAudioOutput() {
@@ -412,44 +417,40 @@
   }
 
   async function tryUnlock({ resumeAfter = false } = {}) {
-    const state = currentState || {};
+    const state = getMutableState();
     const bg = ensureBgMusic(state);
     const cur = getCurTrackFromState(state);
     bgmDiag('tryUnlock:start', { resumeAfter, unlocked, isPlaying: !!bg?.isPlaying, hasTrack: !!cur });
 
     if (unlocked) {
       await resumeAudioPipeline().catch(() => {});
-      if (resumeAfter) {
+      if (resumeAfter && bg?.isPlaying && cur) {
         // ВАЖНО: если это вызвано из пользовательского жеста и музыка уже должна играть,
         // запускаем реальное воспроизведение прямо здесь, пока у браузера ещё есть user activation.
-        if (bg?.isPlaying && cur) {
+        try {
+          const resolvedUrl = await materializePlayableUrl(cur);
+          const nextTrackKey = String(cur?.id || cur?.path || cur?.url || '');
+          if (resolvedUrl && (!audio.src || currentTrackKey !== nextTrackKey)) {
+            currentObjectUrl = String(resolvedUrl || '');
+            currentResolvedUrl = String(resolvedUrl || '');
+            currentTrackKey = nextTrackKey;
+            audio.src = resolvedUrl;
+            try { audio.load(); } catch {}
+          }
+          const offset = Math.max(0, (Date.now() - safeNum(bg.startedAt, Date.now())) / 1000);
           try {
-            const resolvedUrl = await materializePlayableUrl(cur);
-            const nextTrackKey = String(cur?.id || cur?.path || cur?.url || '');
-            if (resolvedUrl && (!audio.src || currentTrackKey !== nextTrackKey)) {
-              currentObjectUrl = String(resolvedUrl || '');
-              currentResolvedUrl = String(resolvedUrl || '');
-              currentTrackKey = nextTrackKey;
-              audio.src = resolvedUrl;
-              try { audio.load(); } catch {}
+            if (Number.isFinite(audio.duration) && audio.duration > 0) {
+              audio.currentTime = (offset % audio.duration);
+            } else if (offset > 0) {
+              audio.currentTime = offset;
             }
-            const offset = Math.max(0, (Date.now() - safeNum(bg.startedAt, Date.now())) / 1000);
-            try {
-              if (Number.isFinite(audio.duration) && audio.duration > 0) {
-                audio.currentTime = (offset % audio.duration);
-              } else if (offset > 0) {
-                audio.currentTime = offset;
-              }
-            } catch {}
-            normalizeAudioOutput();
-            await audio.play();
-            bgmDiag('tryUnlock:alreadyUnlocked->play ok');
-            hideUnlockBtn();
-            return true;
           } catch {}
-        }
-        bgmDiag('tryUnlock:alreadyUnlocked->applyState');
-        applyState(state);
+          normalizeAudioOutput();
+          await audio.play();
+          bgmDiag('tryUnlock:alreadyUnlocked->play ok');
+          hideUnlockBtn();
+          return true;
+        } catch {}
       }
       return true;
     }
@@ -486,7 +487,7 @@
       unlocked = true;
       bgmDiag('tryUnlock:success via probe');
       hideUnlockBtn();
-      if (resumeAfter) applyState(state);
+      if (resumeAfter && bg?.isPlaying && cur) applyState(state);
       return true;
     } catch {
       bgmDiag('tryUnlock:failed');
@@ -877,6 +878,10 @@
 
     modal.querySelector(".modal-close")?.addEventListener("click", closeModal);
     modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+    modal.addEventListener("pointerdown", () => markModalInteraction(), true);
+    modal.addEventListener("focusin", () => markModalInteraction(4000), true);
+    modal.addEventListener("keydown", () => markModalInteraction(4000), true);
+    modal.addEventListener("input", () => markModalInteraction(4000), true);
 
     const uploadBtn = modal.querySelector("#bgm-upload-btn");
     const fileInput = modal.querySelector("#bgm-file-input");
@@ -906,10 +911,10 @@
       }
 
       fileInput.value = "";
-      renderList();
+      renderList({ force: true });
     });
 
-    renderList();
+    renderList({ force: true });
   }
 
   function closeModal() {
@@ -919,13 +924,15 @@
     }
   }
 
-  function renderList() {
+  function renderList(options = {}) {
     if (!modal) return;
+    const force = !!options?.force;
 
     try {
       const ae = document.activeElement;
-      if (ae && modal.contains(ae) && ae.tagName === 'TEXTAREA') return;
+      if (!force && ae && modal.contains(ae) && ae.tagName === 'TEXTAREA') return;
     } catch {}
+    if (!force && Date.now() < modalInteractionUntil) return;
 
     const listEl = modal.querySelector("#bgm-list");
     if (!listEl) return;
@@ -992,12 +999,32 @@
         desc.addEventListener("change", handler);
       }
 
-      item.querySelector('[data-act="play"]')?.addEventListener("click", () => setCurrent(trackId, true));
-      item.querySelector('[data-act="set"]')?.addEventListener("click", () => setCurrent(trackId, false));
+      const bindImmediateTrackAction = (selector, fn) => {
+        const btn = item.querySelector(selector);
+        if (!btn) return;
+        let handledOnPointerDown = false;
+        btn.addEventListener("pointerdown", (e) => {
+          if (e.button !== 0) return;
+          handledOnPointerDown = true;
+          e.preventDefault();
+          markModalInteraction();
+          fn();
+        });
+        btn.addEventListener("click", () => {
+          if (handledOnPointerDown) {
+            handledOnPointerDown = false;
+            return;
+          }
+          fn();
+        });
+      };
+
+      bindImmediateTrackAction('[data-act="play"]', () => setCurrent(trackId, true));
+      bindImmediateTrackAction('[data-act="set"]', () => setCurrent(trackId, false));
       item.querySelector('[data-act="del"]')?.addEventListener("click", async () => {
         if (!confirm("Удалить трек?")) return;
         await deleteTrack(getTrackById(trackId) || t);
-        renderList();
+        renderList({ force: true });
       });
 
       listEl.appendChild(item);
@@ -1129,7 +1156,7 @@
     if (!bg.currentTrackId) bg.currentTrackId = id;
     syncState();
     try { await applyState(getMutableState()); } catch {}
-    try { if (modal) renderList(); } catch {}
+    try { if (modal) renderList({ force: true }); } catch {}
   }
 
   async function deleteTrack(track) {
