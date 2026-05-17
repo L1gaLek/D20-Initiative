@@ -3474,9 +3474,17 @@ async function sendMessage(msg) {
             description: String(t?.description || t?.desc || ''),
             url: String(t?.url || ''),
             path: String(t?.path || ''),
+            source: String(t?.source || ''),
+            fileName: String(t?.fileName || t?.serverFileName || t?.name || ''),
+            serverFileName: String(t?.serverFileName || t?.fileName || t?.name || ''),
+            storageKey: String(t?.storageKey || t?.deleteKey || t?.path || ''),
+            deleteKey: String(t?.deleteKey || t?.storageKey || t?.path || ''),
             createdAt: String(t?.createdAt || '')
           })).filter(t => t.id && (t.url || t.path));
           incoming.currentTrackId = incoming.currentTrackId ? String(incoming.currentTrackId) : null;
+          if (incoming.currentTrackId && !incoming.tracks.some(t => String(t.id || '') === String(incoming.currentTrackId))) {
+            incoming.currentTrackId = incoming.tracks.length ? String(incoming.tracks[0].id || '') : null;
+          }
           incoming.isPlaying = !!incoming.isPlaying;
           incoming.startedAt = Number.isFinite(Number(incoming.startedAt)) ? Math.max(0, Number(incoming.startedAt)) : 0;
           incoming.pausedAt = Number.isFinite(Number(incoming.pausedAt)) ? Math.max(0, Number(incoming.pausedAt)) : 0;

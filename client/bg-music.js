@@ -212,7 +212,9 @@
           else t.source = isVpsTrack(t) ? 'vps' : 'supabase-legacy';
         }
         if (!t.fileName) t.fileName = String(t.serverFileName || t.name || '');
+        if (!t.serverFileName) t.serverFileName = String(t.fileName || t.name || '');
         if (!t.storageKey) t.storageKey = String(t.deleteKey || t.path || '');
+        if (!t.deleteKey) t.deleteKey = String(t.storageKey || t.path || '');
       });
     } catch {}
 
@@ -305,6 +307,11 @@
   let currentResolvedUrl = '';
   let lastPlaybackSync = { trackKey: '', isPlaying: false, startedAt: 0, pausedAt: 0 };
 
+  function getMutableState() {
+    if (!currentState || typeof currentState !== 'object') currentState = {};
+    return currentState;
+  }
+
   function normalizeAudioOutput() {
     try { audio.muted = false; } catch {}
     try { audio.defaultMuted = false; } catch {}
@@ -364,6 +371,13 @@
     const bg = ensureBgMusic(state || {});
     const tracks = safeArr(bg?.tracks);
     return tracks.find(t => String(t?.id || "") === String(bg?.currentTrackId || "")) || null;
+  }
+
+  function getTrackById(trackId, state = currentState) {
+    const id = String(trackId || '').trim();
+    if (!id) return null;
+    const bg = ensureBgMusic(state || {});
+    return safeArr(bg?.tracks).find(t => String(t?.id || '').trim() === id) || null;
   }
 
   async function performUnlockProbe() {
@@ -759,7 +773,7 @@
           if (now - _lastSeekSyncAt > 250) {
             _lastSeekSyncAt = now;
             try {
-              const bg = ensureBgMusic(currentState || {});
+              const bg = ensureBgMusic(getMutableState());
               bg.pausedAt = cur;
               if (bg.isPlaying) bg.startedAt = Date.now() - Math.round(cur * 1000);
               syncState();
@@ -873,7 +887,7 @@
       const files = Array.from(fileInput.files || []);
       if (!files.length) return;
 
-      const bg = ensureBgMusic(currentState || {});
+      const bg = ensureBgMusic(getMutableState());
       const existing = safeArr(bg?.tracks).length;
 
       if (existing >= MAX_TRACKS) {
@@ -883,7 +897,7 @@
       }
 
       for (const f of files) {
-        if ((ensureBgMusic(currentState).tracks || []).length >= MAX_TRACKS) break;
+        if ((ensureBgMusic(getMutableState()).tracks || []).length >= MAX_TRACKS) break;
         if (f.size > MAX_FILE_SIZE) {
           alert(`Файл "${f.name}" больше 50 МБ и не будет загружен.`);
           continue;
@@ -917,7 +931,7 @@
     if (!listEl) return;
     listEl.innerHTML = "";
 
-    const bg = ensureBgMusic(currentState || {});
+    const bg = ensureBgMusic(getMutableState());
     const tracks = safeArr(bg.tracks);
 
     if (!tracks.length) {
@@ -935,7 +949,8 @@
       item.style.padding = "10px";
       item.style.background = "rgba(0,0,0,0.15)";
 
-      const isCurrent = String(bg.currentTrackId || "") === String(t.id || "");
+      const trackId = String(t?.id || "").trim();
+      const isCurrent = String(bg.currentTrackId || "") === trackId;
       item.innerHTML = `
         <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
           <div style="min-width:0;">
@@ -968,19 +983,20 @@
       const desc = item.querySelector('textarea[data-act="desc"]');
       if (desc) {
         const handler = () => {
-          t.desc = String(desc.value || '');
-          t.description = t.desc;
+          const latest = getTrackById(trackId) || t;
+          latest.desc = String(desc.value || '');
+          latest.description = latest.desc;
           debounceSync();
         };
         desc.addEventListener("input", handler);
         desc.addEventListener("change", handler);
       }
 
-      item.querySelector('[data-act="play"]')?.addEventListener("click", () => setCurrent(t.id, true));
-      item.querySelector('[data-act="set"]')?.addEventListener("click", () => setCurrent(t.id, false));
+      item.querySelector('[data-act="play"]')?.addEventListener("click", () => setCurrent(trackId, true));
+      item.querySelector('[data-act="set"]')?.addEventListener("click", () => setCurrent(trackId, false));
       item.querySelector('[data-act="del"]')?.addEventListener("click", async () => {
         if (!confirm("Удалить трек?")) return;
-        await deleteTrack(t);
+        await deleteTrack(getTrackById(trackId) || t);
         renderList();
       });
 
@@ -1000,7 +1016,7 @@
   // ---------- Storage ops ----------
   async function uploadTrack(file) {
     const roomId = getRoomId();
-    const bg = ensureBgMusic(currentState || {});
+    const bg = ensureBgMusic(getMutableState());
     if (safeArr(bg.tracks).length >= MAX_TRACKS) return;
 
     if (!roomId) {
@@ -1112,24 +1128,30 @@
 
     if (!bg.currentTrackId) bg.currentTrackId = id;
     syncState();
+    try { await applyState(getMutableState()); } catch {}
+    try { if (modal) renderList(); } catch {}
   }
 
   async function deleteTrack(track) {
-    const bg = ensureBgMusic(currentState || {});
+    const bg = ensureBgMusic(getMutableState());
     const id = String(track?.id || "");
     if (!id) return;
+    const freshTrack = getTrackById(id) || track;
 
-    if (isVpsTrack(track)) {
+    if (isVpsTrack(freshTrack)) {
       try {
-        const resp = await fetch(buildTrackDeleteUrl(track), {
-          method: 'DELETE',
-          headers: (typeof window.getVpsAuthHeaders === 'function') ? window.getVpsAuthHeaders() : {},
-          credentials: 'omit',
-          mode: 'cors'
-        });
-        if (!resp.ok && resp.status !== 404) {
-          const payload = await resp.json().catch(() => null);
-          console.warn('bg-music: VPS delete failed', payload || resp.status);
+        const deleteUrl = buildTrackDeleteUrl(freshTrack);
+        if (deleteUrl) {
+          const resp = await fetch(deleteUrl, {
+            method: 'DELETE',
+            headers: (typeof window.getVpsAuthHeaders === 'function') ? window.getVpsAuthHeaders() : {},
+            credentials: 'omit',
+            mode: 'cors'
+          });
+          if (!resp.ok && resp.status !== 404) {
+            const payload = await resp.json().catch(() => null);
+            console.warn('bg-music: VPS delete failed', payload || resp.status);
+          }
         }
       } catch (e) {
         console.warn('bg-music: VPS delete failed', e);
@@ -1137,7 +1159,7 @@
     } else {
       // Legacy Supabase track without direct URL.
       const sb = getSb();
-      const p = String(track?.storageKey || track?.deleteKey || track?.path || "");
+      const p = String(freshTrack?.storageKey || freshTrack?.deleteKey || freshTrack?.path || "");
       if (sb?.storage && p) {
         const rm = await sb.storage.from(BUCKET).remove([p]);
         if (rm?.error) console.warn("bg-music: remove failed", rm.error);
@@ -1160,6 +1182,7 @@
     }
 
     syncState();
+    try { await applyState(getMutableState()); } catch {}
   }
 
   // ---------- Sync (room_state) ----------
@@ -1177,14 +1200,15 @@
     const sm = (typeof sendMessage === "function") ? sendMessage : window.sendMessage;
     if (typeof sm !== "function") return;
 
-    const bg = ensureBgMusic(currentState || {});
+    const bg = ensureBgMusic(getMutableState());
     sm({ type: "bgMusicSet", bgMusic: bg });
   }
 
   function setCurrent(trackId, play) {
     if (!isGM()) return;
-    const bg = ensureBgMusic(currentState || {});
-    const nextId = String(trackId || "");
+    const bg = ensureBgMusic(getMutableState());
+    const nextId = String(trackId || "").trim();
+    if (!getTrackById(nextId)) return;
     const changed = String(bg.currentTrackId || "") !== nextId;
 
     bg.currentTrackId = nextId;
@@ -1207,6 +1231,7 @@
     }
 
     syncState();
+    try { Promise.resolve(applyState(getMutableState())).catch(() => {}); } catch {}
   }
 
   function syncSeekUi() {
@@ -1226,7 +1251,7 @@
     audio.addEventListener('ended', syncSeekUi);
     audio.addEventListener('canplay', async () => {
       normalizeAudioOutput();
-      const bg = ensureBgMusic(currentState || {});
+      const bg = ensureBgMusic(getMutableState());
       if (!bg?.isPlaying) return;
       if (!unlocked) return;
       try {
@@ -1239,7 +1264,7 @@
       }
     });
     audio.addEventListener('canplaythrough', async () => {
-      const bg = ensureBgMusic(currentState || {});
+      const bg = ensureBgMusic(getMutableState());
       if (!bg?.isPlaying || !unlocked) return;
       try {
         await resumeAudioPipeline().catch(() => {});
@@ -1439,13 +1464,14 @@
   if (toggleBtn) {
     toggleBtn.addEventListener("click", () => {
       if (!isGM()) return;
-      const bg = ensureBgMusic(currentState || {});
+      const bg = ensureBgMusic(getMutableState());
       if (!bg.currentTrackId) return;
 
       if (bg.isPlaying) {
         bg.pausedAt = Number(audio.currentTime) || Number(bg.pausedAt) || 0;
         bg.isPlaying = false;
         syncState();
+        try { Promise.resolve(applyState(getMutableState())).catch(() => {}); } catch {}
         return;
       }
 
@@ -1454,18 +1480,20 @@
       bg.isPlaying = true;
       bg.startedAt = Date.now() - Math.round(t * 1000);
       syncState();
+      try { Promise.resolve(applyState(getMutableState())).catch(() => {}); } catch {}
     });
   }
 
   if (stopBtn) {
     stopBtn.addEventListener("click", () => {
       if (!isGM()) return;
-      const bg = ensureBgMusic(currentState || {});
+      const bg = ensureBgMusic(getMutableState());
       bg.isPlaying = false;
       bg.pausedAt = 0;
       try { audio.pause(); audio.currentTime = 0; } catch {}
       bg.startedAt = Date.now();
       syncState();
+      try { Promise.resolve(applyState(getMutableState())).catch(() => {}); } catch {}
     });
   }
 
