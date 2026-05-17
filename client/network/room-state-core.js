@@ -328,6 +328,7 @@ function createInitialGameState() {
     },
     phase: "exploration",
     phaseEpoch: 0,
+    combatSelectionEpoch: 0,
     turnOrder: [],
     currentTurnIndex: 0,
     round: 1,
@@ -359,6 +360,7 @@ function createInitialGameState() {
 
     phase: "lobby",
     phaseEpoch: 0,
+    combatSelectionEpoch: 0,
     players: [],
     turnOrder: [],
     currentTurnIndex: 0,

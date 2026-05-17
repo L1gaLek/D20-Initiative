@@ -129,6 +129,28 @@ function rememberPendingInitiativeOverlay(roomId, updates, options = {}) {
   } catch {}
 }
 
+const PENDING_INITIATIVE_OVERLAY_TTL_MS = 15000;
+
+function syncPendingInitiativePlayerToActiveMap(stateLike, player) {
+  try {
+    const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
+    const p = player && typeof player === 'object' ? player : null;
+    if (!st || !p || !p.id) return;
+    const mapId = String(st.currentMapId || '').trim();
+    const maps = Array.isArray(st.maps) ? st.maps : [];
+    const activeMap = maps.find(m => String(m?.id || '').trim() === mapId) || maps[0] || null;
+    if (!activeMap) return;
+    if (!activeMap.playerStates || typeof activeMap.playerStates !== 'object') activeMap.playerStates = {};
+    activeMap.playerStates[String(p.id)] = {
+      inCombat: !!p.inCombat,
+      initiative: (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative),
+      hasRolledInitiative: !!p.hasRolledInitiative,
+      pendingInitiativeChoice: !!p.pendingInitiativeChoice,
+      willJoinNextRound: !!p.willJoinNextRound
+    };
+  } catch {}
+}
+
 function applyPendingInitiativeOverlayToState(state) {
   try {
     const st = state && typeof state === 'object' ? state : null;
@@ -167,13 +189,14 @@ function applyPendingInitiativeOverlayToState(state) {
       const pid = String(p.id);
       const ov = __pendingInitiativeOverlay.byPlayerId.get(pid);
       if (!ov) return;
-
-      const incomingRolled = !!p.hasRolledInitiative;
-      const incomingInit = (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative);
-      if (incomingRolled && incomingInit === Number(ov.initiative)) {
+      const age = Date.now() - (Number(ov.updatedAt) || 0);
+      if (age < 0 || age > PENDING_INITIATIVE_OVERLAY_TTL_MS) {
         __pendingInitiativeOverlay.byPlayerId.delete(pid);
         return;
       }
+
+      const incomingRolled = !!p.hasRolledInitiative;
+      const incomingInit = (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative);
 
       if (!p.inCombat) return;
       if (!incomingRolled || incomingInit === null) {
@@ -182,6 +205,7 @@ function applyPendingInitiativeOverlayToState(state) {
         p.pendingInitiativeChoice = false;
         if (typeof ov.willJoinNextRound !== 'undefined') p.willJoinNextRound = !!ov.willJoinNextRound;
       }
+      syncPendingInitiativePlayerToActiveMap(st, p);
     });
     return st;
   } catch {
@@ -392,6 +416,7 @@ async function upsertRoomState(roomId, nextState) {
       },
       phase: String(m?.phase || stSafe?.phase || 'exploration'),
       phaseEpoch: Math.max(0, Number(m?.phaseEpoch ?? stSafe?.phaseEpoch) || 0),
+      combatSelectionEpoch: Math.max(0, Number(m?.combatSelectionEpoch ?? stSafe?.combatSelectionEpoch) || 0),
       turnOrder: Array.isArray(m?.turnOrder) ? m.turnOrder.map(id => String(id || '')).filter(Boolean) : [],
       currentTurnIndex: Math.max(0, Number(m?.currentTurnIndex) || 0),
       round: Math.max(1, Number(m?.round) || 1),
