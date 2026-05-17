@@ -1751,6 +1751,17 @@ function bumpPhaseEpoch(stateLike) {
   }
 }
 
+function bumpCombatSelectionEpoch(stateLike) {
+  try {
+    if (!stateLike || typeof stateLike !== 'object') return 0;
+    const nextEpoch = Math.max(Date.now(), (Number(stateLike.combatSelectionEpoch) || 0) + 1);
+    stateLike.combatSelectionEpoch = nextEpoch;
+    return nextEpoch;
+  } catch {
+    return 0;
+  }
+}
+
 function ensureDiceEventLocalNonce(ev) {
   try {
     if (!ev || typeof ev !== 'object') return '';
@@ -2769,6 +2780,8 @@ async function sendMessage(msg) {
             wallAlpha: 1,
             walls: [],
             phase: 'exploration',
+            phaseEpoch: 0,
+            combatSelectionEpoch: 0,
             turnOrder: [],
             currentTurnIndex: 0,
             round: 1,
@@ -2842,6 +2855,7 @@ async function sendMessage(msg) {
           try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
           next.phase = "initiative";
           bumpPhaseEpoch(next);
+          bumpCombatSelectionEpoch(next);
           next.initiativeEpoch = Date.now();
           next.turnOrder = [];
           next.currentTurnIndex = 0;
@@ -2903,6 +2917,7 @@ async function sendMessage(msg) {
           }
 
           logEventToState(next, `${p.name} ${inCombat ? 'вступает' : 'выходит'} из боя`);
+          bumpCombatSelectionEpoch(next);
         }
 
         else if (type === 'setPlayersInCombatBulk') {
@@ -2946,6 +2961,7 @@ async function sendMessage(msg) {
 
           if (changed) {
             logEventToState(next, `GM изменил участников боя: ${changed}`);
+            bumpCombatSelectionEpoch(next);
           }
         }
 
@@ -3198,6 +3214,11 @@ async function sendMessage(msg) {
           p.initiative = Number(roll.total) || 0;
           p.hasRolledInitiative = true;
           p.pendingInitiativeChoice = false;
+          try {
+            rememberPendingInitiativeOverlay(currentRoomId, [{ playerId: p.id, total: p.initiative }], {
+              epoch: Number(next?.initiativeEpoch) || 0
+            });
+          } catch {}
           await broadcastDiceEventOnly({
             fromId: myUserId,
             fromName: p.name,
@@ -3226,6 +3247,11 @@ async function sendMessage(msg) {
             p.initiative = Number(roll.total) || 0;
             p.hasRolledInitiative = true;
             p.pendingInitiativeChoice = false;
+            try {
+              rememberPendingInitiativeOverlay(currentRoomId, [{ playerId: p.id, total: p.initiative }], {
+                epoch: Number(next?.initiativeEpoch) || 0
+              });
+            } catch {}
             await broadcastDiceEventOnly({
               fromId: myUserId,
               fromName: p.name,
@@ -3286,6 +3312,15 @@ async function sendMessage(msg) {
           p.hasRolledInitiative = true;
           p.pendingInitiativeChoice = false;
           if (next.phase === 'combat') p.willJoinNextRound = true;
+          try {
+            rememberPendingInitiativeOverlay(currentRoomId, [{
+              playerId: p.id,
+              total: p.initiative,
+              willJoinNextRound: !!p.willJoinNextRound
+            }], {
+              epoch: Number(next?.initiativeEpoch) || 0
+            });
+          } catch {}
 
           await broadcastDiceEventOnly({
             fromId: myUserId,
@@ -4101,6 +4136,7 @@ async function sendMessage(msg) {
           next.currentTurnIndex = 0;
           next.turnEpoch = 0;
           next.phaseEpoch = 0;
+          next.combatSelectionEpoch = 0;
           next.log = ["Игра полностью сброшена"];
         }
 

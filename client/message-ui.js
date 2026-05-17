@@ -235,7 +235,52 @@ window.consumeCombatPlacementForPlayer = (playerOrId) => {
   __combatPlacementReady.delete(pid);
 };
 
+const COMBAT_SELECTION_OVERLAY_TTL_MS = 15000;
 const __pendingCombatSelectionOverlay = new Map(); // playerId -> { inCombat, updatedAt }
+
+function getPendingCombatSelectionOverlay(playerId) {
+  try {
+    const pid = String(playerId || '').trim();
+    if (!pid) return null;
+    const ov = __pendingCombatSelectionOverlay.get(pid);
+    if (!ov) return null;
+    const age = Date.now() - (Number(ov.updatedAt) || 0);
+    if (age < 0 || age > COMBAT_SELECTION_OVERLAY_TTL_MS) {
+      __pendingCombatSelectionOverlay.delete(pid);
+      return null;
+    }
+    return ov;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingCombatSelectionOverlay() {
+  try { __pendingCombatSelectionOverlay.clear(); } catch {}
+}
+
+function syncCombatPlayerToActiveMap(stateLike, player) {
+  try {
+    const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
+    const p = player && typeof player === 'object' ? player : null;
+    if (!st || !p || !p.id) return;
+    const mapId = String(st.currentMapId || '').trim();
+    const maps = Array.isArray(st.maps) ? st.maps : [];
+    const activeMap = maps.find(m => String(m?.id || '').trim() === mapId) || maps[0] || null;
+    if (!activeMap) return;
+    if (!activeMap.playerStates || typeof activeMap.playerStates !== 'object') activeMap.playerStates = {};
+    activeMap.playerStates[String(p.id)] = {
+      inCombat: !!p.inCombat,
+      initiative: (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative),
+      hasRolledInitiative: !!p.hasRolledInitiative,
+      pendingInitiativeChoice: !!p.pendingInitiativeChoice,
+      willJoinNextRound: !!p.willJoinNextRound
+    };
+    if (typeof st.combatSelectionEpoch !== 'undefined') {
+      activeMap.combatSelectionEpoch = Math.max(0, Number(st.combatSelectionEpoch) || 0);
+    }
+  } catch {}
+}
 
 function rememberPendingCombatSelection(playerId, inCombat) {
   const pid = String(playerId || '').trim();
@@ -249,28 +294,35 @@ function rememberPendingCombatSelection(playerId, inCombat) {
 function applyPendingCombatSelectionOverlay(stateLike) {
   const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
   if (!st || !Array.isArray(st.players) || __pendingCombatSelectionOverlay.size === 0) return st;
+  const phase = String(st?.phase || '');
+  if (phase !== 'initiative' && phase !== 'combat') {
+    clearPendingCombatSelectionOverlay();
+    return st;
+  }
   const now = Date.now();
   st.players.forEach((p) => {
     if (!p || !p.id) return;
     const pid = String(p.id);
     const ov = __pendingCombatSelectionOverlay.get(pid);
     if (!ov) return;
-    if ((now - Number(ov.updatedAt || 0)) > 8000) {
-      __pendingCombatSelectionOverlay.delete(pid);
-      return;
-    }
-    if (!!p.inCombat === !!ov.inCombat) {
+    if ((now - Number(ov.updatedAt || 0)) > COMBAT_SELECTION_OVERLAY_TTL_MS) {
       __pendingCombatSelectionOverlay.delete(pid);
       return;
     }
     p.inCombat = !!ov.inCombat;
     if (!p.inCombat) {
+      p.initiative = null;
+      p.hasRolledInitiative = false;
       p.pendingInitiativeChoice = false;
       p.willJoinNextRound = false;
     }
+    syncCombatPlayerToActiveMap(st, p);
   });
   return st;
 }
+
+try { window.getPendingCombatSelectionOverlay = getPendingCombatSelectionOverlay; } catch {}
+try { window.clearPendingCombatSelectionOverlay = clearPendingCombatSelectionOverlay; } catch {}
 
 function syncVisiblePlayersState(state) {
   const normalized = state || lastState || null;
@@ -363,6 +415,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
     if (msg.type === 'initiativeReset') {
       try { window.clearPendingInitiativeOverlay?.(currentRoomId); } catch {}
+      try { clearPendingCombatSelectionOverlay(); } catch {}
       if (lastState && Array.isArray(lastState.players)) {
         lastState.phase = 'initiative';
         lastState.turnOrder = [];
@@ -608,6 +661,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
       const prevLog = (lastState && Array.isArray(lastState.log)) ? [...lastState.log] : null;
       const prevPlayerIds = new Set((lastState?.players || []).map((p) => String(p?.id || '').trim()).filter(Boolean));
       const prevPhase = String(lastState?.phase || '');
+      const prevCombatSelectionEpoch = Math.max(0, Number(lastState?.combatSelectionEpoch) || 0);
       const prevPhaseSnapshot = (lastState && prevPhase)
         ? {
             phase: prevPhase,
@@ -657,10 +711,29 @@ try { handleSessionUiMessage?.(msg); } catch {}
       // нормализация состояния + поддержка нескольких карт кампании
       let normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
-      try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
       try { normalized = applyPendingCombatSelectionOverlay(normalized) || normalized; } catch {}
+      try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
       try { normalized = window.stripRoomSecretsFromState?.(normalized) || normalized; } catch {}
       try { normalized = window.applyPendingVisibilityOverlayToState?.(normalized) || normalized; } catch {}
+
+      try {
+        const incomingCombatEpoch = Math.max(0, Number(normalized?.combatSelectionEpoch) || 0);
+        if (prevCombatSelectionEpoch > incomingCombatEpoch) {
+          normalized.combatSelectionEpoch = prevCombatSelectionEpoch;
+          (normalized.players || []).forEach((p) => {
+            if (!p || !p.id) return;
+            const prev = prevInitiatives.get(String(p.id));
+            if (!prev) return;
+            p.inCombat = !!prev.inCombat;
+            p.initiative = prev.initiative;
+            p.hasRolledInitiative = !!prev.hasRolledInitiative;
+            p.pendingInitiativeChoice = !!prev.pendingInitiativeChoice;
+            p.willJoinNextRound = !!prev.willJoinNextRound;
+            if (String(prev.initiativeMode || '').trim()) p.initiativeMode = prev.initiativeMode;
+            syncCombatPlayerToActiveMap(normalized, p);
+          });
+        }
+      } catch {}
 
       try {
         const prevEpoch = Math.max(0, Number(prevPhaseSnapshot?.phaseEpoch) || 0);
