@@ -1615,7 +1615,7 @@ function renderShopTab(vm, canEdit) {
     const note = document.createElement('div');
     note.className = 'sheet-note';
     note.textContent = canEdit
-      ? "Можно загрузить .json (Long Story Short/Charbox) или редактировать поля вручную — всё сохраняется."
+      ? "Можно загрузить .json или редактировать поля вручную — всё сохраняется."
       : "Просмотр. Редактировать может только владелец или GM.";
     sheetActions.appendChild(note);
 
