@@ -1082,7 +1082,8 @@ function applyBoardBackgroundToDom(state) {
   if (!bg || !board) return;
 
   const bgUrl = state?.boardBgUrl || state?.boardBgDataUrl || null;
-  bg.style.backgroundImage = bgUrl ? `url(${bgUrl})` : 'none';
+  const cssBgUrl = bgUrl ? String(bgUrl).replace(/\\/g, '\\\\').replace(/"/g, '\\"') : '';
+  bg.style.backgroundImage = cssBgUrl ? `url("${cssBgUrl}")` : 'none';
 
   // Важно: размеры берем из актуального состояния, а не из глобальных переменных
   const bw = Number(state?.boardWidth) || 10;

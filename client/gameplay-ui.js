@@ -199,7 +199,10 @@ clearBoardBtn.addEventListener('click', () => {
 
 // ===== Campaign save/load UI (GM) =====
 function snapshotCampaignStateForSave() {
-  const st = ensureStateHasMaps(deepClone(lastState || null));
+  let st = ensureStateHasMaps(deepClone(lastState || null));
+  try {
+    st = window.applyDetachedPayloadToState?.(st) || st;
+  } catch {}
   // Зафиксируем всё текущее (подложка/стены/позиции) в активную карту перед сохранением
   syncActiveToMap(st);
   return st;
