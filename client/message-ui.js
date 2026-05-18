@@ -385,6 +385,110 @@ function updateCellFeetUi(state) {
   if (playerValue) playerValue.textContent = String(value);
 }
 
+function applyStatePatchMessage(msg) {
+  try {
+    const patch = (msg?.patch && typeof msg.patch === 'object') ? msg.patch : {};
+    if (!lastState) lastState = createInitialGameState();
+    const st = lastState;
+    const fields = (patch.fields && typeof patch.fields === 'object') ? patch.fields : {};
+    const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+    const prevMapId = String(st.currentMapId || '').trim();
+    let mapChanged = false;
+
+    if (hasOwn(fields, 'currentMapId')) {
+      const nextMapId = String(fields.currentMapId || '').trim();
+      const maps = Array.isArray(st.maps) ? st.maps : [];
+      const exists = maps.some(m => String(m?.id || '') === nextMapId);
+      if (nextMapId && exists && nextMapId !== prevMapId) {
+        try { syncActiveToMap(st); } catch {}
+        try { loadMapToRoot(st, nextMapId); } catch {}
+        mapChanged = true;
+      }
+    }
+
+    const incomingPhaseEpoch = Math.max(0, Number(fields.phaseEpoch) || 0);
+    const currentPhaseEpoch = Math.max(0, Number(st.phaseEpoch) || 0);
+    const canApplyPhase = !hasOwn(fields, 'phaseEpoch') || incomingPhaseEpoch >= currentPhaseEpoch;
+    if (canApplyPhase) {
+      if (typeof fields.phase === 'string' && fields.phase.trim()) st.phase = fields.phase.trim();
+      if (hasOwn(fields, 'phaseEpoch')) st.phaseEpoch = incomingPhaseEpoch;
+      if (hasOwn(fields, 'combatSelectionEpoch')) st.combatSelectionEpoch = Math.max(0, Number(fields.combatSelectionEpoch) || 0);
+      if (hasOwn(fields, 'initiativeEpoch')) st.initiativeEpoch = Math.max(0, Number(fields.initiativeEpoch) || 0);
+    }
+
+    const incomingTurnEpoch = Math.max(0, Number(fields.turnEpoch) || 0);
+    const currentTurnEpoch = Math.max(0, Number(st.turnEpoch) || 0);
+    const canApplyTurn = !hasOwn(fields, 'turnEpoch') || incomingTurnEpoch >= currentTurnEpoch;
+    if (canApplyTurn) {
+      if (Array.isArray(fields.turnOrder)) st.turnOrder = fields.turnOrder.map(id => String(id || '')).filter(Boolean);
+      if (hasOwn(fields, 'currentTurnIndex')) {
+        const maxIndex = Math.max(0, (Array.isArray(st.turnOrder) ? st.turnOrder.length : 0) - 1);
+        st.currentTurnIndex = Math.min(maxIndex, Math.max(0, Number(fields.currentTurnIndex) || 0));
+      }
+      if (hasOwn(fields, 'round')) st.round = Math.max(1, Number(fields.round) || 1);
+      if (hasOwn(fields, 'turnEpoch')) st.turnEpoch = incomingTurnEpoch;
+    }
+
+    if (hasOwn(fields, 'cellFeet')) {
+      st.cellFeet = Math.max(1, Math.min(100, Number(fields.cellFeet) || 10));
+    }
+
+    const applyPlayerPatch = (target) => {
+      if (!target || !target.id) return null;
+      const id = String(target.id || '');
+      const p = (Array.isArray(st.players) ? st.players : []).find(pp => String(pp?.id || '') === id);
+      if (!p) return null;
+      if (hasOwn(target, 'inCombat')) {
+        p.inCombat = !!target.inCombat;
+        try { rememberPendingCombatSelection?.(p.id, p.inCombat); } catch {}
+      }
+      if (hasOwn(target, 'initiative')) {
+        p.initiative = (target.initiative === null || typeof target.initiative === 'undefined') ? null : Number(target.initiative);
+      }
+      if (hasOwn(target, 'hasRolledInitiative')) p.hasRolledInitiative = !!target.hasRolledInitiative;
+      if (hasOwn(target, 'pendingInitiativeChoice')) p.pendingInitiativeChoice = !!target.pendingInitiativeChoice;
+      if (hasOwn(target, 'willJoinNextRound')) p.willJoinNextRound = !!target.willJoinNextRound;
+      if (hasOwn(target, 'initiativeMode')) p.initiativeMode = String(target.initiativeMode || 'normal');
+      try { syncCombatPlayerToActiveMap(st, p); } catch {}
+      return p;
+    };
+
+    (Array.isArray(patch.players) ? patch.players : []).forEach((item) => {
+      const patched = applyPlayerPatch(item);
+      if (!patched) return;
+      const local = (Array.isArray(players) ? players : []).find(pp => String(pp?.id || '') === String(patched.id || ''));
+      if (local) {
+        ['inCombat', 'initiative', 'hasRolledInitiative', 'pendingInitiativeChoice', 'willJoinNextRound', 'initiativeMode'].forEach((key) => {
+          if (hasOwn(item, key)) local[key] = deepClone(patched[key]);
+        });
+      }
+    });
+
+    try { syncActiveToMap(st); } catch {}
+    try { updateCampaignMapsUI?.(st); } catch {}
+    try { updateCellFeetUi(st); } catch {}
+    try { syncVisiblePlayersState(st); } catch {}
+    try { renderBoard(st); } catch {}
+    try { updatePhaseUI(st); } catch {}
+    try { updateCurrentPlayer(st); } catch {}
+    try { renderTurnOrderBox(st); } catch {}
+    try { renderInitiativePlayersBox(st); } catch {}
+    try { updatePlayerList(); } catch {}
+    try { window.InfoModal?.refresh?.(players); } catch {}
+    if (mapChanged && currentRoomId && typeof loadRoomTokens === 'function') {
+      const targetMapId = String(st.currentMapId || '').trim();
+      Promise.resolve(loadRoomTokens(currentRoomId, targetMapId))
+        .then((rows) => {
+          if (String(lastState?.currentMapId || '').trim() !== targetMapId) return;
+          handleMessage({ type: 'tokensInit', rows: Array.isArray(rows) ? rows : [], mapId: targetMapId });
+        })
+        .catch((e) => console.warn('statePatch map tokens load failed', e));
+    }
+  } catch (e) {
+    console.warn('statePatch apply failed', e);
+  }
+}
+
 function handleMessage(msg) {
 
 // ===== Rooms lobby messages =====
@@ -454,12 +558,27 @@ try { handleSessionUiMessage?.(msg); } catch {}
           p.hasRolledInitiative = true;
           p.pendingInitiativeChoice = false;
         });
+        try { syncVisiblePlayersState(lastState); } catch {}
+        try {
+          updates.forEach((u) => {
+            const local = (Array.isArray(players) ? players : []).find(pp => String(pp?.id || '') === String(u.playerId));
+            if (!local) return;
+            local.initiative = Number(u.total);
+            local.hasRolledInitiative = true;
+            local.pendingInitiativeChoice = false;
+          });
+        } catch {}
         try { window.rememberPendingInitiativeOverlay?.(currentRoomId, updates, { epoch: Number(msg?.epoch) || 0 }); } catch {}
         refreshInitiativeRealtimeUi(lastState);
       }
     }
 
     // ===== Saved bases (персонажи, привязанные к userId) =====
+    if (msg.type === 'statePatch' && msg.patch) {
+      applyStatePatchMessage(msg);
+      return;
+    }
+
     if (msg.type === "savedBasesList" && Array.isArray(msg.list)) {
       window.InfoModal?.onSavedBasesList?.(msg.list);
     }

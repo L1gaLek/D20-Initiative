@@ -1148,6 +1148,129 @@ function applyOptimisticPlayerVisuals(snapshot) {
   }
 }
 
+function buildRealtimeCombatPlayerPatch(player) {
+  if (!player || !player.id) return null;
+  return {
+    id: String(player.id),
+    inCombat: !!player.inCombat,
+    initiative: (player.initiative === null || typeof player.initiative === 'undefined') ? null : Number(player.initiative),
+    hasRolledInitiative: !!player.hasRolledInitiative,
+    pendingInitiativeChoice: !!player.pendingInitiativeChoice,
+    willJoinNextRound: !!player.willJoinNextRound,
+    initiativeMode: normalizeInitiativeMode(player.initiativeMode || 'normal')
+  };
+}
+
+function buildRealtimeStatePatchForMessage(type, msg, stateLike, isGM, userId) {
+  try {
+    const st = stateLike && typeof stateLike === 'object' ? stateLike : null;
+    if (!st) return null;
+    const fields = {};
+    const playersPatch = [];
+    const addPlayer = (player) => {
+      const patch = buildRealtimeCombatPlayerPatch(player);
+      if (patch) playersPatch.push(patch);
+    };
+    const addPlayersByIds = (ids) => {
+      const wanted = new Set((Array.isArray(ids) ? ids : []).map(id => String(id || '')).filter(Boolean));
+      (Array.isArray(st.players) ? st.players : []).forEach((p) => {
+        if (wanted.has(String(p?.id || ''))) addPlayer(p);
+      });
+    };
+    const addAllCombatPlayers = () => {
+      (Array.isArray(st.players) ? st.players : []).forEach(addPlayer);
+    };
+    const addPhaseFields = () => {
+      fields.phase = String(st.phase || 'exploration');
+      fields.phaseEpoch = Math.max(0, Number(st.phaseEpoch) || 0);
+      fields.combatSelectionEpoch = Math.max(0, Number(st.combatSelectionEpoch) || 0);
+      fields.initiativeEpoch = Math.max(0, Number(st.initiativeEpoch) || 0);
+      fields.turnOrder = Array.isArray(st.turnOrder) ? st.turnOrder.map(id => String(id || '')).filter(Boolean) : [];
+      fields.currentTurnIndex = Math.max(0, Number(st.currentTurnIndex) || 0);
+      fields.round = Math.max(1, Number(st.round) || 1);
+      fields.turnEpoch = Math.max(0, Number(st.turnEpoch) || 0);
+    };
+    const addTurnFields = () => {
+      fields.turnOrder = Array.isArray(st.turnOrder) ? st.turnOrder.map(id => String(id || '')).filter(Boolean) : [];
+      fields.currentTurnIndex = Math.max(0, Number(st.currentTurnIndex) || 0);
+      fields.round = Math.max(1, Number(st.round) || 1);
+      fields.turnEpoch = Math.max(0, Number(st.turnEpoch) || 0);
+    };
+    const addCurrentMapField = () => {
+      const mapId = String(st.currentMapId || '').trim();
+      if (mapId) fields.currentMapId = mapId;
+    };
+
+    switch (String(type || '')) {
+      case 'startInitiative':
+        if (!isGM) return null;
+        addPhaseFields();
+        addAllCombatPlayers();
+        break;
+      case 'startExploration':
+        if (!isGM) return null;
+        addPhaseFields();
+        break;
+      case 'startCombat':
+        if (!isGM) return null;
+        addPhaseFields();
+        addAllCombatPlayers();
+        break;
+      case 'endTurn':
+        if (isGM) {
+          addTurnFields();
+          addAllCombatPlayers();
+        } else {
+          fields.currentTurnIndex = Math.max(0, Number(st.currentTurnIndex) || 0);
+          fields.round = Math.max(1, Number(st.round) || 1);
+          fields.turnEpoch = Math.max(0, Number(st.turnEpoch) || 0);
+        }
+        break;
+      case 'setPlayerInCombat':
+        if (!isGM) return null;
+        fields.combatSelectionEpoch = Math.max(0, Number(st.combatSelectionEpoch) || 0);
+        addPlayersByIds([msg?.id]);
+        break;
+      case 'setPlayersInCombatBulk':
+        if (!isGM) return null;
+        fields.combatSelectionEpoch = Math.max(0, Number(st.combatSelectionEpoch) || 0);
+        addPlayersByIds((Array.isArray(msg?.items) ? msg.items : []).map((it) => it?.id));
+        break;
+      case 'setInitiativeMode':
+      case 'rollInitiativeFor':
+      case 'gmRollInitiativeFor':
+      case 'combatInitChoice':
+        addPlayersByIds([msg?.id]);
+        break;
+      case 'rollInitiativeAllOwned':
+      case 'rollInitiative':
+        (Array.isArray(st.players) ? st.players : [])
+          .filter((p) => p && String(p.ownerId || '') === String(userId || '') && p.inCombat && p.hasRolledInitiative)
+          .forEach(addPlayer);
+        break;
+      case 'setCellFeet':
+        if (!isGM) return null;
+        fields.cellFeet = Math.max(1, Math.min(100, Number(st.cellFeet) || 10));
+        break;
+      case 'switchCampaignMap':
+        if (!isGM) return null;
+        addCurrentMapField();
+        addPhaseFields();
+        break;
+      default:
+        return null;
+    }
+
+    const patch = {};
+    if (Object.keys(fields).length) patch.fields = fields;
+    if (playersPatch.length) patch.players = playersPatch;
+    return Object.keys(patch).length ? patch : null;
+  } catch (e) {
+    console.warn('buildRealtimeStatePatchForMessage failed', e);
+    return null;
+  }
+}
+
 async function upsertRoomMapMetaRow(roomId, map) {
   await ensureSupabaseReady();
   const m = map || {};
@@ -2901,6 +3024,19 @@ async function sendMessage(msg) {
           }
 
           try {
+            const livePatch = buildRealtimeStatePatchForMessage(type, msg, next, isGM, myUserId);
+            if (livePatch) {
+              sendWsEnvelope({
+                type: 'statePatch',
+                roomId: currentRoomId,
+                patch: livePatch
+              }, { optimisticApplied: true });
+            }
+          } catch (e) {
+            console.warn('campaign statePatch relay failed', e);
+          }
+
+          try {
             const existingIds = new Set((next.maps || []).map(m => String(m?.id || '')).filter(Boolean));
             for (const m of (next.maps || [])) {
               if (m && m.id) await upsertRoomMapMetaRow(currentRoomId, m);
@@ -4267,6 +4403,19 @@ async function sendMessage(msg) {
           try { applyOptimisticPlayerVisuals(lastState || optimisticState); } catch {}
         } catch (e) {
           console.warn('optimistic state apply failed', e);
+        }
+
+        try {
+          const livePatch = buildRealtimeStatePatchForMessage(type, msg, optimisticState || next, isGM, myUserId);
+          if (livePatch) {
+            sendWsEnvelope({
+              type: 'statePatch',
+              roomId: currentRoomId,
+              patch: livePatch
+            }, { optimisticApplied: true });
+          }
+        } catch (e) {
+          console.warn('statePatch immediate relay failed', e);
         }
 
         let stateRelaySent = false;
