@@ -569,7 +569,7 @@ async function createCampaignSave(ownerKey, name, state) {
   try {
     const roomId = String(arguments?.[3] || currentRoomId || '').trim();
     if (roomId) {
-      const detached = await snapshotCampaignDetachedData(roomId, state);
+      const detached = _mergeDetachedWithStateFallback(await snapshotCampaignDetachedData(roomId, state), state);
       payloadState = {
         __format: 'campaign-save-v2',
         state: deepClone(state || {}),
@@ -700,15 +700,16 @@ function _deriveDetachedFromState(stateLike) {
   const players = Array.isArray(st.players) ? st.players : [];
   const tokens = [];
   const seen = new Set();
+  const activeMapId = String(st?.currentMapId || '').trim();
   const roomMapMeta = maps.map((m) => ({
     map_id: String(m?.id || ''),
     name: String(m?.name || 'Карта'),
     section_id: String(m?.sectionId || '') || null,
     board_width: Math.max(5, Math.min(150, Number(m?.boardWidth) || 10)),
     board_height: Math.max(5, Math.min(150, Number(m?.boardHeight) || 10)),
-    board_bg_url: m?.boardBgUrl || m?.boardBgDataUrl || null,
-    board_bg_storage_path: m?.boardBgStoragePath || null,
-    board_bg_storage_bucket: m?.boardBgStorageBucket || null,
+    board_bg_url: m?.boardBgUrl || m?.boardBgDataUrl || (String(m?.id || '') === activeMapId ? (st?.boardBgUrl || st?.boardBgDataUrl) : null) || null,
+    board_bg_storage_path: m?.boardBgStoragePath || (String(m?.id || '') === activeMapId ? st?.boardBgStoragePath : null) || null,
+    board_bg_storage_bucket: m?.boardBgStorageBucket || (String(m?.id || '') === activeMapId ? st?.boardBgStorageBucket : null) || null,
     grid_alpha: Number.isFinite(Number(m?.gridAlpha)) ? clamp(Number(m.gridAlpha), 0, 1) : 1,
     wall_alpha: Number.isFinite(Number(m?.wallAlpha)) ? clamp(Number(m.wallAlpha), 0, 1) : 1
   }));
@@ -770,6 +771,59 @@ function _deriveDetachedFromState(stateLike) {
   return { roomMapMeta, roomWalls, roomMarks, roomFog, roomTokens: tokens };
 }
 
+function _getDetachedMapId(row) {
+  return String(row?.map_id || row?.mapId || row?.id || '').trim();
+}
+
+function _hasValue(value) {
+  return value !== null && typeof value !== 'undefined' && String(value).trim() !== '';
+}
+
+function _fillMissingDetachedMetaField(target, source, targetKey, sourceKey = targetKey) {
+  if (_hasValue(target?.[targetKey])) return;
+  if (_hasValue(source?.[sourceKey])) target[targetKey] = source[sourceKey];
+}
+
+function _mergeDetachedWithStateFallback(detachedRaw, stateLike) {
+  const derived = _deriveDetachedFromState(stateLike);
+  const base = (detachedRaw && typeof detachedRaw === 'object') ? deepClone(detachedRaw) : {};
+  const merged = {
+    ...derived,
+    ...base,
+    roomWalls: Array.isArray(base.roomWalls) ? base.roomWalls : derived.roomWalls,
+    roomMarks: Array.isArray(base.roomMarks) ? base.roomMarks : derived.roomMarks,
+    roomFog: Array.isArray(base.roomFog) ? base.roomFog : derived.roomFog,
+    roomTokens: Array.isArray(base.roomTokens) ? base.roomTokens : derived.roomTokens
+  };
+
+  const byMapId = new Map();
+  (Array.isArray(base.roomMapMeta) ? base.roomMapMeta : []).forEach((row) => {
+    const mapId = _getDetachedMapId(row);
+    if (!mapId) return;
+    byMapId.set(mapId, { map_id: mapId, ...(row || {}) });
+  });
+
+  (Array.isArray(derived.roomMapMeta) ? derived.roomMapMeta : []).forEach((source) => {
+    const mapId = _getDetachedMapId(source);
+    if (!mapId) return;
+    const target = byMapId.get(mapId) || { map_id: mapId };
+    target.map_id = String(target.map_id || mapId);
+    _fillMissingDetachedMetaField(target, source, 'name');
+    _fillMissingDetachedMetaField(target, source, 'section_id');
+    _fillMissingDetachedMetaField(target, source, 'board_width');
+    _fillMissingDetachedMetaField(target, source, 'board_height');
+    _fillMissingDetachedMetaField(target, source, 'board_bg_url');
+    _fillMissingDetachedMetaField(target, source, 'board_bg_storage_path');
+    _fillMissingDetachedMetaField(target, source, 'board_bg_storage_bucket');
+    _fillMissingDetachedMetaField(target, source, 'grid_alpha');
+    _fillMissingDetachedMetaField(target, source, 'wall_alpha');
+    byMapId.set(mapId, target);
+  });
+
+  merged.roomMapMeta = Array.from(byMapId.values());
+  return merged;
+}
+
 async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
   const rid = String(roomId || '').trim();
   if (!rid) return;
@@ -786,7 +840,7 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
     console.warn('applyCampaignSaveToRoom: immediate local state apply failed', e);
   }
 
-  const detached = payload.detached || _deriveDetachedFromState(normalized);
+  const detached = _mergeDetachedWithStateFallback(payload.detached, normalized);
   const mapIds = new Set((Array.isArray(normalized.maps) ? normalized.maps : []).map((m) => String(m?.id || '').trim()).filter(Boolean));
   const withRoom = (rows, { dropId = false } = {}) => (Array.isArray(rows) ? rows : [])
     .map((r) => {
@@ -795,9 +849,10 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
       // Reusing those IDs during restore may collide with rows from other rooms.
       if (dropId) delete row.id;
       delete row.created_at;
+      if (!row.map_id && row.mapId) row.map_id = String(row.mapId);
       return { ...row, room_id: rid, updated_at: new Date().toISOString() };
     })
-    .filter((r) => mapIds.has(String(r?.map_id || '').trim()));
+    .filter((r) => mapIds.has(String(r?.map_id || r?.mapId || '').trim()));
 
   let mapMetaRows = withRoom(detached?.roomMapMeta, { dropId: true });
   let wallRows = withRoom(detached?.roomWalls, { dropId: true });

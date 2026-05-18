@@ -10,19 +10,22 @@ function resetDetachedRoomCache(roomId) {
 }
 
 function _cacheMapMeta(row) {
-  const mapId = String(row?.map_id || row?.id || '').trim();
+  const mapId = String(row?.map_id || row?.mapId || row?.id || '').trim();
   if (!mapId) return;
+  const boardBgUrl = row?.board_bg_url || row?.boardBgUrl || row?.boardBgDataUrl || null;
+  const boardBgStoragePath = row?.board_bg_storage_path || row?.boardBgStoragePath || null;
+  const boardBgStorageBucket = row?.board_bg_storage_bucket || row?.boardBgStorageBucket || null;
   __roomDetachedCache.mapMetaById.set(mapId, {
     id: mapId,
     name: String(row?.name || '').trim() || 'Карта',
-    sectionId: String(row?.section_id || '').trim() || null,
-    boardWidth: Math.max(5, Math.min(150, Number(row?.board_width) || 10)),
-    boardHeight: Math.max(5, Math.min(150, Number(row?.board_height) || 10)),
-    boardBgUrl: row?.board_bg_url ? String(row.board_bg_url) : null,
-    boardBgStoragePath: row?.board_bg_storage_path ? String(row.board_bg_storage_path) : null,
-    boardBgStorageBucket: row?.board_bg_storage_bucket ? String(row.board_bg_storage_bucket) : null,
-    gridAlpha: Number.isFinite(Number(row?.grid_alpha)) ? clamp(Number(row.grid_alpha), 0, 1) : 1,
-    wallAlpha: Number.isFinite(Number(row?.wall_alpha)) ? clamp(Number(row.wall_alpha), 0, 1) : 1,
+    sectionId: String(row?.section_id || row?.sectionId || '').trim() || null,
+    boardWidth: Math.max(5, Math.min(150, Number(row?.board_width ?? row?.boardWidth) || 10)),
+    boardHeight: Math.max(5, Math.min(150, Number(row?.board_height ?? row?.boardHeight) || 10)),
+    boardBgUrl: boardBgUrl ? String(boardBgUrl) : null,
+    boardBgStoragePath: boardBgStoragePath ? String(boardBgStoragePath) : null,
+    boardBgStorageBucket: boardBgStorageBucket ? String(boardBgStorageBucket) : null,
+    gridAlpha: Number.isFinite(Number(row?.grid_alpha ?? row?.gridAlpha)) ? clamp(Number(row?.grid_alpha ?? row?.gridAlpha), 0, 1) : 1,
+    wallAlpha: Number.isFinite(Number(row?.wall_alpha ?? row?.wallAlpha)) ? clamp(Number(row?.wall_alpha ?? row?.wallAlpha), 0, 1) : 1,
     updatedAt: row?.updated_at || null
   });
 }
@@ -291,4 +294,3 @@ function _fogApplyExploredDeltaToState(state, cells) {
     return false;
   }
 }
-
