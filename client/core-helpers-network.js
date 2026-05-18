@@ -33,6 +33,24 @@ function wsWasSeen(nonce) {
   return true;
 }
 
+function shouldAcceptWsServerEvent(msg) {
+  try {
+    if (!msg || typeof msg !== 'object') return true;
+    if (!msg.__serverEvent) return true;
+    const seq = Math.trunc(Number(msg.__eventSeq) || 0);
+    if (!seq) return true;
+    const roomId = String(msg.roomId || wsRoomId || '').trim();
+    if (!roomId) return true;
+    if (!(window.__lastWsRoomEventSeq instanceof Map)) window.__lastWsRoomEventSeq = new Map();
+    const last = Math.trunc(Number(window.__lastWsRoomEventSeq.get(roomId)) || 0);
+    if (seq <= last) return false;
+    window.__lastWsRoomEventSeq.set(roomId, seq);
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 function normalizeInitiativeMode(mode) {
   const m = String(mode || 'normal').trim();
   if (m === 'advantage' || m === 'disadvantage') return m;
@@ -399,11 +417,12 @@ function connectRoomWs(roomId) {
       if (nonce && wsWasSeen(nonce)) return;
       if (nonce) wsRememberNonce(nonce);
 
-      const from = String(msg.__fromWsClient || '').trim();
-      if (from && from === WS_CLIENT_ID && msg.__optimisticApplied) return;
-
       const msgRoomId = String(msg.roomId || '').trim();
       if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
+      if (!shouldAcceptWsServerEvent(msg)) return;
+
+      const from = String(msg.__fromWsClient || '').trim();
+      if (from && from === WS_CLIENT_ID && msg.__optimisticApplied) return;
 
       if (msg.type === 'ping') {
         markWsAlive();
@@ -529,7 +548,6 @@ function sendWsEnvelope(msg, opts = {}) {
       __fromWsClient: WS_CLIENT_ID,
       __optimisticApplied: !!opts.optimisticApplied
     };
-    wsRememberNonce(nonce);
 
     if (wsClient && wsClient.readyState === WebSocket.OPEN && wsClient.__joined === true) {
       wsClient.send(JSON.stringify(payload));
@@ -2636,9 +2654,14 @@ async function sendMessage(msg) {
   try {
     if (optimisticSheetState) {
       sheetRelaySent = !!sendWsEnvelope({
-        type: 'state',
+        type: 'playerPatch',
         roomId: currentRoomId,
-        state: stripRoomSecretsFromState(optimisticSheetState)
+        playerId: String(p.id || msg.id || ''),
+        patch: {
+          sheet: deepClone(p.sheet),
+          sheetUpdatedAt: Number(p.sheetUpdatedAt) || Date.now(),
+          name: String(p.name || '')
+        }
       }, { optimisticApplied: true });
     }
   } catch (e) {
@@ -3175,6 +3198,14 @@ async function sendMessage(msg) {
 
           p.isPublic = !!msg.isPublic;
           setTokenVisibilityOptimisticGuard(pid, p.isPublic, p.mapId || next.currentMapId || '');
+          try {
+            sendWsEnvelope({
+              type: 'playerPatch',
+              roomId: currentRoomId,
+              playerId: pid,
+              patch: { isPublic: p.isPublic }
+            }, { optimisticApplied: true });
+          } catch {}
         }
 
         else if (type === "combatInitChoice") {

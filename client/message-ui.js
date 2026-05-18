@@ -483,6 +483,42 @@ try { handleSessionUiMessage?.(msg); } catch {}
       try { window.__inventoryTransfer?.onCoinsTransferResult?.(msg); } catch {}
     }
 
+    if (msg.type === 'playerPatch' && (msg.playerId || msg.id) && msg.patch) {
+      try {
+        const playerId = String(msg.playerId || msg.id || '').trim();
+        const patch = (msg.patch && typeof msg.patch === 'object') ? msg.patch : {};
+        const applyTo = (list) => {
+          const p = (Array.isArray(list) ? list : []).find(pp => String(pp?.id || '') === playerId);
+          if (!p) return null;
+          if (typeof patch.name === 'string' && patch.name.trim()) p.name = patch.name.trim();
+          if (typeof patch.isPublic === 'boolean') p.isPublic = !!patch.isPublic;
+          if (patch.sheet && typeof patch.sheet === 'object') p.sheet = deepClone(patch.sheet);
+          if (typeof patch.sheetUpdatedAt !== 'undefined') p.sheetUpdatedAt = Number(patch.sheetUpdatedAt) || Date.now();
+          return p;
+        };
+        const patched = applyTo(lastState?.players);
+        if (lastState && Array.isArray(lastState.maps)) {
+          lastState.maps.forEach((m) => {
+            const stateEntry = m?.playerStates?.[playerId];
+            if (stateEntry && typeof patch.isPublic === 'boolean') stateEntry.isPublic = !!patch.isPublic;
+          });
+        }
+        applyTo(players);
+        try { syncVisiblePlayersState(lastState); } catch {}
+        try { updatePlayerList?.(); } catch {}
+        try { window.InfoModal?.refresh?.(players); } catch {}
+        if (patched) {
+          const el = playerElements?.get?.(playerId);
+          if (el) {
+            try { setPlayerPosition?.(patched); } catch {}
+            try { updateHpBar?.(patched, el); } catch {}
+          }
+        }
+      } catch (e) {
+        console.warn('playerPatch apply failed', e);
+      }
+    }
+
     // ================== v4: LOG (append-only) ==================
     if (msg.type === 'tavernLogRow' && msg.row) {
       try {
