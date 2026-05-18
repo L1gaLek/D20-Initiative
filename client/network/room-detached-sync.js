@@ -22,7 +22,12 @@ async function loadRoomScopedRows(table, roomId, opts = {}) {
       if (maybeSingle) return payload?.row ?? (Array.isArray(payload?.rows) ? (payload.rows[0] || null) : null);
       return Array.isArray(payload?.rows) ? payload.rows : [];
     } catch (error) {
-      console.warn(`${table} VPS load failed, falling back to Supabase`, error);
+      console.warn(`${table} VPS load failed`, error);
+      try {
+        if (typeof window.shouldUseSupabaseFallback === 'function' && !window.shouldUseSupabaseFallback()) throw error;
+      } catch (fallbackError) {
+        throw fallbackError;
+      }
     }
   }
 

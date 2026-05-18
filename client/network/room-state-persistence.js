@@ -523,6 +523,24 @@ function scheduleRoomStateUpsert(roomId, nextState, delayMs = 180) {
 // ===== Campaign saves (GM) =====
 // Сохранения кампаний НЕ привязаны к комнате, а привязаны к "ключу владельца" (owner_key),
 // который хранится в localStorage у ГМа. Тогда ГМ может зайти в любую комнату и загрузить кампанию.
+const CAMPAIGN_DETACHED_RESTORE_TIMEOUT_MS = 120000;
+
+function canUseLegacySupabaseFallback() {
+  try {
+    if (typeof window !== 'undefined' && typeof window.shouldUseSupabaseFallback === 'function') {
+      return !!window.shouldUseSupabaseFallback();
+    }
+    const configured = String(window?.D20_CONFIG?.vpsApiBase || window?.VPS_API_BASE || '').trim();
+    return !configured;
+  } catch {
+    return false;
+  }
+}
+
+function throwIfNoLegacySupabaseFallback(error) {
+  if (!canUseLegacySupabaseFallback()) throw error;
+}
+
 async function listCampaignSavesByOwner(ownerKey) {
   if (typeof window !== 'undefined' && typeof window.vpsApi === 'function') {
     try {
@@ -530,7 +548,8 @@ async function listCampaignSavesByOwner(ownerKey) {
       const payload = await window.vpsApi(`/campaign-saves?${params.toString()}`);
       return Array.isArray(payload?.saves) ? payload.saves : [];
     } catch (error) {
-      console.warn('campaign_saves VPS list failed, falling back to Supabase', error);
+      console.warn('campaign_saves VPS list failed', error);
+      throwIfNoLegacySupabaseFallback(error);
     }
   }
 
@@ -559,7 +578,8 @@ async function createCampaignSave(ownerKey, name, state) {
       };
     }
   } catch (e) {
-    console.warn('createCampaignSave: detached snapshot failed, fallback to plain state', e);
+    console.warn('createCampaignSave: detached snapshot failed', e);
+    throwIfNoLegacySupabaseFallback(e);
     payloadState = state;
   }
 
@@ -571,7 +591,8 @@ async function createCampaignSave(ownerKey, name, state) {
       });
       return;
     } catch (error) {
-      console.warn('campaign_saves VPS create failed, falling back to Supabase', error);
+      console.warn('campaign_saves VPS create failed', error);
+      throwIfNoLegacySupabaseFallback(error);
     }
   }
 
@@ -590,7 +611,8 @@ async function getCampaignSaveState(saveId, ownerKey = null) {
       const payload = await window.vpsApi(`/campaign-saves/${encodeURIComponent(String(saveId || ''))}?${params.toString()}`);
       return payload?.state || null;
     } catch (error) {
-      console.warn('campaign_saves VPS read failed, falling back to Supabase', error);
+      console.warn('campaign_saves VPS read failed', error);
+      throwIfNoLegacySupabaseFallback(error);
     }
   }
 
@@ -645,7 +667,8 @@ async function snapshotCampaignDetachedData(roomId, stateLike = null) {
         roomTokens: (roomTokens || []).filter((r) => mapIds.has(String(r?.map_id || '').trim()))
       };
     } catch (error) {
-      console.warn('campaign detached VPS snapshot failed, falling back to Supabase', error);
+      console.warn('campaign detached VPS snapshot failed', error);
+      throwIfNoLegacySupabaseFallback(error);
     }
   }
 
@@ -787,7 +810,8 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
     try {
       const response = await window.vpsApi(`/rooms/${encodeURIComponent(rid)}/detached/replace`, {
         method: 'POST',
-        body: { detached, state: normalized }
+        body: { detached, state: normalized },
+        timeoutMs: CAMPAIGN_DETACHED_RESTORE_TIMEOUT_MS
       });
       const saved = response?.detached && typeof response.detached === 'object' ? response.detached : {};
       mapMetaRows = Array.isArray(saved.roomMapMeta) ? saved.roomMapMeta : mapMetaRows;
@@ -797,7 +821,8 @@ async function applyCampaignSaveToRoom(roomId, rawSavePayload) {
       tokenRows = Array.isArray(saved.roomTokens) ? saved.roomTokens : tokenRows;
       restoredViaVps = true;
     } catch (error) {
-      console.warn('campaign detached VPS restore failed, falling back to Supabase', error);
+      console.warn('campaign detached VPS restore failed', error);
+      throwIfNoLegacySupabaseFallback(error);
     }
   }
 
@@ -887,7 +912,8 @@ async function deleteCampaignSave(saveId) {
       });
       return;
     } catch (error) {
-      console.warn('campaign_saves VPS delete failed, falling back to Supabase', error);
+      console.warn('campaign_saves VPS delete failed', error);
+      throwIfNoLegacySupabaseFallback(error);
     }
   }
 

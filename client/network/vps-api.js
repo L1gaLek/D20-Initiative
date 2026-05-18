@@ -27,6 +27,16 @@ const VPS_RETRY_DELAYS_MS = [350, 900];
 let pendingVpsSessionPromise = null;
 let pendingVpsSessionKey = '';
 
+function shouldUseSupabaseFallback() {
+  try {
+    const config = (window.D20_CONFIG && typeof window.D20_CONFIG === 'object')
+      ? window.D20_CONFIG
+      : {};
+    if (config.allowSupabaseDirectFallback === true) return true;
+  } catch {}
+  return !VPS_API_BASE;
+}
+
 function getStoredValue(key) {
   try {
     if (typeof getAppStorageItem === 'function') return String(getAppStorageItem(key) || '').trim();
@@ -340,4 +350,5 @@ try { window.getVpsApiErrorMessage = getVpsApiErrorMessage; } catch {}
 try { window.ensureVpsSession = ensureVpsSession; } catch {}
 try { window.getVpsAuthToken = getVpsAuthToken; } catch {}
 try { window.getVpsAuthHeaders = getVpsAuthHeaders; } catch {}
+try { window.shouldUseSupabaseFallback = shouldUseSupabaseFallback; } catch {}
 try { window.migrateLegacyCharactersIfNeeded = migrateLegacyCharactersIfNeeded; } catch {}
