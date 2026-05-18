@@ -638,6 +638,64 @@ try { handleSessionUiMessage?.(msg); } catch {}
       }
     }
 
+    if (msg.type === 'playerCreated' && msg.player && msg.player.id) {
+      try {
+        if (!lastState) lastState = createInitialGameState();
+        if (!Array.isArray(lastState.players)) lastState.players = [];
+        const incoming = deepClone(msg.player);
+        incoming.x = null;
+        incoming.y = null;
+        const id = String(incoming.id || '').trim();
+        try { window.finishPendingPlayerCreateStateWrite?.(id); } catch {}
+        const idx = lastState.players.findIndex(p => String(p?.id || '') === id);
+        if (idx >= 0) {
+          lastState.players[idx] = { ...lastState.players[idx], ...incoming };
+        } else {
+          lastState.players.push(incoming);
+        }
+        try { syncCombatPlayerToActiveMap(lastState, lastState.players.find(p => String(p?.id || '') === id)); } catch {}
+        try { syncVisiblePlayersState(lastState); } catch {}
+        try { renderBoard(lastState); } catch {}
+        try { updatePlayerList(); } catch {}
+        try { renderInitiativePlayersBox(lastState); } catch {}
+        try { renderTurnOrderBox(lastState); } catch {}
+        try { window.InfoModal?.refresh?.(players); } catch {}
+      } catch (e) {
+        console.warn('playerCreated apply failed', e);
+      }
+      return;
+    }
+
+    if (msg.type === 'playerDeleted' && (msg.playerId || msg.id)) {
+      try {
+        const playerId = String(msg.playerId || msg.id || '').trim();
+        if (playerId && lastState && Array.isArray(lastState.players)) {
+          lastState.players = lastState.players.filter(p => String(p?.id || '') !== playerId);
+          lastState.turnOrder = (Array.isArray(lastState.turnOrder) ? lastState.turnOrder : []).filter(id => String(id || '') !== playerId);
+          if (Array.isArray(lastState.maps)) {
+            lastState.maps.forEach((m) => {
+              if (!m || typeof m !== 'object') return;
+              if (m.playerStates && typeof m.playerStates === 'object') delete m.playerStates[playerId];
+              if (m.playersPos && typeof m.playersPos === 'object') delete m.playersPos[playerId];
+              if (Array.isArray(m.turnOrder)) m.turnOrder = m.turnOrder.filter(id => String(id || '') !== playerId);
+            });
+          }
+        }
+        if (selectedPlayer && String(selectedPlayer.id || '') === playerId) selectedPlayer = null;
+        try { deleteTokenSnapshotCached?.(playerId, String(lastState?.currentMapId || '')); } catch {}
+        try { syncVisiblePlayersState(lastState); } catch {}
+        try { renderBoard(lastState); } catch {}
+        try { updatePhaseUI(lastState); } catch {}
+        try { updatePlayerList(); } catch {}
+        try { renderInitiativePlayersBox(lastState); } catch {}
+        try { renderTurnOrderBox(lastState); } catch {}
+        try { window.InfoModal?.refresh?.(players); } catch {}
+      } catch (e) {
+        console.warn('playerDeleted apply failed', e);
+      }
+      return;
+    }
+
     // ================== v4: LOG (append-only) ==================
     if (msg.type === 'tavernLogRow' && msg.row) {
       try {

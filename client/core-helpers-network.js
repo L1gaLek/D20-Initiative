@@ -278,18 +278,35 @@ function markPendingPlayerCreateStateWrite(playerId) {
   const pending = getPendingPlayerCreateStateWrites();
   let resolveDone = null;
   const promise = new Promise((resolve) => { resolveDone = resolve; });
-  const entry = { promise, startedAt: Date.now() };
-  pending.set(id, entry);
   let finished = false;
+  const entry = {
+    promise,
+    startedAt: Date.now(),
+    finish: () => {
+      if (finished) return;
+      finished = true;
+      try { resolveDone?.(); } catch {}
+      try {
+        if (pending.get(id) === entry) pending.delete(id);
+      } catch {}
+    }
+  };
+  pending.set(id, entry);
   return () => {
     if (finished) return;
-    finished = true;
-    try { resolveDone?.(); } catch {}
-    try {
-      if (pending.get(id) === entry) pending.delete(id);
-    } catch {}
+    try { entry.finish(); } catch {}
   };
 }
+
+function finishPendingPlayerCreateStateWriteById(playerId) {
+  try {
+    const id = String(playerId || '').trim();
+    if (!id) return;
+    const entry = getPendingPlayerCreateStateWrites().get(id);
+    if (entry && typeof entry.finish === 'function') entry.finish();
+  } catch {}
+}
+try { window.finishPendingPlayerCreateStateWrite = finishPendingPlayerCreateStateWriteById; } catch {}
 
 async function waitForPendingPlayerCreateStateWrite(playerId, timeoutMs = 5000) {
   const id = String(playerId || '').trim();
@@ -1269,6 +1286,26 @@ function buildRealtimeStatePatchForMessage(type, msg, stateLike, isGM, userId) {
     console.warn('buildRealtimeStatePatchForMessage failed', e);
     return null;
   }
+}
+
+const REALTIME_STATE_PATCH_ONLY_TYPES = new Set([
+  'startInitiative',
+  'setPlayerInCombat',
+  'setPlayersInCombatBulk',
+  'startExploration',
+  'combatInitChoice',
+  'setInitiativeMode',
+  'rollInitiativeFor',
+  'rollInitiativeAllOwned',
+  'gmRollInitiativeFor',
+  'startCombat',
+  'endTurn',
+  'setCellFeet',
+  'switchCampaignMap'
+]);
+
+function shouldUsePatchOnlyRealtime(type, patchSent) {
+  return !!patchSent && REALTIME_STATE_PATCH_ONLY_TYPES.has(String(type || ''));
 }
 
 async function upsertRoomMapMetaRow(roomId, map) {
@@ -3023,10 +3060,11 @@ async function sendMessage(msg) {
             console.warn('campaign optimistic state apply failed', e);
           }
 
+          let campaignPatchSent = false;
           try {
             const livePatch = buildRealtimeStatePatchForMessage(type, msg, next, isGM, myUserId);
             if (livePatch) {
-              sendWsEnvelope({
+              campaignPatchSent = !!sendWsEnvelope({
                 type: 'statePatch',
                 roomId: currentRoomId,
                 patch: livePatch
@@ -3048,7 +3086,9 @@ async function sendMessage(msg) {
           } catch (e) {
             console.warn('campaign map meta sync failed', e);
           }
-          await upsertRoomState(currentRoomId, next);
+          if (!shouldUsePatchOnlyRealtime(type, campaignPatchSent)) {
+            await upsertRoomState(currentRoomId, next);
+          }
           break;
         }
 
@@ -4214,8 +4254,9 @@ async function sendMessage(msg) {
           try {
             rememberPendingInitiativeOverlay(currentRoomId, updates, { epoch: initiativeEpoch });
           } catch {}
+          let initiativeRelaySent = false;
           try {
-            sendWsEnvelope({
+            initiativeRelaySent = !!sendWsEnvelope({
               type: 'initiativeApplied',
               roomId: String(currentRoomId || ''),
               updates: updates.map((u) => ({
@@ -4243,7 +4284,7 @@ async function sendMessage(msg) {
 
           // Atomic-ish persist to room_state (retry on collision).
           // UI is already updated optimistically above, so persistence must not block realtime.
-          try {
+          if (!initiativeRelaySent) try {
             applyInitiativeAtomic(currentRoomId, myUserId, updates, {
               expectedEpoch: initiativeEpoch
             }).then((appliedUpdates) => {
@@ -4405,10 +4446,11 @@ async function sendMessage(msg) {
           console.warn('optimistic state apply failed', e);
         }
 
+        let livePatchSent = false;
         try {
           const livePatch = buildRealtimeStatePatchForMessage(type, msg, optimisticState || next, isGM, myUserId);
           if (livePatch) {
-            sendWsEnvelope({
+            livePatchSent = !!sendWsEnvelope({
               type: 'statePatch',
               roomId: currentRoomId,
               patch: livePatch
@@ -4418,8 +4460,43 @@ async function sendMessage(msg) {
           console.warn('statePatch immediate relay failed', e);
         }
 
+        let playerLifecycleRelaySent = false;
+        try {
+          if (type === 'addPlayer' && pendingCreatedPlayerId) {
+            const created = (next.players || []).find(p => String(p?.id || '') === String(pendingCreatedPlayerId));
+            if (created) {
+              playerLifecycleRelaySent = !!sendWsEnvelope({
+                type: 'playerCreate',
+                roomId: currentRoomId,
+                player: deepClone(created)
+              }, { optimisticApplied: false });
+            }
+          } else if (type === 'removePlayerCompletely') {
+            const playerId = String(msg.id || '').trim();
+            if (playerId) {
+              playerLifecycleRelaySent = !!sendWsEnvelope({
+                type: 'playerDelete',
+                roomId: currentRoomId,
+                playerId
+              }, { optimisticApplied: true });
+            }
+          }
+        } catch (e) {
+          console.warn('player lifecycle relay failed', e);
+        }
+
         let stateRelaySent = false;
-        if (optimisticState) {
+        const awaitingPlayerCreateEcho = (type === 'addPlayer' && playerLifecycleRelaySent && !!pendingCreatedPlayerId);
+        if (awaitingPlayerCreateEcho) {
+          try {
+            const pid = String(pendingCreatedPlayerId || '');
+            setTimeout(() => { try { window.finishPendingPlayerCreateStateWrite?.(pid); } catch {} }, 1800);
+          } catch {}
+        }
+        const patchOnlyRealtime = shouldUsePatchOnlyRealtime(type, livePatchSent) || playerLifecycleRelaySent;
+        if (patchOnlyRealtime) {
+          stateRelaySent = true;
+        } else if (optimisticState) {
           try {
             stateRelaySent = !!sendWsEnvelope({
               type: 'state',
@@ -4431,7 +4508,7 @@ async function sendMessage(msg) {
           }
         }
 
-        const needsHttpPersist = !stateRelaySent || !!pendingCreatedPlayerId;
+        const needsHttpPersist = !stateRelaySent || (!!pendingCreatedPlayerId && !playerLifecycleRelaySent);
         if (needsHttpPersist) {
           try {
             upsertRoomState(currentRoomId, next)
@@ -4444,7 +4521,9 @@ async function sendMessage(msg) {
             try { console.debug?.('room_state background persist schedule failed', e); } catch {}
           }
         } else {
-          try { finishPendingPlayerCreateStateWrite?.(); } catch {}
+          if (!awaitingPlayerCreateEcho) {
+            try { finishPendingPlayerCreateStateWrite?.(); } catch {}
+          }
         }
 
 		// v4+: mirror GM "eye" visibility into room_tokens for reliable realtime visibility updates.
