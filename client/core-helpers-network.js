@@ -639,6 +639,15 @@ function handleDetachedWsMessage(msg) {
         __roomDetachedCache.wallsByMap.delete(mapId);
         __roomDetachedCache.marksByMap.delete(mapId);
         __roomDetachedCache.fogByMap.delete(mapId);
+        try {
+          if (lastState && Array.isArray(lastState.maps)) {
+            lastState.maps = lastState.maps.filter(m => String(m?.id || '') !== mapId);
+            if (String(lastState.currentMapId || '') === mapId) {
+              const fallback = lastState.maps[0] || null;
+              if (fallback?.id) loadMapToRoot(lastState, String(fallback.id));
+            }
+          }
+        } catch {}
       }
       _refreshDetachedRoomView();
       return true;
@@ -1217,6 +1226,29 @@ function buildRealtimeStatePatchForMessage(type, msg, stateLike, isGM, userId) {
       const mapId = String(st.currentMapId || '').trim();
       if (mapId) fields.currentMapId = mapId;
     };
+    const addMapSectionsField = () => {
+      const sections = Array.isArray(st.mapSections) ? st.mapSections : [];
+      if (!sections.length) return;
+      fields.mapSections = sections
+        .map((section) => ({
+          id: String(section?.id || '').trim(),
+          name: String(section?.name || '').trim() || 'Раздел'
+        }))
+        .filter(section => section.id);
+    };
+    const addActiveMapMetaFields = () => {
+      addCurrentMapField();
+      if (typeof st.boardWidth !== 'undefined') fields.boardWidth = Math.max(5, Math.min(150, Number(st.boardWidth) || 10));
+      if (typeof st.boardHeight !== 'undefined') fields.boardHeight = Math.max(5, Math.min(150, Number(st.boardHeight) || 10));
+      if (typeof st.gridAlpha !== 'undefined') {
+        const value = Number(st.gridAlpha);
+        fields.gridAlpha = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+      }
+      if (typeof st.wallAlpha !== 'undefined') {
+        const value = Number(st.wallAlpha);
+        fields.wallAlpha = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+      }
+    };
 
     switch (String(type || '')) {
       case 'startInitiative':
@@ -1269,10 +1301,31 @@ function buildRealtimeStatePatchForMessage(type, msg, stateLike, isGM, userId) {
         if (!isGM) return null;
         fields.cellFeet = Math.max(1, Math.min(100, Number(st.cellFeet) || 10));
         break;
+      case 'resizeBoard':
+      case 'setBoardBg':
+      case 'clearBoardBg':
+      case 'setGridAlpha':
+      case 'setWallAlpha':
+        if (!isGM) return null;
+        addActiveMapMetaFields();
+        break;
+      case 'createMapSection':
+      case 'renameMapSection':
+        if (!isGM) return null;
+        addCurrentMapField();
+        addMapSectionsField();
+        break;
+      case 'renameCampaignMap':
+      case 'moveCampaignMap':
+        if (!isGM) return null;
+        addCurrentMapField();
+        addMapSectionsField();
+        break;
       case 'switchCampaignMap':
         if (!isGM) return null;
         addCurrentMapField();
         addPhaseFields();
+        addMapSectionsField();
         break;
       default:
         return null;
@@ -1301,6 +1354,15 @@ const REALTIME_STATE_PATCH_ONLY_TYPES = new Set([
   'startCombat',
   'endTurn',
   'setCellFeet',
+  'resizeBoard',
+  'setBoardBg',
+  'clearBoardBg',
+  'setGridAlpha',
+  'setWallAlpha',
+  'createMapSection',
+  'renameMapSection',
+  'renameCampaignMap',
+  'moveCampaignMap',
   'switchCampaignMap'
 ]);
 
@@ -2556,11 +2618,38 @@ async function sendMessage(msg) {
           if (typeof nextName === "string" && nextName.trim()) p.name = nextName.trim();
         } catch {}
 
+        let optimisticSheetState = null;
         try {
-          handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+          optimisticSheetState = syncActiveToMap(deepClone(next));
+          try { syncOptimisticPlayersToLocalState(optimisticSheetState); } catch {}
+          handleMessage({ type: 'state', state: optimisticSheetState });
+          try { applyOptimisticPlayerVisuals(lastState || optimisticSheetState); } catch {}
         } catch {}
 
-        await upsertRoomState(currentRoomId, next);
+        let sheetRelaySent = false;
+        try {
+          sheetRelaySent = !!sendWsEnvelope({
+            type: 'playerPatch',
+            roomId: currentRoomId,
+            playerId: String(p.id || msg.playerId || ''),
+            patch: {
+              sheet: deepClone(p.sheet),
+              sheetUpdatedAt: Number(p.sheetUpdatedAt) || Date.now(),
+              name: String(p.name || '')
+            }
+          }, { optimisticApplied: true });
+        } catch (e) {
+          console.warn('saved base immediate relay failed', e);
+        }
+
+        if (!sheetRelaySent) {
+          try {
+            upsertRoomState(currentRoomId, next)
+              .catch((e) => { try { console.debug?.('saved base background persist failed', e); } catch {} });
+          } catch (e) {
+            try { console.debug?.('saved base background persist schedule failed', e); } catch {}
+          }
+        }
         handleMessage({ type: "savedBaseApplied", playerId: p.id, savedId });
         break;
       }
@@ -2702,7 +2791,7 @@ async function sendMessage(msg) {
         const fromPlayerId = String(msg.fromPlayerId || '').trim();
         const toPlayerId = String(msg.toPlayerId || '').trim();
         const coin = String(msg.coin || 'gp').trim().toLowerCase();
-        const amount = Math.max(1, Number(msg.amount) || 1);
+        const amount = Math.max(1, Math.trunc(Number(msg.amount) || 1));
         const validCoins = new Set(['cp','sp','ep','gp','pp']);
         if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) return;
         if (!validCoins.has(coin)) return;
@@ -2741,7 +2830,7 @@ async function sendMessage(msg) {
             message: 'Передача монет не удалась: недостаточно средств.'
           };
           try {
-            sendWsEnvelope({ type: 'coinsTransferResult', roomId: currentRoomId, result: failResult }, { optimisticApplied: true });
+            handleMessage({ type: 'coinsTransferResult', result: failResult });
           } catch {}
           break;
         }
@@ -2755,22 +2844,27 @@ async function sendMessage(msg) {
         } catch {}
 
         try {
-          handleMessage({ type: 'state', state: syncActiveToMap(deepClone(next)) });
+          const optimisticCoinState = syncActiveToMap(deepClone(next));
+          try { syncOptimisticPlayersToLocalState(optimisticCoinState); } catch {}
+          handleMessage({ type: 'state', state: optimisticCoinState });
+          try { applyOptimisticPlayerVisuals(lastState || optimisticCoinState); } catch {}
         } catch {}
 
-        await upsertRoomState(currentRoomId, next);
-
-        const RU = { cp: 'мм', sp: 'см', ep: 'эм', gp: 'зм', pp: 'пм' };
-        const okResult = {
-          accepted: true,
-          fromPlayerId: String(fromPlayer?.id || ''),
-          toPlayerId: String(toPlayer?.id || ''),
-          fromOwnerId: String(fromPlayer?.ownerId || ''),
-          toOwnerId: String(toPlayer?.ownerId || ''),
-          message: `Передано ${amount} ${RU[coin] || coin} игроку ${String(toPlayer?.name || 'получатель')}.`
-        };
         try {
-          sendWsEnvelope({ type: 'coinsTransferResult', roomId: currentRoomId, result: okResult }, { optimisticApplied: true });
+          sendWsEnvelope({
+            type: 'coinsTransfer',
+            roomId: currentRoomId,
+            transfer: {
+              id: (crypto?.randomUUID ? crypto.randomUUID() : (`coins-transfer-${Date.now()}-${Math.random().toString(16).slice(2)}`)),
+              createdAt: Date.now(),
+              fromPlayerId: String(fromPlayer?.id || ''),
+              toPlayerId: String(toPlayer?.id || ''),
+              fromOwnerId: String(fromPlayer?.ownerId || ''),
+              toOwnerId: String(toPlayer?.ownerId || ''),
+              coin,
+              amount
+            }
+          }, { optimisticApplied: true });
         } catch {}
         break;
       }
@@ -2853,6 +2947,8 @@ async function sendMessage(msg) {
         const type = msg.type;
         let handled = false;
         let pendingCreatedPlayerId = "";
+        let directPlayerPatchRelaySent = false;
+        let detachedTokenRelaySent = false;
 
         // ===== Campaign maps + sections (GM) =====
         if (type === "createMapSection") {
@@ -3237,7 +3333,7 @@ async function sendMessage(msg) {
           logEventToState(next, `${p.name} изменил цвет`);
 
           try {
-            sendWsEnvelope({
+            detachedTokenRelaySent = !!sendWsEnvelope({
               type: 'updateTokenColor',
               roomId: String(currentRoomId || ''),
               mapId: String(next?.currentMapId || ''),
@@ -3375,7 +3471,7 @@ async function sendMessage(msg) {
           p.isPublic = !!msg.isPublic;
           setTokenVisibilityOptimisticGuard(pid, p.isPublic, p.mapId || next.currentMapId || '');
           try {
-            sendWsEnvelope({
+            directPlayerPatchRelaySent = !!sendWsEnvelope({
               type: 'playerPatch',
               roomId: currentRoomId,
               playerId: pid,
@@ -3685,6 +3781,7 @@ async function sendMessage(msg) {
               x: nx,
               y: ny,
               size: Number(p?.size) || 1,
+              color: p?.color || null,
               isPublic: !!p?.isPublic,
               client_ts: Date.now()
             }, { optimisticApplied: true });
@@ -3730,7 +3827,7 @@ async function sendMessage(msg) {
           logEventToState(next, `${p.name} изменил размер на ${p.size}x${p.size}`);
 
           try {
-            sendWsEnvelope({
+            detachedTokenRelaySent = !!sendWsEnvelope({
               type: 'updateTokenSize',
               roomId: String(currentRoomId || ''),
               mapId: String(next?.currentMapId || ''),
@@ -3754,7 +3851,7 @@ async function sendMessage(msg) {
           try { setPlayerPosition?.(p); } catch {}
 
           try {
-            sendWsEnvelope({
+            detachedTokenRelaySent = !!sendWsEnvelope({
               type: 'removeTokenFromBoard',
               roomId: String(currentRoomId || ''),
               mapId: String(next?.currentMapId || ''),
@@ -4493,7 +4590,10 @@ async function sendMessage(msg) {
             setTimeout(() => { try { window.finishPendingPlayerCreateStateWrite?.(pid); } catch {} }, 1800);
           } catch {}
         }
-        const patchOnlyRealtime = shouldUsePatchOnlyRealtime(type, livePatchSent) || playerLifecycleRelaySent;
+        const patchOnlyRealtime = shouldUsePatchOnlyRealtime(type, livePatchSent)
+          || playerLifecycleRelaySent
+          || directPlayerPatchRelaySent
+          || detachedTokenRelaySent;
         if (patchOnlyRealtime) {
           stateRelaySent = true;
         } else if (optimisticState) {

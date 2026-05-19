@@ -432,6 +432,42 @@ function applyStatePatchMessage(msg) {
     if (hasOwn(fields, 'cellFeet')) {
       st.cellFeet = Math.max(1, Math.min(100, Number(fields.cellFeet) || 10));
     }
+    if (
+      hasOwn(fields, 'boardWidth')
+      || hasOwn(fields, 'boardHeight')
+      || hasOwn(fields, 'gridAlpha')
+      || hasOwn(fields, 'wallAlpha')
+    ) {
+      const activeMapId = String(st.currentMapId || '').trim();
+      const activeMap = (Array.isArray(st.maps) ? st.maps : [])
+        .find((map) => String(map?.id || '') === activeMapId);
+      if (hasOwn(fields, 'boardWidth')) {
+        st.boardWidth = Math.max(5, Math.min(150, Number(fields.boardWidth) || 10));
+        if (activeMap) activeMap.boardWidth = st.boardWidth;
+      }
+      if (hasOwn(fields, 'boardHeight')) {
+        st.boardHeight = Math.max(5, Math.min(150, Number(fields.boardHeight) || 10));
+        if (activeMap) activeMap.boardHeight = st.boardHeight;
+      }
+      if (hasOwn(fields, 'gridAlpha')) {
+        const value = Number(fields.gridAlpha);
+        st.gridAlpha = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+        if (activeMap) activeMap.gridAlpha = st.gridAlpha;
+      }
+      if (hasOwn(fields, 'wallAlpha')) {
+        const value = Number(fields.wallAlpha);
+        st.wallAlpha = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
+        if (activeMap) activeMap.wallAlpha = st.wallAlpha;
+      }
+    }
+    if (Array.isArray(fields.mapSections) && fields.mapSections.length) {
+      st.mapSections = fields.mapSections
+        .map((section) => ({
+          id: String(section?.id || '').trim(),
+          name: String(section?.name || '').trim() || 'Раздел'
+        }))
+        .filter(section => section.id);
+    }
 
     const applyPlayerPatch = (target) => {
       if (!target || !target.id) return null;
