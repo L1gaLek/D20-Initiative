@@ -163,9 +163,61 @@ function _cacheMusicRow(row) {
   __roomDetachedCache.music = payload;
 }
 
+function _mapFromDetachedMeta(meta, fallbackSectionId = '') {
+  const mapId = String(meta?.id || '').trim();
+  if (!mapId) return null;
+  return {
+    id: mapId,
+    name: String(meta?.name || '').trim() || 'Карта',
+    sectionId: String(meta?.sectionId || fallbackSectionId || '').trim() || null,
+    boardWidth: Math.max(5, Math.min(150, Number(meta?.boardWidth) || 10)),
+    boardHeight: Math.max(5, Math.min(150, Number(meta?.boardHeight) || 10)),
+    boardBgDataUrl: meta?.boardBgUrl || null,
+    boardBgUrl: meta?.boardBgUrl || null,
+    boardBgStoragePath: meta?.boardBgStoragePath || null,
+    boardBgStorageBucket: meta?.boardBgStorageBucket || null,
+    gridAlpha: Number.isFinite(Number(meta?.gridAlpha)) ? clamp(Number(meta.gridAlpha), 0, 1) : 1,
+    wallAlpha: Number.isFinite(Number(meta?.wallAlpha)) ? clamp(Number(meta.wallAlpha), 0, 1) : 1,
+    walls: [],
+    marks: [],
+    fog: {
+      enabled: false,
+      mode: 'manual',
+      manualBase: 'hide',
+      manualStamps: [],
+      visionRadius: 8,
+      useWalls: true,
+      exploredEnabled: true,
+      gmViewMode: 'gm',
+      gmOpen: false,
+      moveOnlyExplored: false,
+      explored: []
+    },
+    phase: 'exploration',
+    phaseEpoch: 0,
+    combatSelectionEpoch: 0,
+    turnOrder: [],
+    currentTurnIndex: 0,
+    round: 1,
+    turnEpoch: 0,
+    playerStates: {},
+    playersPos: {}
+  };
+}
+
 function applyDetachedPayloadToState(state) {
   const st = ensureStateHasMaps(deepClone(state || {}));
   const maps = Array.isArray(st.maps) ? st.maps : [];
+  const fallbackSectionId = String(st.mapSections?.[0]?.id || '').trim();
+  const existingMapIds = new Set(maps.map(m => String(m?.id || '')).filter(Boolean));
+  __roomDetachedCache.mapMetaById.forEach((meta, mapId) => {
+    const id = String(mapId || meta?.id || '').trim();
+    if (!id || existingMapIds.has(id)) return;
+    const created = _mapFromDetachedMeta(meta, fallbackSectionId);
+    if (!created) return;
+    maps.push(created);
+    existingMapIds.add(id);
+  });
   maps.forEach((m) => {
     if (!m || typeof m !== 'object') return;
     const mapId = String(m.id || '');
