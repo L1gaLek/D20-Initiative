@@ -68,6 +68,15 @@
     try { node?.remove?.(); } catch {}
   }
 
+  function notify(message, tone = 'info') {
+    const text = String(message || '').trim();
+    if (!text) return;
+    try {
+      if (window.showAppToast?.(text, { tone })) return;
+    } catch {}
+    try { console.info(text); } catch {}
+  }
+
   function openTransferModal({ fromPlayer, tabId, idx, item, maxQty }) {
     const sendMessage = getCtx()?.sendMessage;
     if (typeof sendMessage !== 'function') return;
@@ -128,7 +137,7 @@
       const toPlayerId = String(selectEl?.value || '').trim();
       const qty = Math.max(1, Math.min(qtyCap, safeInt(qtyEl?.value, 1)));
       if (!toPlayerId) {
-        alert('Нет доступного получателя-Основы.');
+        notify('Нет доступного получателя-Основы.', 'error');
         return;
       }
 
@@ -141,7 +150,7 @@
         qty
       });
       closeModal(wrap);
-      alert('Запрос на передачу отправлен.');
+      notify('Запрос на передачу отправлен.', 'success');
     });
 
     wrap.addEventListener('keydown', (e) => {
@@ -226,7 +235,7 @@
       const amount = Math.max(1, safeInt(amountEl?.value, 1));
 
       if (!toPlayerId) {
-        alert('Нет доступного получателя-Основы.');
+        notify('Нет доступного получателя-Основы.', 'error');
         return;
       }
 
@@ -307,7 +316,7 @@
     const byPlayerOwnership = isMinePlayerId(result?.fromPlayerId) || isMinePlayerId(result?.toPlayerId);
     if (!byOwnerId && !byPlayerOwnership) return;
     const text = String(result?.message || '').trim();
-    if (text) alert(text);
+    if (text) notify(text, result?.accepted === false ? 'error' : 'success');
   }
 
   function onCoinsTransferResult(msg) {
@@ -318,7 +327,7 @@
     const byPlayerOwnership = isMinePlayerId(result?.fromPlayerId) || isMinePlayerId(result?.toPlayerId);
     if (!byOwnerId && !byPlayerOwnership) return;
     const text = String(result?.message || '').trim();
-    if (text) alert(text);
+    if (text) notify(text, result?.accepted === false ? 'error' : 'success');
   }
 
   window.__inventoryTransfer = {
