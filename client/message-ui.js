@@ -67,6 +67,113 @@ function shouldSkipRecentLogRow(text, explicitId) {
   }
 }
 
+function showAppToast(message, options = {}) {
+  try {
+    const text = String(message || '').trim();
+    if (!text) return false;
+    let host = document.getElementById('app-toast-host');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'app-toast-host';
+      host.style.cssText = [
+        'position:fixed',
+        'right:16px',
+        'bottom:16px',
+        'z-index:100000',
+        'display:flex',
+        'flex-direction:column',
+        'gap:8px',
+        'max-width:min(360px,calc(100vw - 32px))',
+        'pointer-events:none'
+      ].join(';');
+      document.body.appendChild(host);
+    }
+    const item = document.createElement('div');
+    const tone = String(options?.tone || options?.type || '').toLowerCase();
+    const border = tone === 'error' ? '#d65b5b' : tone === 'success' ? '#4fa36a' : '#8aa0ff';
+    item.style.cssText = [
+      'pointer-events:auto',
+      'border:1px solid rgba(255,255,255,.14)',
+      `border-left:3px solid ${border}`,
+      'background:rgba(18,20,28,.96)',
+      'color:#f5f6fb',
+      'box-shadow:0 10px 32px rgba(0,0,0,.35)',
+      'border-radius:8px',
+      'padding:10px 12px',
+      'font:13px/1.35 system-ui,-apple-system,Segoe UI,sans-serif',
+      'white-space:normal'
+    ].join(';');
+    item.textContent = text;
+    host.appendChild(item);
+    const timeout = Math.max(1200, Math.min(10000, Number(options?.timeoutMs) || 3600));
+    setTimeout(() => {
+      try { item.remove(); } catch {}
+      try { if (!host.childElementCount) host.remove(); } catch {}
+    }, timeout);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+try { window.showAppToast = showAppToast; } catch {}
+
+function getStateUpdatedAtMsFromMessage(msg) {
+  try {
+    const raw = String(msg?.stateUpdatedAt || msg?.updatedAt || msg?.state_updated_at || '').trim();
+    if (!raw) return 0;
+    return Math.max(0, Number(new Date(raw).getTime()) || 0);
+  } catch {
+    return 0;
+  }
+}
+
+function getAcceptedStateClock(roomId) {
+  try {
+    if (!(window.__acceptedRoomStateClock instanceof Map)) window.__acceptedRoomStateClock = new Map();
+    const rid = String(roomId || currentRoomId || '').trim();
+    return rid ? Math.max(0, Number(window.__acceptedRoomStateClock.get(rid)) || 0) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function rememberAcceptedStateClock(msg) {
+  try {
+    const ms = getStateUpdatedAtMsFromMessage(msg);
+    if (!ms) return;
+    if (!(window.__acceptedRoomStateClock instanceof Map)) window.__acceptedRoomStateClock = new Map();
+    const rid = String(msg?.roomId || currentRoomId || '').trim();
+    if (!rid) return;
+    const prev = Math.max(0, Number(window.__acceptedRoomStateClock.get(rid)) || 0);
+    if (ms > prev) window.__acceptedRoomStateClock.set(rid, ms);
+  } catch {}
+}
+
+function shouldSkipStaleStateSnapshot(msg) {
+  try {
+    if (!msg || (msg.type !== 'state' && msg.type !== 'init')) return false;
+    const incomingMs = getStateUpdatedAtMsFromMessage(msg);
+    if (!incomingMs) return false;
+    const rid = String(msg.roomId || currentRoomId || '').trim();
+    const acceptedMs = getAcceptedStateClock(rid);
+    const stale = acceptedMs > 0 && incomingMs + 2 < acceptedMs;
+    if (stale) {
+      try {
+        window.recordRealtimeDebugEvent?.('state:skip-stale', {
+          roomId: rid,
+          incomingUpdatedAt: new Date(incomingMs).toISOString(),
+          acceptedUpdatedAt: new Date(acceptedMs).toISOString(),
+          seq: Math.max(0, Number(msg.__eventSeq) || 0)
+        });
+      } catch {}
+    }
+    return stale;
+  } catch {
+    return false;
+  }
+}
+
 function refreshInitiativeRealtimeUi(state) {
   try { updatePhaseUI?.(state); } catch {}
   try { updateCurrentPlayer?.(state); } catch {}
@@ -526,6 +633,13 @@ function applyStatePatchMessage(msg) {
 }
 
 function handleMessage(msg) {
+try {
+  window.recordRealtimeDebugEvent?.('message:handle', {
+    type: String(msg?.type || ''),
+    roomId: String(msg?.roomId || currentRoomId || ''),
+    seq: Math.max(0, Number(msg?.__eventSeq) || 0)
+  });
+} catch {}
 
 // ===== Rooms lobby messages =====
 try { handleLobbyRoomMessage?.(msg); } catch {}
@@ -901,6 +1015,15 @@ try { handleSessionUiMessage?.(msg); } catch {}
     }
 
     if (msg.type === "init" || msg.type === "state") {
+      if (shouldSkipStaleStateSnapshot(msg)) return;
+      try {
+        window.recordRealtimeDebugEvent?.('state:apply-start', {
+          type: String(msg.type || ''),
+          roomId: String(msg.roomId || currentRoomId || ''),
+          stateUpdatedAt: String(msg.stateUpdatedAt || msg.updatedAt || ''),
+          seq: Math.max(0, Number(msg.__eventSeq) || 0)
+        });
+      } catch {}
       // ===== Preserve volatile UI state across room_state snapshots (v4) =====
       // room_state no longer contains authoritative token positions or logs.
       // They arrive via dedicated tables (room_tokens / room_log).
@@ -1199,6 +1322,16 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // если "Инфа" открыта — обновляем ее по свежему state
       window.InfoModal?.refresh?.(players);
+      try { window.rememberRoomStateShadow?.(currentRoomId, lastState); } catch {}
+      rememberAcceptedStateClock(msg);
+      try {
+        window.recordRealtimeDebugEvent?.('state:applied', {
+          roomId: String(msg.roomId || currentRoomId || ''),
+          stateUpdatedAt: String(msg.stateUpdatedAt || msg.updatedAt || ''),
+          players: Array.isArray(lastState?.players) ? lastState.players.length : 0,
+          mapId: String(lastState?.currentMapId || '')
+        });
+      } catch {}
     }
 }
 

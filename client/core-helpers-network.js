@@ -51,6 +51,51 @@ function shouldAcceptWsServerEvent(msg) {
   }
 }
 
+function isRealtimeDebugEnabled() {
+  try {
+    if (window.__REALTIME_DEBUG === true) return true;
+    const value = String(localStorage.getItem('d20_realtime_debug') || '').trim().toLowerCase();
+    return value === '1' || value === 'true' || value === 'on';
+  } catch {
+    return false;
+  }
+}
+
+function getRealtimeDebugBuffer() {
+  try {
+    if (!Array.isArray(window.__realtimeDebugEvents)) window.__realtimeDebugEvents = [];
+    return window.__realtimeDebugEvents;
+  } catch {
+    return [];
+  }
+}
+
+function recordRealtimeDebugEvent(kind, data = {}) {
+  try {
+    const entry = {
+      at: new Date().toISOString(),
+      t: Date.now(),
+      kind: String(kind || ''),
+      ...((data && typeof data === 'object') ? data : {})
+    };
+    const buffer = getRealtimeDebugBuffer();
+    buffer.push(entry);
+    if (buffer.length > 300) buffer.splice(0, buffer.length - 300);
+    if (isRealtimeDebugEnabled()) console.debug('[realtime]', entry.kind, entry);
+  } catch {}
+}
+
+try {
+  window.recordRealtimeDebugEvent = recordRealtimeDebugEvent;
+  window.RealtimeDebug = {
+    enable() { try { localStorage.setItem('d20_realtime_debug', '1'); } catch {}; window.__REALTIME_DEBUG = true; return 'Realtime debug enabled'; },
+    disable() { try { localStorage.removeItem('d20_realtime_debug'); } catch {}; window.__REALTIME_DEBUG = false; return 'Realtime debug disabled'; },
+    clear() { const buffer = getRealtimeDebugBuffer(); buffer.splice(0, buffer.length); return 'Realtime debug cleared'; },
+    events() { return [...getRealtimeDebugBuffer()]; },
+    table() { console.table([...getRealtimeDebugBuffer()]); }
+  };
+} catch {}
+
 function normalizeInitiativeMode(mode) {
   const m = String(mode || 'normal').trim();
   if (m === 'advantage' || m === 'disadvantage') return m;
@@ -438,6 +483,17 @@ function connectRoomWs(roomId) {
       if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
       if (!shouldAcceptWsServerEvent(msg)) return;
 
+      recordRealtimeDebugEvent('ws:recv', {
+        type: String(msg.type || ''),
+        roomId: String(msg.roomId || wsRoomId || ''),
+        seq: Math.max(0, Number(msg.__eventSeq) || 0),
+        replyTo: String(msg.__replyToWsNonce || ''),
+        inReplyToType: String(msg.__inReplyToType || ''),
+        rttMs: msg.__clientSentAt ? Math.max(0, Date.now() - Number(msg.__clientSentAt)) : null,
+        serverQueueMs: (msg.__serverTs && msg.__serverReceivedAt) ? Math.max(0, Number(msg.__serverTs) - Number(msg.__serverReceivedAt)) : null,
+        afterServerMs: msg.__serverTs ? Math.max(0, Date.now() - Number(msg.__serverTs)) : null
+      });
+
       const from = String(msg.__fromWsClient || '').trim();
       if (from && from === WS_CLIENT_ID && msg.__optimisticApplied) return;
 
@@ -464,9 +520,6 @@ function connectRoomWs(roomId) {
         try { sock.__joined = true; } catch {}
         flushWsPendingEnvelopes(sock);
         return;
-      }
-      if (String(msg.type || '') === 'state' && msg.state) {
-        try { rememberRoomStateShadow(msg.roomId || wsRoomId, msg.state); } catch {}
       }
       if (handleDetachedWsMessage(msg)) return;
       handleMessage(msg);
@@ -558,20 +611,34 @@ function sendWsEnvelope(msg, opts = {}) {
     if (!msg || typeof msg !== 'object') return false;
     if (!wsRoomId) return false;
     const nonce = String(opts.nonce || wsMakeNonce());
+    const clientSentAt = Date.now();
     const payload = {
       ...msg,
       roomId: String(msg.roomId || wsRoomId),
       __wsNonce: nonce,
+      __clientSentAt: clientSentAt,
       __fromWsClient: WS_CLIENT_ID,
       __optimisticApplied: !!opts.optimisticApplied
     };
 
     if (wsClient && wsClient.readyState === WebSocket.OPEN && wsClient.__joined === true) {
       wsClient.send(JSON.stringify(payload));
+      recordRealtimeDebugEvent('ws:send', {
+        type: String(payload.type || ''),
+        roomId: String(payload.roomId || ''),
+        nonce,
+        optimistic: !!payload.__optimisticApplied
+      });
       return true;
     }
 
     queueWsEnvelope(payload);
+    recordRealtimeDebugEvent('ws:queue', {
+      type: String(payload.type || ''),
+      roomId: String(payload.roomId || ''),
+      nonce,
+      optimistic: !!payload.__optimisticApplied
+    });
     if (wsWantConnected && wsRoomId) {
       connectRoomWs(wsRoomId);
       return true;
@@ -2352,7 +2419,7 @@ async function sendMessage(msg) {
               if (myScenarioSpan) myScenarioSpan.textContent = String(roomPayload.scenario || msg.scenario || '-');
             } catch {}
             if (payload.state) {
-              try { handleMessage({ type: 'state', state: payload.state }); } catch {}
+              try { handleMessage({ type: 'state', state: payload.state, stateUpdatedAt: payload.stateUpdatedAt || payload.updatedAt || null }); } catch {}
             }
           }
           try { handleMessage({ type: 'roomUpdated', room: roomPayload }); } catch {}
@@ -2399,7 +2466,7 @@ async function sendMessage(msg) {
           const payload = await window.RoomsApi.kickRoomMember(roomId, { actorUserId, targetUserId });
           if (payload.state) {
             try { rememberRoomStateShadow(roomId, payload.state); } catch {}
-            try { handleMessage({ type: 'state', state: payload.state }); } catch {}
+            try { handleMessage({ type: 'state', state: payload.state, stateUpdatedAt: payload.stateUpdatedAt || payload.updatedAt || null }); } catch {}
           }
           if (payload.moderationEvent) {
             try { handleMessage({ type: 'moderationEvent', event: payload.moderationEvent }); } catch {}
@@ -2432,7 +2499,7 @@ async function sendMessage(msg) {
           const payload = await window.RoomsApi.banRoomMember(roomId, { actorUserId, targetUserId, hours, minutes, totalMinutes, reason });
           if (payload.state) {
             try { rememberRoomStateShadow(roomId, payload.state); } catch {}
-            try { handleMessage({ type: 'state', state: payload.state }); } catch {}
+            try { handleMessage({ type: 'state', state: payload.state, stateUpdatedAt: payload.stateUpdatedAt || payload.updatedAt || null }); } catch {}
           }
           if (payload.moderationEvent) {
             try { handleMessage({ type: 'moderationEvent', event: payload.moderationEvent }); } catch {}
@@ -2517,7 +2584,7 @@ async function sendMessage(msg) {
         startRoomMembersPolling(roomId);
         const __initialStateApplied = applyDetachedPayloadToState(state);
         try { rememberRoomStateShadow(roomId, __initialStateApplied); } catch {}
-        handleMessage({ type: "state", state: stripRoomSecretsFromState(__initialStateApplied) });
+        handleMessage({ type: "state", state: stripRoomSecretsFromState(__initialStateApplied), stateUpdatedAt: payload.stateUpdatedAt || payload.updatedAt || null });
 
         try {
           const logRows = await loadRoomLog(roomId, 200);
@@ -4509,6 +4576,7 @@ async function sendMessage(msg) {
                 clearMarks: false,
                 resetFog: false
               });
+              detachedTokenRelaySent = true;
               _refreshDetachedRoomView();
             }
           } catch (e) {
