@@ -9,6 +9,8 @@
     "dev": "node scripts/static-server.js",
     "prestart": "npm run config",
     "start": "node scripts/static-server.js",
+    "start:server": "node apps/server/src/server.js",
+    "db:migrate": "node scripts/migrate-database.js",
     "check": "node scripts/check-js-syntax.js",
     "test": "npm run check && npm run test:unit && npm run test:e2e",
     "test:unit": "node --test tests/unit/*.test.js",
@@ -18,5 +20,14 @@
   "license": "UNLICENSED",
   "devDependencies": {
     "@playwright/test": "^1.62.1"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/websocket": "^11.3.0",
+    "@node-rs/argon2": "^2.1.0",
+    "fastify": "^5.12.1",
+    "pg": "^8.23.0",
+    "zod": "^4.4.3"
   }
 }
