@@ -1,0 +1,12 @@
+thoughts/
+
+.env
+/client/runtime-config.js
+/node_modules/
+/playwright-report/
+/test-results/
+
+# Local Graphify integration and generated knowledge graph
+/AGENTS.md
+/.codex/
+/graphify-out/

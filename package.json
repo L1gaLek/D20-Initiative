@@ -4,10 +4,19 @@
   "private": true,
   "description": "Static browser client for D20 Initiative.",
   "scripts": {
+    "config": "node scripts/generate-runtime-config.js",
+    "predev": "npm run config",
     "dev": "node scripts/static-server.js",
+    "prestart": "npm run config",
     "start": "node scripts/static-server.js",
     "check": "node scripts/check-js-syntax.js",
-    "test": "npm run check"
+    "test": "npm run check && npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
 }

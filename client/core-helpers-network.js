@@ -3380,13 +3380,8 @@ async function sendMessage(msg) {
 
         else if (type === "startExploration") {
           if (!isGM) return;
-          next.phase = "exploration";
+          window.D20GameModeRules.resetForExploration(next);
           bumpPhaseEpoch(next);
-          // В исследовании очередь хода не нужна
-          next.turnOrder = [];
-          next.currentTurnIndex = 0;
-          next.round = 1;
-          next.turnEpoch = 0;
           logEventToState(next, "GM начал фазу исследования");
         }
 
@@ -4499,16 +4494,12 @@ async function sendMessage(msg) {
               if (typeof p.inCombat !== 'boolean') p.inCombat = !!placed;
             });
           }
-          const combatants = (next.players || []).filter(p => p && p.inCombat);
-          const combatantsOnActiveMap = combatants.filter((p) => isPlayerEligibleForCurrentMapCombat(p, next));
-          const allRolled = combatantsOnActiveMap.length ? combatantsOnActiveMap.every(p => p.hasRolledInitiative) : false;
-          if (!allRolled) {
+          const isEligible = (player, state) => isPlayerEligibleForCurrentMapCombat(player, state);
+          if (!window.D20GameModeRules.canStartCombat(next, isEligible)) {
             handleMessage({ type: "error", message: "Сначала бросьте инициативу за всех участников боя" });
             return;
           }
-          next.turnOrder = [...combatantsOnActiveMap]
-            .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
-            .map(p => p.id);
+          next.turnOrder = window.D20GameModeRules.buildCombatTurnOrder(next, isEligible);
           autoPlacePlayers(next);
           next.phase = "combat";
           bumpPhaseEpoch(next);
@@ -4528,25 +4519,13 @@ async function sendMessage(msg) {
           const canEnd = isGM || (current && ownsPlayer(current));
           if (!canEnd) return;
 
-          const prevIndex = next.currentTurnIndex;
-          const nextIndex = (next.currentTurnIndex + 1) % next.turnOrder.length;
-          const wrapped = (prevIndex === next.turnOrder.length - 1 && nextIndex === 0);
-          if (wrapped) {
-            next.round = (Number(next.round) || 1) + 1;
-            const toJoin = (next.players || []).filter(p => p && p.willJoinNextRound);
-            if (toJoin.length) {
-              toJoin.forEach(p => { p.willJoinNextRound = false; });
-              next.turnOrder = [...new Set(
-                [...next.players]
-                  .filter(p => p && isPlayerEligibleForCurrentMapCombat(p, next) && (p.initiative !== null && p.initiative !== undefined) && p.hasRolledInitiative)
-                  .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
-                  .map(p => p.id)
-              )];
-            }
-          }
-          next.currentTurnIndex = wrapped ? 0 : nextIndex;
+          const advanced = window.D20GameModeRules.advanceCombatTurn(
+            next,
+            (player, state) => isPlayerEligibleForCurrentMapCombat(player, state)
+          );
+          if (!advanced) return;
           next.turnEpoch = Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1);
-          const nid = next.turnOrder[next.currentTurnIndex];
+          const nid = advanced.actorId;
           const np = (next.players || []).find(p => p.id === nid);
           logEventToState(next, `Ход игрока ${np?.name || '-'}`);
         }

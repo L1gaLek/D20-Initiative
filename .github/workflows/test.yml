@@ -1,0 +1,28 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PUBLIC_SUPABASE_URL: https://example.supabase.co
+      PUBLIC_SUPABASE_ANON_KEY: test-anon-key
+      PUBLIC_SUPABASE_FETCH_FN: fetch
+      PUBLIC_WS_URL: wss://example.invalid/ws/
+      PUBLIC_VPS_API_BASE: https://example.invalid/api
+      PUBLIC_BGM_UPLOAD_ENDPOINT: https://example.invalid/api/uploads/room-audio
+      PUBLIC_BOARD_BG_UPLOAD_ENDPOINT: https://example.invalid/api/uploads/room-board-bg
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
