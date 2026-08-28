@@ -29,6 +29,10 @@ const MIME_TYPES = {
 function resolveRequestPath(url) {
   const parsed = new URL(url || '/', `http://${HOST}:${PORT}`);
   const cleanPath = decodeURIComponent(parsed.pathname);
+  const segments = cleanPath.split('/').filter(Boolean);
+  if (segments.some((segment) => segment.startsWith('.'))) {
+    return null;
+  }
   const requested = cleanPath === '/' ? '/index.html' : cleanPath;
   const filePath = path.resolve(ROOT, `.${requested}`);
 

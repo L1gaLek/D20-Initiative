@@ -264,19 +264,13 @@ function isMapScopedPlayerForUi(player) {
 
 function canCurrentUserMovePlayerNow(player, { forInitialPlacement = false } = {}) {
   try {
-    if (!player || !player.id) return false;
-    if (String(myRole || '') === 'GM') return true;
-    const mine = String(player?.ownerId || '') === String(myId || '');
-    if (!mine) return false;
-    const phaseNow = String(lastState?.phase || '');
-    if (phaseNow === 'initiative') return false;
-    if (phaseNow !== 'combat') return true;
-    const currentId = String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
-    const isCurrent = String(player.id) === currentId;
-    if (isCurrent) return true;
-    if (!forInitialPlacement) return false;
-    const unplaced = (player.x === null || typeof player.x === 'undefined' || player.y === null || typeof player.y === 'undefined');
-    return unplaced;
+    return !!window.D20GameModeRules?.canUserMovePlayer({
+      player,
+      state: lastState,
+      userId: myId,
+      role: myRole,
+      forInitialPlacement
+    });
   } catch {
     return false;
   }

@@ -35,6 +35,14 @@ function wsWasSeen(nonce) {
 
 function shouldAcceptWsServerEvent(msg) {
   try {
+    const contracts = window.D20RealtimeContracts;
+    if (contracts?.shouldAcceptServerEvent) {
+      if (!(window.__lastWsRoomEventSeq instanceof Map)) window.__lastWsRoomEventSeq = new Map();
+      return contracts.shouldAcceptServerEvent(msg, {
+        currentRoomId: wsRoomId,
+        lastSequenceByRoom: window.__lastWsRoomEventSeq
+      });
+    }
     if (!msg || typeof msg !== 'object') return true;
     if (!msg.__serverEvent) return true;
     const seq = Math.trunc(Number(msg.__eventSeq) || 0);
@@ -612,14 +620,23 @@ function sendWsEnvelope(msg, opts = {}) {
     if (!wsRoomId) return false;
     const nonce = String(opts.nonce || wsMakeNonce());
     const clientSentAt = Date.now();
-    const payload = {
-      ...msg,
-      roomId: String(msg.roomId || wsRoomId),
-      __wsNonce: nonce,
-      __clientSentAt: clientSentAt,
-      __fromWsClient: WS_CLIENT_ID,
-      __optimisticApplied: !!opts.optimisticApplied
-    };
+    const payload = window.D20RealtimeContracts?.buildClientEnvelope
+      ? window.D20RealtimeContracts.buildClientEnvelope(msg, {
+          roomId: wsRoomId,
+          clientId: WS_CLIENT_ID,
+          nonce,
+          sentAt: clientSentAt,
+          optimisticApplied: !!opts.optimisticApplied
+        })
+      : {
+          ...msg,
+          roomId: String(msg.roomId || wsRoomId),
+          __wsNonce: nonce,
+          __clientSentAt: clientSentAt,
+          __fromWsClient: WS_CLIENT_ID,
+          __optimisticApplied: !!opts.optimisticApplied
+        };
+    if (!payload) return false;
 
     if (wsClient && wsClient.readyState === WebSocket.OPEN && wsClient.__joined === true) {
       wsClient.send(JSON.stringify(payload));
@@ -3266,29 +3283,15 @@ async function sendMessage(msg) {
         else if (type === "startInitiative") {
           if (!isGM) return;
           try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
-          next.phase = "initiative";
+          window.D20GameModeRules.startInitiative(next, {
+            initiativeEpoch: Date.now(),
+            isEligible: (player, state) => (
+              !isMapScopedPlayer(player)
+              || String(player?.mapId || '').trim() === String(state?.currentMapId || '').trim()
+            )
+          });
           bumpPhaseEpoch(next);
           bumpCombatSelectionEpoch(next);
-          next.initiativeEpoch = Date.now();
-          next.turnOrder = [];
-          next.currentTurnIndex = 0;
-          next.round = 1;
-          next.turnEpoch = 0;
-          // Initiative is now per-combatant, not "everyone in the room".
-          // Default selection: those already placed on the board.
-          (next.players || []).forEach(p => {
-            if (!p) return;
-            const isEligibleOnMap = !isMapScopedPlayer(p) || String(p?.mapId || '').trim() === String(next?.currentMapId || '').trim();
-            const placed = (p && p.x !== null && p.y !== null);
-            p.inCombat = !!placed && !!isEligibleOnMap;
-            // Always reset initiative-related fields for everyone.
-            // This keeps GM and players strictly in sync when initiative phase restarts.
-            p.initiative = null;
-            p.hasRolledInitiative = false;
-            p.pendingInitiativeChoice = false;
-            p.willJoinNextRound = false;
-            p.initiativeMode = normalizeInitiativeMode(p.initiativeMode || 'normal');
-          });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
           try {
             sendWsEnvelope({
@@ -3380,13 +3383,8 @@ async function sendMessage(msg) {
 
         else if (type === "startExploration") {
           if (!isGM) return;
-          next.phase = "exploration";
+          window.D20GameModeRules.resetForExploration(next);
           bumpPhaseEpoch(next);
-          // В исследовании очередь хода не нужна
-          next.turnOrder = [];
-          next.currentTurnIndex = 0;
-          next.round = 1;
-          next.turnEpoch = 0;
           logEventToState(next, "GM начал фазу исследования");
         }
 
@@ -4490,63 +4488,37 @@ async function sendMessage(msg) {
         else if (type === "startCombat") {
           if (!isGM) return;
           try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
-          if (next.phase !== "initiative" && next.phase !== "placement" && next.phase !== "exploration") return;
-          // In v6, combat includes only selected combatants.
-          // If starting combat directly from placement/exploration, default to "those placed on the board".
-          if (next.phase !== 'initiative') {
-            (next.players || []).forEach(p => {
-              const placed = (p && p.x !== null && p.y !== null);
-              if (typeof p.inCombat !== 'boolean') p.inCombat = !!placed;
-            });
-          }
-          const combatants = (next.players || []).filter(p => p && p.inCombat);
-          const combatantsOnActiveMap = combatants.filter((p) => isPlayerEligibleForCurrentMapCombat(p, next));
-          const allRolled = combatantsOnActiveMap.length ? combatantsOnActiveMap.every(p => p.hasRolledInitiative) : false;
-          if (!allRolled) {
+          const isEligible = (player, state) => isPlayerEligibleForCurrentMapCombat(player, state);
+          const combatStarted = window.D20GameModeRules.startCombat(next, {
+            isEligible,
+            turnEpoch: Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1)
+          });
+          if (!combatStarted.ok) {
+            if (combatStarted.reason !== 'initiative-required') return;
             handleMessage({ type: "error", message: "Сначала бросьте инициативу за всех участников боя" });
             return;
           }
-          next.turnOrder = [...combatantsOnActiveMap]
-            .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
-            .map(p => p.id);
           autoPlacePlayers(next);
-          next.phase = "combat";
           bumpPhaseEpoch(next);
-          next.currentTurnIndex = 0;
-          next.round = 1;
-          next.turnEpoch = Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1);
-          const firstId = next.turnOrder[0];
+          const firstId = combatStarted.firstActorId;
           const first = (next.players || []).find(p => p.id === firstId);
           logEventToState(next, `Бой начался. Первый ход: ${first?.name || '-'}`);
         }
 
         else if (type === "endTurn") {
-          if (next.phase !== "combat") return;
-          if (!Array.isArray(next.turnOrder) || next.turnOrder.length === 0) return;
-          const currentId = next.turnOrder[next.currentTurnIndex];
-          const current = (next.players || []).find(p => p.id === currentId);
-          const canEnd = isGM || (current && ownsPlayer(current));
-          if (!canEnd) return;
+          if (!window.D20GameModeRules.canUserEndCurrentTurn({
+            state: next,
+            userId: myUserId,
+            role: isGM ? 'GM' : myRole
+          })) return;
 
-          const prevIndex = next.currentTurnIndex;
-          const nextIndex = (next.currentTurnIndex + 1) % next.turnOrder.length;
-          const wrapped = (prevIndex === next.turnOrder.length - 1 && nextIndex === 0);
-          if (wrapped) {
-            next.round = (Number(next.round) || 1) + 1;
-            const toJoin = (next.players || []).filter(p => p && p.willJoinNextRound);
-            if (toJoin.length) {
-              toJoin.forEach(p => { p.willJoinNextRound = false; });
-              next.turnOrder = [...new Set(
-                [...next.players]
-                  .filter(p => p && isPlayerEligibleForCurrentMapCombat(p, next) && (p.initiative !== null && p.initiative !== undefined) && p.hasRolledInitiative)
-                  .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
-                  .map(p => p.id)
-              )];
-            }
-          }
-          next.currentTurnIndex = wrapped ? 0 : nextIndex;
+          const advanced = window.D20GameModeRules.advanceCombatTurn(
+            next,
+            (player, state) => isPlayerEligibleForCurrentMapCombat(player, state)
+          );
+          if (!advanced) return;
           next.turnEpoch = Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1);
-          const nid = next.turnOrder[next.currentTurnIndex];
+          const nid = advanced.actorId;
           const np = (next.players || []).find(p => p.id === nid);
           logEventToState(next, `Ход игрока ${np?.name || '-'}`);
         }
