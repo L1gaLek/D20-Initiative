@@ -4506,12 +4506,11 @@ async function sendMessage(msg) {
         }
 
         else if (type === "endTurn") {
-          if (next.phase !== "combat") return;
-          if (!Array.isArray(next.turnOrder) || next.turnOrder.length === 0) return;
-          const currentId = next.turnOrder[next.currentTurnIndex];
-          const current = (next.players || []).find(p => p.id === currentId);
-          const canEnd = isGM || (current && ownsPlayer(current));
-          if (!canEnd) return;
+          if (!window.D20GameModeRules.canUserEndCurrentTurn({
+            state: next,
+            userId: myUserId,
+            role: isGM ? 'GM' : myRole
+          })) return;
 
           const advanced = window.D20GameModeRules.advanceCombatTurn(
             next,

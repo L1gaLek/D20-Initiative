@@ -4,6 +4,7 @@ const {
   advanceCombatTurn,
   buildCombatTurnOrder,
   canStartCombat,
+  canUserEndCurrentTurn,
   canUserMovePlayer,
   getCurrentTurnActorId,
   isTokenUnplaced,
@@ -180,4 +181,25 @@ test('combat cannot start from an unknown phase', () => {
   const state = { phase: 'paused', players: [] };
   assert.deepEqual(startCombat(state), { ok: false, reason: 'invalid-phase' });
   assert.equal(state.phase, 'paused');
+});
+
+test('only the GM or owner of the active combatant can end the turn', () => {
+  const state = {
+    phase: 'combat',
+    turnOrder: ['a', 'b'],
+    currentTurnIndex: 0,
+    players: [
+      { id: 'a', ownerId: 'user-a' },
+      { id: 'b', ownerId: 'user-b' }
+    ]
+  };
+  assert.equal(canUserEndCurrentTurn({ state, userId: 'user-a', role: 'Player' }), true);
+  assert.equal(canUserEndCurrentTurn({ state, userId: 'user-b', role: 'Player' }), false);
+  assert.equal(canUserEndCurrentTurn({ state, userId: 'user-b', role: 'GM' }), true);
+  assert.equal(canUserEndCurrentTurn({ state: { ...state, phase: 'exploration' }, userId: 'user-a', role: 'Player' }), false);
+});
+
+test('turn cannot end when the active combatant is missing', () => {
+  const state = { phase: 'combat', turnOrder: [], currentTurnIndex: 0, players: [] };
+  assert.equal(canUserEndCurrentTurn({ state, userId: 'user-a', role: 'GM' }), false);
 });

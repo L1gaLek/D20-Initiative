@@ -35,6 +35,16 @@
     return !!forInitialPlacement && isTokenUnplaced(player);
   }
 
+  function canUserEndCurrentTurn({ state, userId, role } = {}) {
+    if (!state || state.phase !== PHASES.COMBAT) return false;
+    const actorId = getCurrentTurnActorId(state);
+    if (!actorId) return false;
+    if (String(role || '') === 'GM') return true;
+    const actor = (Array.isArray(state.players) ? state.players : [])
+      .find((player) => String(player?.id || '') === actorId);
+    return !!actor && String(actor.ownerId || '') === String(userId || '');
+  }
+
   function resetForExploration(state) {
     if (!state || typeof state !== 'object') return state;
     state.phase = PHASES.EXPLORATION;
@@ -137,6 +147,7 @@
     advanceCombatTurn,
     buildCombatTurnOrder,
     canStartCombat,
+    canUserEndCurrentTurn,
     canUserMovePlayer,
     getReadyCombatants,
     getCurrentTurnActorId,
