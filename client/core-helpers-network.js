@@ -35,6 +35,14 @@ function wsWasSeen(nonce) {
 
 function shouldAcceptWsServerEvent(msg) {
   try {
+    const contracts = window.D20RealtimeContracts;
+    if (contracts?.shouldAcceptServerEvent) {
+      if (!(window.__lastWsRoomEventSeq instanceof Map)) window.__lastWsRoomEventSeq = new Map();
+      return contracts.shouldAcceptServerEvent(msg, {
+        currentRoomId: wsRoomId,
+        lastSequenceByRoom: window.__lastWsRoomEventSeq
+      });
+    }
     if (!msg || typeof msg !== 'object') return true;
     if (!msg.__serverEvent) return true;
     const seq = Math.trunc(Number(msg.__eventSeq) || 0);
@@ -612,14 +620,23 @@ function sendWsEnvelope(msg, opts = {}) {
     if (!wsRoomId) return false;
     const nonce = String(opts.nonce || wsMakeNonce());
     const clientSentAt = Date.now();
-    const payload = {
-      ...msg,
-      roomId: String(msg.roomId || wsRoomId),
-      __wsNonce: nonce,
-      __clientSentAt: clientSentAt,
-      __fromWsClient: WS_CLIENT_ID,
-      __optimisticApplied: !!opts.optimisticApplied
-    };
+    const payload = window.D20RealtimeContracts?.buildClientEnvelope
+      ? window.D20RealtimeContracts.buildClientEnvelope(msg, {
+          roomId: wsRoomId,
+          clientId: WS_CLIENT_ID,
+          nonce,
+          sentAt: clientSentAt,
+          optimisticApplied: !!opts.optimisticApplied
+        })
+      : {
+          ...msg,
+          roomId: String(msg.roomId || wsRoomId),
+          __wsNonce: nonce,
+          __clientSentAt: clientSentAt,
+          __fromWsClient: WS_CLIENT_ID,
+          __optimisticApplied: !!opts.optimisticApplied
+        };
+    if (!payload) return false;
 
     if (wsClient && wsClient.readyState === WebSocket.OPEN && wsClient.__joined === true) {
       wsClient.send(JSON.stringify(payload));
