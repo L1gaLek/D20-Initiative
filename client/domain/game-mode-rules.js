@@ -45,6 +45,30 @@
     return state;
   }
 
+  function startInitiative(state, options = {}) {
+    if (!state || typeof state !== 'object') return null;
+    const isEligible = typeof options.isEligible === 'function' ? options.isEligible : () => true;
+    state.phase = PHASES.INITIATIVE;
+    state.turnOrder = [];
+    state.currentTurnIndex = 0;
+    state.round = 1;
+    state.turnEpoch = 0;
+    state.initiativeEpoch = Number(options.initiativeEpoch) || Date.now();
+
+    (Array.isArray(state.players) ? state.players : []).forEach((player) => {
+      if (!player) return;
+      const placed = !isTokenUnplaced(player);
+      player.inCombat = placed && isEligible(player, state);
+      player.initiative = null;
+      player.hasRolledInitiative = false;
+      player.pendingInitiativeChoice = false;
+      player.willJoinNextRound = false;
+      const mode = String(player.initiativeMode || 'normal');
+      player.initiativeMode = mode === 'advantage' || mode === 'disadvantage' ? mode : 'normal';
+    });
+    return state;
+  }
+
   function getReadyCombatants(state, isEligible = () => true) {
     const players = Array.isArray(state?.players) ? state.players : [];
     return players.filter((player) => player && player.inCombat && isEligible(player, state));
@@ -60,6 +84,27 @@
       .filter((player) => player.initiative !== null && typeof player.initiative !== 'undefined' && player.hasRolledInitiative)
       .sort((a, b) => (Number(b.initiative) || 0) - (Number(a.initiative) || 0))
       .map((player) => player.id);
+  }
+
+  function startCombat(state, options = {}) {
+    if (!state || typeof state !== 'object') return { ok: false, reason: 'invalid-state' };
+    const allowedPhases = new Set([PHASES.EXPLORATION, PHASES.INITIATIVE, 'placement']);
+    if (!allowedPhases.has(String(state.phase || ''))) return { ok: false, reason: 'invalid-phase' };
+    const isEligible = typeof options.isEligible === 'function' ? options.isEligible : () => true;
+
+    if (state.phase !== PHASES.INITIATIVE) {
+      (Array.isArray(state.players) ? state.players : []).forEach((player) => {
+        if (player && typeof player.inCombat !== 'boolean') player.inCombat = !isTokenUnplaced(player);
+      });
+    }
+    if (!canStartCombat(state, isEligible)) return { ok: false, reason: 'initiative-required' };
+
+    state.turnOrder = buildCombatTurnOrder(state, isEligible);
+    state.phase = PHASES.COMBAT;
+    state.currentTurnIndex = 0;
+    state.round = 1;
+    state.turnEpoch = Number(options.turnEpoch) || Date.now();
+    return { ok: true, firstActorId: String(state.turnOrder[0] || '') };
   }
 
   function advanceCombatTurn(state, isEligible = () => true) {
@@ -96,6 +141,8 @@
     getReadyCombatants,
     getCurrentTurnActorId,
     isTokenUnplaced,
-    resetForExploration
+    resetForExploration,
+    startCombat,
+    startInitiative
   };
 });

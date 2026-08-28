@@ -3283,29 +3283,15 @@ async function sendMessage(msg) {
         else if (type === "startInitiative") {
           if (!isGM) return;
           try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
-          next.phase = "initiative";
+          window.D20GameModeRules.startInitiative(next, {
+            initiativeEpoch: Date.now(),
+            isEligible: (player, state) => (
+              !isMapScopedPlayer(player)
+              || String(player?.mapId || '').trim() === String(state?.currentMapId || '').trim()
+            )
+          });
           bumpPhaseEpoch(next);
           bumpCombatSelectionEpoch(next);
-          next.initiativeEpoch = Date.now();
-          next.turnOrder = [];
-          next.currentTurnIndex = 0;
-          next.round = 1;
-          next.turnEpoch = 0;
-          // Initiative is now per-combatant, not "everyone in the room".
-          // Default selection: those already placed on the board.
-          (next.players || []).forEach(p => {
-            if (!p) return;
-            const isEligibleOnMap = !isMapScopedPlayer(p) || String(p?.mapId || '').trim() === String(next?.currentMapId || '').trim();
-            const placed = (p && p.x !== null && p.y !== null);
-            p.inCombat = !!placed && !!isEligibleOnMap;
-            // Always reset initiative-related fields for everyone.
-            // This keeps GM and players strictly in sync when initiative phase restarts.
-            p.initiative = null;
-            p.hasRolledInitiative = false;
-            p.pendingInitiativeChoice = false;
-            p.willJoinNextRound = false;
-            p.initiativeMode = normalizeInitiativeMode(p.initiativeMode || 'normal');
-          });
           logEventToState(next, "GM начал фазу инициативы (выбор участников)");
           try {
             sendWsEnvelope({
@@ -4502,28 +4488,19 @@ async function sendMessage(msg) {
         else if (type === "startCombat") {
           if (!isGM) return;
           try { clearPendingInitiativeOverlay(currentRoomId); } catch {}
-          if (next.phase !== "initiative" && next.phase !== "placement" && next.phase !== "exploration") return;
-          // In v6, combat includes only selected combatants.
-          // If starting combat directly from placement/exploration, default to "those placed on the board".
-          if (next.phase !== 'initiative') {
-            (next.players || []).forEach(p => {
-              const placed = (p && p.x !== null && p.y !== null);
-              if (typeof p.inCombat !== 'boolean') p.inCombat = !!placed;
-            });
-          }
           const isEligible = (player, state) => isPlayerEligibleForCurrentMapCombat(player, state);
-          if (!window.D20GameModeRules.canStartCombat(next, isEligible)) {
+          const combatStarted = window.D20GameModeRules.startCombat(next, {
+            isEligible,
+            turnEpoch: Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1)
+          });
+          if (!combatStarted.ok) {
+            if (combatStarted.reason !== 'initiative-required') return;
             handleMessage({ type: "error", message: "Сначала бросьте инициативу за всех участников боя" });
             return;
           }
-          next.turnOrder = window.D20GameModeRules.buildCombatTurnOrder(next, isEligible);
           autoPlacePlayers(next);
-          next.phase = "combat";
           bumpPhaseEpoch(next);
-          next.currentTurnIndex = 0;
-          next.round = 1;
-          next.turnEpoch = Math.max(Date.now(), (Number(next.turnEpoch) || 0) + 1);
-          const firstId = next.turnOrder[0];
+          const firstId = combatStarted.firstActorId;
           const first = (next.players || []).find(p => p.id === firstId);
           logEventToState(next, `Бой начался. Первый ход: ${first?.name || '-'}`);
         }

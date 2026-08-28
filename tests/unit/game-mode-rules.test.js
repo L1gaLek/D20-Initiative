@@ -7,7 +7,9 @@ const {
   canUserMovePlayer,
   getCurrentTurnActorId,
   isTokenUnplaced,
-  resetForExploration
+  resetForExploration,
+  startCombat,
+  startInitiative
 } = require('../../client/domain/game-mode-rules.js');
 
 const owned = { id: 'token-a', ownerId: 'user-a', x: 2, y: 3 };
@@ -130,4 +132,52 @@ test('queued combatants join in initiative order at the next round', () => {
   assert.deepEqual(advanceCombatTurn(state), { actorId: 'c', wrapped: true, round: 2 });
   assert.deepEqual(state.turnOrder, ['c', 'a', 'b']);
   assert.equal(state.players[2].willJoinNextRound, false);
+});
+
+test('full mode flow resets initiative, starts combat and returns to exploration', () => {
+  const state = {
+    phase: 'exploration',
+    players: [
+      { id: 'a', x: 1, y: 1, initiative: 99, hasRolledInitiative: true, initiativeMode: 'advantage' },
+      { id: 'b', x: 2, y: 2, initiative: 88, hasRolledInitiative: true, initiativeMode: 'invalid' },
+      { id: 'off-map', x: 3, y: 3, initiative: 77, hasRolledInitiative: true },
+      { id: 'unplaced', x: null, y: null, initiative: 66, hasRolledInitiative: true }
+    ]
+  };
+  const eligible = (player) => player.id !== 'off-map';
+
+  startInitiative(state, { initiativeEpoch: 10, isEligible: eligible });
+  assert.equal(state.phase, 'initiative');
+  assert.equal(state.initiativeEpoch, 10);
+  assert.deepEqual(state.players.map((player) => player.inCombat), [true, true, false, false]);
+  assert.deepEqual(state.players.map((player) => player.hasRolledInitiative), [false, false, false, false]);
+  assert.deepEqual(state.players.map((player) => player.initiative), [null, null, null, null]);
+  assert.equal(state.players[0].initiativeMode, 'advantage');
+  assert.equal(state.players[1].initiativeMode, 'normal');
+
+  assert.deepEqual(startCombat(state, { isEligible: eligible, turnEpoch: 20 }), {
+    ok: false,
+    reason: 'initiative-required'
+  });
+  state.players[0].initiative = 12;
+  state.players[0].hasRolledInitiative = true;
+  state.players[1].initiative = 18;
+  state.players[1].hasRolledInitiative = true;
+  assert.deepEqual(startCombat(state, { isEligible: eligible, turnEpoch: 20 }), {
+    ok: true,
+    firstActorId: 'b'
+  });
+  assert.equal(state.phase, 'combat');
+  assert.deepEqual(state.turnOrder, ['b', 'a']);
+  assert.equal(state.turnEpoch, 20);
+
+  resetForExploration(state);
+  assert.equal(state.phase, 'exploration');
+  assert.deepEqual(state.turnOrder, []);
+});
+
+test('combat cannot start from an unknown phase', () => {
+  const state = { phase: 'paused', players: [] };
+  assert.deepEqual(startCombat(state), { ok: false, reason: 'invalid-phase' });
+  assert.equal(state.phase, 'paused');
 });
