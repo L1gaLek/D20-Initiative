@@ -1142,6 +1142,18 @@ const weapons = weaponsRaw
     const key = sheetDraftKey(playerId);
     const draft = sheetSaveDrafts.get(key);
     if (!draft || !Number.isFinite(Number(updatedAt)) || Number(updatedAt) < draft.sheetUpdatedAt) return;
+    if (Number(updatedAt) > draft.sheetUpdatedAt) {
+      // The server rejected an outdated version and returned a newer sheet.
+      // Retain the user's text and retry above the server's current version.
+      draft.sheetUpdatedAt = Math.max(Date.now(), Number(updatedAt) + 1);
+      if (openedSheetPlayer && String(openedSheetPlayer.id) === String(playerId)) {
+        openedSheetPlayer.sheetUpdatedAt = draft.sheetUpdatedAt;
+      }
+      try { localStorage.setItem(key, JSON.stringify(draft)); } catch {}
+      clearTimeout(sheetSaveTimers.get(String(playerId)));
+      sheetSaveTimers.set(String(playerId), setTimeout(() => flushSheetSaves(playerId), 450));
+      return;
+    }
     sheetSaveDrafts.delete(key);
     clearTimeout(sheetSaveTimers.get(String(playerId)));
     sheetSaveTimers.delete(String(playerId));
@@ -1156,11 +1168,16 @@ const weapons = weaponsRaw
       try { draft = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
     }
     if (!draft?.sheet || String(draft.id) !== String(player.id)) return;
-    // An acknowledged or newer server copy wins over a recovered local draft.
-    if (Number(player.sheetUpdatedAt || 0) >= Number(draft.sheetUpdatedAt || 0)) {
+    // Only matching content proves a recovered draft was already committed.
+    if (Number(player.sheetUpdatedAt || 0) >= Number(draft.sheetUpdatedAt || 0)
+      && JSON.stringify(player.sheet) === JSON.stringify(draft.sheet)) {
       sheetSaveDrafts.set(key, draft);
-      acknowledgeSheetSave(player.id, player.sheetUpdatedAt);
+      acknowledgeSheetSave(player.id, draft.sheetUpdatedAt);
       return;
+    }
+    if (Number(player.sheetUpdatedAt || 0) > Number(draft.sheetUpdatedAt || 0)) {
+      draft.sheetUpdatedAt = Math.max(Date.now(), Number(player.sheetUpdatedAt) + 1);
+      try { localStorage.setItem(key, JSON.stringify(draft)); } catch {}
     }
     player.sheet = deepClone(draft.sheet);
     player.sheetUpdatedAt = draft.sheetUpdatedAt;

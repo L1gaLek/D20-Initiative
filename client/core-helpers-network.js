@@ -497,7 +497,7 @@ function connectRoomWs(roomId) {
       });
 
       const from = String(msg.__fromWsClient || '').trim();
-      if (msg.type === 'playerPatch' && msg.patch?.sheet) {
+      if (from === WS_CLIENT_ID && msg.type === 'playerPatch' && msg.patch?.sheet) {
         window.InfoModal?.acknowledgeSheetSave?.(msg.playerId || msg.id, msg.patch.sheetUpdatedAt);
       }
       if (from && from === WS_CLIENT_ID && msg.__optimisticApplied && !(msg.type === 'playerPatch' && msg.patch?.sheet)) return;

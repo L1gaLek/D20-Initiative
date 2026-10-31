@@ -285,3 +285,17 @@ test('a stale unrolled snapshot from the same phase cannot clear the initiative 
   assert.equal(state.players[0].initiative, 18);
   assert.equal(state.maps[0].playerStates['player-1'].initiative, 18);
 });
+
+test('a rejected sheet version retains local text and retries above the server version', () => {
+  const h = sheetHarness();
+  h.context.open(initialState().players[0]);
+  const model = h.rendered();
+  model.sheet.parsed.notes.entries[0].text = 'unsaved text';
+  h.context.scheduleSheetSave(model);
+  const newerServerVersion = model.sheetUpdatedAt + 100;
+  h.context.acknowledgeSheetSave(model.id, newerServerVersion);
+  assert.equal(h.storage.size, 1);
+  h.fire();
+  assert.equal(h.sent.at(-1).sheet.parsed.notes.entries[0].text, 'unsaved text');
+  assert.ok(h.sent.at(-1).sheetUpdatedAt > newerServerVersion);
+});
