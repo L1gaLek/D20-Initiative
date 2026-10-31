@@ -167,15 +167,9 @@ function applyPendingInitiativeOverlayToState(state) {
       phase === 'initiative' &&
       (
         (
-          (Number(st?.round) || 1) === 1 &&
-          Array.isArray(st?.turnOrder) &&
-          st.turnOrder.length === 0 &&
-          (Array.isArray(st?.players) ? st.players : []).every((p) => !p?.inCombat || !p?.hasRolledInitiative)
-        ) ||
-        (
           (Number(st?.initiativeEpoch) || 0) > 0 &&
           Number(__pendingInitiativeOverlay.initiativeEpoch) > 0 &&
-          Number(st?.initiativeEpoch) !== Number(__pendingInitiativeOverlay.initiativeEpoch)
+          Number(st?.initiativeEpoch) > Number(__pendingInitiativeOverlay.initiativeEpoch)
         )
       )
     );

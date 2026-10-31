@@ -449,6 +449,8 @@ function connectRoomWs(roomId) {
   wsClient = sock;
 
   sock.onopen = async () => {
+    // Event numbers start over after a server restart. They are scoped to this connection.
+    try { window.__lastWsRoomEventSeq?.delete?.(rid); } catch {}
     markWsAlive();
     startWsHeartbeat(sock);
     try {
@@ -495,7 +497,10 @@ function connectRoomWs(roomId) {
       });
 
       const from = String(msg.__fromWsClient || '').trim();
-      if (from && from === WS_CLIENT_ID && msg.__optimisticApplied) return;
+      if (msg.type === 'playerPatch' && msg.patch?.sheet) {
+        window.InfoModal?.acknowledgeSheetSave?.(msg.playerId || msg.id, msg.patch.sheetUpdatedAt);
+      }
+      if (from && from === WS_CLIENT_ID && msg.__optimisticApplied && !(msg.type === 'playerPatch' && msg.patch?.sheet)) return;
 
       if (msg.type === 'ping') {
         markWsAlive();
@@ -519,6 +524,7 @@ function connectRoomWs(roomId) {
         markWsAlive();
         try { sock.__joined = true; } catch {}
         flushWsPendingEnvelopes(sock);
+        window.InfoModal?.flushSheetSaves?.();
         return;
       }
       if (handleDetachedWsMessage(msg)) return;

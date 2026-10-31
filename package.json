@@ -7,7 +7,7 @@
     "dev": "node scripts/static-server.js",
     "start": "node scripts/static-server.js",
     "check": "node scripts/check-js-syntax.js",
-    "test": "npm run check"
+    "test": "npm run check && node --test tests/room-sync.test.cjs"
   },
   "license": "UNLICENSED"
 }

@@ -682,6 +682,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
           p.hasRolledInitiative = false;
           p.pendingInitiativeChoice = false;
           p.willJoinNextRound = false;
+          try { syncPendingInitiativePlayerToActiveMap(lastState, p); } catch {}
         });
         refreshInitiativeRealtimeUi(lastState);
       }
@@ -707,6 +708,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
           p.initiative = Number(u.total);
           p.hasRolledInitiative = true;
           p.pendingInitiativeChoice = false;
+          try { syncPendingInitiativePlayerToActiveMap(lastState, p); } catch {}
         });
         try { syncVisiblePlayersState(lastState); } catch {}
         try {
@@ -759,10 +761,11 @@ try { handleSessionUiMessage?.(msg); } catch {}
         const applyTo = (list) => {
           const p = (Array.isArray(list) ? list : []).find(pp => String(pp?.id || '') === playerId);
           if (!p) return null;
-          if (typeof patch.name === 'string' && patch.name.trim()) p.name = patch.name.trim();
+          const acceptsSheet = !patch.sheet || Number(patch.sheetUpdatedAt || 0) >= Number(p.sheetUpdatedAt || 0);
+          if (acceptsSheet && typeof patch.name === 'string' && patch.name.trim()) p.name = patch.name.trim();
           if (typeof patch.isPublic === 'boolean') p.isPublic = !!patch.isPublic;
-          if (patch.sheet && typeof patch.sheet === 'object') p.sheet = deepClone(patch.sheet);
-          if (typeof patch.sheetUpdatedAt !== 'undefined') p.sheetUpdatedAt = Number(patch.sheetUpdatedAt) || Date.now();
+          if (acceptsSheet && patch.sheet && typeof patch.sheet === 'object') p.sheet = deepClone(patch.sheet);
+          if (acceptsSheet && typeof patch.sheetUpdatedAt !== 'undefined') p.sheetUpdatedAt = Number(patch.sheetUpdatedAt) || Date.now();
           return p;
         };
         const patched = applyTo(lastState?.players);

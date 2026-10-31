@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+*.bak
+*.bak_*
+*.pre-upload.bak
+*.before-*.bak
+backend/uploads/
+backend/.pm2/
+.DS_Store
+Thumbs.db

@@ -37,6 +37,7 @@ function handleRegisteredMessage(msg) {
       sendMessage,
       getMyId: () => myId,
       getMyRole: () => myRole,
+      getRoomId: () => currentRoomId,
       getPlayers: () => (Array.isArray(players) ? players : [])
     });
   }

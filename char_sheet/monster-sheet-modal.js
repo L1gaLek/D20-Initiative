@@ -1381,6 +1381,10 @@
       try { player.__sheetSaveHook(); } catch (err) { console.warn('MonsterSheetModal: custom save hook failed', err); }
       return;
     }
+    if (typeof scheduleSheetSave === 'function') {
+      scheduleSheetSave(player);
+      return;
+    }
     const pid = String(player?.id || '');
     if (!pid || !ctx?.sendMessage) return;
     clearTimeout(saveTimers.get(pid));

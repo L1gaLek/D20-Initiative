@@ -1130,28 +1130,82 @@ const weapons = weaponsRaw
     catch { return undefined; }
   }
 
+  const sheetSaveDrafts = new Map();
+
+  function sheetDraftKey(playerId) {
+    const owner = String(ctx?.getMyId?.() || '');
+    const room = String(ctx?.getRoomId?.() || '');
+    return owner && room && playerId ? `d20_sheet_draft_v1:${owner}:${room}:${playerId}` : '';
+  }
+
+  function acknowledgeSheetSave(playerId, updatedAt) {
+    const key = sheetDraftKey(playerId);
+    const draft = sheetSaveDrafts.get(key);
+    if (!draft || !Number.isFinite(Number(updatedAt)) || Number(updatedAt) < draft.sheetUpdatedAt) return;
+    sheetSaveDrafts.delete(key);
+    clearTimeout(sheetSaveTimers.get(String(playerId)));
+    sheetSaveTimers.delete(String(playerId));
+    try { localStorage.removeItem(key); } catch {}
+  }
+
+  function restoreSheetDraft(player) {
+    const key = sheetDraftKey(player?.id);
+    if (!key || !canEditPlayer(player)) return;
+    let draft = sheetSaveDrafts.get(key);
+    if (!draft) {
+      try { draft = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
+    }
+    if (!draft?.sheet || String(draft.id) !== String(player.id)) return;
+    // An acknowledged or newer server copy wins over a recovered local draft.
+    if (Number(player.sheetUpdatedAt || 0) >= Number(draft.sheetUpdatedAt || 0)) {
+      sheetSaveDrafts.set(key, draft);
+      acknowledgeSheetSave(player.id, player.sheetUpdatedAt);
+      return;
+    }
+    player.sheet = deepClone(draft.sheet);
+    player.sheetUpdatedAt = draft.sheetUpdatedAt;
+    sheetSaveDrafts.set(key, draft);
+  }
+
+  function flushSheetSaves(playerId = null) {
+    if (!ctx?.sendMessage) return;
+    for (const [key, draft] of sheetSaveDrafts) {
+      if (playerId && String(draft.id) !== String(playerId)) continue;
+      if (key !== sheetDraftKey(draft.id)) continue;
+      clearTimeout(sheetSaveTimers.get(String(draft.id)));
+      sheetSaveTimers.delete(String(draft.id));
+      try {
+        Promise.resolve(ctx.sendMessage({
+          type: 'setPlayerSheet', id: draft.id,
+          sheet: deepClone(draft.sheet), sheetUpdatedAt: draft.sheetUpdatedAt
+        })).catch((error) => console.warn('Sheet save will retry', error));
+      } catch (error) { console.warn('Sheet save will retry', error); }
+    }
+  }
+
   function scheduleSheetSave(player) {
     if (!player?.id || !ctx?.sendMessage) return;
-
-    const key = player.id;
-    const prev = sheetSaveTimers.get(key);
-    if (prev) clearTimeout(prev);
-
-    const updatedAt = Date.now();
-    try { player.sheetUpdatedAt = updatedAt; } catch {}
-
-    const t = setTimeout(() => {
-      ctx.sendMessage({
-        type: "setPlayerSheet",
-        id: player.id,
-        sheet: deepClone(player.sheet),
-        sheetUpdatedAt: updatedAt
-      });
-      sheetSaveTimers.delete(key);
-    }, 450);
-
-    sheetSaveTimers.set(key, t);
+    const key = sheetDraftKey(player.id);
+    if (!key) return;
+    const id = String(player.id);
+    clearTimeout(sheetSaveTimers.get(id));
+    const previous = sheetSaveDrafts.get(key);
+    const updatedAt = Math.max(Date.now(), Number(player.sheetUpdatedAt || 0) + 1,
+      Number(previous?.sheetUpdatedAt || 0) + 1);
+    player.sheetUpdatedAt = updatedAt;
+    // Capture at input time, not after a delay when realtime may have replaced the model.
+    const draft = { id, sheet: deepClone(player.sheet), sheetUpdatedAt: updatedAt };
+    sheetSaveDrafts.set(key, draft);
+    try { localStorage.setItem(key, JSON.stringify(draft)); } catch {}
+    sheetSaveTimers.set(id, setTimeout(() => flushSheetSaves(id), 450));
   }
+
+  window.addEventListener('pagehide', () => flushSheetSaves());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSheetSaves();
+  });
+  // Keep unacknowledged drafts until the server confirms the database commit.
+  setInterval(() => flushSheetSaves(), 5000);
 
   // ===== Coins helpers =====
   const COIN_TO_CP = { cp: 1, sp: 10, ep: 50, gp: 100, pp: 1000 };

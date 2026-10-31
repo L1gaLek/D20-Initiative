@@ -1536,7 +1536,8 @@ function renderShopTab(vm, canEdit) {
         if (next) applyWildShapeToMain(sheet);
         else restoreMainFromWildShape(sheet);
         try {
-          ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
+          scheduleSheetSave(player);
+          flushSheetSaves(player.id);
         } catch {}
         renderSheetModal(player, { force: true });
       });
@@ -1557,7 +1558,8 @@ function renderShopTab(vm, canEdit) {
       __sheetSaveHook: () => {
         ws.formSheet = virtualPlayer.sheet.parsed;
         if (ws.active) applyWildShapeToMain(sheet);
-        ctx?.sendMessage?.({ type: 'setPlayerSheet', id: player.id, sheet: player.sheet });
+        scheduleSheetSave(player);
+        flushSheetSaves(player.id);
       }
     };
     try {
@@ -1632,7 +1634,8 @@ function renderShopTab(vm, canEdit) {
           const text = await file.text();
           const sheet = parseCharboxFileText(text);
           player.sheet = sheet;
-          ctx.sendMessage({ type: "setPlayerSheet", id: player.id, sheet });
+          scheduleSheetSave(player);
+          flushSheetSaves(player.id);
 
           // Мгновенно обновляем UI (не ждём round-trip через сервер)
           // и при этом не сбрасываем вкладку/скролл.
@@ -1966,10 +1969,14 @@ function renderShopTab(vm, canEdit) {
 
   function open(player) {
     if (!player) return;
+    if (openedSheetPlayerId) flushSheetSaves(openedSheetPlayerId);
     openedSheetPlayerId = player.id;
+    openedSheetPlayer = deepClone(player);
+    restoreSheetDraft(openedSheetPlayer);
     rememberPlayersSnapshot([player]);
-    renderSheetModal(player);
+    renderSheetModal(openedSheetPlayer, { force: true });
     openModal();
+    flushSheetSaves(player.id);
   }
 
   function refresh(players) {
@@ -1977,7 +1984,11 @@ function renderShopTab(vm, canEdit) {
     if (!Array.isArray(players)) return;
     rememberPlayersSnapshot(players);
     const pl = players.find(x => x.id === openedSheetPlayerId);
-    if (pl) renderSheetModal(pl);
+    if (!pl || isModalBusy(pl.id) || sheetSaveTimers.has(String(pl.id))) return;
+    if (openedSheetPlayer && Number(openedSheetPlayer.sheetUpdatedAt || 0) > Number(pl.sheetUpdatedAt || 0)) return;
+    openedSheetPlayer = deepClone(pl);
+    restoreSheetDraft(openedSheetPlayer);
+    renderSheetModal(openedSheetPlayer);
   }
 
   // callbacks are called from client.js when server answers
@@ -2016,6 +2027,8 @@ function renderShopTab(vm, canEdit) {
     open,
     refresh,
     close: closeModal,
+    flushSheetSaves,
+    acknowledgeSheetSave,
     onSavedBasesList,
     onSavedBaseSaved,
     onSavedBaseApplied,

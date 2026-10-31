@@ -10,6 +10,7 @@
 
   function getOpenedPlayerSafe() {
     if (!openedSheetPlayerId) return null;
+    if (openedSheetPlayer && openedSheetPlayer.id === openedSheetPlayerId) return openedSheetPlayer;
     return (lastPlayersSnapshot || []).find(x => x && x.id === openedSheetPlayerId) || null;
   }
 

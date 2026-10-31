@@ -35,6 +35,8 @@
 
   // состояние модалки
   let openedSheetPlayerId = null;
+  // Keep editor bindings independent of player objects replaced by realtime snapshots.
+  let openedSheetPlayer = null;
   let lastCanEdit = false; // GM или владелец текущего открытого персонажа
 
   
@@ -53,12 +55,14 @@
 
   function closeModal() {
     if (!sheetModal) return;
+    flushSheetSaves(openedSheetPlayerId);
     hideHpPopup();
     hideExhPopup();
     hideCondPopup();
     sheetModal.classList.add('hidden');
     sheetModal.setAttribute('aria-hidden', 'true');
     openedSheetPlayerId = null;
+    openedSheetPlayer = null;
 
     if (sheetTitle) sheetTitle.textContent = "Информация о персонаже";
     if (sheetSubtitle) sheetSubtitle.textContent = "";
