@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const path = require('path');
+const DamageRolls = require('./shared/damage-rolls');
 const crypto = require('crypto');
 const http = require('http');
 const express = require('express');
@@ -2572,6 +2573,9 @@ app.post('/api/rooms/:roomId/dice', async (req, res) => {
       total,
       crit
     };
+    if (Array.isArray(incoming.damageParts)) {
+      Object.assign(event, DamageRolls.event(incoming.damageParts, sanitizeText(incoming.damageTitle, 'Урон', 1000)));
+    }
     const { rows } = await pool.query(
       `
         insert into public.room_dice_events(room_id, from_id, from_name, kind_text, sides, count, bonus, rolls, total, crit)
@@ -3819,6 +3823,9 @@ function preserveNewerPlayerData(nextState, currentState) {
         player[key] = current[key] ?? null;
       }
     }
+    if (Number(current.affiliationUpdatedAt || 0) > Number(player.affiliationUpdatedAt || 0)) {
+      for (const key of ['isAlly', 'isEnemy', 'affiliationUpdatedAt']) player[key] = current[key];
+    }
     if (Number(current.sheetUpdatedAt || 0) > Number(player.sheetUpdatedAt || 0)) {
       player.sheet = cloneJson(current.sheet);
       player.sheetUpdatedAt = current.sheetUpdatedAt;
@@ -4709,6 +4716,11 @@ async function handleDiceEventRelay(ws, data) {
       crit: (safeCrit === 'crit-success' || safeCrit === 'crit-fail') ? safeCrit : ''
     };
   }
+  if (Array.isArray(event.damageParts)) {
+    const damage = DamageRolls.event(event.damageParts, sanitizeText(event.damageTitle, 'Урон', 1000));
+    Object.assign(match, { kind_text: damage.kindText, sides: damage.sides, count: damage.count,
+      bonus: damage.bonus, rolls: damage.rolls, total: damage.total, crit: '' });
+  }
   const payload = {
     type: 'diceEvent',
     roomId: ctx.roomId,
@@ -5276,9 +5288,10 @@ async function applyInitiativeUpdates(ctx, data) {
 async function setTokenAccessForContext(ctx, playerId, data) {
   ensurePlayerOrGm(ctx);
   const action = String(data?.action || '');
-  if (!['owner', 'controller'].includes(action)) throw new Error('Invalid access action');
+  if (!['owner', 'controller', 'affiliation'].includes(action)) throw new Error('Invalid access action');
   if (action === 'owner') ensureGm(ctx);
-  const targetId = normalizeSafeId(data?.targetUserId, USER_ID_RE);
+  if (action === 'affiliation' && !['ally', 'enemy'].includes(data?.affiliation)) throw new Error('Invalid affiliation');
+  const targetId = action === 'affiliation' ? '' : normalizeSafeId(data?.targetUserId, USER_ID_RE);
   if (action === 'owner' && !targetId) throw new Error('New owner required');
   const member = targetId ? await fetchRoomMember(ctx.roomId, targetId) : null;
   if (targetId && (!member || !['GM', 'Player'].includes(normalizeRole(member.role))
@@ -5292,6 +5305,12 @@ async function setTokenAccessForContext(ctx, playerId, data) {
     if (data.sheet && typeof data.sheet === 'object' && Number(data.sheetUpdatedAt || 0) >= Number(player.sheetUpdatedAt || 0)) {
       player.sheet = cloneJson(data.sheet);
       player.sheetUpdatedAt = Number(data.sheetUpdatedAt) || 0;
+    }
+    if (action === 'affiliation') {
+      player.isAlly = data.affiliation === 'ally';
+      player.isEnemy = !player.isAlly;
+      player.affiliationUpdatedAt = Math.max(Date.now(), Number(player.affiliationUpdatedAt || 0) + 1);
+      return state;
     }
     if (action === 'owner') {
       player.ownerId = targetId;

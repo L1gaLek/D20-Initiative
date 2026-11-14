@@ -2,6 +2,62 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const test = require('node:test');
 const { read, functions, initialState, serverHarness, clone } = require('./helpers/room-harness.cjs');
+const DamageRolls = require('../backend/shared/damage-rolls');
+
+test('affiliation can be changed by the owner or GM, survives stale snapshots, and excludes delegates', async () => {
+  const h = serverHarness();
+  const stale = clone(h.database());
+  await h.context.setTokenAccessForContext(h.clients[0].ctx, 'player-1', { action: 'affiliation', affiliation: 'enemy' });
+  assert.equal(h.database().players[0].isEnemy, true);
+  assert.equal(h.database().players[0].isAlly, false);
+  await h.context.persistStateForContext(h.clients[4].ctx, stale);
+  assert.equal(h.database().players[0].isEnemy, true);
+  await h.context.setTokenAccessForContext(h.clients[0].ctx, 'player-1', { action: 'controller', targetUserId: 'user-2' });
+  await assert.rejects(h.context.setTokenAccessForContext(h.clients[1].ctx, 'player-1', { action: 'affiliation', affiliation: 'ally' }), /Only the owner/);
+  await assert.rejects(h.context.setTokenAccessForContext(h.clients[0].ctx, 'player-1', { action: 'affiliation', affiliation: 'neutral' }), /Invalid affiliation/);
+  await h.context.setTokenAccessForContext(h.clients[4].ctx, 'player-1', { action: 'affiliation', affiliation: 'ally' });
+  assert.equal(h.database().players[0].isAlly, true);
+  assert.equal(h.database().players[0].isEnemy, false);
+});
+
+test('client merges affiliation and control versions independently', () => {
+  const client = vm.createContext({ window: {} });
+  vm.runInContext(read('client/token-permissions.js'), client);
+  const next = initialState();
+  const previous = initialState();
+  Object.assign(next.players[0], { controllerId: 'user-2', accessUpdatedAt: 50 });
+  Object.assign(previous.players[0], { isAlly: false, isEnemy: true, affiliationUpdatedAt: 20 });
+  client.mergeNewestTokenAccess(next, previous);
+  assert.equal(next.players[0].controllerId, 'user-2');
+  assert.equal(next.players[0].isEnemy, true);
+});
+
+test('mixed damage totals retain every die, fixed value and description without the old 20-dice or 200-character truncation', () => {
+  const parts = [{ type: 'dice', description: 'Основной урон', sides: 6, count: 2 },
+    { type: 'flat', description: 'Характеристика', value: 3 },
+    ...Array.from({ length: 30 }, (_, i) => ({ type: 'dice', description: `Огонь ${i}`, sides: 4, count: 1 })),
+    { type: 'flat', description: 'Ослабление', value: -2 }];
+  const event = DamageRolls.event(parts, 'Урон: Меч', sides => sides);
+  assert.equal(event.total, 133);
+  assert.equal(event.count, 32);
+  assert.equal(event.bonus, 1);
+  assert.ok(event.kindText.length > 200);
+  assert.match(event.kindText, /Огонь 29: 1d4 \[4\]/);
+  assert.match(event.kindText, /Ослабление: -2/);
+  assert.deepEqual(DamageRolls.event(event.damageParts, event.damageTitle), event);
+  assert.throws(() => DamageRolls.event([{ type: 'dice', sides: 4, count: 1, rolls: [7] }]), /Invalid damage rolls/);
+});
+
+test('weapon damage includes its ability and all modifiers while ordinary weapons keep their existing damage', () => {
+  const client = vm.createContext({ window: {}, safeInt: (value, fallback) => Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : fallback });
+  vm.runInContext(read('char_sheet/weapon-damage.js') + functions(read('char_sheet/sheet-modal-combat-ui.js'), ['calcWeaponDamageBonus', 'weaponDamageText']), client);
+  const weapon = { name: 'Меч', ability: 'str', dmgNum: 1, dmgDice: 'к8' };
+  const sheet = { stats: { str: { modifier: 2 } } };
+  assert.equal(DamageRolls.event(client.getWeaponDamageParts(sheet, weapon), 'Урон', () => 4).total, 6);
+  weapon.damageModifiers = [{ type: 'dice', count: 2, dice: 'к4', description: 'Пламя' }, { type: 'flat', value: 5, description: 'Масло' }];
+  assert.equal(DamageRolls.event(client.getWeaponDamageParts(sheet, weapon), 'Урон', () => 4).total, 19);
+  assert.equal(client.weaponDamageText(weapon), '1к8 + 2к4 + 5');
+});
 
 const roll = (h, n, total = n + 10, epoch = 100) => h.context.handleInitiativeLiveRelay(h.clients[n - 1], {
   type: 'initiativeApplied', epoch, updates: [{ playerId: `player-${n}`, total }]

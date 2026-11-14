@@ -1581,6 +1581,20 @@
   border-radius: 10px;
   padding: 4px 10px;
 }
+.weapon-prof-quick-inline[hidden],
+.weapon-head.is-collapsed .weapon-prof-quick-inline { display: none; }
+.weapon-head.is-expanded .weapon-actions { grid-column: 1 / -1; }
+.weapon-actions .weapon-prof-quick-inline { margin-right: auto; min-width: 0; }
+.weapon-damage-modifiers { margin-top: 12px; }
+.weapon-damage-modifiers__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.weapon-damage-modifier { padding: 10px; margin-top: 8px; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; background: rgba(255,255,255,.03); }
+.weapon-damage-modifier__controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.weapon-damage-modifier__controls .weapon-num { width: 50px; }
+.weapon-damage-modifier__controls [data-damage-field="type"] { max-width: 100px; }
+.weapon-damage-modifier__controls [data-damage-field="dice"] { max-width: 64px; }
+.weapon-damage-modifier__controls [data-damage-del] { margin-left: auto; min-width: 30px; padding: 6px; }
+.weapon-damage-description { width: 100%; box-sizing: border-box; min-height: 62px; resize: vertical; padding: 8px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; background: rgba(0,0,0,.2); color: inherit; font: inherit; font-size: 12px; }
+.weapon-sum-val { overflow-wrap: anywhere; }
 .weapon-ability-row{
   display:flex;
   align-items:flex-end;

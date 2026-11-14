@@ -1211,7 +1211,7 @@ function syncOptimisticPlayersToLocalState(snapshot) {
 
       if (typeof src.name === 'string' && src.name.trim()) dst.name = src.name;
       if (typeof src.ownerId !== 'undefined') dst.ownerId = src.ownerId;
-      for (const key of ['ownerName', 'ownerRole', 'controllerId', 'controllerName', 'accessUpdatedAt']) {
+      for (const key of ['ownerName', 'ownerRole', 'controllerId', 'controllerName', 'accessUpdatedAt', 'affiliationUpdatedAt']) {
         if (typeof src[key] !== 'undefined') dst[key] = src[key];
       }
       if (typeof src.ownerRole !== 'undefined') dst.ownerRole = src.ownerRole;

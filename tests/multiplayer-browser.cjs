@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createRequire } = require('node:module');
 const { initialState, serverHarness, clone } = require('./helpers/room-harness.cjs');
+const DamageRolls = require('../backend/shared/damage-rolls');
 const backendRequire = createRequire(path.resolve(__dirname, '../backend/package.json'));
 const { WebSocketServer } = backendRequire('ws');
 const { chromium } = require(process.env.D20_PLAYWRIGHT_MODULE || 'playwright');
@@ -75,7 +76,9 @@ const server = http.createServer(async (req, res) => {
       }
       if (url.pathname.endsWith('/dice')) {
         const event = { ...data.event, id: `dice-${++diceId}`, fromId: userId };
-        return json(res, { ok: true, event, row: event });
+        if (event.damageParts) Object.assign(event, DamageRolls.event(event.damageParts, event.damageTitle));
+        const text = `${event.fromName}: ${event.kindText}: ${event.rolls.join(',')}${event.bonus >= 0 ? '+' : ''}${event.bonus} = ${event.total}`;
+        return json(res, { ok: true, event, row: event, logRow: { id: `damage-log-${diceId}`, text } });
       }
       if (url.pathname.endsWith('/members')) return json(res, { ok: true, users: members, rows: members });
       if (url.pathname.endsWith('/tokens')) return json(res, { ok: true, rows: start.players.map(p => ({ token_id: p.id, map_id: 'map-1', x: p.x, y: p.y, size: 1, is_public: true })) });
@@ -108,7 +111,8 @@ wss.on('connection', ws => {
     else if (msg.type === 'state') {
       await h.context.persistStateForContext(ws.ctx, msg.state);
       broadcast({ type: 'state', roomId: 'test-room', state: h.database() });
-    } else if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
+    } else if (msg.type === 'diceEvent') await h.context.handleDiceEventRelay(ws, msg);
+    else if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
     else if (msg.type === 'moveToken') {
       const player = h.database().players.find(p => p.id === msg.tokenId);
       assert.equal(h.context.canControlPlayer(ws.ctx, player), true);
@@ -168,6 +172,15 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    await gm.locator('#content-row').evaluate(el => { el.style.flexWrap = 'nowrap'; });
+    const panelBefore = await gm.locator('#initiative-players-box').evaluate(el => el.getBoundingClientRect().height);
+    await gm.locator('#board-col').evaluate(el => { el.style.minHeight = '1900px'; });
+    const panelAfter = await gm.locator('#initiative-players-box').evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(panelAfter > panelBefore + 200, `Initiative panel should grow with frame: ${panelBefore} -> ${panelAfter}`);
+    assert.equal(await gm.locator('#initiative-players-box').evaluate(el => getComputedStyle(el).maxHeight), 'none');
+    await gm.locator('#board-col').evaluate(el => { el.style.minHeight = ''; });
+    await gm.locator('#content-row').evaluate(el => { el.style.flexWrap = ''; });
+    console.log('PASS: initiative panel uses the remaining frame height and grows with the board');
     await p1.route('**/api/rooms/test-room/initiative', route => route.fulfill({ status: 403, json: { ok: false, error: 'Test rejection' } }));
     await p1.locator('#initiative-players-list button').first().click();
     await p1.getByText(/Инициатива не сохранена/).waitFor();
@@ -197,8 +210,17 @@ async function main() {
 
     await p1.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
     assert.equal(await p1.getByRole('button', { name: 'Передать токен', exact: true }).count(), 0);
+    await p1.getByLabel('Принадлежность', { exact: true }).selectOption('enemy');
+    await p1.getByLabel('Принадлежность', { exact: true }).locator('..').getByRole('button').click();
+    await waitFor(() => h.database().players[0].isEnemy, 'owner changes affiliation');
+    await gm.waitForFunction(() => lastState.players[0].isEnemy);
+    await p1.getByLabel('Принадлежность', { exact: true }).selectOption('ally');
+    await p1.getByLabel('Принадлежность', { exact: true }).locator('..').getByRole('button').click();
+    await waitFor(() => h.database().players[0].isAlly, 'owner restores ally');
+    await gm.waitForFunction(() => lastState.players[0].isAlly);
+    console.log('PASS: owner changes affiliation and every participant receives it');
     await p1.getByLabel('Передача управления', { exact: true }).selectOption('user-2');
-    await p1.locator('#sheet-token-access button').click();
+    await p1.getByLabel('Передача управления', { exact: true }).locator('..').getByRole('button').click();
     await waitFor(() => h.database().players[0].controllerId === 'user-2', 'delegate control');
     await p2.waitForFunction(() => canControlToken(lastState.players[0]));
     await p2.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
@@ -240,6 +262,64 @@ async function main() {
     await p4.evaluate(() => InfoModal.open(players.find(p => p.id === 'monster-1')));
     await p4.waitForSelector('[data-monster-player-name]:not([disabled])');
     console.log('PASS: GM can also transfer a monster; its new owner can edit the monster sheet');
+
+    await gm.getByLabel('Принадлежность', { exact: true }).selectOption('ally');
+    await gm.getByLabel('Принадлежность', { exact: true }).locator('..').getByRole('button').click();
+    await waitFor(() => h.database().players.find(p => p.id === 'monster-1').isAlly, 'GM changes another owner affiliation');
+    await p4.waitForFunction(() => lastState.players.find(p => p.id === 'monster-1').isAlly);
+    console.log('PASS: GM changes any token affiliation, including a transferred monster');
+
+    for (const [page, playerId, monster] of [[p3, 'player-1', false], [p4, 'monster-1', true]]) {
+      await page.evaluate(id => InfoModal.open(players.find(p => p.id === id)), playerId);
+      await page.locator(monster ? '[data-monster-tab="monster-combat"]' : '.sheet-tab[data-tab="combat"]').click();
+      await page.locator('[data-weapon-add]').click();
+      const card = page.locator('.weapon-card').first();
+      await card.locator('[data-weapon-field="name"]').fill('Тестовый меч');
+      await card.locator('[data-weapon-field="dmgNum"]').fill('1');
+      await card.locator('[data-weapon-field="dmgDice"]').selectOption('к6');
+      for (let index = 0; index < 3; index++) await card.locator('[data-damage-add]').click();
+      await card.locator('[data-damage-idx="0"] [data-damage-field="count"]').fill('2');
+      await card.locator('[data-damage-idx="0"] [data-damage-field="dice"]').selectOption('к4');
+      await card.locator('[data-damage-idx="0"] [data-damage-field="description"]').fill('Огонь клинка');
+      await card.locator('[data-damage-idx="1"] [data-damage-field="dice"]').selectOption('к8');
+      await card.locator('[data-damage-idx="1"] [data-damage-field="description"]').fill('Холод');
+      await card.locator('[data-damage-idx="2"] [data-damage-field="type"]').selectOption('flat');
+      await card.locator('[data-damage-idx="2"] [data-damage-field="value"]').fill('5');
+      await card.locator('[data-damage-idx="2"] [data-damage-field="description"]').fill('Магическое масло');
+      const prof = await card.locator('.weapon-prof-quick-inline').boundingBox();
+      const hide = await card.locator('[data-weapon-toggle-desc]').boundingBox();
+      assert.ok(Math.abs(prof.y + prof.height / 2 - hide.y - hide.height / 2) < 3);
+      await card.locator('[data-weapon-toggle-desc]').click();
+      assert.equal(await card.locator('.weapon-prof-quick-inline').isVisible(), false);
+      await card.locator('[data-weapon-toggle-desc]').click();
+      await page.evaluate(() => { animateSingleRoll = async () => {}; rollDie = () => 3; });
+      const diceBefore = requests.filter(r => r.path.endsWith('/dice')).length;
+      await card.locator('[data-weapon-roll-dmg]').click();
+      await waitFor(() => requests.filter(r => r.path.endsWith('/dice')).length > diceBefore, 'mixed damage saved');
+      const sent = requests.filter(r => r.path.endsWith('/dice')).at(-1).data.event;
+      const canonical = DamageRolls.event(sent.damageParts, sent.damageTitle);
+      assert.equal(sent.total, canonical.total);
+      assert.deepEqual(sent.damageParts.filter(p => /Огонь|Холод|масло/.test(p.description)).map(p => p.description), ['Огонь клинка', 'Холод', 'Магическое масло']);
+      await gm.waitForFunction(total => [...document.querySelectorAll('#log-list li')].some(el => /Огонь клинка/.test(el.textContent) && /Магическое масло/.test(el.textContent) && el.textContent.includes(`= ${total}`)), sent.total);
+      await page.evaluate(() => InfoModal.close());
+      await waitFor(() => h.database().players.find(p => p.id === playerId).sheet.parsed.weaponsList?.[0]?.damageModifiers?.[2]?.description === 'Магическое масло', 'modifiers persisted');
+      await page.evaluate(id => InfoModal.open(players.find(p => p.id === id)), playerId);
+      await page.locator(monster ? '[data-monster-tab="monster-combat"]' : '.sheet-tab[data-tab="combat"]').click();
+      assert.equal(await card.locator('[data-damage-idx]').count(), 3);
+      await card.locator('[data-damage-idx="1"] [data-damage-del]').click();
+      assert.equal(await card.locator('[data-damage-idx]').count(), 2);
+      if (screenshotDir) {
+        fs.mkdirSync(screenshotDir, { recursive: true });
+        await page.locator('#sheet-main').evaluate(el => { el.scrollTop = 0; });
+        await page.screenshot({ path: path.join(screenshotDir, monster ? 'monster-weapon-modifiers.png' : 'weapon-modifiers.png') });
+      }
+      await page.evaluate(id => { InfoModal.close(); rollTokenMiniWeapon(players.find(p => p.id === id), 0, 'dmg'); }, playerId);
+      await waitFor(() => requests.filter(r => r.path.endsWith('/dice')).length > diceBefore + 1, 'quick token damage includes modifiers');
+      const quick = requests.filter(r => r.path.endsWith('/dice')).at(-1).data.event;
+      assert.ok(quick.kindText.includes('Огонь клинка') && quick.kindText.includes('Магическое масло'));
+      assert.equal(quick.kindText.includes('Холод'), false);
+      console.log(`PASS: ${monster ? 'monster' : 'character'} weapon modifiers edit, roll, log, persist, reopen and delete; proficiency shares the action row`);
+    }
 
     for (const page of pages) await page.evaluate(() => InfoModal.close());
     await p3.evaluate(() => {

@@ -467,10 +467,7 @@ function renderCombatTab(vm) {
   };
 
   const dmgText = (w) => {
-    const n = Math.max(0, safeInt(w.dmgNum, 1));
-    const dice = String(w.dmgDice || "к6");
-    const type = String(w.dmgType || "").trim();
-    return `${n}${dice}${type ? ` ${type}` : ""}`.trim();
+    return weaponDamageText(w);
   };
 
   const d20Svg = `
@@ -517,6 +514,7 @@ function renderCombatTab(vm) {
                      data-weapon-field="name">
 
               <div class="weapon-actions">
+                <div class="weapon-prof-quick weapon-prof-quick-inline"><div class="weapon-fieldlabel">Бонус владения</div><button class="weapon-prof-dot ${w.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к бонусу атаки"></button></div>
                 <button class="weapon-btn" type="button" data-weapon-toggle-desc>${collapsed ? "Показать" : "Скрыть"}</button>
                 <button class="weapon-btn danger" type="button" data-weapon-del>Удалить</button>
               </div>
@@ -544,11 +542,6 @@ function renderCombatTab(vm) {
             <!-- всё ниже скрывается кнопкой Скрыть -->
             <div class="weapon-details ${collapsed ? "collapsed" : ""}">
               <div class="weapon-details-grid">
-                <div class="weapon-prof-quick">
-                  <div class="weapon-fieldlabel">Бонус владения</div>
-                  <button class="weapon-prof-dot ${w.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к бонусу атаки"></button>
-                </div>
-
                 <div class="weapon-fieldbox weapon-ability">
                   <div class="weapon-ability-row">
                     <div class="weapon-ability-main-wrap">
@@ -583,6 +576,7 @@ function renderCombatTab(vm) {
                 </div>
               </div>
 
+              ${renderWeaponDamageModifiers(w)}
               <div class="weapon-desc">
                 <textarea class="sheet-textarea weapon-desc-text" rows="4"
                           placeholder="Описание оружия..."
@@ -1987,6 +1981,11 @@ function renderShopTab(vm, canEdit) {
     rememberPlayersSnapshot(players);
     const pl = players.find(x => x.id === openedSheetPlayerId);
     if (!pl) { closeModal(); return; }
+    if (openedSheetPlayer && Number(pl.affiliationUpdatedAt || 0) > Number(openedSheetPlayer.affiliationUpdatedAt || 0)) {
+      for (const key of ['isAlly', 'isEnemy', 'affiliationUpdatedAt']) openedSheetPlayer[key] = pl[key];
+      renderSheetModal(openedSheetPlayer, { force: true });
+      return;
+    }
     if (openedSheetPlayer && Number(pl.accessUpdatedAt || 0) > Number(openedSheetPlayer.accessUpdatedAt || 0)) {
       for (const key of ['ownerId', 'ownerName', 'ownerRole', 'controllerId', 'controllerName', 'accessUpdatedAt']) openedSheetPlayer[key] = pl[key] ?? null;
       renderSheetModal(openedSheetPlayer, { force: true });
@@ -2034,6 +2033,11 @@ function renderShopTab(vm, canEdit) {
     init,
     open,
     refresh,
+    getSheetForRolls(player) {
+      const model = deepClone(player);
+      if (model) restoreSheetDraft(model);
+      return model?.sheet?.parsed;
+    },
     close: closeModal,
     flushSheetSaves,
     acknowledgeSheetSave,

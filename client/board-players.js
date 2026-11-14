@@ -899,16 +899,12 @@ function toggleTokenMiniSidePanel(card, panelName) {
 
 function rollTokenMiniWeapon(player, weaponIdx, kind) {
   const current = players.find(pp => String(pp?.id) === String(player?.id || '')) || player;
-  const sheet = current?.sheet?.parsed;
+  if (!canUseTokenMiniQuickPanels(current)) return;
+  const sheet = window.InfoModal?.getSheetForRolls?.(current) || current?.sheet?.parsed;
   const weapon = Array.isArray(sheet?.weaponsList) ? sheet.weaponsList[weaponIdx] : null;
   if (!sheet || !weapon || !window.DicePanel?.roll) return;
   if (kind === 'dmg') {
-    const count = Math.max(1, safeNum(weapon?.dmgNum, 1) ?? 1);
-    const dice = String(weapon?.dmgDice || 'к6').trim().toLowerCase();
-    const sides = Math.max(1, safeNum(dice.replace('к', ''), 6) ?? 6);
-    const bonus = (typeof calcWeaponDamageBonus === 'function') ? calcWeaponDamageBonus(sheet, weapon) : tokenMiniStatMod(sheet, weapon?.ability);
-    window.DicePanel.roll({ sides, count, bonus, kindText: `Урон: ${count}d${sides} ${formatSignedValue(bonus, '+0')}` });
-    return;
+    return rollWeaponDamage(sheet, weapon, current.name);
   }
   const bonus = (typeof calcWeaponAttackBonus === 'function') ? calcWeaponAttackBonus(sheet, weapon) : (safeNum(weapon?.extraAtk, 0) ?? 0);
   window.DicePanel.roll({ sides: 20, count: 1, bonus, kindText: `Атака: d20 ${formatSignedValue(bonus, '+0')}` });
@@ -3137,6 +3133,7 @@ function pushOtherDiceEvent(ev) {
   // Для одиночного броска с бонусом показываем компактно: "12+4=16"
   let tail = `${rollsText} = ${ev.total}`;
   const bonusNum = Number(ev.bonus) || 0;
+  if (bonusNum !== 0) tail = `${rollsText}${bonusNum >= 0 ? '+' : ''}${bonusNum} = ${ev.total}`;
   if (Number(ev.count) === 1 && bonusNum !== 0 && Array.isArray(ev.rolls) && ev.rolls.length === 1) {
     const r = Number(ev.rolls[0]) || 0;
     const sign = bonusNum >= 0 ? "+" : "-";
@@ -3188,7 +3185,7 @@ function isInitiativeDiceKind(kindText) {
 function getSingleD20CritType({ sides, count, rolls, kindText } = {}) {
   const vals = Array.isArray(rolls) ? rolls : [];
   if (Number(sides) !== 20 || Number(count) !== 1 || vals.length !== 1) return '';
-  if (isInitiativeDiceKind(kindText)) return '';
+  if (isInitiativeDiceKind(kindText) || /^Урон(?:\s|:|«)/i.test(String(kindText || ''))) return '';
   const finalValue = Number(vals[0]) || 0;
   if (finalValue === 1) return 'crit-fail';
   if (finalValue === 20) return 'crit-success';
@@ -3351,14 +3348,17 @@ window.DicePanel = window.DicePanel || {};
 // Programmatic dice roll used by InfoModal etc.
 // If silent=true, it will only animate/update the local dice panel UI and will NOT send log/diceEvent.
 // Returns: {sides,count,bonus,rolls,sum,total}
-window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false, actorName = null } = {}) => {
+window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false, actorName = null, damageParts = null } = {}) => {
   if (typeof isSpectator === 'function' && isSpectator()) return null;
   if (diceAnimBusy) return;
-  diceAnimBusy = true;
 
-  const S = clampInt(sides, 2, 100, 20);
-  const C = clampInt(count, 1, 20, 1);
-  const B = Number(bonus) || 0;
+  const damage = damageParts ? DamageRolls.event(damageParts, kindText || "Урон", rollDie) : null;
+  diceAnimBusy = true;
+  try {
+  const S = damage ? damage.sides : clampInt(sides, 2, 100, 20);
+  const C = damage ? damage.count : clampInt(count, 1, 20, 1);
+  const B = damage ? damage.bonus : (Number(bonus) || 0);
+  if (damage) kindText = damage.kindText;
 
   // чтобы UI панели соответствовал броску
   if (dice) dice.value = String(S);
@@ -3366,7 +3366,8 @@ window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = nu
 
   clearCritUI();
 
-  const finals = Array.from({ length: C }, () => rollDie(S));
+  const finals = damage ? damage.rolls : Array.from({ length: C }, () => rollDie(S));
+  const rollSides = damage ? damage.damageParts.filter(p => p.type === "dice").flatMap(p => Array(p.count).fill(p.sides)) : Array(C).fill(S);
   const shown = Array.from({ length: C }, () => null);
 
   renderRollChips(shown, 0, S);
@@ -3376,7 +3377,7 @@ window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = nu
 
   for (let i = 0; i < C; i++) {
     renderRollChips(shown, i, S);
-    await animateSingleRoll(S, finals[i]);
+    if (i < 20) await animateSingleRoll(rollSides[i], finals[i]);
     shown[i] = finals[i];
     renderRollChips(shown, Math.min(i + 1, C - 1), S);
   }
@@ -3388,7 +3389,7 @@ window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = nu
 if (diceVizValue) diceVizValue.textContent = String(total);
 renderRollChips(shown, -1, S);
 
-const critType = getSingleD20CritType({
+const critType = damage ? "" : getSingleD20CritType({
   sides: S,
   count: C,
   rolls: finals,
@@ -3413,6 +3414,7 @@ if (critType) {
           ? String(myNameSpan.textContent)
           : '';
         const event = {
+          ...(damage || {}),
           localNonce,
           fromId: (typeof myId !== 'undefined') ? String(myId) : '',
           fromName: actor || fallbackName,
@@ -3433,7 +3435,6 @@ if (critType) {
     } catch {}
   }
 
-  diceAnimBusy = false;
-
-  return { sides: S, count: C, bonus: B, rolls: finals, sum, total };
+  return { ...(damage || {}), sides: S, count: C, bonus: B, rolls: finals, sum, total };
+  } finally { diceAnimBusy = false; }
 };

@@ -21,12 +21,15 @@ function renderTokenAccessControls(player) {
   const addAction = (action, title, emptyLabel, current) => {
     const group = document.createElement('label');
     group.className = 'sheet-token-access__group';
+    group.dataset.tokenAction = action;
     const caption = document.createElement('span');
     caption.textContent = title;
     const select = document.createElement('select');
     select.setAttribute('aria-label', title);
-    select.appendChild(new Option(emptyLabel, ''));
-    users.filter(u => String(u.id) !== owner).forEach(u => select.appendChild(new Option(u.name || 'Игрок', u.id)));
+    if (action === 'affiliation') {
+      select.append(new Option('Союзник', 'ally'), new Option('Враг', 'enemy'));
+    } else select.appendChild(new Option(emptyLabel, ''));
+    (action === 'affiliation' ? [] : users).filter(u => String(u.id) !== owner).forEach(u => select.appendChild(new Option(u.name || 'Игрок', u.id)));
     if (current && ![...select.options].some(o => o.value === current)) {
       select.appendChild(new Option(player.controllerName || 'Игрок', current));
     }
@@ -43,7 +46,7 @@ function renderTokenAccessControls(player) {
       try {
         flushSheetSaves(player.id);
         const result = await window.vpsApi(`/rooms/${encodeURIComponent(ctx.getRoomId())}/players/${encodeURIComponent(player.id)}/access`, {
-          method: 'POST', body: { action, targetUserId: select.value,
+          method: 'POST', body: { action, targetUserId: select.value, affiliation: action === 'affiliation' ? select.value : undefined,
             sheet: deepClone(player.sheet), sheetUpdatedAt: Number(player.sheetUpdatedAt) || 0 }
         });
         status.textContent = 'Сохранено';
@@ -58,5 +61,6 @@ function renderTokenAccessControls(player) {
     bar.appendChild(group);
   };
   if (role === 'GM') addAction('owner', 'Передача токена', 'Выберите нового владельца', '');
+  addAction('affiliation', 'Принадлежность', '', player.isEnemy ? 'enemy' : 'ally');
   addAction('controller', 'Передача управления', 'Только владелец и ГМ', String(player.controllerId || ''));
 }

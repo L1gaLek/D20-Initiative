@@ -10,6 +10,7 @@
 .sheet-token-access { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 8px; font-size: 12px; }
 .sheet-token-access:empty { display: none; }
 .sheet-token-access__group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sheet-token-access__group[data-token-action="owner"] { flex-basis: 100%; }
 .sheet-token-access select { max-width: 230px; min-height: 30px; }
 .sheet-token-access button { min-height: 30px; }
 .sheet-token-access [role="status"] { max-width: 280px; }

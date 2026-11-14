@@ -26,7 +26,8 @@ function weaponDamageText(weapon) {
   const n = Math.max(0, safeInt(weapon?.dmgNum, 1));
   const dice = String(weapon?.dmgDice || "к6");
   const type = String(weapon?.dmgType || "").trim();
-  return `${n}${dice}${type ? ` ${type}` : ""}`.trim();
+  const extras = getWeaponDamageModifiers(weapon).map(modifier => weaponDamageModifierText(modifier));
+  return `${n}${dice}${extras.map(text => ` + ${text}`).join("")}${type ? ` ${type}` : ""}`.trim();
 }
 
 // Обновляем "Бонус атаки" и превью урона без полного ререндера
@@ -67,6 +68,8 @@ function updateWeaponsBonuses(root, sheet) {
       head.classList.toggle('is-expanded', !w.collapsed);
     }
 
+    const profWrap = card.querySelector(".weapon-prof-quick-inline");
+    if (profWrap) profWrap.hidden = !!w.collapsed;
     const toggleBtn = card.querySelector('[data-weapon-toggle-desc]');
     if (toggleBtn) toggleBtn.textContent = w.collapsed ? "Показать" : "Скрыть";
   });

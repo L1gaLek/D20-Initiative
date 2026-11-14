@@ -262,6 +262,47 @@ function bindCombatEditors(root, player, canEdit) {
     const isNew = ("ability" in w || "prof" in w || "extraAtk" in w || "dmgNum" in w || "dmgDice" in w || "dmgType" in w || "desc" in w || "collapsed" in w);
     if (!isNew) return;
 
+    const addDamage = card.querySelector('[data-damage-add]');
+    if (addDamage) {
+      addDamage.disabled = !canEdit;
+      addDamage.addEventListener('click', () => {
+        if (!canEditPlayer(player)) return;
+        if (!Array.isArray(w.damageModifiers)) w.damageModifiers = [];
+        w.damageModifiers.push({ type: 'dice', count: 1, dice: 'к6', value: 0, description: '' });
+        scheduleSheetSave(player);
+        rerenderCombatTabInPlace(root, player, canEdit);
+      });
+    }
+    card.querySelectorAll('[data-damage-idx]').forEach(row => {
+      const index = safeInt(row.dataset.damageIdx, -1);
+      const modifier = getWeaponDamageModifiers(w)[index];
+      if (!modifier) return;
+      row.querySelectorAll('[data-damage-field]').forEach(input => {
+        input.disabled = !canEdit;
+        const field = input.dataset.damageField;
+        const update = () => {
+          if (!canEditPlayer(player)) return;
+          modifier[field] = field === 'value' ? safeInt(input.value, 0)
+            : field === 'count' ? Math.max(1, Math.min(20, safeInt(input.value, 1))) : input.value;
+          markModalInteracted(player.id);
+          updateWeaponsBonuses(root, sheet);
+          scheduleSheetSave(player);
+          if (field === 'type') rerenderCombatTabInPlace(root, player, canEdit);
+        };
+        input.addEventListener(input.tagName === 'SELECT' ? 'change' : 'input', update);
+      });
+      const remove = row.querySelector('[data-damage-del]');
+      if (remove) {
+        remove.disabled = !canEdit;
+        remove.addEventListener('click', () => {
+          if (!canEditPlayer(player)) return;
+          w.damageModifiers.splice(index, 1);
+          scheduleSheetSave(player);
+          rerenderCombatTabInPlace(root, player, canEdit);
+        });
+      }
+    });
+
     // редактирование полей
     const fields = card.querySelectorAll('[data-weapon-field]');
     fields.forEach(el => {
@@ -377,20 +418,7 @@ function bindCombatEditors(root, player, canEdit) {
       rollDmgBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         if (!canEditPlayer(player)) return;
-        const n = Math.max(0, safeInt(w?.dmgNum, 1));
-        const diceStr = String(w?.dmgDice || "к6").trim().toLowerCase(); // "к8"
-        const sides = safeInt(diceStr.replace("к", ""), 6);
-        const bonus = calcWeaponDamageBonus(sheet, w);
-        if (window.DicePanel?.roll) {
-          const cnt = Math.max(1, n);
-          window.DicePanel.roll({
-            sides,
-            count: cnt,
-            bonus,
-            kindText: `Урон: ${cnt}d${sides} ${formatMod(bonus)}`,
-            actorName: String(player?.name || '').trim()
-          });
-        }
+        return rollWeaponDamage(sheet, w, player.name);
       });
     }
   });

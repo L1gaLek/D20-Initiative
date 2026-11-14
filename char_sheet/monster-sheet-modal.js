@@ -1200,7 +1200,7 @@
     `;
     const weapons = Array.isArray(sheet?.weaponsList) ? sheet.weaponsList : [];
     const format = (n) => `${n >= 0 ? '+' : ''}${n}`;
-    const dmgText = (w) => `${Math.max(0, toInt(w?.dmgNum, 1))}${String(w?.dmgDice || 'к6')}${toInt(w?.dmgBonus, 0) ? format(toInt(w?.dmgBonus, 0)) : ''}${String(w?.dmgType || '').trim() ? ` ${String(w.dmgType).trim()}` : ''}`;
+    const dmgText = (w) => weaponDamageText(w);
     const atkVal = (w) => {
       if (typeof calcWeaponAttackBonus === 'function') return calcWeaponAttackBonus(sheet, w);
       const mod = toInt(get(sheet, `stats.${String(w?.ability || 'str')}.modifier`, 0), 0);
@@ -1214,6 +1214,7 @@
           <div class="weapon-head ${collapsed ? 'is-collapsed' : 'is-expanded'}">
             <input class="weapon-title-input" type="text" value="${esc(String(w?.name || ''))}" placeholder="Название" data-weapon-field="name" ${canEdit ? '' : 'disabled'}>
             <div class="weapon-actions">
+              <div class="weapon-prof-quick weapon-prof-quick-inline"><div class="weapon-fieldlabel">Бонус владения</div><button class="weapon-prof-dot ${w?.prof ? "active" : ""}" type="button" data-weapon-prof title="Владение: +${profBonus} к атаке" ${canEdit ? "" : "disabled"}></button></div>
               <button class="weapon-btn" type="button" data-weapon-toggle-desc>${collapsed ? 'Показать' : 'Скрыть'}</button>
               <button class="weapon-btn danger" type="button" data-weapon-del ${canEdit ? '' : 'disabled'}>Удалить</button>
             </div>
@@ -1236,7 +1237,6 @@
                   ${abilityOptions.map(o => `<option value="${o.k}" ${o.k === String(w?.ability || 'str') ? 'selected' : ''}>${o.label}</option>`).join('')}
                 </select>
               </div>
-              <div class="weapon-fieldbox weapon-fieldbox-inline"><div class="weapon-fieldlabel">Бонус владения</div><button class="weapon-prof-dot ${w?.prof ? 'active' : ''}" type="button" data-weapon-prof title="Владение: +${profBonus} к атаке" ${canEdit ? '' : 'disabled'}></button></div>
               <div class="weapon-fieldbox"><div class="weapon-fieldlabel">Доп. модификатор</div><input class="weapon-num weapon-extra" type="number" step="1" value="${esc(String(toInt(w?.extraAtk, 0)))}" data-weapon-field="extraAtk" ${canEdit ? '' : 'disabled'}></div>
               <div class="weapon-fieldbox weapon-dmg-edit">
                 <div class="weapon-fieldlabel">Урон (редакт.)</div>
@@ -1249,6 +1249,7 @@
                 <input class="weapon-text weapon-dmg-type weapon-dmg-type-full" type="text" value="${esc(String(w?.dmgType || ''))}" placeholder="вид урона" data-weapon-field="dmgType" ${canEdit ? '' : 'disabled'}>
               </div>
             </div>
+            ${renderWeaponDamageModifiers(w, canEdit)}
             <div class="weapon-desc"><textarea class="sheet-textarea weapon-desc-text" rows="4" placeholder="Описание оружия..." data-weapon-field="desc" ${canEdit ? '' : 'disabled'}>${esc(String(w?.desc || ''))}</textarea></div>
           </div>
         </div>
@@ -1680,11 +1681,14 @@
       main.addEventListener('click', (event) => {
         const target = event.target instanceof Element ? event.target : null;
         if (!target) return;
-        if (target.closest('[data-weapon-add]') || target.closest('[data-weapon-del]') || target.closest('[data-weapon-toggle-desc]')) {
+        if (target.closest('[data-damage-add], [data-damage-del], [data-weapon-add]') || target.closest('[data-weapon-del]') || target.closest('[data-weapon-toggle-desc]')) {
           requestImmediateRerender();
         }
       });
 
+      main.addEventListener('change', (event) => {
+        if (event.target?.matches?.('[data-damage-field="type"]')) requestImmediateRerender();
+      });
       main.addEventListener('input', (event) => {
         const target = event.target instanceof Element ? event.target : null;
         if (!target) return;
