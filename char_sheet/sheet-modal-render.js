@@ -535,6 +535,7 @@ function renderCombatTab(vm) {
               </div>
             </div>
 
+            <div class="weapon-damage-extras" data-weapon-damage-extras ${getWeaponDamageModifiers(w).length ? '' : 'hidden'}>${renderWeaponDamageExtras(w)}</div>
             <!-- всё ниже скрывается кнопкой Скрыть -->
             <div class="weapon-details ${collapsed ? "collapsed" : ""}">
               <div class="weapon-details-grid">
@@ -1589,7 +1590,7 @@ function renderShopTab(vm, canEdit) {
     const shieldEquipped = !!String(player?.sheet?.parsed?.appearance?.slots?.shield || '').trim();
 
     sheetTitle.textContent = `Инфа: ${player.name}`;
-    sheetSubtitle.textContent = `Владелец: ${player.ownerName || 'Unknown'} • Тип: ${player.isBase ? 'Основа' : '-'}`;
+    renderSheetSubtitle(player, player.isBase ? 'Основа' : 'Токен');
 
     ensurePlayerSheetWrapper(player);
 

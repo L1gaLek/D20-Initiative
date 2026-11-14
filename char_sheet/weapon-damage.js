@@ -10,14 +10,20 @@ function weaponDamageModifierText(modifier) {
 function renderWeaponDamageSummary(weapon) {
   const base = `${Math.max(0, safeInt(weapon?.dmgNum, 1))}${String(weapon?.dmgDice || 'к6')}`;
   const type = String(weapon?.dmgType || '').trim();
-  const extras = getWeaponDamageModifiers(weapon).map((modifier, index) => {
+  return `<span class="weapon-damage-summary"><span class="weapon-damage-base">${escapeHtml(base)}</span>${type ? `<span class="weapon-damage-type">${escapeHtml(type)}</span>` : ''}</span>`;
+}
+
+function renderWeaponDamageExtras(weapon) {
+  const modifiers = getWeaponDamageModifiers(weapon);
+  if (!modifiers.length) return '';
+  const extras = modifiers.map((modifier, index) => {
     const value = safeInt(modifier?.value, 0);
     const text = modifier?.type === 'flat'
       ? `${value < 0 ? '−' : '+'}${Math.abs(value)}` : `+${weaponDamageModifierText(modifier)}`;
     const description = String(modifier?.description || '').trim() || `Дополнительный урон ${index + 1}`;
     return `<span class="weapon-damage-extra" title="${escapeHtml(description)}" aria-label="${escapeHtml(`${text}: ${description}`)}">${escapeHtml(text)}</span>`;
   }).join('');
-  return `<span class="weapon-damage-summary"><span class="weapon-damage-base">${escapeHtml(base)}</span>${extras}${type ? `<span class="weapon-damage-type">${escapeHtml(type)}</span>` : ''}</span>`;
+  return `<span class="weapon-damage-extras__label">Доп. урон</span>${extras}`;
 }
 
 function getWeaponDamageParts(sheet, weapon) {

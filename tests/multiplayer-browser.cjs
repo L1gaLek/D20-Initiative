@@ -296,9 +296,13 @@ async function main() {
       assert.ok(Math.abs(prof.y + prof.height / 2 - hide.y - hide.height / 2) < 3);
       await card.locator('[data-weapon-toggle-desc]').click();
       assert.equal(await card.locator('.weapon-prof-quick-inline').isVisible(), false);
-      assert.deepEqual(await card.locator('[data-weapon-dmg] .weapon-damage-extra').allTextContents(), ['+2к4', '+1к8', '+5']);
-      assert.equal(await card.locator('[data-weapon-dmg] .weapon-damage-extra').first().getAttribute('title'), 'Огонь клинка');
-      assert.equal(await card.locator('[data-weapon-dmg] .weapon-damage-extra').last().isVisible(), true);
+      assert.deepEqual(await card.locator('[data-weapon-damage-extras] .weapon-damage-extra').allTextContents(), ['+2к4', '+1к8', '+5']);
+      assert.equal(await card.locator('[data-weapon-damage-extras] .weapon-damage-extra').first().getAttribute('title'), 'Огонь клинка');
+      assert.equal(await card.locator('[data-weapon-damage-extras] .weapon-damage-extra').last().isVisible(), true);
+      assert.equal(await card.locator('.weapon-summary .weapon-damage-extra').count(), 0);
+      const summaryRect = await card.locator('.weapon-summary').boundingBox();
+      const extrasRect = await card.locator('[data-weapon-damage-extras]').boundingBox();
+      assert.ok(extrasRect.y >= summaryRect.y + summaryRect.height, 'extra damage is below the entire main frame');
       if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, monster ? 'monster-weapon-collapsed.png' : 'weapon-collapsed.png') });
       await card.locator('[data-weapon-toggle-desc]').click();
       await page.evaluate(() => { animateSingleRoll = async () => {}; rollDie = () => 3; });
@@ -317,6 +321,7 @@ async function main() {
       assert.equal(await card.locator('[data-damage-idx]').count(), 3);
       await card.locator('[data-damage-idx="1"] [data-damage-del]').click();
       assert.equal(await card.locator('[data-damage-idx]').count(), 2);
+      assert.deepEqual(await card.locator('[data-weapon-damage-extras] .weapon-damage-extra').allTextContents(), ['+2к4', '+5']);
       if (screenshotDir) {
         fs.mkdirSync(screenshotDir, { recursive: true });
         await page.locator('#sheet-main').evaluate(el => { el.scrollTop = 0; });

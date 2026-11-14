@@ -1,3 +1,17 @@
+function renderSheetSubtitle(player, typeLabel) {
+  sheetSubtitle.replaceChildren();
+  for (const [label, value] of [['Владелец', player.ownerName || '—'], ['Тип', typeLabel]]) {
+    const chip = document.createElement('span');
+    chip.className = 'sheet-meta-chip';
+    const caption = document.createElement('span');
+    caption.textContent = `${label}:`;
+    const text = document.createElement('strong');
+    text.textContent = String(value || '—');
+    chip.append(caption, text);
+    sheetSubtitle.appendChild(chip);
+  }
+}
+
 function renderTokenAccessControls(player) {
   let bar = document.getElementById('sheet-token-access');
   if (!bar) {
@@ -25,6 +39,7 @@ function renderTokenAccessControls(player) {
   document.getElementById('sheet-affiliation')?.remove();
   const affiliation = document.createElement('span');
   affiliation.id = 'sheet-affiliation';
+  affiliation.dataset.affiliation = player.isEnemy ? 'enemy' : 'ally';
   const affiliationSelect = document.createElement('select');
   affiliationSelect.setAttribute('aria-label', 'Принадлежность');
   affiliationSelect.append(new Option('Союзник', 'ally'), new Option('Враг', 'enemy'));
@@ -55,7 +70,7 @@ function renderTokenAccessControls(player) {
   if (!mayManage) return;
   const users = (ctx?.getUsers?.() || []).filter(u => ['GM', 'Player'].includes(u.role));
   const addAction = (action, title, emptyLabel, current) => {
-    const group = document.createElement('label');
+    const group = document.createElement('div');
     group.className = 'sheet-token-access__group';
     group.dataset.tokenAction = action;
     const caption = document.createElement('span');

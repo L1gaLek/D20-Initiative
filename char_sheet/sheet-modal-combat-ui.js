@@ -52,6 +52,11 @@ function updateWeaponsBonuses(root, sheet) {
 
     const dmgEl = card.querySelector('[data-weapon-dmg]');
     if (dmgEl) dmgEl.innerHTML = renderWeaponDamageSummary(w);
+    const extrasEl = card.querySelector('[data-weapon-damage-extras]');
+    if (extrasEl) {
+      extrasEl.innerHTML = renderWeaponDamageExtras(w);
+      extrasEl.hidden = getWeaponDamageModifiers(w).length === 0;
+    }
 
     const profDot = card.querySelector('[data-weapon-prof]');
     if (profDot) {

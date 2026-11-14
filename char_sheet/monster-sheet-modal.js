@@ -1231,6 +1231,7 @@
               <div class="weapon-sum-val" data-weapon-dmg>${renderWeaponDamageSummary(w)}</div>
             </div>
           </div>
+          <div class="weapon-damage-extras" data-weapon-damage-extras ${getWeaponDamageModifiers(w).length ? '' : 'hidden'}>${renderWeaponDamageExtras(w)}</div>
           <div class="weapon-details ${collapsed ? 'collapsed' : ''}">
             <div class="weapon-details-grid">
               <div class="weapon-fieldbox weapon-ability">
@@ -2016,9 +2017,7 @@
     if (String(openedSheetPlayerId) !== String(player?.id)) return false;
     player = getOpenedPlayerSafe() || player;
     sheetTitle.textContent = `${getMonsterSheetTitleLabel(player)}: ${player.name}`;
-    sheetSubtitle.textContent = player.ownerName
-      ? `Владелец: ${player.ownerName} • Тип: ${getMonsterSheetTypeLabel(player)}`
-      : `Тип: ${getMonsterSheetTypeLabel(player)}`;
+    renderSheetSubtitle(player, getMonsterSheetTypeLabel(player));
 
     renderTokenAccessControls(player);
       sheetActions.innerHTML = '';
