@@ -54,6 +54,9 @@
 
   function closeModal() {
     if (!sheetModal) return;
+    if (openedSheetPlayer) captureUiStateFromDom(openedSheetPlayer);
+    sheetContent.__monsterRenderGeneration = (sheetContent.__monsterRenderGeneration || 0) + 1;
+    if (sheetContent.dataset) sheetContent.dataset.sheetPlayerId = '';
     flushSheetSaves(openedSheetPlayerId);
     hideHpPopup();
     hideExhPopup();
@@ -66,6 +69,7 @@
     if (sheetTitle) sheetTitle.textContent = "Информация о персонаже";
     if (sheetSubtitle) sheetSubtitle.textContent = "";
     document.getElementById('sheet-token-access')?.replaceChildren();
+    document.getElementById('sheet-affiliation')?.remove();
     if (sheetActions) sheetActions.innerHTML = "";
     if (sheetContent) sheetContent.innerHTML = "";
   }

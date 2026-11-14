@@ -1721,12 +1721,14 @@
     buttons.forEach((button) => {
       button.addEventListener('click', () => {
         const tabId = String(button.getAttribute('data-monster-tab') || 'monster-main');
+        captureUiStateFromDom(player, root);
         player._activeSheetTab = tabId;
         const st = getUiState(player.id);
         st.activeTab = tabId;
         try { options?.onTabChange?.(tabId); } catch {}
         buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
         main.innerHTML = renderMonsterTabContent(tabId, player, vm, canEdit);
+        restoreUiStateToDom(player, root);
         bindCurrentTab();
         markModalInteracted(player.id);
       });
@@ -1805,18 +1807,28 @@
 
   async function renderMonsterSheetIntoRoot(rootEl, player, options = {}) {
     if (!rootEl) return false;
+    if (!options?.embedded) {
+      if (String(openedSheetPlayerId) !== String(player?.id)) return false;
+      player = getOpenedPlayerSafe() || player;
+      options = { ...options, canEdit: canEditPlayer(player) };
+    }
     ensureMonsterStyles();
 
     const canEdit = !!options.canEdit;
     const sheet = ensureEnemySheet(player);
     const activeUi = getUiState(player.id);
-    let activeTab = String(options?.activeTab || player?._activeSheetTab || activeUi?.activeTab || 'monster-main');
+    captureUiStateFromDom(player, rootEl);
+    const generation = (rootEl.__monsterRenderGeneration || 0) + 1;
+    rootEl.__monsterRenderGeneration = generation;
+    rootEl.dataset.sheetPlayerId = String(player.id);
+    let activeTab = String((options?.embedded && options?.activeTab) || activeUi?.activeTab || 'monster-main');
     if (!['monster-main', 'monster-extra', 'monster-combat', 'monster-manual', 'monster-token'].includes(activeTab)) activeTab = 'monster-main';
     player._activeSheetTab = activeTab;
     activeUi.activeTab = activeTab;
     rootEl.innerHTML = '<div class="monster-note">Загружаю данные монстра…</div>';
 
     const monster = await resolveMonsterRecord(player);
+    if (!rootEl.isConnected || rootEl.__monsterRenderGeneration !== generation) return true;
     if (!options?.embedded && openedSheetPlayerId !== player.id) return true;
 
     const vm = buildMonsterViewModel(player, sheet, monster);
@@ -1973,15 +1985,19 @@
       </div>
     `;
 
-    restoreUiStateToDom(player);
+    restoreUiStateToDom(player, rootEl);
     const mainEl = rootEl.querySelector('#sheet-main');
     mainEl?.addEventListener('scroll', () => {
       markModalInteracted(player.id);
-      captureUiStateFromDom(player);
+      captureUiStateFromDom(player, rootEl);
     }, { passive: true });
 
-    rootEl.addEventListener('pointerdown', () => markModalInteracted(player.id), { passive: true });
-    rootEl.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
+    if (!rootEl.__monsterInteractionWired) {
+      rootEl.__monsterInteractionWired = true;
+      const interact = () => markModalInteracted(rootEl.dataset.sheetPlayerId);
+      rootEl.addEventListener('pointerdown', interact, { passive: true });
+      rootEl.addEventListener('keydown', interact, { passive: true });
+    }
 
     const rerender = () => renderMonsterSheetIntoRoot(rootEl, player, { ...options, activeTab: player?._activeSheetTab || options?.activeTab || 'monster-main' });
     const bindOptions = { ...options, rerender };
@@ -1992,6 +2008,8 @@
 
   async function render(player, options = {}) {
     if (!sheetTitle || !sheetSubtitle || !sheetActions || !sheetContent) return false;
+    if (String(openedSheetPlayerId) !== String(player?.id)) return false;
+    player = getOpenedPlayerSafe() || player;
     sheetTitle.textContent = `${getMonsterSheetTitleLabel(player)}: ${player.name}`;
     sheetSubtitle.textContent = player.ownerName
       ? `Владелец: ${player.ownerName} • Тип: ${getMonsterSheetTypeLabel(player)}`

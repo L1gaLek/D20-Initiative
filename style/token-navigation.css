@@ -16,3 +16,10 @@
 .sheet-token-access [role="status"] { max-width: 280px; }
 #sheet-modal .modal-header > div { flex: 1; min-width: 0; }
 #sheet-modal .modal-close { flex-shrink: 0; }
+.sheet-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+#sheet-affiliation { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; }
+#sheet-affiliation select { min-height: 30px; }
+.sheet-actions__note { flex-basis: 100%; }
+.sheet-file-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; width: 100%; }
+.sheet-file-actions input[type="file"] { width: 265px; max-width: 100%; }
+.sheet-file-actions .saved-bases-actions { flex-wrap: nowrap; }

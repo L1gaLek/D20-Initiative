@@ -7,35 +7,35 @@
     return uiStateByPlayerId.get(playerId);
   }
 
-  function captureUiStateFromDom(player) {
+  function captureUiStateFromDom(player, root = sheetContent) {
     if (!player?.id) return;
+    if (String(root?.dataset?.sheetPlayerId || '') !== String(player.id)) return;
     const st = getUiState(player.id);
 
     // Prefer DOM (current active sidebar tab) — protects against "tab jumping" on state updates
     // when player object is reconstructed without _activeSheetTab.
     let domTab = null;
     try {
-      const activeBtn = sheetContent?.querySelector?.('.sheet-tab.active[data-tab]');
-      domTab = activeBtn ? String(activeBtn.getAttribute('data-tab') || '') : null;
+      const activeBtn = root?.querySelector?.('.sheet-tab.active[data-tab], .monster-sidebar__btn.active[data-monster-tab]');
+      domTab = activeBtn ? String(activeBtn.getAttribute('data-tab') || activeBtn.getAttribute('data-monster-tab') || '') : null;
     } catch { domTab = null; }
 
-    const activeTab = (domTab && domTab.trim()) ? domTab : (player._activeSheetTab || st.activeTab || "basic");
+    const activeTab = (domTab && domTab.trim()) ? domTab : (st.activeTab || "basic");
     st.activeTab = activeTab;
+    player._activeSheetTab = activeTab;
 
-    const main = sheetContent?.querySelector?.("#sheet-main");
+    const main = root?.querySelector?.("#sheet-main");
     if (main) {
       st.scrollTopByTab[activeTab] = main.scrollTop || 0;
     }
   }
 
-  function restoreUiStateToDom(player) {
+  function restoreUiStateToDom(player, root = sheetContent) {
     if (!player?.id) return;
     const st = getUiState(player.id);
-    const activeTab = player._activeSheetTab || st.activeTab || "basic";
-    const main = sheetContent?.querySelector?.("#sheet-main");
-    if (main && st.scrollTopByTab && typeof st.scrollTopByTab[activeTab] === "number") {
-      main.scrollTop = st.scrollTopByTab[activeTab];
-    }
+    const activeTab = st.activeTab || "basic";
+    const main = root?.querySelector?.("#sheet-main");
+    if (main) main.scrollTop = st.scrollTopByTab?.[activeTab] || 0;
   }
 
   function markModalInteracted(playerId) {

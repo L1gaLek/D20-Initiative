@@ -137,6 +137,11 @@ async function main() {
       await context.route('https://cdn.jsdelivr.net/npm/@supabase/**', route => route.fulfill({ contentType: 'text/javascript', body: 'window.supabase={createClient:()=>({auth:{getSession:async()=>({data:{session:null}})},channel:()=>({on(){return this},subscribe(){return this}})})};' }));
       await context.route(/https?:\/\/(?!127\.0\.0\.1).*supabase\.co\//, route => route.fulfill({ json: [] }));
       await context.addInitScript(({ base, id }) => {
+        window.__notificationOscillators = 0;
+        if (window.AudioContext) {
+          const create = AudioContext.prototype.createOscillator;
+          AudioContext.prototype.createOscillator = function (...args) { window.__notificationOscillators++; return create.apply(this, args); };
+        }
         window.D20_CONFIG = { vpsApiBase: `${base}/api`, wsUrl: base.replace('http:', 'ws:') + '/ws/' };
         localStorage.setItem('int_user_id', id); localStorage.setItem('int_auth_token', id);
         localStorage.setItem('int_auth_expires_at', '2099-01-01T00:00:00Z');
@@ -211,11 +216,9 @@ async function main() {
     await p1.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
     assert.equal(await p1.getByRole('button', { name: 'Передать токен', exact: true }).count(), 0);
     await p1.getByLabel('Принадлежность', { exact: true }).selectOption('enemy');
-    await p1.getByLabel('Принадлежность', { exact: true }).locator('..').getByRole('button').click();
     await waitFor(() => h.database().players[0].isEnemy, 'owner changes affiliation');
     await gm.waitForFunction(() => lastState.players[0].isEnemy);
     await p1.getByLabel('Принадлежность', { exact: true }).selectOption('ally');
-    await p1.getByLabel('Принадлежность', { exact: true }).locator('..').getByRole('button').click();
     await waitFor(() => h.database().players[0].isAlly, 'owner restores ally');
     await gm.waitForFunction(() => lastState.players[0].isAlly);
     console.log('PASS: owner changes affiliation and every participant receives it');
@@ -264,7 +267,6 @@ async function main() {
     console.log('PASS: GM can also transfer a monster; its new owner can edit the monster sheet');
 
     await gm.getByLabel('Принадлежность', { exact: true }).selectOption('ally');
-    await gm.getByLabel('Принадлежность', { exact: true }).locator('..').getByRole('button').click();
     await waitFor(() => h.database().players.find(p => p.id === 'monster-1').isAlly, 'GM changes another owner affiliation');
     await p4.waitForFunction(() => lastState.players.find(p => p.id === 'monster-1').isAlly);
     console.log('PASS: GM changes any token affiliation, including a transferred monster');
@@ -362,6 +364,108 @@ async function main() {
     assert.ok(isoAfter.x > isoBefore.x && isoAfter.y > isoBefore.y);
     assert.equal(await p3.locator('#board-wrapper').evaluate(el => el.classList.contains('board-view--panning')), false);
     console.log('PASS: middle drag also pans in isometric mode and stops on release');
+    for (const page of pages) await page.evaluate(() => InfoModal.close());
+    await p3.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
+    const titleRect = await p3.locator('#sheet-title').boundingBox();
+    const affiliationRect = await p3.locator('#sheet-affiliation').boundingBox();
+    assert.ok(Math.abs(titleRect.y + titleRect.height / 2 - affiliationRect.y - affiliationRect.height / 2) < 3);
+    assert.equal(await p3.locator('#sheet-affiliation button').count(), 0);
+    const fileRect = await p3.getByLabel('Загрузить JSON').boundingBox();
+    const saveRect = await p3.getByRole('button', { name: 'Сохранить основу', exact: true }).boundingBox();
+    assert.ok(Math.abs(fileRect.y + fileRect.height / 2 - saveRect.y - saveRect.height / 2) < 3);
+    for (const tab of ['basic', 'spells', 'combat', 'inventory', 'personality', 'appearance', 'notes', 'wildshape', 'shop']) {
+      await p3.locator(`.sheet-tab[data-tab="${tab}"]`).click();
+      const applied = await p3.evaluate(() => {
+        document.querySelectorAll('.equip-overlay').forEach(el => el.remove());
+        document.activeElement?.blur();
+        getUiState(openedSheetPlayerId).lastInteractAt = 0;
+        const snapshot = structuredClone(openedSheetPlayer);
+        snapshot._activeSheetTab = 'inventory';
+        snapshot.sheetUpdatedAt += 1;
+        InfoModal.refresh([snapshot]);
+        return openedSheetPlayer.sheetUpdatedAt === snapshot.sheetUpdatedAt;
+      });
+      assert.equal(applied, true, `network refresh applied on ${tab}`);
+      assert.equal(await p3.locator('.sheet-tab.active').getAttribute('data-tab'), tab);
+      await p3.evaluate(() => document.querySelectorAll('.equip-overlay').forEach(el => el.remove()));
+    }
+    await p3.locator('.sheet-tab[data-tab="combat"]').click();
+    await p3.evaluate(() => rerenderSpellsTabInPlace(sheetContent, openedSheetPlayer, openedSheetPlayer.sheet.parsed, true));
+    assert.ok(await p3.locator('[data-combat-root]').count());
+    await p3.evaluate(() => { InfoModal.close(); InfoModal.open(players.find(p => p.id === 'player-3')); });
+    assert.equal(await p3.locator('.sheet-tab.active').getAttribute('data-tab'), 'basic');
+    await p3.evaluate(() => { InfoModal.close(); InfoModal.open(players.find(p => p.id === 'player-1')); });
+    assert.equal(await p3.locator('.sheet-tab.active').getAttribute('data-tab'), 'combat');
+    console.log('PASS: affiliation auto-saves at title level; JSON and base buttons align; all nine character tabs resist stale network selection');
+
+    await p4.evaluate(() => InfoModal.open(players.find(p => p.id === 'monster-1')));
+    for (const tab of ['monster-main', 'monster-extra', 'monster-combat', 'monster-manual', 'monster-token']) {
+      await p4.locator(`[data-monster-tab="${tab}"]`).click();
+      await p4.evaluate(() => {
+        document.activeElement?.blur(); getUiState(openedSheetPlayerId).lastInteractAt = 0;
+        const snapshot = structuredClone(openedSheetPlayer);
+        snapshot._activeSheetTab = 'monster-main'; snapshot.sheetUpdatedAt += 1;
+        InfoModal.refresh([snapshot]);
+      });
+      await p4.locator(`[data-monster-tab="${tab}"].active`).waitFor();
+    }
+    await p4.evaluate(() => {
+      const other = structuredClone(openedSheetPlayer); other.id = 'another-monster';
+      InfoModal.open(other);
+    });
+    await p4.locator('[data-monster-tab="monster-main"].active').waitFor();
+    await p4.evaluate(() => InfoModal.open(players.find(p => p.id === 'monster-1')));
+    await p4.locator('[data-monster-tab="monster-token"].active').waitFor();
+    let releaseLookup;
+    const lookupGate = new Promise(resolve => { releaseLookup = resolve; });
+    await p4.route('**/srd5_1_monsters_extracted.json', async route => { await lookupGate; await route.fulfill({ json: { monsters: [] } }); });
+    const monsterLookup = p4.waitForRequest('**/srd5_1_monsters_extracted.json');
+    await p4.evaluate(() => {
+      if (window.MonstersLib) window.MonstersLib.getMonsters = () => [];
+      const player = structuredClone(players.find(p => p.id === 'monster-1'));
+      player.monsterId = 'slow-lookup'; delete player.sheet.parsed.monster;
+      InfoModal.open(player);
+    });
+    await monsterLookup;
+    await p4.evaluate(() => {
+      const base = structuredClone(openedSheetPlayer); base.isBase = true;
+      InfoModal.close(); InfoModal.open(base);
+    });
+    releaseLookup();
+    await p4.waitForTimeout(80);
+    assert.ok(await p4.locator('.sheet-tab.active').count());
+    assert.equal(await p4.locator('[data-monster-tab]').count(), 0);
+    console.log('PASS: all five monster tabs resist stale selection; a late monster lookup cannot overwrite a reopened sheet');
+
+    for (const page of pages) await page.evaluate(() => { InfoModal.close(); RoomChat.hydrateFromRows([]); });
+    await p1.locator('#room-chat-open').click();
+    await p1.locator('#roomChatClose').click();
+    const toneBefore = await p1.evaluate(() => window.__notificationOscillators);
+    const incoming = { id: 'notification-test-1', chatType: 'direct', fromId: 'user-2', fromName: 'User 2', toId: 'user-1', text: 'Новое сообщение', ts: Date.now() };
+    const row = { id: 'notify-row-1', text: await p1.evaluate(message => encodeRoomChatLogRow(message), incoming) };
+    broadcast({ type: 'logRow', roomId: 'test-room', row });
+    await p1.locator('#room-chat-notification').waitFor({ state: 'visible' });
+    await p1.waitForFunction(before => window.__notificationOscillators === before + 2, toneBefore);
+    assert.equal(await p2.locator('#room-chat-notification').isVisible(), false);
+    assert.equal(await p3.locator('#room-chat-notification').isVisible(), false);
+    const iconRect = await p1.locator('#room-chat-notification').boundingBox();
+    const statusRect = await p1.locator('#status-bar').boundingBox();
+    assert.ok(Math.abs(iconRect.x + iconRect.width / 2 - statusRect.x - statusRect.width / 2) < 2);
+    assert.equal(await p1.locator('#room-chat-notification').evaluate(el => getComputedStyle(el).animationName), 'room-message-blink');
+    if (screenshotDir) await p1.screenshot({ path: path.join(screenshotDir, 'chat-notification.png') });
+    await p1.locator('#room-chat-notification').click();
+    assert.equal(await p1.locator('#room-chat-notification').isVisible(), false);
+    await p1.waitForTimeout(850);
+    broadcast({ type: 'logRow', roomId: 'test-room', row });
+    await p1.evaluate(message => {
+      RoomChat.pushMessage({ ...message, id: 'visible-notify' });
+      RoomChat.pushMessage({ ...message, id: 'my-notify', fromId: 'user-1', toId: 'user-2' });
+    }, incoming);
+    assert.equal(await p1.locator('#room-chat-notification').isVisible(), false);
+    assert.equal(await p1.evaluate(() => window.__notificationOscillators), toneBefore + 2);
+    await p1.evaluate(message => RoomChat.hydrateFromRows([{ ...message, id: 'old-history' }]), incoming);
+    assert.equal(await p1.evaluate(() => window.__notificationOscillators), toneBefore + 2);
+    console.log('PASS: new incoming DM flashes a centered icon and schedules a short real Web Audio chime; reading, history, own messages and duplicates stay quiet');
     assert.deepEqual(errors, []);
     console.log(`Browser regression complete; ${requests.filter(r => r.path.endsWith('/initiative')).length} confirmed initiative requests.`);
   } catch (error) {

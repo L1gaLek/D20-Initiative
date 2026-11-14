@@ -1502,16 +1502,19 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
     }
 
     function rerenderActiveTab(curPlayer) {
+      if (String(root.dataset.sheetPlayerId) !== String(curPlayer?.id)) return;
+      captureUiStateFromDom(curPlayer);
       // перерисуем только main текущей вкладки, как это делает обработчик табов
       const main = root.querySelector('#sheet-main');
       const sheet = curPlayer?.sheet?.parsed || createEmptySheet(curPlayer?.name);
       // Keep AC in sync with equipped armor/shield before building VM
       try { window.__equipAc?.applyAutoAcToSheet?.(sheet); } catch {}
       const vm = toViewModel(sheet, curPlayer?.name);
-      const tabId = curPlayer?._activeSheetTab || (getUiState(curPlayer.id)?.activeTab) || 'basic';
+      const tabId = getUiState(curPlayer.id)?.activeTab || 'basic';
       const { canEdit: curCanEdit } = getState();
       if (main) {
-        main.innerHTML = renderActiveTab(tabId, vm, curCanEdit);
+        main.innerHTML = renderActiveTab(tabId, vm, curCanEdit, curPlayer);
+        restoreUiStateToDom(curPlayer);
         bindEditableInputs(root, curPlayer, curCanEdit);
         bindSkillBoostDots(root, curPlayer, curCanEdit);
         bindSaveProfDots(root, curPlayer, curCanEdit);

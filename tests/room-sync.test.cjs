@@ -155,11 +155,12 @@ function sheetHarness(storage = new Map()) {
   const timers = new Map();
   let counter = 0;
   let rendered;
-  const content = { innerHTML: '', querySelector: () => null };
+  const content = { innerHTML: '', dataset: {}, querySelector: () => null };
   const context = vm.createContext({
     console, Map, Date, Promise, Number, String, deepClone: clone,
     ctx: { getMyId: () => 'user-1', getRoomId: () => 'test-room', sendMessage: message => sent.push(clone(message)) },
     sheetSaveTimers: new Map(), sheetSaveDrafts: new Map(),
+    uiStateByPlayerId: new Map(),
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     setTimeout: callback => { const id = ++counter; timers.set(id, callback); return id; },
     clearTimeout: id => timers.delete(id),
@@ -173,7 +174,8 @@ function sheetHarness(storage = new Map()) {
     document: { getElementById: () => null }
   });
   vm.runInContext(functions(read(process.env.D20_SHEET_DATA_SOURCE || 'char_sheet/sheet-modal-data.js'), [
-    'sheetDraftKey', 'acknowledgeSheetSave', 'restoreSheetDraft', 'flushSheetSaves', 'scheduleSheetSave'
+    'sheetDraftKey', 'acknowledgeSheetSave', 'restoreSheetDraft', 'flushSheetSaves', 'scheduleSheetSave',
+    'getUiState', 'captureUiStateFromDom', 'restoreUiStateToDom'
   ]), context);
   vm.runInContext(functions(read('char_sheet/sheet-modal-render.js'), ['open', 'refresh']), context);
   vm.runInContext(functions(read('char_sheet/sheet-modal-core.js'), ['closeModal']), context);
@@ -181,6 +183,35 @@ function sheetHarness(storage = new Map()) {
     const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback());
   } };
 }
+
+test('sheet navigation captures both layouts, ignores another character DOM and restores each tab scroll', () => {
+  const node = { scrollTop: 240 };
+  let selected = 'combat';
+  let monster = false;
+  const root = { dataset: { sheetPlayerId: 'player-1' }, querySelector: selector => selector === '#sheet-main' ? node
+    : { getAttribute: attr => attr === (monster ? 'data-monster-tab' : 'data-tab') ? selected : null } };
+  const context = vm.createContext({ uiStateByPlayerId: new Map(), sheetContent: root });
+  vm.runInContext(functions(read('char_sheet/sheet-modal-data.js'), ['getUiState', 'captureUiStateFromDom', 'restoreUiStateToDom']), context);
+  const player = { id: 'player-1', _activeSheetTab: 'inventory' };
+  context.captureUiStateFromDom(player);
+  assert.equal(player._activeSheetTab, 'combat');
+  context.captureUiStateFromDom({ id: 'player-2', _activeSheetTab: 'inventory' });
+  assert.equal(context.getUiState('player-2').activeTab, 'basic');
+  node.scrollTop = 0;
+  context.restoreUiStateToDom(player);
+  assert.equal(node.scrollTop, 240);
+  selected = 'monster-combat'; monster = true;
+  context.captureUiStateFromDom(player);
+  assert.equal(context.getUiState(player.id).activeTab, 'monster-combat');
+});
+
+test('late spell refresh cannot replace a different tab or a different character', () => {
+  const root = { dataset: { sheetPlayerId: 'player-1' }, querySelector: () => { throw new Error('Unexpected repaint'); } };
+  const context = vm.createContext({ getUiState: () => ({ activeTab: 'combat' }) });
+  vm.runInContext(functions(read('char_sheet/sheet-modal-spells.js'), ['rerenderSpellsTabInPlace']), context);
+  context.rerenderSpellsTabInPlace(root, { id: 'player-1' }, {}, true);
+  context.rerenderSpellsTabInPlace(root, { id: 'player-2' }, {}, true);
+});
 
 test('debounced saving captures the edited sheet before realtime replaces its wrapper', () => {
   const h = sheetHarness();

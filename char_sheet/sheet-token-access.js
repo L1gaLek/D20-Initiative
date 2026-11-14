@@ -11,6 +11,41 @@ function renderTokenAccessControls(player) {
   const uid = String(ctx?.getMyId?.() || '');
   const owner = String(player.ownerId || '');
   const mayManage = role === 'GM' || (role === 'Player' && uid === owner);
+  const persist = async (action, value) => {
+    flushSheetSaves(player.id);
+    const result = await window.vpsApi(`/rooms/${encodeURIComponent(ctx.getRoomId())}/players/${encodeURIComponent(player.id)}/access`, {
+      method: 'POST', body: { action, targetUserId: action === 'affiliation' ? undefined : value,
+        affiliation: action === 'affiliation' ? value : undefined,
+        sheet: deepClone(player.sheet), sheetUpdatedAt: Number(player.sheetUpdatedAt) || 0 }
+    });
+    const saved = result.state?.players?.find(p => String(p.id) === String(player.id));
+    if (saved && JSON.stringify(saved.sheet) === JSON.stringify(player.sheet)) acknowledgeSheetSave(player.id, saved.sheetUpdatedAt);
+    ctx?.applyState?.(result.state);
+  };
+  document.getElementById('sheet-affiliation')?.remove();
+  const affiliation = document.createElement('span');
+  affiliation.id = 'sheet-affiliation';
+  const affiliationSelect = document.createElement('select');
+  affiliationSelect.setAttribute('aria-label', 'Принадлежность');
+  affiliationSelect.append(new Option('Союзник', 'ally'), new Option('Враг', 'enemy'));
+  affiliationSelect.value = player.isEnemy ? 'enemy' : 'ally';
+  affiliationSelect.disabled = !mayManage;
+  const affiliationStatus = document.createElement('span');
+  affiliationStatus.setAttribute('role', 'status');
+  affiliationSelect.addEventListener('change', async () => {
+    affiliationSelect.disabled = true;
+    affiliationStatus.textContent = 'Сохраняю…';
+    try {
+      await persist('affiliation', affiliationSelect.value);
+      affiliationStatus.textContent = '';
+    }
+    catch (error) {
+      affiliationSelect.value = player.isEnemy ? 'enemy' : 'ally';
+      affiliationStatus.textContent = error?.message || 'Не удалось сохранить';
+    } finally { affiliationSelect.disabled = !mayManage; }
+  });
+  affiliation.append(affiliationSelect, affiliationStatus);
+  document.getElementById('sheet-title-row')?.appendChild(affiliation);
   if (player.controllerId) {
     const info = document.createElement('span');
     info.textContent = `Управление: ${player.controllerName || player.controllerId}`;
@@ -26,10 +61,8 @@ function renderTokenAccessControls(player) {
     caption.textContent = title;
     const select = document.createElement('select');
     select.setAttribute('aria-label', title);
-    if (action === 'affiliation') {
-      select.append(new Option('Союзник', 'ally'), new Option('Враг', 'enemy'));
-    } else select.appendChild(new Option(emptyLabel, ''));
-    (action === 'affiliation' ? [] : users).filter(u => String(u.id) !== owner).forEach(u => select.appendChild(new Option(u.name || 'Игрок', u.id)));
+    select.appendChild(new Option(emptyLabel, ''));
+    users.filter(u => String(u.id) !== owner).forEach(u => select.appendChild(new Option(u.name || 'Игрок', u.id)));
     if (current && ![...select.options].some(o => o.value === current)) {
       select.appendChild(new Option(player.controllerName || 'Игрок', current));
     }
@@ -44,15 +77,8 @@ function renderTokenAccessControls(player) {
       button.disabled = true;
       status.textContent = 'Сохраняю…';
       try {
-        flushSheetSaves(player.id);
-        const result = await window.vpsApi(`/rooms/${encodeURIComponent(ctx.getRoomId())}/players/${encodeURIComponent(player.id)}/access`, {
-          method: 'POST', body: { action, targetUserId: select.value, affiliation: action === 'affiliation' ? select.value : undefined,
-            sheet: deepClone(player.sheet), sheetUpdatedAt: Number(player.sheetUpdatedAt) || 0 }
-        });
+        await persist(action, select.value);
         status.textContent = 'Сохранено';
-        const saved = result.state?.players?.find(p => String(p.id) === String(player.id));
-        if (saved && JSON.stringify(saved.sheet) === JSON.stringify(player.sheet)) acknowledgeSheetSave(player.id, saved.sheetUpdatedAt);
-        ctx?.applyState?.(result.state);
       } catch (error) {
         status.textContent = error?.message || 'Не удалось сохранить';
       } finally { button.disabled = false; }
@@ -61,6 +87,5 @@ function renderTokenAccessControls(player) {
     bar.appendChild(group);
   };
   if (role === 'GM') addAction('owner', 'Передача токена', 'Выберите нового владельца', '');
-  addAction('affiliation', 'Принадлежность', '', player.isEnemy ? 'enemy' : 'ally');
   addAction('controller', 'Передача управления', 'Только владелец и ГМ', String(player.controllerId || ''));
 }

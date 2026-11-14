@@ -1578,6 +1578,9 @@ function renderShopTab(vm, canEdit) {
   function renderSheetModal(player, opts = {}) {
     if (!sheetTitle || !sheetSubtitle || !sheetActions || !sheetContent) return;
     if (!ctx) return;
+    if (String(player?.id || '') !== String(openedSheetPlayerId || '')) return;
+    // Async callbacks may still hold a model replaced by a room update.
+    player = openedSheetPlayer || player;
 
     const force = !!opts.force;
     // Если пользователь сейчас редактирует что-то внутри модалки — не перерисовываем, чтобы не прыгал скролл/вкладка.
@@ -1587,6 +1590,7 @@ function renderShopTab(vm, canEdit) {
 
     // сохраняем текущую вкладку/скролл перед любым ререндером
     captureUiStateFromDom(player);
+    sheetContent.__monsterRenderGeneration = (sheetContent.__monsterRenderGeneration || 0) + 1;
 
     const myRole = ctx.getMyRole?.();
     const myId = ctx.getMyId?.();
@@ -1600,6 +1604,7 @@ function renderShopTab(vm, canEdit) {
       return;
     }
 
+    sheetContent.dataset.sheetPlayerId = String(player.id);
     renderTokenAccessControls(player);
 
     const shieldEquipped = !!String(player?.sheet?.parsed?.appearance?.slots?.shield || '').trim();
@@ -1611,7 +1616,7 @@ function renderShopTab(vm, canEdit) {
 
     sheetActions.innerHTML = '';
     const note = document.createElement('div');
-    note.className = 'sheet-note';
+    note.className = 'sheet-note sheet-actions__note';
     note.textContent = canEdit
       ? "Можно загрузить .json или редактировать поля вручную — всё сохраняется."
       : "Просмотр. Редактировать может только владелец или GM.";
@@ -1621,6 +1626,7 @@ function renderShopTab(vm, canEdit) {
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
       fileInput.accept = '.json,application/json';
+      fileInput.setAttribute('aria-label', 'Загрузить JSON');
 
       fileInput.addEventListener('change', async () => {
         const file = fileInput.files?.[0];
@@ -1629,14 +1635,16 @@ function renderShopTab(vm, canEdit) {
         try {
           const text = await file.text();
           const sheet = parseCharboxFileText(text);
-          player.sheet = sheet;
-          scheduleSheetSave(player);
-          flushSheetSaves(player.id);
+          const editor = getOpenedPlayerSafe();
+          if (!editor || String(editor.id) !== String(player.id) || !canEditPlayer(editor)) return;
+          editor.sheet = sheet;
+          scheduleSheetSave(editor);
+          flushSheetSaves(editor.id);
 
           // Мгновенно обновляем UI (не ждём round-trip через сервер)
           // и при этом не сбрасываем вкладку/скролл.
-          markModalInteracted(player.id);
-          renderSheetModal(player, { force: true });
+          markModalInteracted(editor.id);
+          renderSheetModal(editor, { force: true });
 
           const tmp = document.createElement('div');
           tmp.className = 'sheet-note';
@@ -1650,7 +1658,10 @@ function renderShopTab(vm, canEdit) {
         }
       });
 
-      sheetActions.appendChild(fileInput);
+      const fileActions = document.createElement('div');
+      fileActions.className = 'sheet-file-actions';
+      fileActions.appendChild(fileInput);
+      sheetActions.appendChild(fileActions);
 
       // ===== Мои сохранённые персонажи (привязка к уникальному userId) =====
       // Работает даже если пользователь заходит под разными никами.
@@ -1710,7 +1721,7 @@ function renderShopTab(vm, canEdit) {
 
       savedWrap.appendChild(saveBtn);
       savedWrap.appendChild(loadBtn);
-      sheetActions.appendChild(savedWrap);
+      fileActions.appendChild(savedWrap);
     }
 
     // Players created without importing a .json may carry a minimal sheet payload.
@@ -1738,8 +1749,9 @@ function renderShopTab(vm, canEdit) {
 
     // восстановление вкладки (если была)
     const st = player?.id ? getUiState(player.id) : null;
-    if (!player._activeSheetTab) player._activeSheetTab = (st?.activeTab || "basic");
-    let activeTab = player._activeSheetTab;
+    let activeTab = tabs.some(tab => tab.id === st?.activeTab) ? st.activeTab : 'basic';
+    player._activeSheetTab = activeTab;
+    st.activeTab = activeTab;
 
     const hero = `
       <div class="sheet-hero">
@@ -1877,8 +1889,12 @@ function renderShopTab(vm, canEdit) {
       captureUiStateFromDom(player);
     }, { passive: true });
 
-    sheetContent.addEventListener('pointerdown', () => markModalInteracted(player.id), { passive: true });
-    sheetContent.addEventListener('keydown', () => markModalInteracted(player.id), { passive: true });
+    if (!sheetContent.__sheetInteractionWired) {
+      sheetContent.__sheetInteractionWired = true;
+      const interact = () => markModalInteracted(openedSheetPlayerId);
+      sheetContent.addEventListener('pointerdown', interact, { passive: true });
+      sheetContent.addEventListener('keydown', interact, { passive: true });
+    }
 
     bindEditableInputs(sheetContent, player, canEdit);
     bindLanguagesUi(sheetContent, player, canEdit);
@@ -1914,6 +1930,8 @@ function renderShopTab(vm, canEdit) {
       btn.addEventListener("click", () => {
         const tabId = btn.dataset.tab;
         if (!tabId) return;
+        captureUiStateFromDom(player);
+        markModalInteracted(player.id);
 
         activeTab = tabId;
         player._activeSheetTab = tabId;
@@ -1927,6 +1945,7 @@ function renderShopTab(vm, canEdit) {
           const freshVm = toViewModel(freshSheet, player.name);
           freshVm._sheetRef = freshSheet;
           main.innerHTML = renderActiveTab(activeTab, freshVm, canEdit, player);
+          restoreUiStateToDom(player);
 
           bindEditableInputs(sheetContent, player, canEdit);
           bindSkillBoostDots(sheetContent, player, canEdit);
@@ -1965,6 +1984,7 @@ function renderShopTab(vm, canEdit) {
 
   function open(player) {
     if (!player) return;
+    if (openedSheetPlayer) captureUiStateFromDom(openedSheetPlayer);
     if (openedSheetPlayerId) flushSheetSaves(openedSheetPlayerId);
     openedSheetPlayerId = player.id;
     openedSheetPlayer = deepClone(player);
@@ -1981,6 +2001,7 @@ function renderShopTab(vm, canEdit) {
     rememberPlayersSnapshot(players);
     const pl = players.find(x => x.id === openedSheetPlayerId);
     if (!pl) { closeModal(); return; }
+    if (openedSheetPlayer) captureUiStateFromDom(openedSheetPlayer);
     if (openedSheetPlayer && Number(pl.affiliationUpdatedAt || 0) > Number(openedSheetPlayer.affiliationUpdatedAt || 0)) {
       for (const key of ['isAlly', 'isEnemy', 'affiliationUpdatedAt']) openedSheetPlayer[key] = pl[key];
       renderSheetModal(openedSheetPlayer, { force: true });

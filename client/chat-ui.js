@@ -154,7 +154,7 @@ function noteChatUnreadState(state, modalEl, item, getUnreadCount, updateBadges)
   if (!item || item.system || item.mine) return;
   const modalOpen = !!(modalEl && !modalEl.classList.contains('hidden'));
   const isActive = String(state.activeChatKey || 'global') === String(item.chatKey || 'global');
-  if (modalOpen && isActive) return;
+  if (modalOpen && isActive && !document.hidden) return;
   const key = String(item.chatKey || 'global');
   const prev = Number(typeof getUnreadCount === 'function' ? getUnreadCount(key) : 0) || 0;
   state.unreadByChat.set(key, prev + 1);
@@ -1300,9 +1300,9 @@ function getRoomChatUserName(userId, fallback = 'Собеседник') {
 function getRoomDirectChatKey(otherUserId) { return `dm:${String(otherUserId || '').trim()}`; }
 function getRoomUnreadCountForChat(chatKey) { return Number(roomChatState.unreadByChat.get(String(chatKey || 'global')) || 0) || 0; }
 function updateRoomChatBlinkState() {
-  if (!roomChatOpenBtn) return;
   const hasUnread = (Number(roomChatState.unreadGlobal) || 0) > 0 || (Number(roomChatState.unreadDirect) || 0) > 0;
-  roomChatOpenBtn.classList.toggle('room-top-actions__btn--chat-unread', hasUnread);
+  roomChatOpenBtn?.classList.toggle('room-top-actions__btn--chat-unread', hasUnread);
+  window.RoomChatNotifications?.update(hasUnread);
 }
 function updateRoomChatBadges() {
   updateUnreadBadges(roomChatState, roomChatBadgeGlobal, roomChatBadgeDirect);
@@ -1318,7 +1318,9 @@ function markRoomChatRead(chatKey) {
   markChatReadState(roomChatState, chatKey, getRoomUnreadCountForChat, updateRoomChatBadges);
 }
 function noteRoomChatUnread(item) {
+  const before = roomChatState.unreadGlobal + roomChatState.unreadDirect;
   noteChatUnreadState(roomChatState, roomChatModal, item, getRoomUnreadCountForChat, updateRoomChatBadges);
+  if (roomChatState.unreadGlobal + roomChatState.unreadDirect > before) window.RoomChatNotifications?.ping();
 }
 function normalizeRoomChatMessage(entry) {
   if (!entry || typeof entry !== 'object') return null;
@@ -1866,6 +1868,17 @@ if (tavernCreateRoomBtn) tavernCreateRoomBtn.addEventListener('click', () => {
 
 
 if (roomChatOpenBtn) roomChatOpenBtn.addEventListener('click', openRoomChat);
+document.getElementById('room-chat-notification')?.addEventListener('click', () => {
+  const unread = [...roomChatState.unreadByChat].find(([, count]) => count > 0);
+  if (unread) roomChatState.activeChatKey = unread[0];
+  openRoomChat();
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && roomChatModal && !roomChatModal.classList.contains('hidden')) {
+    markRoomChatRead(roomChatState.activeChatKey);
+    renderRoomChatTabs();
+  }
+});
 if (roomReturnTavernBtn) roomReturnTavernBtn.addEventListener('click', () => { returnToTavernFromRoom(); });
 if (roomChatClose) roomChatClose.addEventListener('click', () => hideModalEl(roomChatModal));
 if (roomChatModal) {

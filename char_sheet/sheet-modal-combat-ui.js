@@ -78,11 +78,13 @@ function updateWeaponsBonuses(root, sheet) {
 
 function rerenderCombatTabInPlace(root, player, canEdit) {
   const main = root?.querySelector('#sheet-main');
-  if (!main || player?._activeSheetTab !== "combat") return;
+  if (!main || String(root.dataset.sheetPlayerId) !== String(player?.id) || getUiState(player.id).activeTab !== "combat") return;
+  captureUiStateFromDom(player);
 
   const freshSheet = player.sheet?.parsed || createEmptySheet(player.name);
   const freshVm = toViewModel(freshSheet, player.name);
   main.innerHTML = renderActiveTab("combat", freshVm, canEdit);
+  restoreUiStateToDom(player);
 
   bindEditableInputs(root, player, canEdit);
   bindSkillBoostDots(root, player, canEdit);

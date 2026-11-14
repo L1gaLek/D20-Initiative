@@ -271,6 +271,7 @@ function makeManualHref() {
 }
 
 function rerenderSpellsTabInPlace(root, player, sheet, canEdit) {
+  if (String(root?.dataset?.sheetPlayerId) !== String(player?.id) || getUiState(player.id).activeTab !== 'spells') return;
   const main = root.querySelector("#sheet-main");
   if (!main) return;
   const scrollTop = main.scrollTop;
