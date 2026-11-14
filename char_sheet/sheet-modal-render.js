@@ -1596,7 +1596,7 @@ function renderShopTab(vm, canEdit) {
 
     const myRole = ctx.getMyRole?.();
     const myId = ctx.getMyId?.();
-    const canEdit = (myRole === "GM" || String(player.ownerId) === String(myId));
+    const canEdit = canEditPlayer(player);
     lastCanEdit = !!canEdit;
 
     if (window.MonsterSheetModal?.shouldUseForPlayer?.(player)) {
@@ -1605,6 +1605,8 @@ function renderShopTab(vm, canEdit) {
       });
       return;
     }
+
+    renderTokenAccessControls(player);
 
     const shieldEquipped = !!String(player?.sheet?.parsed?.appearance?.slots?.shield || '').trim();
 
@@ -1984,7 +1986,13 @@ function renderShopTab(vm, canEdit) {
     if (!Array.isArray(players)) return;
     rememberPlayersSnapshot(players);
     const pl = players.find(x => x.id === openedSheetPlayerId);
-    if (!pl || isModalBusy(pl.id) || sheetSaveTimers.has(String(pl.id))) return;
+    if (!pl) { closeModal(); return; }
+    if (openedSheetPlayer && Number(pl.accessUpdatedAt || 0) > Number(openedSheetPlayer.accessUpdatedAt || 0)) {
+      for (const key of ['ownerId', 'ownerName', 'ownerRole', 'controllerId', 'controllerName', 'accessUpdatedAt']) openedSheetPlayer[key] = pl[key] ?? null;
+      renderSheetModal(openedSheetPlayer, { force: true });
+      return;
+    }
+    if (isModalBusy(pl.id) || sheetSaveTimers.has(String(pl.id))) return;
     if (openedSheetPlayer && Number(openedSheetPlayer.sheetUpdatedAt || 0) > Number(pl.sheetUpdatedAt || 0)) return;
     openedSheetPlayer = deepClone(pl);
     restoreSheetDraft(openedSheetPlayer);

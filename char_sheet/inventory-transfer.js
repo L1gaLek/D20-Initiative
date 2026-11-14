@@ -54,7 +54,7 @@
     const myId = getMyUserId();
     if (!myId) return false;
     const pl = getAllPlayers().find((p) => String(p?.id || '') === pid);
-    return !!pl && String(pl?.ownerId || '') === myId;
+    return !!pl && !!window.canControlToken?.(pl, myId, 'Player');
   }
 
   function buildBasePlayerOptions(fromPlayerId) {

@@ -354,8 +354,10 @@ function bindCombatEditors(root, player, canEdit) {
     // 🎲 броски из оружия -> в панель кубиков
     const rollAtkBtn = card.querySelector('[data-weapon-roll-atk]');
     if (rollAtkBtn) {
+      rollAtkBtn.disabled = !canEdit;
       rollAtkBtn.addEventListener('click', async (e) => {
         e.preventDefault();
+        if (!canEditPlayer(player)) return;
         const bonus = calcWeaponAttackBonus(sheet, w);
         if (window.DicePanel?.roll) {
           window.DicePanel.roll({
@@ -371,8 +373,10 @@ function bindCombatEditors(root, player, canEdit) {
 
     const rollDmgBtn = card.querySelector('[data-weapon-roll-dmg]');
     if (rollDmgBtn) {
+      rollDmgBtn.disabled = !canEdit;
       rollDmgBtn.addEventListener('click', async (e) => {
         e.preventDefault();
+        if (!canEditPlayer(player)) return;
         const n = Math.max(0, safeInt(w?.dmgNum, 1));
         const diceStr = String(w?.dmgDice || "к6").trim().toLowerCase(); // "к8"
         const sides = safeInt(diceStr.replace("к", ""), 6);
@@ -923,9 +927,11 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
 
     const btns = root.querySelectorAll('.lss-dice-btn[data-roll-kind]');
     btns.forEach(btn => {
+      btn.disabled = !canEditPlayer(player);
       btn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (!canEditPlayer(player)) return;
 
         const kind = btn.getAttribute('data-roll-kind');
         let bonus = 0;

@@ -266,7 +266,8 @@ function canCurrentUserMovePlayerNow(player, { forInitialPlacement = false } = {
   try {
     if (!player || !player.id) return false;
     if (String(myRole || '') === 'GM') return true;
-    const mine = String(player?.ownerId || '') === String(myId || '');
+    const current = (lastState?.players || []).find(p => String(p.id) === String(player.id)) || player;
+    const mine = canControlToken(current);
     if (!mine) return false;
     const phaseNow = String(lastState?.phase || '');
     if (phaseNow === 'initiative') return false;
@@ -314,7 +315,7 @@ function rememberCombatPlacementCandidates(prevIds, stateLike) {
     nowIds.add(pid);
     const isNew = !prevIds.has(pid);
     const createdInCombat = String(st?.phase || '') === 'combat';
-    const mine = String(p?.ownerId || '') === String(myId || '');
+    const mine = canControlToken(p);
     const isGmNow = String(myRole || '') === 'GM';
     const unplaced = (p?.x === null || typeof p?.x === 'undefined' || p?.y === null || typeof p?.y === 'undefined');
     if (isNew && createdInCombat && mine && !isGmNow && unplaced && consumeCreateIntent(p)) __combatPlacementReady.add(pid);
@@ -1085,6 +1086,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // нормализация состояния + поддержка нескольких карт кампании
       let normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
+      mergeNewestTokenAccess(normalized, lastState);
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
       try { normalized = applyPendingCombatSelectionOverlay(normalized) || normalized; } catch {}
       try { normalized = window.applyPendingInitiativeOverlayToState?.(normalized) || normalized; } catch {}
@@ -1479,7 +1481,7 @@ function updateCurrentPlayer(state) {
 
   // кнопку "Следующий ход" может нажимать GM или владелец текущего персонажа
   if (nextTurnBtn) {
-    const canNext = (myRole === 'GM') || (p && p.ownerId === myId);
+    const canNext = (myRole === 'GM') || (p && canControlToken(p));
     nextTurnBtn.disabled = !canNext;
     if (canNext) nextTurnBtn.classList.add('is-active');
   }
@@ -1684,7 +1686,7 @@ function renderInitiativePlayersBox(state) {
 
   const ownId = String(myId || '');
   const mine = (Array.isArray(players) ? players : [])
-    .filter((p) => p && String(p.ownerId || '') === ownId)
+    .filter((p) => p && canControlToken(p, ownId, myRole))
     .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
 
   initiativePlayersList.innerHTML = '';
@@ -2028,9 +2030,9 @@ function updatePlayerList() {
   players.forEach((p) => {
     // if view is filtered, skip non-matching players
     if (playerListView === 'mine') {
-      if (String(p.ownerId || '') !== myIdStr) return;
+      if (!canControlToken(p, myIdStr, 'Player')) return;
     } else {
-      if (String(p.ownerId || '') === myIdStr) return;
+      if (canControlToken(p, myIdStr, 'Player')) return;
     }
     const oid = String(p.ownerId || '');
     if (!grouped.has(oid)) {
@@ -2209,7 +2211,7 @@ function updatePlayerList() {
       // Такой сценарий помечается флагом pendingInitiativeChoice (ставится сервером в setPlayerInCombat,
       // когда next.phase === 'combat').
       const isLateJoiner = !!p.pendingInitiativeChoice;
-      if (lastState && canPickInit && isLateJoiner && p.inCombat && !p.hasRolledInitiative && (myRole === 'GM' || p.ownerId === myId)) {
+      if (lastState && canPickInit && isLateJoiner && p.inCombat && !p.hasRolledInitiative && canControlToken(p)) {
         const box = document.createElement('div');
         box.className = 'init-choice-box';
 
@@ -2243,7 +2245,7 @@ function updatePlayerList() {
       const midRow = document.createElement('div');
       midRow.className = 'player-actions-row player-actions-row--controls';
 
-      if (myRole === "GM" || p.ownerId === myId) {
+      if (canControlToken(p)) {
         // размер
         const sizeSelect = document.createElement('select');
         sizeSelect.className = 'size-select';
@@ -2337,7 +2339,7 @@ function getOwnerRoleForPlayerUI(p) {
 function canViewSensitiveInfo(p) {
   if (!p) return false;
   if (myRole === 'GM') return true;
-  if (String(p.ownerId || '') === String(myId || '')) return true;
+  if (canControlToken(p)) return true;
   if (p.isAlly) return true;
   const ownerRole = getOwnerRoleForPlayerUI(p);
   if (ownerRole === 'GM') return false;

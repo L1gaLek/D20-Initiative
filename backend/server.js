@@ -756,8 +756,9 @@ async function getMapBounds(roomId, mapId, state) {
 function canControlPlayer(ctx, player) {
   if (!ctx || !player) return false;
   if (ctx.role === 'GM') return true;
-  if (ctx.role === 'Spectator') return false;
-  return String(player.ownerId || '') === String(ctx.userId || '');
+  if (ctx.role !== 'Player' || !ctx.userId) return false;
+  return String(player.ownerId || '') === String(ctx.userId)
+    || String(player.controllerId || '') === String(ctx.userId);
 }
 
 function ensureCanControlPlayer(ctx, player) {
@@ -2461,6 +2462,32 @@ app.post('/api/rooms/:roomId/detached/replace', async (req, res) => {
   }
 });
 
+app.post('/api/rooms/:roomId/initiative', async (req, res) => {
+  try {
+    const ctx = await loadRoomContext(req.params.roomId, requireRequestActor(req).userId);
+    const payload = await applyInitiativeUpdates(ctx, req.body || {});
+    broadcastToRoom(ctx.roomId, payload);
+    return res.json({ ok: true, ...payload });
+  } catch (error) {
+    return res.status(statusFromError(error, /required|role|member|banned|authorized/i))
+      .json({ ok: false, error: error?.message || 'Initiative update failed' });
+  }
+});
+
+app.post('/api/rooms/:roomId/players/:playerId/access', async (req, res) => {
+  try {
+    const ctx = await loadRoomContext(req.params.roomId, requireRequestActor(req).userId);
+    const playerId = normalizeSafeId(req.params.playerId, ENTITY_ID_RE);
+    if (!playerId) return httpError(res, 400, 'playerId required');
+    const state = await setTokenAccessForContext(ctx, playerId, req.body);
+    broadcastToRoom(ctx.roomId, { type: 'state', roomId: ctx.roomId, state });
+    return res.json({ ok: true, state });
+  } catch (error) {
+    return res.status(statusFromError(error, /required|role|member|banned|owner|player in/i))
+      .json({ ok: false, error: error?.message || 'Access update failed' });
+  }
+});
+
 app.post('/api/rooms/:roomId/state', async (req, res) => {
   try {
     const roomId = normalizeSafeId(req.params.roomId, ROOM_ID_RE);
@@ -3525,6 +3552,7 @@ function syncActiveMapCombatStateServer(state) {
 
   map.phase = String(state.phase || map.phase || 'exploration');
   map.phaseEpoch = Math.max(0, Math.trunc(Number(state.phaseEpoch) || Number(map.phaseEpoch) || 0));
+  map.initiativeEpoch = Math.max(0, Number(state.initiativeEpoch) || 0);
   map.combatSelectionEpoch = Math.max(0, Math.trunc(Number(state.combatSelectionEpoch) || Number(map.combatSelectionEpoch) || 0));
   map.turnOrder = turnOrder;
   map.currentTurnIndex = currentTurnIndex;
@@ -3617,7 +3645,7 @@ function isCurrentTurnOwner(ctx, state) {
     if (!order.length) return false;
     const index = Math.max(0, Math.min(order.length - 1, Math.trunc(Number(state.currentTurnIndex) || 0)));
     const actor = findPlayerById(state, order[index]);
-    return !!actor && String(actor.ownerId || '') === ctx.userId;
+    return !!actor && canControlPlayer(ctx, actor);
   } catch {
     return false;
   }
@@ -3729,11 +3757,11 @@ function applyStatePatchToCurrentState(ctx, rawPatch) {
     if (!playerId) continue;
     const player = findPlayerById(state, playerId);
     if (!player) continue;
-    const owns = String(player.ownerId || '') === ctx.userId;
+    const owns = canControlPlayer(ctx, player);
     const out = { id: playerId };
 
     if (Object.prototype.hasOwnProperty.call(item, 'inCombat')) {
-      ensureGm(ctx);
+      if (ctx.role !== 'GM' && !!item.inCombat !== !!player.inCombat) ensureGm(ctx);
       player.inCombat = !!item.inCombat;
       out.inCombat = !!player.inCombat;
       if (!player.inCombat) {
@@ -3786,6 +3814,11 @@ function preserveNewerPlayerData(nextState, currentState) {
   for (const player of getStatePlayers(nextState)) {
     const current = currentById.get(String(player.id));
     if (!current) continue;
+    if (Number(current.accessUpdatedAt || 0) > Number(player.accessUpdatedAt || 0)) {
+      for (const key of ['ownerId', 'ownerName', 'ownerRole', 'controllerId', 'controllerName', 'accessUpdatedAt']) {
+        player[key] = current[key] ?? null;
+      }
+    }
     if (Number(current.sheetUpdatedAt || 0) > Number(player.sheetUpdatedAt || 0)) {
       player.sheet = cloneJson(current.sheet);
       player.sheetUpdatedAt = current.sheetUpdatedAt;
@@ -3810,7 +3843,7 @@ async function mutateRoomState(ctx, mutate) {
     await client.query("select pg_advisory_xact_lock(hashtext('d20_room_state'), hashtext($1))", [ctx.roomId]);
     const { rows } = await client.query('select state from public.room_state where room_id = $1 for update', [ctx.roomId]);
     ctx.state = cloneJson(rows[0]?.state || ctx.state || {}) || {};
-    stored = sanitizeRoomStateForStorage(await mutate(cloneJson(ctx.state)));
+    stored = sanitizeRoomStateForStorage(await mutate(cloneJson(ctx.state), client));
     const result = await writeRoomState(ctx, stored, client);
     updatedAt = result;
   });
@@ -3992,7 +4025,7 @@ function applyPlayerStateUpdate(ctx, requestedState) {
 
   current.players = players.map((player) => {
     if (!player || typeof player !== 'object') return player;
-    if (String(player.ownerId || '') !== ctx.userId) return player;
+    if (!canControlPlayer(ctx, player)) return player;
     const incoming = requestedById.get(String(player.id));
     if (!incoming || typeof incoming !== 'object') return player;
     const next = cloneJson(player) || {};
@@ -4040,7 +4073,7 @@ function applyPlayerStateUpdate(ctx, requestedState) {
     const currentIndex = Math.max(0, Math.min(current.turnOrder.length - 1, Math.trunc(Number(current.currentTurnIndex) || 0)));
     const currentActorId = String(current.turnOrder[currentIndex] || '');
     const currentActor = current.players.find((player) => String(player?.id || '') === currentActorId);
-    if (currentActor && String(currentActor.ownerId || '') === ctx.userId) {
+    if (currentActor && canControlPlayer(ctx, currentActor)) {
       const requestedIndex = Math.trunc(Number(requested.currentTurnIndex));
       const nextIndex = (currentIndex + 1) % current.turnOrder.length;
       const wrapped = currentIndex === current.turnOrder.length - 1 && nextIndex === 0;
@@ -4872,7 +4905,7 @@ async function applyAcceptedInventoryTransfer(ctx, body) {
     const fromPlayer = players.find((player) => player && String(player.id || '') === fromPlayerId);
     const toPlayer = players.find((player) => player && String(player.id || '') === toPlayerId);
     if (!fromPlayer || !toPlayer || !toPlayer.isBase) throw new Error('Transfer player not found');
-    if (String(toPlayer.ownerId || '') !== ctx.userId) throw new Error('Only the target owner can answer this transfer');
+    if (!canControlPlayer(ctx, toPlayer)) throw new Error('Only the target controller can answer this transfer');
 
     const fromItems = fromPlayer?.sheet?.parsed?.inventory?.[tabId];
     if (!Array.isArray(fromItems) || itemIdx < 0 || itemIdx >= fromItems.length) {
@@ -4975,7 +5008,7 @@ async function applyAcceptedCoinsTransfer(ctx, body) {
     const fromPlayer = players.find((player) => player && String(player.id || '') === fromPlayerId);
     const toPlayer = players.find((player) => player && String(player.id || '') === toPlayerId);
     if (!fromPlayer || !toPlayer || !toPlayer.isBase) throw new Error('Transfer player not found');
-    if (ctx.role !== 'GM' && String(fromPlayer.ownerId || '') !== ctx.userId) throw new Error('You cannot transfer coins from this player');
+    if (!canControlPlayer(ctx, fromPlayer)) throw new Error('You cannot transfer coins from this player');
 
     const publicCurrentState = () => stripRoomSecretsFromState(sanitizeRoomStateForStorage(syncActiveMapCombatStateServer(currentState)));
     if (rememberAppliedCoinsTransfer(currentState, body?.id)) {
@@ -5050,8 +5083,8 @@ async function handleTransferEventRelay(ws, data) {
   const fromPlayer = findPlayerById(ctx.state || {}, fromPlayerId);
   const toPlayer = findPlayerById(ctx.state || {}, toPlayerId);
   if (!fromPlayer || !toPlayer) throw new Error('Transfer player not found');
-  const ownsFrom = String(fromPlayer.ownerId || '') === ctx.userId;
-  const ownsTo = String(toPlayer.ownerId || '') === ctx.userId;
+  const ownsFrom = canControlPlayer(ctx, fromPlayer);
+  const ownsTo = canControlPlayer(ctx, toPlayer);
   if (eventType === 'inventoryTransferResult') {
     if (!ownsTo) throw new Error('Only the target owner can answer this transfer');
   } else if (eventType === 'coinsTransfer') {
@@ -5119,7 +5152,7 @@ async function handlePlayerPatchRelay(ws, data) {
 
     const incoming = (data.patch && typeof data.patch === 'object') ? data.patch : data;
     patch = {};
-    const ownsPlayer = String(player.ownerId || '') === ctx.userId;
+    const ownsPlayer = canControlPlayer(ctx, player);
 
     if (incoming.sheet && typeof incoming.sheet === 'object') {
       if (ctx.role !== 'GM' && !ownsPlayer) throw new Error('You cannot edit this sheet');
@@ -5201,12 +5234,23 @@ async function handleInitiativeLiveRelay(ws, data) {
     return;
   }
 
+  const payload = await applyInitiativeUpdates(ctx, data);
+  ws.roomContext = null;
+  payload.__fromWsClient = data.__fromWsClient;
+  // A confirmed result must also reach its author.
+  payload.__optimisticApplied = false;
+  send(ws, payload);
+  broadcastToRoom(ctx.roomId, payload, ws);
+}
+
+async function applyInitiativeUpdates(ctx, data) {
   ensurePlayerOrGm(ctx);
-  const updates = Array.isArray(data.updates) ? data.updates.slice(0, 100) : [];
+  const updates = Array.isArray(data.updates) ? data.updates.slice(0, 200) : [];
   const safeUpdates = [];
   await mutateRoomState(ctx, (state) => {
     const epoch = Math.max(0, Number(data.epoch) || 0);
-    if (String(state.phase) !== 'initiative' || (epoch && epoch !== Number(state.initiativeEpoch || 0))) {
+    if (String(state.phase) !== 'initiative' || (epoch && epoch !== Number(state.initiativeEpoch || 0))
+      || (data.mapId && String(data.mapId) !== String(state.currentMapId))) {
       throw new Error('Initiative phase has changed');
     }
     for (const item of updates) {
@@ -5214,9 +5258,7 @@ async function handleInitiativeLiveRelay(ws, data) {
       const total = Math.trunc(Number(item?.total));
       if (!playerId || !Number.isFinite(total)) continue;
       const player = findPlayerById(state, playerId);
-      if (!player) continue;
-      if (ctx.role !== 'GM' && String(player.ownerId || '') !== ctx.userId) continue;
-      if (!player.inCombat) continue;
+      if (!player || !canControlPlayer(ctx, player) || !player.inCombat) continue;
       if (!player.hasRolledInitiative) {
         player.initiative = Math.max(-100, Math.min(200, total));
         player.hasRolledInitiative = true;
@@ -5227,17 +5269,45 @@ async function handleInitiativeLiveRelay(ws, data) {
     if (!safeUpdates.length) throw new Error('No authorized initiative updates');
     return syncActiveMapCombatStateServer(state);
   });
-  ws.roomContext = null;
-  const payload = {
-    type: 'initiativeApplied',
-    roomId: ctx.roomId,
-    updates: safeUpdates,
-    epoch: Math.max(0, Math.trunc(Number(data.epoch) || 0)),
-    __fromWsClient: data.__fromWsClient,
-    __optimisticApplied: !!data.__optimisticApplied
-  };
-  send(ws, payload);
-  broadcastToRoom(ctx.roomId, payload, ws);
+  return { type: 'initiativeApplied', roomId: ctx.roomId, updates: safeUpdates,
+    epoch: Number(ctx.state.initiativeEpoch) || 0, mapId: ctx.state.currentMapId };
+}
+
+async function setTokenAccessForContext(ctx, playerId, data) {
+  ensurePlayerOrGm(ctx);
+  const action = String(data?.action || '');
+  if (!['owner', 'controller'].includes(action)) throw new Error('Invalid access action');
+  if (action === 'owner') ensureGm(ctx);
+  const targetId = normalizeSafeId(data?.targetUserId, USER_ID_RE);
+  if (action === 'owner' && !targetId) throw new Error('New owner required');
+  const member = targetId ? await fetchRoomMember(ctx.roomId, targetId) : null;
+  if (targetId && (!member || !['GM', 'Player'].includes(normalizeRole(member.role))
+    || await fetchActiveRoomBan(ctx.roomId, targetId))) throw new Error('Target must be a player in this room');
+  return mutateRoomState(ctx, async (state, client) => {
+    const player = findPlayerById(state, playerId);
+    if (!player) throw new Error('Player not found');
+    if (ctx.role !== 'GM' && String(player.ownerId) !== ctx.userId) throw new Error('Only the owner can grant control');
+    if (targetId && targetId === String(player.ownerId)) throw new Error('This player already owns the token');
+    // Preserve the editor's final input in the same transaction as the handover.
+    if (data.sheet && typeof data.sheet === 'object' && Number(data.sheetUpdatedAt || 0) >= Number(player.sheetUpdatedAt || 0)) {
+      player.sheet = cloneJson(data.sheet);
+      player.sheetUpdatedAt = Number(data.sheetUpdatedAt) || 0;
+    }
+    if (action === 'owner') {
+      player.ownerId = targetId;
+      player.ownerName = sanitizeText(member.name, 'Player', 160);
+      player.ownerRole = normalizeRole(member.role);
+      player.controllerId = null;
+      player.controllerName = null;
+      await client.query('update public.room_tokens set owner_id = $1, updated_at = now() where room_id = $2 and token_id = $3',
+        [targetId, ctx.roomId, playerId]);
+    } else {
+      player.controllerId = targetId || null;
+      player.controllerName = targetId ? sanitizeText(member.name, 'Player', 160) : null;
+    }
+    player.accessUpdatedAt = Math.max(Date.now(), Number(player.accessUpdatedAt || 0) + 1);
+    return state;
+  });
 }
 
 async function handleTokensInitRelay(ws, data) {
@@ -5459,8 +5529,11 @@ wss.on('connection', (ws) => {
   ws.roomContext = null;
   ws.currentInboundMeta = null;
 
+  let inboundQueue = Promise.resolve();
   ws.on('message', (rawMessage) => {
-    handleMessage(ws, rawMessage);
+    inboundQueue = inboundQueue.then(() => handleMessage(ws, rawMessage)).catch(error => {
+      send(ws, { type: 'error', message: error?.message || 'Server error' });
+    });
   });
 
   ws.on('close', () => {

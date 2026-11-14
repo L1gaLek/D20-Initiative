@@ -1189,6 +1189,8 @@ const weapons = weaponsRaw
     for (const [key, draft] of sheetSaveDrafts) {
       if (playerId && String(draft.id) !== String(playerId)) continue;
       if (key !== sheetDraftKey(draft.id)) continue;
+        const live = ctx?.getPlayers?.()?.find(player => String(player.id) === String(draft.id));
+        if (live && !canEditPlayer(live)) continue;
       clearTimeout(sheetSaveTimers.get(String(draft.id)));
       sheetSaveTimers.delete(String(draft.id));
       try {

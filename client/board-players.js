@@ -418,7 +418,7 @@ function canEditTokenMiniSheet(player) {
     if (String(typeof myRole !== 'undefined' ? myRole : window.myRole || '') === 'GM') return true;
   } catch {}
   try {
-    return String(player?.ownerId || '') === String(typeof myId !== 'undefined' ? myId : window.myId || '');
+    return canControlToken(player);
   } catch {}
   return false;
 }
@@ -1437,7 +1437,7 @@ function canShowTokenConditionIndicators(player) {
   try {
     if (String(myRole || '') === 'GM') return true;
   } catch {}
-  if (String(player.ownerId || '') === String(myId || '')) return true;
+  if (canControlToken(player)) return true;
   if (player.isAlly) return true;
 
   const ownerRole = getOwnerRoleForToken(player);
@@ -1604,7 +1604,8 @@ function setPlayerPosition(player) {
     // Это ломало выбор/движение (у пользователей переставало двигаться после пары ходов).
     const pid = String(player.id);
 
-    el.addEventListener('mousedown', () => {
+    el.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
       const cur = players.find(pp => String(pp?.id) === pid) || player;
 
       // Fog of war: disallow selecting hidden tokens for non-GM
@@ -1622,7 +1623,7 @@ function setPlayerPosition(player) {
         if (!restricted) {
           try {
             const phaseNow = String(lastState?.phase || '');
-            const mine = String(cur?.ownerId || '') === String(myId || '');
+            const mine = canControlToken(cur);
             const isCurrent = String(cur?.id || '') === String(lastState?.turnOrder?.[lastState?.currentTurnIndex] || '');
             if (phaseNow === 'combat' && String(myRole || '') !== 'GM' && mine && !isCurrent) {
               return;
@@ -2051,7 +2052,7 @@ addPlayerBtn.addEventListener('click', () => {
   function isRestrictedForPlayer(player) {
     try {
       if (!player || !isCombatPhase() || isGmNow()) return false;
-      const mine = String(player?.ownerId || '') === String(myId || '');
+      const mine = canControlToken(player);
       const currentId = getCurrentTurnActorId();
       return !!mine && !!currentId && String(player?.id || '') === currentId;
     } catch {
@@ -2423,7 +2424,7 @@ addPlayerBtn.addEventListener('click', () => {
     if (!live || !canUseSpellActionsPhase()) return false;
     if (live.x === null || live.y === null) return false;
 
-    const mine = String(live?.ownerId || '') === String(myId || '');
+    const mine = canControlToken(live);
     if (!isGmNow()) {
       if (isCombatPhase()) {
         if (!isRestrictedForPlayer(live)) return false;
@@ -2985,249 +2986,6 @@ document.addEventListener('keydown', (e) => {
 // ===== Dice Viz (panel + canvas animation) =====
 const diceVizKind = document.getElementById("dice-viz-kind");
 
-// ================== BASE TOKEN NAV ARROW (find "Основа" if off-screen) ==================
-// Shows a small orange triangle on the edge of the visible board area pointing toward
-// the player's "Основа" token when it is outside the current viewport.
-(function wireBaseNavArrow() {
-  const CELL = 50;
-  const ARROW_SIZE = 14; // px
-  const EDGE_PAD = 10;   // px from edge
-  const Z = 999999;
-
-  function getBoardWrapper() {
-    return document.getElementById('board-wrapper');
-  }
-
-  function getBoardEl() {
-    // In this project, global "board" is #game-board.
-    try { return board || document.getElementById('game-board'); } catch { return document.getElementById('game-board'); }
-  }
-
-  function ensureArrowEl() {
-    const b = getBoardEl();
-    if (!b) return null;
-    let el = document.getElementById('base-nav-arrow');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'base-nav-arrow';
-
-      // Triangle pointing up by default; we rotate it.
-      el.style.width = '0px';
-      el.style.height = '0px';
-      el.style.borderLeft = `${ARROW_SIZE}px solid transparent`;
-      el.style.borderRight = `${ARROW_SIZE}px solid transparent`;
-      el.style.borderBottom = `${ARROW_SIZE * 1.4}px solid rgba(255, 165, 0, 0.95)`;
-
-      el.style.position = 'absolute';
-      el.style.zIndex = String(Z);
-      el.style.pointerEvents = 'none';
-      el.style.filter = 'drop-shadow(0 0 6px rgba(0,0,0,0.75))';
-      el.style.display = 'none';
-
-      // Ensure board is positioned so absolute works
-      try { b.style.position = b.style.position || 'relative'; } catch {}
-      b.appendChild(el);
-    }
-    return el;
-  }
-
-  function findMyBasePlayer() {
-    try {
-      const list = Array.isArray(players) ? players : [];
-      const myIdStr = (typeof myId !== 'undefined') ? String(myId) : '';
-      const myNameStr = (typeof myName !== 'undefined') ? String(myName) : '';
-
-      // Prefer explicit ownerId match.
-      let p = list.find(pp => pp && pp.isBase && myIdStr && String(pp.ownerId || '') === myIdStr);
-      if (p) return p;
-
-      // Fallback: base token with name == myName.
-      p = list.find(pp => pp && pp.isBase && myNameStr && String(pp.name || '') === myNameStr);
-      if (p) return p;
-
-      // Last fallback: if there is exactly one base token, use it.
-      const bases = list.filter(pp => pp && pp.isBase);
-      if (bases.length === 1) return bases[0];
-    } catch {}
-    return null;
-  }
-
-  function clamp(v, a, b) {
-    return Math.max(a, Math.min(b, v));
-  }
-
-    function updateArrowNow() {
-    const wrap = getBoardWrapper();
-    const b = getBoardEl();
-    const arrow = ensureArrowEl();
-    if (!wrap || !b || !arrow) return;
-
-    const baseP = findMyBasePlayer();
-    if (!baseP) {
-      arrow.style.display = 'none';
-      return;
-    }
-
-    // Prefer live DOM position first. This keeps the locator working even if the
-    // player snapshot temporarily lost x/y while the token is still rendered on the field.
-    const tokenEl = playerElements.get(baseP.id) || (baseP && baseP.element) || null;
-    const hasLogicalPos = !(baseP.x === null || typeof baseP.x === 'undefined' || baseP.y === null || typeof baseP.y === 'undefined');
-    const hasDomToken = !!(tokenEl && tokenEl.style?.display !== 'none');
-    if (!hasLogicalPos && !hasDomToken) {
-      arrow.style.display = 'none';
-      return;
-    }
-
-    // If logical coordinates are absent, but DOM token exists, keep working from DOM.
-    // If both are absent, hide the arrow.
-    const wrapRect = wrap.getBoundingClientRect();
-    let tokenCx = null;
-    let tokenCy = null;
-
-    if (tokenEl && tokenEl.style?.display !== 'none') {
-      const tokRect = tokenEl.getBoundingClientRect();
-      if (Number.isFinite(tokRect.width) && Number.isFinite(tokRect.height) && tokRect.width > 0 && tokRect.height > 0) {
-        tokenCx = tokRect.left + tokRect.width / 2;
-        tokenCy = tokRect.top + tokRect.height / 2;
-      }
-    }
-
-    if (!Number.isFinite(tokenCx) || !Number.isFinite(tokenCy)) {
-      const bRect = b.getBoundingClientRect();
-      const ow = b.offsetWidth || 1;
-      const scale = (bRect.width && ow) ? (bRect.width / ow) : (window.ControlBox?.getZoom?.() || 1);
-      const size = Math.max(1, Number(baseP?.size) || 1);
-      const localCx = ((Number(baseP.x) || 0) + (size / 2)) * CELL;
-      const localCy = ((Number(baseP.y) || 0) + (size / 2)) * CELL;
-      tokenCx = bRect.left + (localCx * scale);
-      tokenCy = bRect.top + (localCy * scale);
-    }
-
-    // Visible area (in screen coordinates), slightly inset so arrow doesn't overlap borders.
-    // IMPORTANT: use clientWidth/clientHeight to exclude scrollbars, otherwise the arrow can end up under the scrollbar.
-    const left = wrapRect.left + EDGE_PAD;
-    const top = wrapRect.top + EDGE_PAD;
-    const right = wrapRect.left + (wrap.clientWidth || (wrapRect.width || 0)) - EDGE_PAD;
-    const bottom = wrapRect.top + (wrap.clientHeight || (wrapRect.height || 0)) - EDGE_PAD;
-
-    const inside = (tokenCx >= left && tokenCx <= right && tokenCy >= top && tokenCy <= bottom);
-    if (inside) {
-      arrow.style.display = 'none';
-      return;
-    }
-
-    // Ray from viewport center toward token center; intersect with inset rectangle.
-    const cx = (left + right) / 2;
-    const cy = (top + bottom) / 2;
-    const dx = tokenCx - cx;
-    const dy = tokenCy - cy;
-
-    // Degenerate case (shouldn't happen)
-    if (!Number.isFinite(dx) || !Number.isFinite(dy) || (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6)) {
-      arrow.style.display = 'none';
-      return;
-    }
-
-    let bestT = Infinity;
-    let hitX = cx;
-    let hitY = cy;
-
-    function consider(t, x, y) {
-      if (!(t > 0) || t >= bestT) return;
-      if (x < left - 0.5 || x > right + 0.5) return;
-      if (y < top - 0.5 || y > bottom + 0.5) return;
-      bestT = t;
-      hitX = x;
-      hitY = y;
-    }
-
-    // Vertical sides
-    if (Math.abs(dx) > 1e-6) {
-      let t = (left - cx) / dx;
-      consider(t, left, cy + t * dy);
-      t = (right - cx) / dx;
-      consider(t, right, cy + t * dy);
-    }
-    // Horizontal sides
-    if (Math.abs(dy) > 1e-6) {
-      let t = (top - cy) / dy;
-      consider(t, cx + t * dx, top);
-      t = (bottom - cy) / dy;
-      consider(t, cx + t * dx, bottom);
-    }
-
-    // Angle toward token (screen space)
-    const ang = Math.atan2(tokenCy - hitY, tokenCx - hitX);
-    const deg = (ang * 180 / Math.PI) + 90;
-
-    // Convert screen point -> board local (unscaled) coords so the arrow stays glued to the correct edge under zoom.
-    const bRect = b.getBoundingClientRect();
-    const ow = b.offsetWidth || 1;
-    const scale = (bRect.width && ow) ? (bRect.width / ow) : (window.ControlBox?.getZoom?.() || 1);
-
-    const localX = (hitX - bRect.left) / scale;
-    const localY = (hitY - bRect.top) / scale;
-
-    // Center the triangle around (localX, localY)
-    const w = ARROW_SIZE * 2;
-    const h = ARROW_SIZE * 1.4;
-    arrow.style.left = `${localX - w / 2}px`;
-    arrow.style.top = `${localY - h / 2}px`;
-    arrow.style.transform = `rotate(${deg}deg)`;
-    arrow.style.transformOrigin = '50% 60%';
-    arrow.style.display = 'block';
-  }
-
-  let rafId = 0;
-  function scheduleUpdate() {
-    if (rafId) return;
-    rafId = requestAnimationFrame(() => {
-      rafId = 0;
-      try { updateArrowNow(); } catch {}
-    });
-  }
-
-  let wiredWrap = null;
-  function wire() {
-    const wrap = getBoardWrapper();
-    if (!wrap) return;
-
-    // board-wrapper can be recreated/rebound after UI refreshes; avoid duplicate listeners,
-    // but do re-bind when the actual DOM node changes.
-    if (wiredWrap === wrap) {
-      scheduleUpdate();
-      return;
-    }
-    wiredWrap = wrap;
-
-    // Update on scroll/resize.
-    wrap.addEventListener('scroll', scheduleUpdate, { passive: true });
-    window.addEventListener('resize', scheduleUpdate);
-    try { document.addEventListener('visibilitychange', scheduleUpdate); } catch {}
-    try { wrap.addEventListener('mouseenter', scheduleUpdate, { passive: true }); } catch {}
-    try { wrap.addEventListener('mousemove', scheduleUpdate, { passive: true }); } catch {}
-
-    // Periodic safety update + auto-rebind if wrapper/token DOM was recreated.
-    setInterval(() => {
-      try {
-        const currentWrap = getBoardWrapper();
-        if (currentWrap && currentWrap !== wiredWrap) wire();
-      } catch {}
-      scheduleUpdate();
-    }, 300);
-
-    scheduleUpdate();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wire);
-  } else {
-    wire();
-  }
-
-  // Expose manual trigger for other modules.
-  window.__updateBaseNavArrow = scheduleUpdate;
-})();
 const diceVizValue = document.getElementById("dice-viz-value");
 const diceCanvas = document.getElementById("dice-canvas");
 const diceCtx = diceCanvas?.getContext?.("2d");

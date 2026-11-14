@@ -13,3 +13,4 @@ backend/uploads/
 backend/.pm2/
 .DS_Store
 Thumbs.db
+test-artifacts/

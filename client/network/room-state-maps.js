@@ -5,6 +5,7 @@ function getDefaultMapPhaseState() {
     phase: 'exploration',
     phaseEpoch: 0,
     combatSelectionEpoch: 0,
+    initiativeEpoch: 0,
     turnOrder: [],
     currentTurnIndex: 0,
     round: 1,
@@ -16,6 +17,7 @@ function getDefaultMapPhaseState() {
 function normalizeMapPhaseState(map) {
   if (!map || typeof map !== 'object') return getDefaultMapPhaseState();
   if (typeof map.phase !== 'string' || !map.phase.trim()) map.phase = 'exploration';
+  map.initiativeEpoch = Math.max(0, Number(map.initiativeEpoch) || 0);
   map.phaseEpoch = Math.max(0, Number(map.phaseEpoch) || 0);
   map.combatSelectionEpoch = Math.max(0, Number(map.combatSelectionEpoch) || 0);
   if (!Array.isArray(map.turnOrder)) map.turnOrder = [];
@@ -163,6 +165,7 @@ function ensureStateHasMaps(state) {
     marks: Array.isArray(state.marks) ? state.marks : [],
     phase: String(state.phase || 'exploration'),
     phaseEpoch: Math.max(0, Number(state.phaseEpoch) || 0),
+    initiativeEpoch: Math.max(0, Number(state.initiativeEpoch) || 0),
     combatSelectionEpoch: Math.max(0, Number(state.combatSelectionEpoch) || 0),
     turnOrder: Array.isArray(state.turnOrder) ? deepClone(state.turnOrder) : [],
     currentTurnIndex: Math.max(0, Number(state.currentTurnIndex) || 0),
@@ -259,6 +262,7 @@ function syncActiveToMap(state) {
   if (st.fog && typeof st.fog === 'object') m.fog = deepClone(st.fog);
 
   m.phase = String(st.phase || 'exploration');
+  m.initiativeEpoch = Math.max(0, Number(st.initiativeEpoch) || 0);
   m.phaseEpoch = Math.max(0, Number(st.phaseEpoch) || 0);
   m.combatSelectionEpoch = Math.max(0, Number(st.combatSelectionEpoch) || 0);
   m.turnOrder = Array.isArray(st.turnOrder) ? deepClone(st.turnOrder) : [];
@@ -355,6 +359,9 @@ function loadMapToRoot(state, mapId) {
   const maps = Array.isArray(st.maps) ? st.maps : [];
   const m = maps.find(mm => String(mm.id) === targetId) || maps[0];
   if (!m) return st;
+  if (!Number(m.initiativeEpoch) && String(m.id) === String(st.currentMapId) && m.phase === 'initiative') {
+    m.initiativeEpoch = Number(st.initiativeEpoch) || 0;
+  }
   normalizeMapPhaseState(m);
 
   st.currentMapId = String(m.id);
@@ -371,6 +378,7 @@ function loadMapToRoot(state, mapId) {
   st.walls = Array.isArray(m.walls) ? m.walls : [];
   st.marks = Array.isArray(m.marks) ? deepClone(m.marks) : [];
   st.phase = String(m.phase || 'exploration');
+  st.initiativeEpoch = Math.max(0, Number(m.initiativeEpoch) || 0);
   st.phaseEpoch = Math.max(0, Number(m.phaseEpoch) || 0);
   st.combatSelectionEpoch = Math.max(0, Number(m.combatSelectionEpoch) || 0);
   st.turnOrder = Array.isArray(m.turnOrder) ? deepClone(m.turnOrder) : [];

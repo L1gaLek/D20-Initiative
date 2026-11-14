@@ -1,0 +1,17 @@
+.board-view--panning, .board-view--panning * { cursor: grabbing !important; user-select: none !important; }
+.token-nav-layer { position: fixed; inset: 0; z-index: 1200; pointer-events: none; }
+.token-nav-pointer { position: absolute; color: #6ce89b; filter: drop-shadow(0 1px 3px #000); }
+.token-nav-pointer i { position: absolute; left: -9px; top: -7px; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 14px solid currentColor; }
+.token-nav-pointer--base { color: #ffa500; }
+.token-nav-pointer span { position: absolute; top: 9px; left: 12px; max-width: 115px; padding: 2px 5px; background: #111b; border-radius: 4px; color: #c9ffdd; font: 11px/1.3 system-ui,sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.token-nav-pointer--right span { left: auto; right: 12px; }
+.token-nav-pointer--bottom span { top: auto; bottom: 9px; }
+.token-nav-pointer span:empty { display: none; }
+.sheet-token-access { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 8px; font-size: 12px; }
+.sheet-token-access:empty { display: none; }
+.sheet-token-access__group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sheet-token-access select { max-width: 230px; min-height: 30px; }
+.sheet-token-access button { min-height: 30px; }
+.sheet-token-access [role="status"] { max-width: 280px; }
+#sheet-modal .modal-header > div { flex: 1; min-width: 0; }
+#sheet-modal .modal-close { flex-shrink: 0; }

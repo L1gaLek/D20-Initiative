@@ -28,8 +28,7 @@
       ? (ctx.getMyId() ?? "")
       : (ctx?.myId ?? "");
     if (myRole === "GM") return true;
-    const owner = player?.ownerId ?? "";
-    return String(owner) && String(myId) && String(owner) === String(myId);
+    return window.canControlToken?.(player, myId, myRole) || false;
   }
 
 
@@ -66,6 +65,7 @@
 
     if (sheetTitle) sheetTitle.textContent = "Информация о персонаже";
     if (sheetSubtitle) sheetSubtitle.textContent = "";
+    document.getElementById('sheet-token-access')?.replaceChildren();
     if (sheetActions) sheetActions.innerHTML = "";
     if (sheetContent) sheetContent.innerHTML = "";
   }

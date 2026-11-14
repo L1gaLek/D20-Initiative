@@ -38,7 +38,9 @@ function handleRegisteredMessage(msg) {
       getMyId: () => myId,
       getMyRole: () => myRole,
       getRoomId: () => currentRoomId,
-      getPlayers: () => (Array.isArray(players) ? players : [])
+      getPlayers: () => (Array.isArray(players) ? players : []),
+        getUsers: () => [...usersById].map(([id, user]) => ({ id, ...user })),
+        applyState: state => handleMessage({ type: 'state', state })
     });
   }
 
@@ -48,7 +50,7 @@ function handleRegisteredMessage(msg) {
 function handleErrorSurfaceMessage(msg) {
   if (msg?.type !== 'error') return false;
   const rawText = String(msg.message || '');
-  if (/^GM role required$/i.test(rawText.trim())) return true;
+
   const text = String(msg.message || 'Ошибка');
 
   if (loginDiv && loginDiv.style.display !== 'none') {

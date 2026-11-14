@@ -1,0 +1,301 @@
+// Run with Playwright installed (or D20_PLAYWRIGHT_MODULE pointing at its module).
+// The real browser client talks over HTTP/WS to real backend mutation functions,
+// with an isolated transactional database adapter. No production account is used.
+const assert = require('node:assert/strict');
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const { createRequire } = require('node:module');
+const { initialState, serverHarness, clone } = require('./helpers/room-harness.cjs');
+const backendRequire = createRequire(path.resolve(__dirname, '../backend/package.json'));
+const { WebSocketServer } = backendRequire('ws');
+const { chromium } = require(process.env.D20_PLAYWRIGHT_MODULE || 'playwright');
+const root = path.resolve(__dirname, '..');
+const screenshotDir = process.env.D20_SCREENSHOT_DIR;
+const start = initialState();
+Object.assign(start, { boardWidth: 60, boardHeight: 45, cellFeet: 5,
+  mapSections: [{ id: 'section-1', name: 'Test' }], turnOrder: [], round: 1, currentTurnIndex: 0,
+  fog: { enabled: false }, phaseEpoch: 100 });
+Object.assign(start.maps[0], { boardWidth: 60, boardHeight: 45, sectionId: 'section-1',
+  phase: 'initiative', initiativeEpoch: 100, phaseEpoch: 100, fog: { enabled: false }, marks: [] });
+start.players.forEach((p, index) => Object.assign(p, { x: index * 5 + 2, y: index + 2, size: 1,
+  isBase: true, isAlly: true, isEnemy: false, isPublic: true, ownerRole: 'Player', ownerName: p.ownerId,
+  color: '#ff3333' }));
+start.maps[0].playerStates = Object.fromEntries(start.players.map(p => [p.id, {
+  inCombat: true, initiative: null, hasRolledInitiative: false
+}]));
+start.players.push({ id: 'monster-1', name: 'Test Monster', ownerId: 'gm', ownerRole: 'GM', ownerName: 'gm',
+  isBase: false, isMonster: true, isEnemy: true, isAlly: false, isPublic: true, inCombat: false,
+  hasRolledInitiative: false, mapId: 'map-1', x: 25, y: 15, size: 1, sheet: { parsed: {} }, sheetUpdatedAt: 1 });
+const h = serverHarness(start);
+const sockets = new Set();
+let seq = 0;
+let diceId = 0;
+const requests = [];
+const diagnostics = [];
+function stamp(payload) { return { ...payload, __serverEvent: true, __eventSeq: ++seq }; }
+function broadcast(payload, except) {
+  const raw = JSON.stringify(stamp(payload));
+  for (const ws of sockets) if (ws !== except && ws.readyState === 1) ws.send(raw);
+}
+h.context.send = (ws, payload) => ws.send(JSON.stringify(stamp(payload)));
+h.context.broadcastToRoom = (roomId, payload, except) => broadcast(payload, except);
+const members = h.clients.map(c => ({ id: c.ctx.userId, user_id: c.ctx.userId, name: c.ctx.userId, role: c.ctx.role }));
+async function body(req) {
+  let text = '';
+  for await (const part of req) text += part;
+  return text ? JSON.parse(text) : {};
+}
+function json(res, value, status = 200) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); }
+const server = http.createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, 'http://localhost');
+    if (url.pathname.startsWith('/api/')) {
+      const userId = String(req.headers.authorization || '').replace('Bearer ', '');
+      const ctx = h.clients.find(c => c.ctx.userId === userId)?.ctx;
+      const data = req.method === 'POST' ? await body(req) : {};
+      requests.push({ path: url.pathname, userId, data });
+      if (url.pathname.endsWith('/initiative')) {
+        const payload = await h.context.applyInitiativeUpdates(ctx, data);
+        broadcast(payload);
+        return json(res, { ok: true, ...payload });
+      }
+      if (url.pathname.endsWith('/access')) {
+        const playerId = url.pathname.split('/').at(-2);
+        const state = await h.context.setTokenAccessForContext(ctx, playerId, data);
+        broadcast({ type: 'state', roomId: 'test-room', state });
+        return json(res, { ok: true, state });
+      }
+      if (url.pathname.endsWith('/state')) {
+        if (req.method === 'POST') {
+          await h.context.persistStateForContext(ctx, data.state);
+          broadcast({ type: 'state', roomId: 'test-room', state: h.database() });
+        }
+        return json(res, { ok: true, state: h.database() });
+      }
+      if (url.pathname.endsWith('/dice')) {
+        const event = { ...data.event, id: `dice-${++diceId}`, fromId: userId };
+        return json(res, { ok: true, event, row: event });
+      }
+      if (url.pathname.endsWith('/members')) return json(res, { ok: true, users: members, rows: members });
+      if (url.pathname.endsWith('/tokens')) return json(res, { ok: true, rows: start.players.map(p => ({ token_id: p.id, map_id: 'map-1', x: p.x, y: p.y, size: 1, is_public: true })) });
+      return json(res, { ok: true, rows: [], rooms: [], list: [], row: { id: `log-${diceId}`, text: data.text, created_at: new Date().toISOString() } });
+    }
+    const pathname = url.pathname.replace(/^\/D20-Initiative\//, '/');
+    const requested = path.resolve(root, `.${decodeURIComponent(pathname === '/' ? '/index.html' : pathname)}`);
+    if (!requested.startsWith(root + path.sep)) { res.writeHead(403); return res.end(); }
+    const bytes = await fs.promises.readFile(requested);
+    const type = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg' }[path.extname(requested)] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8` }); res.end(bytes);
+  } catch (error) {
+    if (error.code === 'ENOENT') { res.writeHead(404); res.end(); }
+    else { diagnostics.push(error.stack); json(res, { ok: false, error: error.message }, 400); }
+  }
+});
+const wss = new WebSocketServer({ server });
+wss.on('connection', ws => {
+  sockets.add(ws);
+  ws.on('close', () => sockets.delete(ws));
+  let tail = Promise.resolve();
+  ws.on('message', raw => { tail = tail.then(async () => {
+    const msg = JSON.parse(raw);
+    if (msg.type === 'joinRoom') {
+      ws.ctx = h.clients.find(c => c.ctx.userId === msg.userId).ctx;
+      ws.send(JSON.stringify({ type: 'joinedWsRoom', roomId: 'test-room' }));
+    } else if (msg.type === 'statePatch') await h.context.handleStatePatchRelay(ws, msg);
+    else if (msg.type === 'playerPatch') await h.context.handlePlayerPatchRelay(ws, msg);
+    else if (msg.type === 'initiativeReset' || msg.type === 'initiativeApplied') await h.context.handleInitiativeLiveRelay(ws, msg);
+    else if (msg.type === 'state') {
+      await h.context.persistStateForContext(ws.ctx, msg.state);
+      broadcast({ type: 'state', roomId: 'test-room', state: h.database() });
+    } else if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
+    else if (msg.type === 'moveToken') {
+      const player = h.database().players.find(p => p.id === msg.tokenId);
+      assert.equal(h.context.canControlPlayer(ws.ctx, player), true);
+      broadcast(msg);
+    } else broadcast(msg, ws);
+  }).catch(error => ws.send(JSON.stringify({ type: 'error', message: error.message }))); });
+});
+
+async function waitFor(check, label) {
+  for (let n = 0; n < 100; n++) { if (await check()) return; await new Promise(r => setTimeout(r, 50)); }
+  throw new Error(`Timed out: ${label}`);
+}
+async function main() {
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const browser = await chromium.launch({ headless: true, ...(process.env.D20_BROWSER_PATH ? { executablePath: process.env.D20_BROWSER_PATH } : {}) });
+  const errors = [];
+  const pages = [];
+  try {
+    for (const id of ['gm', 'user-1', 'user-2', 'user-3', 'user-4']) {
+      const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+      await context.route('https://cdn.jsdelivr.net/npm/@supabase/**', route => route.fulfill({ contentType: 'text/javascript', body: 'window.supabase={createClient:()=>({auth:{getSession:async()=>({data:{session:null}})},channel:()=>({on(){return this},subscribe(){return this}})})};' }));
+      await context.route(/https?:\/\/(?!127\.0\.0\.1).*supabase\.co\//, route => route.fulfill({ json: [] }));
+      await context.addInitScript(({ base, id }) => {
+        window.D20_CONFIG = { vpsApiBase: `${base}/api`, wsUrl: base.replace('http:', 'ws:') + '/ws/' };
+        localStorage.setItem('int_user_id', id); localStorage.setItem('int_auth_token', id);
+        localStorage.setItem('int_auth_expires_at', '2099-01-01T00:00:00Z');
+      }, { base, id });
+      const page = await context.newPage();
+      page.on('pageerror', error => errors.push(`${id}: ${error.message}`));
+      page.on('console', message => { if (message.type() === 'warning') diagnostics.push(`${id}: ${message.text()}`); });
+      page.on('dialog', dialog => { errors.push(`${id} dialog: ${dialog.message()}`); dialog.dismiss(); });
+      await page.goto(base, { waitUntil: 'load' });
+      await page.evaluate(({ id, state, members }) => {
+        ensureSupabaseReady = async () => {};
+        ensureVpsSession = async () => ({ userId: id, token: id });
+        myId = id; myRole = id === 'gm' ? 'GM' : 'Player'; currentRoomId = 'test-room';
+        applyRoleToUI();
+        myNameSpan.textContent = id;
+        setAppStorageItem('int_user_id', id);
+        usersById.clear(); usersOrder.splice(0);
+        members.forEach(u => { usersById.set(u.id, u); usersOrder.push(u.id); });
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('rooms-container').style.display = 'none';
+        document.getElementById('tavern-container').style.display = 'none';
+        document.getElementById('main-container').style.display = 'flex';
+        document.getElementById('game-container').style.display = 'block';
+        window.InfoModal.init({ sendMessage, getMyId: () => myId, getMyRole: () => myRole,
+          getRoomId: () => currentRoomId, getPlayers: () => players,
+          getUsers: () => [...usersById].map(([id, user]) => ({ id, ...user })),
+          applyState: state => handleMessage({ type: 'state', state }) });
+        handleMessage({ type: 'state', state });
+        handleMessage({ type: 'tokensInit', mapId: 'map-1', rows: state.players.map(p => ({ token_id: p.id, map_id: 'map-1', x: p.x, y: p.y, size: 1, is_public: true })) });
+        connectRoomWs('test-room');
+      }, { id, state: clone(start), members });
+      await page.waitForFunction(() => wsClient?.__joined === true);
+      pages.push(page);
+    }
+    const [gm, p1, p2, p3, p4] = pages;
+    await p1.route('**/api/rooms/test-room/initiative', route => route.fulfill({ status: 403, json: { ok: false, error: 'Test rejection' } }));
+    await p1.locator('#initiative-players-list button').first().click();
+    await p1.getByText(/Инициатива не сохранена/).waitFor();
+    assert.equal(await p1.evaluate(() => lastState.players[0].hasRolledInitiative), false);
+    assert.equal(requests.filter(r => r.path.endsWith('/dice')).length, 0);
+    await p1.unroute('**/api/rooms/test-room/initiative');
+    console.log('PASS: rejected initiative does not create a local result or a misleading dice log');
+    await Promise.all([
+      p1.locator('#initiative-players-list button').first().click(),
+      p2.locator('#roll-initiative-all').click(),
+      p3.evaluate(() => sendMessage({ type: 'rollInitiative' })),
+      p4.locator('#initiative-players-list button').first().click()
+    ]);
+    await waitFor(() => h.database().players.filter(p => p.inCombat).every(p => p.hasRolledInitiative), 'all rolls persisted');
+    for (const page of pages) {
+      await page.waitForFunction(() => lastState.players.filter(p => p.inCombat).every(p => p.hasRolledInitiative));
+      assert.deepEqual(await page.evaluate(() => lastState.players.filter(p => p.inCombat).map(p => p.initiative)), h.database().players.filter(p => p.inCombat).map(p => p.initiative));
+    }
+    assert.equal(await gm.locator('#start-combat').isDisabled(), false);
+    console.log('PASS: individual, all-owned and main initiative buttons reach all 5 browsers; GM can start combat');
+    await gm.evaluate(() => setActiveGmQuickPanel('phase'));
+    await gm.locator('#start-combat').click();
+    await waitFor(() => h.database().phase === 'combat', 'GM starts combat');
+    await gm.evaluate(() => sendMessage({ type: 'startExploration' }));
+    await waitFor(() => h.database().phase === 'exploration', 'return to exploration');
+    await gm.evaluate(() => setActiveGmQuickPanel(''));
+
+    await p1.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
+    assert.equal(await p1.getByRole('button', { name: 'Передать токен', exact: true }).count(), 0);
+    await p1.getByLabel('Передача управления', { exact: true }).selectOption('user-2');
+    await p1.locator('#sheet-token-access button').click();
+    await waitFor(() => h.database().players[0].controllerId === 'user-2', 'delegate control');
+    await p2.waitForFunction(() => canControlToken(lastState.players[0]));
+    await p2.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
+    assert.equal(await p2.locator('#sheet-token-access select').count(), 0);
+    assert.ok(await p2.locator('#sheet-content input:not([disabled])').count());
+    const diceBefore = requests.filter(r => r.path.endsWith('/dice')).length;
+    await p2.locator('#sheet-content .lss-dice-btn[data-roll-kind="check"]').first().click();
+    await waitFor(() => requests.filter(r => r.path.endsWith('/dice')).length > diceBefore, 'delegate rolls dice');
+    await p2.evaluate(() => {
+      openedSheetPlayer.sheet.parsed.notes = { entries: [{ text: 'Browser delegate note' }] };
+      scheduleSheetSave(openedSheetPlayer); flushSheetSaves(openedSheetPlayer.id);
+    });
+    await waitFor(() => h.database().players[0].sheet.parsed.notes?.entries?.[0]?.text === 'Browser delegate note', 'delegated sheet saved');
+    await p2.evaluate(async () => {
+      InfoModal.close();
+      if (!canCurrentUserMovePlayerNow(lastState.players[0])) throw new Error('Delegate movement is disabled');
+      await sendMessage({ type: 'movePlayer', id: 'player-1', x: 3, y: 2 });
+    });
+    await p1.waitForFunction(() => lastState.players[0].x === 3);
+    await p2.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
+    console.log('PASS: owner grants control; delegate moves token, rolls dice, edits and saves sheet');
+    await gm.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
+    await gm.getByLabel('Передача токена', { exact: true }).selectOption('user-3');
+    await gm.getByRole('button', { name: 'Передать токен', exact: true }).click();
+    await waitFor(() => h.database().players[0].ownerId === 'user-3', 'ownership transferred');
+    await p1.waitForFunction(() => !canControlToken(lastState.players[0]));
+    await p2.waitForFunction(() => !canControlToken(lastState.players[0]));
+    assert.equal(await p2.locator('#sheet-content input:not([disabled])').count(), 0);
+    assert.equal(await p2.locator('#sheet-content .lss-dice-btn:not([disabled])').count(), 0);
+    assert.equal(await p3.evaluate(() => canControlToken(lastState.players[0])), true);
+    await p1.evaluate(state => handleMessage({ type: 'state', state }), clone(start));
+    assert.equal(await p1.evaluate(() => canControlToken(lastState.players[0])), false);
+    console.log('PASS: GM transfers base ownership; previous owner and delegate lose edit access immediately');
+    await gm.evaluate(() => InfoModal.open(players.find(p => p.id === 'monster-1')));
+    await gm.getByLabel('Передача токена', { exact: true }).selectOption('user-4');
+    await gm.getByRole('button', { name: 'Передать токен', exact: true }).click();
+    await waitFor(() => h.database().players.find(p => p.id === 'monster-1').ownerId === 'user-4', 'monster ownership transferred');
+    await p4.waitForFunction(() => canControlToken(lastState.players.find(p => p.id === 'monster-1')));
+    await p4.evaluate(() => InfoModal.open(players.find(p => p.id === 'monster-1')));
+    await p4.waitForSelector('[data-monster-player-name]:not([disabled])');
+    console.log('PASS: GM can also transfer a monster; its new owner can edit the monster sheet');
+
+    for (const page of pages) await page.evaluate(() => InfoModal.close());
+    await p3.evaluate(() => {
+      const wrap = document.getElementById('board-wrapper');
+      wrap.style.cssText += ';width:700px;height:500px;max-width:700px;max-height:500px;display:block;flex:none';
+      wrap.scrollLeft = 500; wrap.scrollTop = 300;
+    });
+    await p3.locator('#board-wrapper').scrollIntoViewIfNeeded();
+    const rect = await p3.locator('#board-wrapper').boundingBox();
+    const before = await p3.locator('#board-wrapper').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
+    await p3.mouse.move(rect.x + 350, rect.y + 250);
+    await p3.mouse.down({ button: 'middle' });
+    await p3.mouse.move(rect.x + 220, rect.y + 180, { steps: 6 });
+    const during = await p3.locator('#board-wrapper').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
+    await p3.mouse.up({ button: 'middle' });
+    await p3.waitForTimeout(350);
+    const after = await p3.locator('#board-wrapper').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
+    assert.ok(during.x > before.x && during.x < after.x);
+    assert.ok(Math.abs(after.x - before.x - 130) <= 2);
+    assert.ok(Math.abs(after.y - before.y - 70) <= 2);
+    await p3.waitForSelector('.token-nav-pointer:not(.token-nav-pointer--base) span');
+    const labels = await p3.locator('.token-nav-pointer:not(.token-nav-pointer--base) span').allTextContents();
+    assert.ok(labels.includes('Player 2') || labels.includes('Player 4'));
+    assert.ok(await p3.locator('.token-nav-pointer--base').count());
+    if (screenshotDir) {
+      fs.mkdirSync(screenshotDir, { recursive: true });
+      await p3.screenshot({ path: path.join(screenshotDir, 'map-navigation.png') });
+      await gm.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
+      await gm.screenshot({ path: path.join(screenshotDir, 'token-access.png') });
+    }
+    console.log('PASS: middle drag interpolates movement; offscreen base and named allies have separate arrows');
+    await p3.evaluate(() => applyBoardViewMode('isometric'));
+    const isoBefore = await p3.locator('#board-wrapper').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
+    await p3.mouse.move(rect.x + 320, rect.y + 260);
+    await p3.mouse.down({ button: 'middle' });
+    await p3.mouse.move(rect.x + 240, rect.y + 200, { steps: 6 });
+    await p3.mouse.up({ button: 'middle' });
+    await p3.waitForTimeout(350);
+    const isoAfter = await p3.locator('#board-wrapper').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
+    assert.ok(isoAfter.x > isoBefore.x && isoAfter.y > isoBefore.y);
+    assert.equal(await p3.locator('#board-wrapper').evaluate(el => el.classList.contains('board-view--panning')), false);
+    console.log('PASS: middle drag also pans in isometric mode and stops on release');
+    assert.deepEqual(errors, []);
+    console.log(`Browser regression complete; ${requests.filter(r => r.path.endsWith('/initiative')).length} confirmed initiative requests.`);
+  } catch (error) {
+    console.error(JSON.stringify({ diagnostics: diagnostics.slice(-15), errors,
+      requests: requests.filter(r => /initiative|access/.test(r.path)),
+      players: h.database().players.map(p => ({ id: p.id, initiative: p.initiative, rolled: p.hasRolledInitiative })) }, null, 2));
+    for (const page of pages) console.error(await page.evaluate(() => ({ id: myId, phase: lastState?.phase,
+      epoch: lastState?.initiativeEpoch, rolls: lastState?.players?.map(p => [p.id,p.hasRolledInitiative]), events: RealtimeDebug.events().slice(-5) })));
+    throw error;
+  } finally {
+    await browser.close();
+    for (const ws of sockets) ws.close();
+    wss.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+main().catch(error => { console.error(error); process.exitCode = 1; for (const ws of sockets) ws.terminate(); server.close(); });

@@ -1,106 +1,7 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-
-const root = path.resolve(__dirname, '..');
-const clone = value => JSON.parse(JSON.stringify(value));
-const read = name => fs.readFileSync(path.resolve(root, name), 'utf8');
-
-// Browser scripts and the server use shared globals. Evaluate the real functions
-// with isolated transports/database/DOM adapters, never a production connection.
-function functions(source, names) {
-  const lines = source.split(/\r?\n/);
-  return names.map(name => {
-    const start = lines.findIndex(line => new RegExp(`^\\s*(?:async )?function ${name}\\(`).test(line));
-    if (start < 0) return '';
-    const indent = lines[start].match(/^\s*/)[0];
-    const end = lines.findIndex((line, index) => index > start && line === `${indent}}`);
-    assert.ok(end > start, `Function boundary: ${name}`);
-    return lines.slice(start, end + 1).join('\n');
-  }).join('\n');
-}
-
-function initialState() {
-  return {
-    phase: 'initiative', initiativeEpoch: 100, phaseEpoch: 100,
-    currentMapId: 'map-1', maps: [{ id: 'map-1', playerStates: {} }],
-    players: [1, 2, 3, 4].map(n => ({
-      id: `player-${n}`, ownerId: `user-${n}`, name: `Player ${n}`,
-      inCombat: true, initiative: null, hasRolledInitiative: false,
-      sheetUpdatedAt: 10, sheet: { parsed: { notes: { entries: [{ text: 'original' }] } } }
-    }))
-  };
-}
-
-function serverHarness(state = initialState()) {
-  let database = clone(state);
-  let tail = Promise.resolve();
-  const clients = [1, 2, 3, 4, 'gm'].map(n => ({
-    ctx: { roomId: 'test-room', userId: n === 'gm' ? 'gm' : `user-${n}`, role: n === 'gm' ? 'GM' : 'Player', state: clone(state) },
-    events: []
-  }));
-  const tick = () => new Promise(resolve => setImmediate(resolve));
-  const query = async (sql, values, transaction) => {
-    await tick();
-    const normalized = sql.trim().toLowerCase();
-    if (normalized === 'begin') return { rows: [] };
-    if (normalized.includes('pg_advisory_xact_lock')) {
-      const previous = tail;
-      tail = new Promise(resolve => { transaction.unlock = resolve; });
-      await previous;
-      return { rows: [] };
-    }
-    if (normalized === 'commit') {
-      if (transaction.pending) database = clone(transaction.pending);
-      return { rows: [] };
-    }
-    if (normalized === 'rollback') return { rows: [] };
-    if (normalized.includes('select state from public.room_state')) return { rows: [{ state: clone(database) }] };
-    if (normalized.includes('insert into public.room_state')) {
-      if (transaction) transaction.pending = clone(values[3]);
-      else database = clone(values[3]);
-      return { rows: [{ updated_at: new Date().toISOString() }] };
-    }
-    throw new Error(`Unexpected database query: ${normalized.slice(0, 80)}`);
-  };
-  const pool = {
-    query: (sql, values) => query(sql, values),
-    connect: async () => {
-      const transaction = {};
-      return { query: (sql, values) => query(sql, values, transaction), release: () => transaction.unlock?.() };
-    }
-  };
-  const context = vm.createContext({
-    console, Date, Map, Set, Math, pool,
-    cloneJson: clone,
-    sanitizeRoomStateForStorage: clone,
-    stripRoomSecretsFromState: clone,
-    ensurePlayerOrGm: ctx => { if (!['GM', 'Player'].includes(ctx.role)) throw new Error('Player role required'); },
-    ensureGm: ctx => { if (ctx.role !== 'GM') throw new Error('GM role required'); },
-    normalizeSafeId: value => String(value || ''), ENTITY_ID_RE: /./,
-    sanitizeText: value => String(value),
-    loadWsRoomContext: async ws => ws.ctx,
-    fetchRoomStateRow: async () => { await tick(); return { state: clone(database) }; },
-    rememberRoomStateValue: () => {}, invalidateRoomContexts: () => {},
-    send: (ws, payload) => ws.events.push({ payload: clone(payload), committed: clone(database) }),
-    broadcastToRoom: (roomId, payload, except) => {
-      for (const client of clients) if (client !== except) client.events.push({ payload: clone(payload), committed: clone(database) });
-    }
-  });
-  const source = read(process.env.D20_SERVER_SOURCE || 'backend/server.js');
-  vm.runInContext(functions(source, [
-    'withTransaction', 'getStatePlayers', 'findPlayerById', 'getActiveMapServer',
-    'syncActiveMapCombatStateServer', 'normalizeInitiativeModeServer',
-    'sanitizeStatePatchFields', 'isCurrentTurnOwner', 'canPatchTurnFields',
-    'applyStatePatchToCurrentState', 'preserveNewerPlayerData', 'mutateRoomState',
-    'writeRoomState', 'persistPatchedState', 'applyPlayerStateUpdate',
-    'persistStateForContext', 'persistStatePatchForContext', 'handleStatePatchRelay',
-    'handlePlayerPatchRelay', 'handleInitiativeLiveRelay'
-  ]), context);
-  return { context, clients, database: () => database, tick };
-}
+const { read, functions, initialState, serverHarness, clone } = require('./helpers/room-harness.cjs');
 
 const roll = (h, n, total = n + 10, epoch = 100) => h.context.handleInitiativeLiveRelay(h.clients[n - 1], {
   type: 'initiativeApplied', epoch, updates: [{ playerId: `player-${n}`, total }]
@@ -212,7 +113,8 @@ function sheetHarness(storage = new Map()) {
     renderSheetModal: player => { rendered = player; }, openModal: () => {},
     hideHpPopup: () => {}, hideExhPopup: () => {}, hideCondPopup: () => {},
     sheetModal: { classList: { add: () => {} }, setAttribute: () => {} },
-    sheetTitle: {}, sheetSubtitle: {}, sheetActions: {}, sheetContent: content
+    sheetTitle: {}, sheetSubtitle: {}, sheetActions: {}, sheetContent: content,
+    document: { getElementById: () => null }
   });
   vm.runInContext(functions(read(process.env.D20_SHEET_DATA_SOURCE || 'char_sheet/sheet-modal-data.js'), [
     'sheetDraftKey', 'acknowledgeSheetSave', 'restoreSheetDraft', 'flushSheetSaves', 'scheduleSheetSave'
@@ -298,4 +200,81 @@ test('a rejected sheet version retains local text and retries above the server v
   h.fire();
   assert.equal(h.sent.at(-1).sheet.parsed.notes.entries[0].text, 'unsaved text');
   assert.ok(h.sent.at(-1).sheetUpdatedAt > newerServerVersion);
+});
+
+test('the real individual/all-owned roll patch is accepted and reaches the GM', async () => {
+  const h = serverHarness();
+  const client = vm.createContext({ console, Set, String, Number, normalizeInitiativeMode: value => value || 'normal' });
+  vm.runInContext(functions(read('client/core-helpers-network.js'), [
+    'buildRealtimeCombatPlayerPatch', 'buildRealtimeStatePatchForMessage'
+  ]), client);
+  for (const [index, type] of ['rollInitiativeFor', 'rollInitiativeAllOwned'].entries()) {
+    const next = clone(h.database());
+    next.players[index].initiative = 17 + index;
+    next.players[index].hasRolledInitiative = true;
+    const patch = client.buildRealtimeStatePatchForMessage(type, { id: `player-${index + 1}` }, next, false, `user-${index + 1}`);
+    assert.equal(Object.hasOwn(patch.players[0], 'inCombat'), false);
+    await h.context.handleStatePatchRelay(h.clients[index], { patch });
+    assert.equal(h.database().players[index].initiative, 17 + index);
+    assert.ok(h.clients[4].events.some(e => e.payload.patch?.players?.some(p => p.id === `player-${index + 1}` && p.hasRolledInitiative)));
+  }
+});
+
+test('legacy player patches can repeat selection, but cannot change combat participation', async () => {
+  const h = serverHarness();
+  await h.context.handleStatePatchRelay(h.clients[0], { patch: { players: [{ id: 'player-1', inCombat: true, initiative: 16, hasRolledInitiative: true }] } });
+  assert.equal(h.database().players[0].initiative, 16);
+  await assert.rejects(h.context.handleStatePatchRelay(h.clients[0], { patch: { players: [{ id: 'player-1', inCombat: false }] } }), /GM role/);
+});
+
+test('delegated control permits sheets and initiative, can be revoked, and cannot be delegated onward', async () => {
+  const h = serverHarness();
+  await h.context.setTokenAccessForContext(h.clients[0].ctx, 'player-1', { action: 'controller', targetUserId: 'user-2' });
+  assert.equal(h.database().players[0].ownerId, 'user-1');
+  assert.equal(h.database().players[0].controllerId, 'user-2');
+  await h.context.handlePlayerPatchRelay(h.clients[1], { playerId: 'player-1', patch: { sheet: { parsed: { notes: 'delegate edit' } }, sheetUpdatedAt: 20 } });
+  await h.context.applyInitiativeUpdates(h.clients[1].ctx, { epoch: 100, updates: [{ playerId: 'player-1', total: 19 }] });
+  assert.equal(h.database().players[0].initiative, 19);
+  assert.equal(h.database().players[0].sheet.parsed.notes, 'delegate edit');
+  await assert.rejects(h.context.setTokenAccessForContext(h.clients[1].ctx, 'player-1', { action: 'controller', targetUserId: 'user-3' }), /Only the owner/);
+  await h.context.setTokenAccessForContext(h.clients[0].ctx, 'player-1', { action: 'controller', targetUserId: '' });
+  await assert.rejects(h.context.handlePlayerPatchRelay(h.clients[1], { playerId: 'player-1', patch: { sheet: { parsed: {} }, sheetUpdatedAt: 30 } }), /cannot edit/);
+});
+
+test('only GM can transfer ownership; the old owner loses access, including after stale snapshots', async () => {
+  const h = serverHarness();
+  const stale = clone(h.database());
+  await assert.rejects(h.context.setTokenAccessForContext(h.clients[0].ctx, 'player-1', { action: 'owner', targetUserId: 'user-2' }), /GM role/);
+  await h.context.setTokenAccessForContext(h.clients[4].ctx, 'player-1', { action: 'owner', targetUserId: 'user-2' });
+  assert.equal(h.database().players[0].ownerId, 'user-2');
+  assert.equal(h.database().players[0].controllerId, null);
+  assert.deepEqual(h.tokenOwnerWrites[0], ['user-2', 'test-room', 'player-1']);
+  await assert.rejects(sheetPatch(h, 1, 'unauthorized', 30), /cannot edit/);
+  await h.context.persistStateForContext(h.clients[4].ctx, stale);
+  assert.equal(h.database().players[0].ownerId, 'user-2');
+  await assert.rejects(h.context.setTokenAccessForContext(h.clients[4].ctx, 'player-1', { action: 'owner', targetUserId: 'outsider' }), /player in this room/);
+});
+
+test('client snapshots preserve a newer access grant or revocation', () => {
+  const client = vm.createContext({ window: {} });
+  vm.runInContext(read('client/token-permissions.js'), client);
+  const previous = initialState();
+  Object.assign(previous.players[0], { ownerId: 'user-2', controllerId: null, accessUpdatedAt: 20 });
+  const next = initialState();
+  client.mergeNewestTokenAccess(next, previous);
+  assert.equal(next.players[0].ownerId, 'user-2');
+  assert.equal(client.canControlToken(next.players[0], 'user-1', 'Player'), false);
+  assert.equal(client.canControlToken(next.players[0], 'user-2', 'Player'), true);
+  assert.equal(client.canControlToken(next.players[0], 'user-2', 'Spectator'), false);
+});
+
+test('offscreen pointers hit each edge and stay hidden for visible tokens', () => {
+  const client = vm.createContext({});
+  vm.runInContext(functions(read('client/board-navigation.js'), ['getOffscreenTokenPointer']), client);
+  const bounds = { left: 20, top: 20, right: 620, bottom: 420 };
+  assert.equal(client.getOffscreenTokenPointer(320, 220, bounds), null);
+  assert.equal(client.getOffscreenTokenPointer(-100, 220, bounds).x, 20);
+  assert.equal(client.getOffscreenTokenPointer(900, 220, bounds).x, 620);
+  assert.equal(client.getOffscreenTokenPointer(320, -100, bounds).y, 20);
+  assert.equal(client.getOffscreenTokenPointer(320, 900, bounds).y, 420);
 });

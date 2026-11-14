@@ -1557,9 +1557,11 @@
     if (!buttons.length) return;
 
     buttons.forEach((btn) => {
+      btn.disabled = !canEditPlayer(player);
       btn.addEventListener('click', async (event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (!canEditPlayer(player)) return;
 
         const statKey = String(btn.getAttribute('data-monster-roll-stat') || '').trim();
         const kind = String(btn.getAttribute('data-monster-roll-kind') || '').trim();
@@ -1991,7 +1993,8 @@
       ? `Владелец: ${player.ownerName} • Тип: ${getMonsterSheetTypeLabel(player)}`
       : `Тип: ${getMonsterSheetTypeLabel(player)}`;
 
-    sheetActions.innerHTML = '';
+    renderTokenAccessControls(player);
+      sheetActions.innerHTML = '';
     const note = document.createElement('div');
     note.className = 'sheet-note';
     note.textContent = options?.canEdit

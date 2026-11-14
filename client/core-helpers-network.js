@@ -1,4 +1,4 @@
-﻿// ================== HELPER ==================
+// ================== HELPER ==================
 
 function wsMakeNonce() {
   return (crypto?.randomUUID ? crypto.randomUUID() : ('n-' + Math.random().toString(16).slice(2) + '-' + Date.now()));
@@ -1184,6 +1184,7 @@ function applyPendingVisibilityOverlayToState(stateLike) {
 function syncOptimisticPlayersToLocalState(snapshot) {
   try {
     if (typeof lastState === 'undefined' || !lastState || !Array.isArray(lastState.players)) return;
+    mergeNewestTokenAccess(snapshot, lastState);
     const srcPlayers = Array.isArray(snapshot?.players) ? snapshot.players : [];
     if (!srcPlayers.length) return;
 
@@ -1210,6 +1211,9 @@ function syncOptimisticPlayersToLocalState(snapshot) {
 
       if (typeof src.name === 'string' && src.name.trim()) dst.name = src.name;
       if (typeof src.ownerId !== 'undefined') dst.ownerId = src.ownerId;
+      for (const key of ['ownerName', 'ownerRole', 'controllerId', 'controllerName', 'accessUpdatedAt']) {
+        if (typeof src[key] !== 'undefined') dst[key] = src[key];
+      }
       if (typeof src.ownerRole !== 'undefined') dst.ownerRole = src.ownerRole;
       if (typeof src.isBase !== 'undefined') dst.isBase = !!src.isBase;
       if (typeof src.isAlly !== 'undefined') dst.isAlly = !!src.isAlly;
@@ -1268,7 +1272,10 @@ function buildRealtimeStatePatchForMessage(type, msg, stateLike, isGM, userId) {
     const playersPatch = [];
     const addPlayer = (player) => {
       const patch = buildRealtimeCombatPlayerPatch(player);
-      if (patch) playersPatch.push(patch);
+      if (patch) {
+        if (!isGM) delete patch.inCombat;
+        playersPatch.push(patch);
+      }
     };
     const addPlayersByIds = (ids) => {
       const wanted = new Set((Array.isArray(ids) ? ids : []).map(id => String(id || '')).filter(Boolean));
@@ -2305,6 +2312,10 @@ async function sendMessage(msg) {
 
     const type = String(msg.type || "");
 
+    if (['rollInitiative', 'rollInitiativeFor', 'rollInitiativeAllOwned'].includes(type)) {
+      return await rollInitiativeAndSync(msg);
+    }
+
     switch (type) {
       // ===== Rooms =====
       case "listRooms": {
@@ -2744,7 +2755,7 @@ async function sendMessage(msg) {
         const toPlayer = (next.players || []).find((pl) => String(pl?.id || '') === toPlayerId);
         if (!fromPlayer || !toPlayer || !toPlayer.isBase) return;
 
-        const ownsFrom = String(fromPlayer?.ownerId || '') === myUserId;
+        const ownsFrom = canControlToken(fromPlayer, myUserId, myRole);
         if (!isGm && !ownsFrom) return;
 
         const items = fromPlayer?.sheet?.parsed?.inventory?.[tabId];
@@ -2794,7 +2805,7 @@ async function sendMessage(msg) {
         const toPlayer = (next.players || []).find((pl) => String(pl?.id || '') === toPlayerId);
         if (!fromPlayer || !toPlayer || !toPlayer.isBase) return;
 
-        const ownsTo = String(toPlayer?.ownerId || '') === myUserId;
+        const ownsTo = canControlToken(toPlayer, myUserId, myRole);
         if (!ownsTo) return;
 
         const notify = (message) => {
@@ -2873,7 +2884,7 @@ async function sendMessage(msg) {
         const toPlayer = (next.players || []).find((pl) => String(pl?.id || '') === toPlayerId);
         if (!fromPlayer || !toPlayer || !toPlayer.isBase) return;
 
-        const ownsFrom = String(fromPlayer?.ownerId || '') === myUserId;
+        const ownsFrom = canControlToken(fromPlayer, myUserId, myRole);
         if (!isGm && !ownsFrom) return;
 
         const ensureCoins = (pl) => {
@@ -2953,7 +2964,7 @@ async function sendMessage(msg) {
   const p = (next.players || []).find(pl => String(pl.id) === String(msg.id));
   if (!p) return;
 
-  const owns = (pl) => pl && String(pl.ownerId) === myUserId;
+  const owns = (pl) => canControlToken(pl, myUserId, myRole);
   if (!isGm && !owns(p)) return;
 
   p.sheet = deepClone(msg.sheet);
@@ -3015,7 +3026,7 @@ async function sendMessage(msg) {
         const isGM = (String(myRole || "") === "GM");
         const myUserId = String(getAppStorageItem("int_user_id") || "");
 
-        const ownsPlayer = (pl) => pl && String(pl.ownerId) === myUserId;
+        const ownsPlayer = (pl) => canControlToken(pl, myUserId, myRole);
 
         const type = msg.type;
         let handled = false;
@@ -3625,72 +3636,6 @@ async function sendMessage(msg) {
           if (!p) return;
           if (!isGM && !ownsPlayer(p)) return;
           p.initiativeMode = normalizeInitiativeMode(msg.mode);
-        }
-
-        else if (type === 'rollInitiativeFor') {
-          if (next.phase !== 'initiative') return;
-          const pid = String(msg.id || '');
-          if (!pid) return;
-          const p = (next.players || []).find(pp => String(pp?.id || '') === pid);
-          if (!p) return;
-          if (!isGM && !ownsPlayer(p)) return;
-          if (p.hasRolledInitiative && !isGM) return;
-          if (!isPlayerEligibleForCurrentMapCombat(p, next)) return;
-
-          const roll = buildInitiativeRollForPlayer(p);
-          p.initiative = Number(roll.total) || 0;
-          p.hasRolledInitiative = true;
-          p.pendingInitiativeChoice = false;
-          try {
-            rememberPendingInitiativeOverlay(currentRoomId, [{ playerId: p.id, total: p.initiative }], {
-              epoch: Number(next?.initiativeEpoch) || 0
-            });
-          } catch {}
-          await broadcastDiceEventOnly({
-            fromId: myUserId,
-            fromName: p.name,
-            kindText: roll.kindText,
-            sides: 20,
-            count: roll.rolls.length,
-            bonus: Number(roll.dexMod) || 0,
-            rolls: roll.rolls,
-            total: Number(roll.total) || 0,
-            crit: ""
-          });
-        }
-
-        else if (type === 'rollInitiativeAllOwned') {
-          if (next.phase !== 'initiative') return;
-          const owned = (next.players || []).filter((p) => (
-            p &&
-            String(p.ownerId || '') === String(myUserId || '') &&
-            isPlayerEligibleForCurrentMapCombat(p, next) &&
-            !p.hasRolledInitiative
-          ));
-          if (!owned.length) return;
-
-          for (const p of owned) {
-            const roll = buildInitiativeRollForPlayer(p);
-            p.initiative = Number(roll.total) || 0;
-            p.hasRolledInitiative = true;
-            p.pendingInitiativeChoice = false;
-            try {
-              rememberPendingInitiativeOverlay(currentRoomId, [{ playerId: p.id, total: p.initiative }], {
-                epoch: Number(next?.initiativeEpoch) || 0
-              });
-            } catch {}
-            await broadcastDiceEventOnly({
-              fromId: myUserId,
-              fromName: p.name,
-              kindText: roll.kindText,
-              sides: 20,
-              count: roll.rolls.length,
-              bonus: Number(roll.dexMod) || 0,
-              rolls: roll.rolls,
-              total: Number(roll.total) || 0,
-              crit: ""
-            });
-          }
         }
 
         else if (type === 'gmRollInitiativeFor') {
@@ -4378,118 +4323,6 @@ async function sendMessage(msg) {
           _cacheUpsertFogRow(buildDetachedFogRow(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight));
           _refreshDetachedRoomView();
           scheduleRoomFogUpsert(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight, 320);
-          return;
-        }
-
-        else if (type === "rollInitiative") {
-          if (next.phase !== "initiative") return;
-
-          // Collect rolls from the current snapshot, then apply them to DB with retry.
-          // This prevents the "last write wins" collision when multiple users roll simultaneously.
-          const toRoll = (next.players || []).filter(p => (
-            String(p.ownerId) === myUserId &&
-            isPlayerEligibleForCurrentMapCombat(p, next) &&
-            !p.hasRolledInitiative
-          ));
-
-          if (!toRoll.length) return;
-
-          const updates = [];
-          for (const p of toRoll) {
-            const roll = buildInitiativeRollForPlayer(p);
-            updates.push({
-              playerId: p.id,
-              total: roll.total,
-              dexMod: roll.dexMod,
-              name: p.name,
-              rolls: roll.rolls,
-              kindText: roll.kindText
-            });
-          }
-
-          const initiativeEpoch = Number(next?.initiativeEpoch) || 0;
-
-          // Instant local + WS apply (do not wait DB roundtrip).
-          // This removes visible delay for the roller and makes updates realtime for everyone.
-          try {
-            handleMessage({
-              type: 'initiativeApplied',
-              updates: updates.map((u) => ({
-                playerId: String(u?.playerId || ''),
-                total: Number(u?.total) || 0
-              })),
-              epoch: initiativeEpoch
-            });
-          } catch {}
-          try {
-            rememberPendingInitiativeOverlay(currentRoomId, updates, { epoch: initiativeEpoch });
-          } catch {}
-          let initiativeRelaySent = false;
-          try {
-            initiativeRelaySent = !!sendWsEnvelope({
-              type: 'initiativeApplied',
-              roomId: String(currentRoomId || ''),
-              updates: updates.map((u) => ({
-                playerId: String(u?.playerId || ''),
-                total: Number(u?.total) || 0
-              })),
-              epoch: initiativeEpoch
-            }, { optimisticApplied: true });
-          } catch {}
-
-          for (const u of updates) {
-            // Live dice event (broadcast only) – includes its own log line in room_log.
-            await broadcastDiceEventOnly({
-              fromId: myUserId,
-              fromName: u.name,
-              kindText: String(u.kindText || `Инициатива: d20${Number(u.dexMod) >= 0 ? "+" : ""}${Number(u.dexMod) || 0}`),
-              sides: 20,
-              count: Array.isArray(u.rolls) ? u.rolls.length : 1,
-              bonus: Number(u.dexMod) || 0,
-              rolls: Array.isArray(u.rolls) ? u.rolls.map((v) => Number(v) || 0) : [],
-              total: Number(u.total) || 0,
-              crit: ""
-            });
-          }
-
-          // Atomic-ish persist to room_state (retry on collision).
-          // UI is already updated optimistically above, so persistence must not block realtime.
-          if (!initiativeRelaySent) try {
-            applyInitiativeAtomic(currentRoomId, myUserId, updates, {
-              expectedEpoch: initiativeEpoch
-            }).then((appliedUpdates) => {
-              if (!Array.isArray(appliedUpdates) || !appliedUpdates.length) return;
-
-              // Immediately keep the local UI in sync even if a slightly stale room_state snapshot
-              // arrives before the DB echo/WS refresh.
-              try { rememberPendingInitiativeOverlay(currentRoomId, appliedUpdates, { epoch: initiativeEpoch }); } catch {}
-              try {
-                // IMPORTANT: prefer the live local state first, because room_state shadow intentionally
-                // does not carry authoritative token x/y positions (they are stored in room_tokens).
-                // If we start from room_state shadow here, src.x/src.y become null and
-                // syncOptimisticPlayersToLocalState(...) can momentarily hide all tokens on the board.
-                const optimisticBase = lastState || getRoomStateShadow(currentRoomId) || next;
-                const optimistic = deepClone(optimisticBase);
-                (optimistic.players || []).forEach((p) => {
-                  if (!p || !p.id) return;
-                  const u = appliedUpdates.find(x => String(x?.playerId || '') === String(p.id));
-                  if (!u) return;
-                  p.initiative = Number(u.total);
-                  p.hasRolledInitiative = true;
-                  p.pendingInitiativeChoice = false;
-                });
-                try { syncOptimisticPlayersToLocalState(optimistic); } catch {}
-                handleMessage({ type: 'state', state: optimistic });
-              } catch (e) {
-                console.warn('initiative optimistic apply failed', e);
-              }
-            }).catch((e) => { try { console.debug?.('initiative background persist failed', e); } catch {} });
-          } catch (e) {
-            try { console.debug?.('initiative background persist schedule failed', e); } catch {}
-          }
-
-          // IMPORTANT: persistence is scheduled against the latest snapshot inside applyInitiativeAtomic.
-          // Do NOT fall through to the generic upsert at the end of the handler (it would use stale 'next').
           return;
         }
 

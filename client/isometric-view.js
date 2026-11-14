@@ -123,7 +123,7 @@
     controlsBound = true;
 
     wrapper.addEventListener('mousedown', (e) => {
-      if (e.button !== 1) return;
+      if (e.button !== 1 || !e.ctrlKey) return;
       if (normalizeMode(window.__boardViewMode) !== 'isometric') return;
       setPivotFromPointer(e.clientX, e.clientY, e.target);
       dragState = { x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, moved: false };
@@ -169,7 +169,7 @@
     window.addEventListener('mouseup', endDrag);
     wrapper.addEventListener('mouseleave', () => endDrag());
     wrapper.addEventListener('auxclick', (e) => {
-      if (e.button !== 1) return;
+      if (e.button !== 1 || !e.ctrlKey) return;
       if (normalizeMode(window.__boardViewMode) !== 'isometric') return;
       e.preventDefault();
     });
