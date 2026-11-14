@@ -246,6 +246,9 @@ async function main() {
     await p2.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
     console.log('PASS: owner grants control; delegate moves token, rolls dice, edits and saves sheet');
     await gm.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
+    const transferRect = await gm.locator('[data-token-action="owner"]').boundingBox();
+    const controlRect = await gm.locator('[data-token-action="controller"]').boundingBox();
+    assert.ok(Math.abs(transferRect.y - controlRect.y) < 3, 'ownership and delegated control share a row');
     await gm.getByLabel('Передача токена', { exact: true }).selectOption('user-3');
     await gm.getByRole('button', { name: 'Передать токен', exact: true }).click();
     await waitFor(() => h.database().players[0].ownerId === 'user-3', 'ownership transferred');
@@ -293,6 +296,10 @@ async function main() {
       assert.ok(Math.abs(prof.y + prof.height / 2 - hide.y - hide.height / 2) < 3);
       await card.locator('[data-weapon-toggle-desc]').click();
       assert.equal(await card.locator('.weapon-prof-quick-inline').isVisible(), false);
+      assert.deepEqual(await card.locator('[data-weapon-dmg] .weapon-damage-extra').allTextContents(), ['+2к4', '+1к8', '+5']);
+      assert.equal(await card.locator('[data-weapon-dmg] .weapon-damage-extra').first().getAttribute('title'), 'Огонь клинка');
+      assert.equal(await card.locator('[data-weapon-dmg] .weapon-damage-extra').last().isVisible(), true);
+      if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, monster ? 'monster-weapon-collapsed.png' : 'weapon-collapsed.png') });
       await card.locator('[data-weapon-toggle-desc]').click();
       await page.evaluate(() => { animateSingleRoll = async () => {}; rollDie = () => 3; });
       const diceBefore = requests.filter(r => r.path.endsWith('/dice')).length;
@@ -370,7 +377,7 @@ async function main() {
     const affiliationRect = await p3.locator('#sheet-affiliation').boundingBox();
     assert.ok(Math.abs(titleRect.y + titleRect.height / 2 - affiliationRect.y - affiliationRect.height / 2) < 3);
     assert.equal(await p3.locator('#sheet-affiliation button').count(), 0);
-    const fileRect = await p3.getByLabel('Загрузить JSON').boundingBox();
+    const fileRect = await p3.locator('.sheet-import').boundingBox();
     const saveRect = await p3.getByRole('button', { name: 'Сохранить основу', exact: true }).boundingBox();
     assert.ok(Math.abs(fileRect.y + fileRect.height / 2 - saveRect.y - saveRect.height / 2) < 3);
     for (const tab of ['basic', 'spells', 'combat', 'inventory', 'personality', 'appearance', 'notes', 'wildshape', 'shop']) {
@@ -397,6 +404,40 @@ async function main() {
     await p3.evaluate(() => { InfoModal.close(); InfoModal.open(players.find(p => p.id === 'player-1')); });
     assert.equal(await p3.locator('.sheet-tab.active').getAttribute('data-tab'), 'combat');
     console.log('PASS: affiliation auto-saves at title level; JSON and base buttons align; all nine character tabs resist stale network selection');
+
+    await p3.locator('.sheet-tab[data-tab="wildshape"]').click();
+    const toggleShape = p3.getByRole('button', { name: 'Импорт монстра', exact: true });
+    await toggleShape.waitFor();
+    assert.equal(await toggleShape.getAttribute('aria-pressed'), 'false');
+    assert.equal(await toggleShape.getAttribute('title'), 'При активации боевые показатели берутся из этого раздела вместо «Основное».');
+    assert.equal(await p3.locator('.monster-import-card [data-wildshape-activate-btn]').count(), 1);
+    const originalVitality = await p3.evaluate(() => structuredClone(openedSheetPlayer.sheet.parsed.vitality));
+    await p3.locator('[data-wildshape-monster-root] [data-monster-sheet-path="vitality.hp-max.value"]').fill('36');
+    await waitFor(() => h.database().players[0].sheet.parsed.wildShape?.formSheet?.vitality?.['hp-max']?.value === 36, 'form edit saved');
+    assert.deepEqual(await p3.evaluate(() => openedSheetPlayer.sheet.parsed.vitality), originalVitality);
+    const inactiveBackground = await toggleShape.evaluate(el => getComputedStyle(el).backgroundImage);
+    if (screenshotDir) await p3.screenshot({ path: path.join(screenshotDir, 'wildshape-inactive.png') });
+    await toggleShape.click();
+    await p3.waitForFunction(() => openedSheetPlayer.sheet.parsed.wildShape.active && openedSheetPlayer.sheet.parsed.vitality['hp-max'].value === 36);
+    await p3.locator('[data-wildshape-activate-btn][aria-pressed="true"]').waitFor();
+    const activeBackground = await toggleShape.evaluate(el => getComputedStyle(el).backgroundImage);
+    assert.notEqual(activeBackground, inactiveBackground);
+    assert.equal(activeBackground, await p3.getByRole('button', { name: 'Сохранить основу', exact: true }).evaluate(el => getComputedStyle(el).backgroundImage));
+    await waitFor(() => h.database().players[0].sheet.parsed.wildShape?.active === true, 'wild shape activation saved');
+    if (screenshotDir) await p3.screenshot({ path: path.join(screenshotDir, 'wildshape-active.png') });
+    await p1.waitForFunction(() => players.find(p => p.id === 'player-1')?.sheet?.parsed?.wildShape?.active === true);
+    await p1.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
+    await p1.locator('.sheet-tab[data-tab="wildshape"]').click();
+    await p1.locator('[data-wildshape-activate-btn][aria-pressed="true"]').waitFor();
+    assert.equal(await p1.locator('[data-wildshape-activate-btn]').isDisabled(), true);
+    await p1.evaluate(() => InfoModal.close());
+    await p3.evaluate(() => { InfoModal.close(); InfoModal.open(players.find(p => p.id === 'player-1')); });
+    await p3.locator('[data-wildshape-activate-btn][aria-pressed="true"]').waitFor();
+    await toggleShape.click();
+    await p3.locator('[data-wildshape-activate-btn][aria-pressed="false"]').waitFor();
+    assert.deepEqual(await p3.evaluate(() => openedSheetPlayer.sheet.parsed.vitality), originalVitality);
+    await waitFor(() => h.database().players[0].sheet.parsed.wildShape?.active === false, 'base stats restored');
+    console.log('PASS: Import Monster toggles wild shape in its import card, changes gray to gold, persists/reopens, restores base stats and respects read-only access');
 
     await p4.evaluate(() => InfoModal.open(players.find(p => p.id === 'monster-1')));
     for (const tab of ['monster-main', 'monster-extra', 'monster-combat', 'monster-manual', 'monster-token']) {

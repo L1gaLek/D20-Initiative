@@ -1595,6 +1595,16 @@
 .weapon-damage-modifier__controls [data-damage-del] { margin-left: auto; min-width: 30px; padding: 6px; }
 .weapon-damage-description { width: 100%; box-sizing: border-box; min-height: 62px; resize: vertical; padding: 8px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; background: rgba(0,0,0,.2); color: inherit; font: inherit; font-size: 12px; }
 .weapon-sum-val { overflow-wrap: anywhere; }
+.weapon-damage-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 5px; }
+.weapon-damage-base { font-weight: 800; }
+.weapon-damage-extra { display: inline-flex; align-items: center; padding: 2px 5px; border: 1px solid rgba(215,180,114,.25); border-radius: 6px; background: rgba(215,180,114,.09); color: #eed5a8; font-size: 10px; font-weight: 600; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.weapon-damage-type { color: #b9ad99; font-size: 10px; font-weight: 400; }
+[data-wildshape-monster-root] .monster-import-card { background: linear-gradient(180deg,#292929,#202020); border-color: rgba(255,255,255,.14); }
+[data-wildshape-monster-root] .wildshape-toggle { min-height: 36px; padding: 8px 16px; border: 1px solid #666; border-radius: 10px; background: linear-gradient(180deg,#4b4b4b,#353535); color: #f5efe3; font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.3; cursor: pointer; transition: background .18s, border-color .18s, box-shadow .18s; }
+[data-wildshape-monster-root] .wildshape-toggle[aria-pressed="true"] { border-color: rgba(255,200,117,.5); background: linear-gradient(180deg,rgba(116,72,25,.94) 0%,rgba(74,44,15,.98) 100%); color: #fff3dd; box-shadow: 0 0 14px rgba(217,162,76,.18),inset 0 1px 0 rgba(255,255,255,.08); }
+[data-wildshape-monster-root] .wildshape-toggle:hover:not(:disabled) { filter: brightness(1.12); }
+[data-wildshape-monster-root] .wildshape-toggle:focus-visible { outline: 2px solid #d4a75d; outline-offset: 3px; }
+[data-wildshape-monster-root] .wildshape-toggle:disabled { cursor: default; }
 .weapon-ability-row{
   display:flex;
   align-items:flex-end;

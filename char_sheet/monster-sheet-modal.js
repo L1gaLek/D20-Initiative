@@ -751,17 +751,20 @@
     });
   }
 
-  function renderImportControls(canEdit, sourceUrl) {
-    if (!canEdit) return '';
+  function renderImportControls(canEdit, sourceUrl, options = {}) {
+    if (!canEdit && !options.wildShape) return '';
     return `
       <div class="monster-import-card">
-        <div class="monster-import-card__title">Импорт монстра</div>
+        ${options.wildShape
+          ? `<button type="button" class="wildshape-toggle" data-wildshape-activate-btn aria-pressed="${!!options.wildShape.active}" title="При активации боевые показатели берутся из этого раздела вместо «Основное»." ${canEdit ? '' : 'disabled'}>Импорт монстра</button>`
+          : '<div class="monster-import-card__title">Импорт монстра</div>'}
+        ${canEdit ? `
         <div class="monster-import-card__subtitle">Вставь ссылку на страницу монстра или готовый текст статблока.</div>
         <div class="monster-import">
           <input type="text" class="popup-field monster-import__input" placeholder="Ссылка или текст статблока монстра" data-monster-import-url value="${esc(sourceUrl || '')}">
           <button type="button" class="btn" data-monster-import-btn>Импортировать</button>
           <button type="button" class="btn" data-monster-import-srd-btn>Монстры SRD</button>
-        </div>
+        </div>` : ''}
       </div>
     `;
   }
@@ -1200,7 +1203,6 @@
     `;
     const weapons = Array.isArray(sheet?.weaponsList) ? sheet.weaponsList : [];
     const format = (n) => `${n >= 0 ? '+' : ''}${n}`;
-    const dmgText = (w) => weaponDamageText(w);
     const atkVal = (w) => {
       if (typeof calcWeaponAttackBonus === 'function') return calcWeaponAttackBonus(sheet, w);
       const mod = toInt(get(sheet, `stats.${String(w?.ability || 'str')}.modifier`, 0), 0);
@@ -1226,7 +1228,7 @@
             </div>
             <div class="weapon-sum-item">
               <div class="weapon-sum-label"><span>Урон</span><button class="weapon-dice-btn" type="button" data-weapon-roll-dmg title="Бросок урона">${d20Svg}</button></div>
-              <div class="weapon-sum-val" data-weapon-dmg>${esc(dmgText(w))}</div>
+              <div class="weapon-sum-val" data-weapon-dmg>${renderWeaponDamageSummary(w)}</div>
             </div>
           </div>
           <div class="weapon-details ${collapsed ? 'collapsed' : ''}">
@@ -1836,7 +1838,7 @@
     const conditionsText = String(vm.conditions || '').trim();
     rootEl.innerHTML = `
       <div class="monster-sheet">
-        ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '')}
+        ${renderImportControls(canEdit, player?.sheet?.parsed?.monster?.source_url || '', options)}
         <div class="monster-sheet__hero ${isEmbedded ? 'monster-sheet__hero--embedded' : ''}">
           <div>
             <input
@@ -2000,6 +2002,9 @@
     }
 
     const rerender = () => renderMonsterSheetIntoRoot(rootEl, player, { ...options, activeTab: player?._activeSheetTab || options?.activeTab || 'monster-main' });
+    rootEl.querySelector('[data-wildshape-activate-btn]')?.addEventListener('click', () => {
+      if (canEdit) options.wildShape?.onToggle?.();
+    });
     const bindOptions = { ...options, rerender };
     bindTabs(rootEl, player, vm, canEdit, bindOptions);
     bindImportControls(rootEl, player, canEdit, bindOptions);

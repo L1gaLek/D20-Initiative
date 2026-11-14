@@ -51,7 +51,7 @@ function updateWeaponsBonuses(root, sheet) {
     if (atkEl) atkEl.textContent = formatMod(calcWeaponAttackBonus(sheet, w));
 
     const dmgEl = card.querySelector('[data-weapon-dmg]');
-    if (dmgEl) dmgEl.textContent = weaponDamageText(w);
+    if (dmgEl) dmgEl.innerHTML = renderWeaponDamageSummary(w);
 
     const profDot = card.querySelector('[data-weapon-prof]');
     if (profDot) {

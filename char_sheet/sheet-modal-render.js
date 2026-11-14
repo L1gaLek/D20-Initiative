@@ -466,10 +466,6 @@ function renderCombatTab(vm) {
     return statMod + prof + extra;
   };
 
-  const dmgText = (w) => {
-    return weaponDamageText(w);
-  };
-
   const d20Svg = `
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
       <path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor" opacity="0.95"></path>
@@ -535,7 +531,7 @@ function renderCombatTab(vm) {
                   <span>Урон</span>
                   <button class="weapon-dice-btn" type="button" data-weapon-roll-dmg title="Бросок урона">${d20Svg}</button>
                 </div>
-                <div class="weapon-sum-val" data-weapon-dmg>${escapeHtml(dmgText(w))}</div>
+                <div class="weapon-sum-val" data-weapon-dmg>${renderWeaponDamageSummary(w)}</div>
               </div>
             </div>
 
@@ -1474,26 +1470,9 @@ function renderShopTab(vm, canEdit) {
   }
 
   function renderWildShapeTab(vm, canEdit) {
-    const sheet = vm?._sheetRef || {};
-    const ws = ensureWildShapeState(sheet) || {};
-    const baseName = String(sheet?.name?.value || vm?.name || '').trim();
-    const wildName = String(ws?.formSheet?.name?.value || '').trim();
-    const displayedWildName = ws.active ? (wildName || baseName) : baseName;
     return `
       <div class="sheet-section">
         <h3>Дикий облик / временный облик</h3>
-        <div class="sheet-card">
-          <div class="kv" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <button
-              type="button"
-              class="btn ${ws.active ? 'danger' : ''}"
-              data-wildshape-activate-btn
-              ${canEdit ? "" : "disabled"}
-              style="${ws.active ? 'background:linear-gradient(180deg,#c53929,#7d150d);border-color:rgba(255,120,110,.7);' : ''}"
-            >${ws.active ? 'Отключить' : 'Активировать'}</button>
-          </div>
-          <div class="sheet-note">При активации боевые показатели берутся из этого раздела вместо «Основное».</div>
-        </div>
         <div class="sheet-card" style="padding:12px;" data-wildshape-monster-root>
           <div class="sheet-note">Загрузка листа монстра…</div>
         </div>
@@ -1521,21 +1500,6 @@ function renderShopTab(vm, canEdit) {
     const ws = ensureWildShapeState(sheet);
     if (!ws) return;
 
-    const activateBtn = root.querySelector('[data-wildshape-activate-btn]');
-    if (activateBtn && !activateBtn.__wildBound) {
-      activateBtn.__wildBound = true;
-      activateBtn.addEventListener('click', () => {
-        const next = !ws.active;
-        ws.active = next;
-        if (next) applyWildShapeToMain(sheet);
-        else restoreMainFromWildShape(sheet);
-        try {
-          scheduleSheetSave(player);
-          flushSheetSaves(player.id);
-        } catch {}
-        renderSheetModal(player, { force: true });
-      });
-    }
     const monsterRoot = root.querySelector('[data-wildshape-monster-root]');
     if (!monsterRoot || monsterRoot.__wildMounted) return;
     monsterRoot.__wildMounted = true;
@@ -1567,6 +1531,21 @@ function renderShopTab(vm, canEdit) {
 
     window.MonsterSheetModal?.renderEmbedded?.(monsterRoot, virtualPlayer, {
       canEdit,
+      wildShape: {
+        active: !!ws.active,
+        onToggle: () => {
+          const editor = getOpenedPlayerSafe();
+          if (!editor || String(editor.id) !== String(player.id) || !canEditPlayer(editor)) return;
+          const currentSheet = editor.sheet.parsed;
+          const currentShape = ensureWildShapeState(currentSheet);
+          currentShape.active = !currentShape.active;
+          if (currentShape.active) applyWildShapeToMain(currentSheet);
+          else restoreMainFromWildShape(currentSheet);
+          scheduleSheetSave(editor);
+          flushSheetSaves(editor.id);
+          renderSheetModal(editor, { force: true });
+        }
+      },
       activeTab: ws.lastMonsterTab || 'monster-main',
       onTabChange: (tabId) => {
         ws.lastMonsterTab = tabId;
@@ -1615,12 +1594,12 @@ function renderShopTab(vm, canEdit) {
     ensurePlayerSheetWrapper(player);
 
     sheetActions.innerHTML = '';
-    const note = document.createElement('div');
-    note.className = 'sheet-note sheet-actions__note';
-    note.textContent = canEdit
-      ? "Можно загрузить .json или редактировать поля вручную — всё сохраняется."
-      : "Просмотр. Редактировать может только владелец или GM.";
-    sheetActions.appendChild(note);
+    if (!canEdit) {
+      const note = document.createElement('div');
+      note.className = 'sheet-note sheet-actions__note';
+      note.textContent = 'Просмотр. Редактировать может владелец, управляющий или ГМ.';
+      sheetActions.appendChild(note);
+    }
 
     if (canEdit) {
       const fileInput = document.createElement('input');
@@ -1660,7 +1639,15 @@ function renderShopTab(vm, canEdit) {
 
       const fileActions = document.createElement('div');
       fileActions.className = 'sheet-file-actions';
-      fileActions.appendChild(fileInput);
+      const intro = document.createElement('div');
+      intro.className = 'sheet-file-actions__intro';
+      intro.innerHTML = '<div class="sheet-file-actions__title">Лист персонажа</div><div class="sheet-file-actions__hint">Изменения сохраняются автоматически</div>';
+      const importLabel = document.createElement('label');
+      importLabel.className = 'sheet-import';
+      importLabel.title = 'Загрузить лист персонажа из файла .json';
+      importLabel.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H5v18h14V8Z"/><path d="M14 3v5h5M12 10v7m-3-3 3 3 3-3"/></svg><span>Загрузить JSON</span>';
+      importLabel.appendChild(fileInput);
+      fileActions.append(intro, importLabel);
       sheetActions.appendChild(fileActions);
 
       // ===== Мои сохранённые персонажи (привязка к уникальному userId) =====
@@ -1671,12 +1658,12 @@ function renderShopTab(vm, canEdit) {
 
       const saveBtn = document.createElement('button');
       saveBtn.type = 'button';
-      saveBtn.textContent = 'Сохранить основу';
+      saveBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h13l3 3v15H4Z"/><path d="M8 3v6h8V3M8 21v-8h8v8"/></svg><span>Сохранить основу</span>';
       saveBtn.title = 'Сохранить текущую "Инфу" в ваш личный список (по userId)';
 
       const loadBtn = document.createElement('button');
       loadBtn.type = 'button';
-      loadBtn.textContent = 'Загрузить основу';
+      loadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5h6l2 2h10v14H3Z"/><path d="M12 10v7m-3-3 3 3 3-3"/></svg><span>Загрузить основу</span>';
       loadBtn.title = 'Открыть список сохранённых персонажей и выбрать, кого загрузить';
 
       // доступно только если это действительно "Основа"

@@ -48,6 +48,7 @@ function renderTokenAccessControls(player) {
   document.getElementById('sheet-title-row')?.appendChild(affiliation);
   if (player.controllerId) {
     const info = document.createElement('span');
+    info.className = 'sheet-token-access__current';
     info.textContent = `Управление: ${player.controllerName || player.controllerId}`;
     bar.appendChild(info);
   }
