@@ -11,7 +11,7 @@ function collectJsFiles(dir, out = []) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       collectJsFiles(fullPath, out);
-    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+    } else if (entry.isFile() && /\.(?:c?js|mjs)$/.test(entry.name)) {
       out.push(fullPath);
     }
   }

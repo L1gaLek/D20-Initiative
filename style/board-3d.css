@@ -1,0 +1,110 @@
+#board-wrapper.board-view--3d {
+  position: relative;
+  overflow: hidden;
+  overflow: clip;
+  padding: 0;
+  isolation: isolate;
+  background: #161c28;
+}
+/* Keep the rules' DOM grid measurable for legacy movement handlers. */
+#board-wrapper.board-view--3d #game-board {
+  position: absolute !important;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: none !important;
+}
+#board-3d-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: #f4e9d1;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+#board-3d-root[hidden] { display: none; }
+.board-3d-canvas { display: block; width: 100%; height: 100%; touch-action: none; outline-offset: -3px; }
+.board-3d-toolbar {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid #d6ba7540;
+  border-radius: 13px;
+  background: #141c28ed;
+  box-shadow: 0 6px 24px #0005;
+  backdrop-filter: blur(12px);
+}
+.board-3d-toolbar button, .board-3d-help summary {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 7px 11px;
+  min-height: 34px;
+  min-width: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #e6dcc9;
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+.board-3d-toolbar button:hover, .board-3d-help summary:hover { background: #ffffff12; border-color: #d6ba754a; }
+.board-3d-toolbar button[aria-pressed="true"] { color: #ffe6a0; background: #a47f383b; border-color: #d3a85788; }
+.board-3d-help { position: relative; }
+.board-3d-help summary { list-style: none; font-weight: 700; }
+.board-3d-help summary::-webkit-details-marker { display: none; }
+.board-3d-help div {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  top: calc(100% + 12px);
+  width: 270px;
+  max-width: 70vw;
+  padding: 15px;
+  border: 1px solid #d6ba754a;
+  border-radius: 12px;
+  background: #151e2af5;
+  box-shadow: 0 10px 35px #0008;
+  line-height: 1.8;
+}
+.board-3d-status {
+  position: absolute;
+  top: 72px;
+  left: 16px;
+  right: 16px;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  padding: 9px 13px;
+  border-radius: 8px;
+  background: #16202bea;
+  border: 1px solid #d6ba7550;
+  pointer-events: none;
+}
+.board-3d-caption {
+  position: absolute;
+  bottom: 10px;
+  left: 14px;
+  padding: 5px 9px;
+  background: #131b28b3;
+  border-radius: 6px;
+  color: #b1bdcc;
+  font-size: 11px;
+  pointer-events: none;
+}
+#board-3d-fallback { color: #e5ba7d; font-size: 12px; margin: 8px 0 0; }
+#board-wrapper:fullscreen { width: 100vw !important; height: 100vh !important; border: 0; }
+@media (max-width: 600px) {
+  .board-3d-toolbar { top: 6px; left: 6px; right: 6px; max-width: calc(100% - 12px); gap: 1px; }
+  .board-3d-toolbar button, .board-3d-help summary { padding: 7px 8px; font-size: 12px; }
+  .board-3d-caption { font-size: 10px; left: 6px; }
+}

@@ -1,0 +1,2 @@
+# Preserve upstream formatting and collapse third-party code in review tools.
+vendor/three/** linguist-vendored=true -whitespace

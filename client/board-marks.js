@@ -22,7 +22,8 @@
     return `rgba(${r},${g},${b},${a})`;
   }
 
-  function cellFromClientXY(boardEl, clientX, clientY) {
+  function cellFromClientXY(boardEl, clientX, clientY, point) {
+    if (point) return { x: point.x + point.u, y: point.y + point.v, inBounds: true };
     const r = boardEl.getBoundingClientRect();
     const localW = Math.max(1, Number(boardEl?.offsetWidth) || Number(boardEl?.clientWidth) || Number(r.width) || 1);
     const localH = Math.max(1, Number(boardEl?.offsetHeight) || Number(boardEl?.clientHeight) || Number(r.height) || 1);
@@ -437,6 +438,7 @@
   function svgEl(tag) { return document.createElementNS('http://www.w3.org/2000/svg', tag); }
 
   function clearPreview() {
+    window.Board3D?.requestSync?.();
     drawing = false;
     startPt = null;
     polyPts = [];
@@ -456,6 +458,7 @@
   }
 
   function renderFromState(state) {
+    window.Board3D?.requestSync?.();
     ensureLayer();
     if (!svg) return;
     syncLayerSize();
@@ -737,7 +740,7 @@
       const mark = hitId ? findMarkById(hitId) : null;
       dragState = null;
       if (mark && canEditMark(mark)) {
-        const p = cellFromClientXY(board, e.clientX, e.clientY);
+        const p = cellFromClientXY(board, e.clientX, e.clientY, e.boardPoint);
         if (p.inBounds) {
           dragState = {
             markId: hitId,
@@ -755,7 +758,7 @@
       return;
     }
     if (tool === 'pin') {
-      const p = cellFromClientXY(board, e.clientX, e.clientY);
+      const p = cellFromClientXY(board, e.clientX, e.clientY, e.boardPoint);
       if (p.inBounds) finalizePin(p);
       return;
     }
@@ -766,7 +769,7 @@
     }
     selectedId = null;
 
-    const p = cellFromClientXY(board, e.clientX, e.clientY);
+    const p = cellFromClientXY(board, e.clientX, e.clientY, e.boardPoint);
     if (!p.inBounds) return;
     startPt = { x: p.x, y: p.y };
 
@@ -782,7 +785,7 @@
 
   function onMove(e) {
     if (dragState) {
-      const p = cellFromClientXY(board, e.clientX, e.clientY);
+      const p = cellFromClientXY(board, e.clientX, e.clientY, e.boardPoint);
       if (!p.inBounds) return;
       dragState.dx = p.x - dragState.start.x;
       dragState.dy = p.y - dragState.start.y;
@@ -791,7 +794,7 @@
       renderFromState(getState());
       return;
     }
-    const p = cellFromClientXY(board, e.clientX, e.clientY);
+    const p = cellFromClientXY(board, e.clientX, e.clientY, e.boardPoint);
     if (!p.inBounds) return;
     if (tool === 'poly') updatePolyPreview({ x: p.x, y: p.y });
     else updatePreview(p);
@@ -802,7 +805,7 @@
       finalizeDrag();
       return;
     }
-    const p = cellFromClientXY(board, e.clientX, e.clientY);
+    const p = cellFromClientXY(board, e.clientX, e.clientY, e.boardPoint);
     if (!p.inBounds) { if (tool !== 'poly') clearPreview(); return; }
     if (tool === 'poly') return; // continues until dblclick
     finalizeShape(p);
@@ -978,6 +981,7 @@
   }
 
   api.onBoardRendered = function (state) {
+    window.Board3D?.requestSync?.(state);
     try {
       if (!board) board = ctx?.boardEl || document.getElementById('game-board');
       if (!boardWrapper) boardWrapper = ctx?.boardWrapperEl || document.getElementById('board-wrapper');
@@ -988,6 +992,20 @@
     } catch (e) {
       console.warn('BoardMarks.onBoardRendered failed', e);
     }
+  };
+
+  api.getRenderMarks = function () {
+    const marks = getCurrentMapMarks().map(m => dragState?.markId === m.id && dragState.preview ? dragState.preview : m);
+    if (previewEl) {
+      const attr = name => Number(previewEl.getAttribute(name)) / CELL;
+      const tag = previewEl.tagName.toLowerCase();
+      const preview = { id:'__preview',color,alphaFill:.22,alphaStroke:.8 };
+      if (tag === 'rect') Object.assign(preview,{kind:'rect',x:attr('x'),y:attr('y'),w:attr('width'),h:attr('height')});
+      if (tag === 'circle') Object.assign(preview,{kind:'circle',cx:attr('cx'),cy:attr('cy'),r:attr('r')});
+      if (tag === 'polyline') Object.assign(preview,{kind:'poly',pts:String(previewEl.getAttribute('points')||'').trim().split(/\s+/).filter(Boolean).map(pair=>{const [x,y]=pair.split(',').map(Number);return{x:x/CELL,y:y/CELL};})});
+      if (preview.kind) marks.push(preview);
+    }
+    return marks;
   };
 
   api.refreshLocators = function () {

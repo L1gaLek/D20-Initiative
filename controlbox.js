@@ -160,6 +160,7 @@
     });
 
     boardWrapper?.addEventListener('wheel', (e) => {
+      if (window.__boardViewMode === '3d') return;
       // Чтобы скролл работал нормально — зум только при зажатом Ctrl
       if (!e.ctrlKey) return;
       e.preventDefault();
@@ -366,8 +367,8 @@
         const y = Number(cell?.dataset?.y);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
         const rect = cell.getBoundingClientRect();
-        const px = (e.clientX - rect.left) / rect.width;
-        const py = (e.clientY - rect.top) / rect.height;
+        const px = e.boardPoint ? e.boardPoint.u : (e.clientX - rect.left) / rect.width;
+        const py = e.boardPoint ? e.boardPoint.v : (e.clientY - rect.top) / rect.height;
         // choose nearest edge
         const dN = py;
         const dS = 1 - py;

@@ -16,7 +16,7 @@
   let controlsBound = false;
 
   function normalizeMode(value) {
-    return String(value || '').trim() === 'isometric' ? 'isometric' : 'topdown';
+    return ['isometric', '3d'].includes(String(value || '').trim()) ? String(value).trim() : 'topdown';
   }
 
   function getSavedMode() {
@@ -96,9 +96,12 @@
     const opts = options && typeof options === 'object' ? options : {};
     const normalized = normalizeMode(mode);
     const wrapper = document.getElementById('board-wrapper');
+    window.Board3D?.beforeViewModeChange?.(normalized);
     if (wrapper) wrapper.classList.toggle('board-view--isometric', normalized === 'isometric');
+    if (wrapper) wrapper.classList.toggle('board-view--3d', normalized === '3d');
 
     window.__boardViewMode = normalized;
+    window.Board3D?.setActive?.(normalized === '3d');
     window.__boardViewExtraTransform = normalized === 'isometric' ? getIsometricTransform() : '';
     window.__boardViewTransformOrigin = normalized === 'isometric' ? getIsometricTransformOrigin() : '0 0';
     window.dispatchEvent(new CustomEvent('board-view-mode-changed', { detail: { mode: normalized } }));

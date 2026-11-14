@@ -129,6 +129,28 @@
       return true;
     },
 
+    // The 3D renderer consumes the already calculated party LOS, manual stamps
+    // and exploration memory. Camera rotation must never recalculate visibility.
+    getViewSnapshot() {
+      const st = this._lastState || {};
+      const fog = st.fog || {};
+      const width = Number(st.boardWidth) || 10;
+      const height = Number(st.boardHeight) || 10;
+      const omniscient = typeof myRole !== 'undefined' && myRole === 'GM' && fog.gmViewMode !== 'player';
+      const mask = new Uint8Array(width * height);
+      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        let revealed = fog.manualBase === 'reveal';
+        if (this._manualGrid?.[i] === 1) revealed = true;
+        if (this._manualGrid?.[i] === 2) revealed = false;
+        const dynamic = fog.mode === 'dynamic' && this._dynVisible?.[i] === 1;
+        mask[i] = !fog.enabled || revealed || dynamic ? 2
+          : fog.mode === 'dynamic' && fog.exploredEnabled && this._isExplored(x, y) ? 1 : 0;
+      }
+      return { width, height, mask, omniscient, showFog: !!fog.enabled && !(omniscient && fog.gmOpen),
+        npcMask: fog.enabled && omniscient && fog.mode === 'dynamic' ? this._dynNpcVisible : null };
+    },
+
     isCellVisible(x, y) {
       const st = this._lastState;
       if (!st || !st.fog || !st.fog.enabled) return true;
@@ -588,6 +610,7 @@
 
     _render() {
       const st = this._lastState;
+      window.Board3D?.requestSync?.(st);
       if (!st || !this._ctx || !this._canvas) return;
 
       const fog = st.fog || {};
@@ -719,6 +742,7 @@
       };
 
       const getCellFromEvent = (e) => {
+        if (e.boardPoint) return { x: e.boardPoint.x, y: e.boardPoint.y };
         const rect = canvas.getBoundingClientRect();
         const w = Number(this._lastState?.boardWidth) || 10;
         const h = Number(this._lastState?.boardHeight) || 10;
@@ -813,6 +837,7 @@
       this._togglePointerEvents = updatePointerEvents;
 
       canvas.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
         updatePointerEvents();
         if (canvas.style.pointerEvents !== 'auto') return;
         painting = true;

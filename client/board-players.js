@@ -1,5 +1,6 @@
 // ================== BOARD ==================
 function renderBoard(state) {
+  window.Board3D?.requestSync?.(state);
   const CELL = 50;
   const bw = Number(state?.boardWidth) || boardWidth || 10;
   const bh = Number(state?.boardHeight) || boardHeight || 10;
@@ -254,6 +255,8 @@ const legacyEventName = (name) => `${LEGACY_EVENT_PREFIX}_${String(name || '').t
 
     const el = document.createElement('div');
     el.className = 'wall-edge wall-preview';
+    el.dataset.wallKey = `${x},${y},${dir}`;
+    el.classList.add(`wall-type-${String(w?.type || 'stone')}`);
     el.style.setProperty('--t', `${thickness}px`);
 
     const left = x * CELL;
@@ -998,8 +1001,9 @@ function useTokenMiniSpell(player, lvl, href, name) {
 function positionTokenMini(tokenEl) {
   if (!tokenMiniEl || !tokenEl) return;
   const rect = tokenEl.getBoundingClientRect();
-  const left = rect.left + (rect.width / 2);
-  const top = rect.top - 8;
+  const projected = window.__boardViewMode === '3d' ? window.Board3D?.projectToken?.(tokenMiniPlayerId) : null;
+  const left = projected ? projected.x : rect.left + (rect.width / 2);
+  const top = projected ? projected.y - 24 : rect.top - 8;
   tokenMiniEl.style.left = `${left}px`;
   tokenMiniEl.style.top = `${top}px`;
   tokenMiniEl.style.transformOrigin = '50% 100%';
@@ -1582,6 +1586,7 @@ function applyTokenVisual(el, player) {
 }
 
 function setPlayerPosition(player) {
+  window.Board3D?.requestSync?.();
   let el = playerElements.get(player.id);
 
   if (!el) {

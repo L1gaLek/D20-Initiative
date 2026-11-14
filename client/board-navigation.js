@@ -39,6 +39,7 @@ function getOffscreenTokenPointer(x, y, bounds) {
   }
   // Capture middle-button gestures before tokens, walls, marks, or fog tools see them.
   wrapper.addEventListener('mousedown', event => {
+    if (window.__boardViewMode === '3d') return;
     if (event.button !== 1 || event.ctrlKey || event.target.closest('input,textarea,select,button,[contenteditable="true"]')) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -94,10 +95,12 @@ function getOffscreenTokenPointer(x, y, bounds) {
       const token = playerElements.get(player.id);
       if (!token || token.style.display === 'none' || token.style.visibility === 'hidden' || token.dataset.fogGhost === '1') continue;
       if (window.FogWar?.isEnabled?.() && !window.FogWar.canInteractWithToken(player)) continue;
+      const projected = window.__boardViewMode === '3d' ? window.Board3D?.projectToken?.(player.id) : null;
+      if (window.__boardViewMode === '3d' && !projected) continue;
       const tokenRect = token.getBoundingClientRect();
       if (!tokenRect.width || !tokenRect.height) continue;
-      const tokenX = tokenRect.left + tokenRect.width / 2;
-      const tokenY = tokenRect.top + tokenRect.height / 2;
+      const tokenX = projected ? projected.x : tokenRect.left + tokenRect.width / 2;
+      const tokenY = projected ? projected.y : tokenRect.top + tokenRect.height / 2;
       const point = getOffscreenTokenPointer(tokenX, tokenY, bounds);
       if (!point) continue;
       let el = indicators.get(String(player.id));
@@ -132,6 +135,7 @@ function getOffscreenTokenPointer(x, y, bounds) {
   wrapper.addEventListener('scroll', schedulePointers, { passive: true });
   window.addEventListener('resize', schedulePointers);
   window.addEventListener('board-view-mode-changed', schedulePointers);
+  window.addEventListener('board-3d-camera-changed', schedulePointers);
   window.__updateBaseNavArrow = schedulePointers;
   setInterval(schedulePointers, 250);
   schedulePointers();

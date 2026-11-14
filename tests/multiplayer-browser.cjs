@@ -88,7 +88,7 @@ const server = http.createServer(async (req, res) => {
     const requested = path.resolve(root, `.${decodeURIComponent(pathname === '/' ? '/index.html' : pathname)}`);
     if (!requested.startsWith(root + path.sep)) { res.writeHead(403); return res.end(); }
     const bytes = await fs.promises.readFile(requested);
-    const type = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg' }[path.extname(requested)] || 'application/octet-stream';
+    const type = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg' }[path.extname(requested)] || 'application/octet-stream';
     res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8` }); res.end(bytes);
   } catch (error) {
     if (error.code === 'ENOENT') { res.writeHead(404); res.end(); }
@@ -128,7 +128,7 @@ async function waitFor(check, label) {
 async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const browser = await chromium.launch({ headless: true, ...(process.env.D20_BROWSER_PATH ? { executablePath: process.env.D20_BROWSER_PATH } : {}) });
+  const browser = await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'], ...(process.env.D20_BROWSER_PATH ? { executablePath: process.env.D20_BROWSER_PATH } : {}) });
   const errors = [];
   const pages = [];
   try {
@@ -148,7 +148,10 @@ async function main() {
       }, { base, id });
       const page = await context.newPage();
       page.on('pageerror', error => errors.push(`${id}: ${error.message}`));
-      page.on('console', message => { if (message.type() === 'warning') diagnostics.push(`${id}: ${message.text()}`); });
+      page.on('console', message => {
+        if (message.type() === 'warning') diagnostics.push(`${id}: ${message.text()}`);
+        if (message.type() === 'error' && /THREE|Shader Error|VALIDATE_STATUS/.test(message.text()) && !/Error creating WebGL context/.test(message.text())) errors.push(`${id}: ${message.text()}`);
+      });
       page.on('dialog', dialog => { errors.push(`${id} dialog: ${dialog.message()}`); dialog.dismiss(); });
       await page.goto(base, { waitUntil: 'load' });
       await page.evaluate(({ id, state, members }) => {
@@ -512,6 +515,7 @@ async function main() {
     await p1.evaluate(message => RoomChat.hydrateFromRows([{ ...message, id: 'old-history' }]), incoming);
     assert.equal(await p1.evaluate(() => window.__notificationOscillators), toneBefore + 2);
     console.log('PASS: new incoming DM flashes a centered icon and schedules a short real Web Audio chime; reading, history, own messages and duplicates stay quiet');
+    await require('./helpers/board-3d-scenarios.cjs')({ pages, h, broadcast, screenshotDir, clone, start });
     assert.deepEqual(errors, []);
     console.log(`Browser regression complete; ${requests.filter(r => r.path.endsWith('/initiative')).length} confirmed initiative requests.`);
   } catch (error) {
