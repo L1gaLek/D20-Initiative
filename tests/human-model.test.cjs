@@ -65,6 +65,17 @@ test('weapons sit inside curled palms and shields clear both forearms, including
             for(let finger=2;finger<=5;finger++)knuckles.addScaledVector(bones.get(`finger${finger}-1.${side}`).getWorldPosition(new T.Vector3()),.25);
             assert.ok(handle.distanceTo(knuckles)<.04,'shield hand retains the back grip throughout the gait');
             const elbow=bones.get(`lowerarm01.${side}`).getWorldPosition(new T.Vector3()),wrist=bones.get(`wrist.${side}`).getWorldPosition(new T.Vector3());
+            const axis=wrist.clone().sub(elbow).normalize(),body=figure.getObjectByName('anatomical-body'),a=body.geometry.attributes;
+            for(const strap of shield.children.filter(o=>o.name==='shield-forearm-strap')){
+              const center=strap.getWorldPosition(new T.Vector3());let radius=0,samples=0;
+              for(let i=0;i<a.position.count;i++){
+                let dominant=0;for(let j=1;j<4;j++)if(a.skinWeight.array[i*4+j]>a.skinWeight.array[i*4+dominant])dominant=j;
+                if(!skeleton.bones[a.skinIndex.array[i*4+dominant]].name.startsWith('lowerarm')||!skeleton.bones[a.skinIndex.array[i*4+dominant]].name.endsWith('.'+side))continue;
+                const p=body.localToWorld(body.getVertexPosition(i,new T.Vector3())).sub(center),along=p.dot(axis);if(Math.abs(along)>.012)continue;
+                radius=Math.max(radius,p.addScaledVector(axis,-along).length());samples++;
+              }
+              assert.ok(samples>5);assert.ok(radius<strap.userData.radius-.003,'strap clears the actual posed forearm surface');
+            }
             for(const t of [0,.25,.5,.75,1]){
               const p=shield.worldToLocal(elbow.clone().lerp(wrist,t)),back=.007+Math.max(0,1-(p.x/.16)**2)*.037;
               assert.ok(p.z+.033<back,'wooden back never intersects the forearm or bracer');

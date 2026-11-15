@@ -1,6 +1,6 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
-import { createHuman } from './human.mjs?v=20261115-human-poses-1';
+import { createHuman } from './human.mjs?v=20261115-human-poses-2';
 
 function disposeFigure(figure){
   if(!figure)return;const materials=new Set();figure.traverse(o=>{o.userData.dispose?.();o.geometry?.dispose();if(o.material)materials.add(o.material);});materials.forEach(m=>m.dispose());figure.removeFromParent();

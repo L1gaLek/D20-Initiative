@@ -275,10 +275,11 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     // Back straps and hand grip are modeled too, visible when orbiting the token.
     const forearm=arm.target.clone().sub(arm.joint).applyQuaternion(shieldInverse).normalize(),up=new THREE.Vector3(0,1,0).addScaledVector(forearm,-forearm.y).normalize(),out=new THREE.Vector3().crossVectors(forearm,up).normalize();
     for(const t of [.23,.66]){
-      const p=arm.joint.clone().lerp(arm.target,t).sub(center).applyQuaternion(shieldInverse),points=[];
-      for(let i=0;i<=28;i++){const a=i/28*Math.PI*2;points.push(p.clone().addScaledVector(up,Math.cos(a)*.034).addScaledVector(out,Math.sin(a)*.034).toArray());}
+      const p=arm.joint.clone().lerp(arm.target,t).sub(center).applyQuaternion(shieldInverse),points=[],radius=t<.5?(armored?.054:.048):(armored?.044:.033);
+      for(let i=0;i<=28;i++){const a=i/28*Math.PI*2;points.push(p.clone().addScaledVector(up,Math.cos(a)*radius).addScaledVector(out,Math.sin(a)*radius).toArray());}
       line(points,.006,m.leather);
-      for(const sign of [-1,1])line([[p.x+sign*.037,p.y,.026],[p.x+sign*.033,p.y,p.z]],.006,m.leather);
+      const strap=new THREE.Object3D();strap.name='shield-forearm-strap';strap.position.copy(p);strap.userData.radius=radius;g.add(strap);
+      for(const sign of [-1,1])line([[p.x+sign*(radius+.003),p.y,.026],[p.x+sign*radius,p.y,p.z]],.006,m.leather);
     }
     const handle=hand.sub(center).applyQuaternion(shieldInverse);
     line([[handle.x,handle.y-.045,.023],[handle.x,handle.y-.034,handle.z],[handle.x,handle.y+.034,handle.z],[handle.x,handle.y+.045,.023]],.006,m.dark);
