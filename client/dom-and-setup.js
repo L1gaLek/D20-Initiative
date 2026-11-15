@@ -666,6 +666,7 @@ function setActiveGmQuickPanel(panelKey) {
     if (hasOpen) refreshGmQuickToolbarTop();
     rightPanel.style.display = hasOpen ? 'block' : 'none';
     rightPanel.classList.toggle('is-open', hasOpen);
+    rightPanel.classList.toggle('has-map-panel', key === 'map');
   }
   if (gmQuickToolbar) gmQuickToolbar.classList.toggle('is-panel-open', hasOpen);
 }

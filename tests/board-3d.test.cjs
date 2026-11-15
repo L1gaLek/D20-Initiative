@@ -31,6 +31,7 @@ test('wall directions preserve 2D edge positions and hidden interior walls are o
   view.omniscient=true;
   assert.ok(wall({x:1,y:1,dir:'S'},view));
   assert.equal(wall({x:NaN,y:1,dir:'N'},view),null);
+  assert.equal(wall({x:1,y:1,dir:'N',type:'magic'},view).type,'magic');
 });
 test('hidden live tokens are never rendered, while last-known silhouettes stay at explored coordinates', () => {
   const view={width:3,height:1,mask:Uint8Array.from([2,1,0]),omniscient:false};

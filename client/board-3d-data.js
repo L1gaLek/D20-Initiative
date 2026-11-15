@@ -39,7 +39,7 @@
       z: y + (dir === 'S' ? 1 : dir === 'N' ? 0 : .5),
       w: block ? 1 : (dir === 'E' || dir === 'W' ? thickness : 1 + thickness),
       d: block ? 1 : (dir === 'N' || dir === 'S' ? thickness : 1 + thickness),
-      type: ['wood', 'metal'].includes(wall.type) ? wall.type : 'stone',
+      type: ['wood', 'metal', 'magic'].includes(wall.type) ? wall.type : 'stone',
       explored: !view.omniscient && Math.max(cellState(view, x, y), cellState(view, nx, ny)) < 2
     };
   }

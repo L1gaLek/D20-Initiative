@@ -1,7 +1,7 @@
 // Adapter: 3D gestures enter the existing board handlers and permission checks.
 (function () {
   'use strict';
-  const moduleUrl = new URL('board-3d/scene.mjs?v=20261115-board-3d-polish-7', document.currentScript.src);
+  const moduleUrl = new URL('board-3d/scene.mjs?v=20261115-board-3d-combat-8', document.currentScript.src);
   let active = false, loading = null, engine = null, root = null, status = null;
   let syncFrame = 0, state = null, gesture = null, lastTap = null;
   let savedScroll = null;
@@ -63,7 +63,16 @@
     toolbar.append(help);
     status = document.createElement('div'); status.className = 'board-3d-status'; status.setAttribute('role', 'status'); status.hidden = true;
     const caption = document.createElement('div'); caption.className = 'board-3d-caption'; caption.textContent = '3D · ПКМ вращение · колесо масштаб / перемещение';
-    root.append(toolbar, status, caption); document.getElementById('board-wrapper')?.append(root);
+    const combat=document.createElement('div');combat.className='board-3d-combat';combat.hidden=true;
+    const summary=document.createElement('span');summary.className='board-3d-combat__summary';
+    const dash=button('Рывок','Включить или отменить режим рывка',()=>{
+      if(typeof selectedPlayer==='undefined' || !selectedPlayer)return;
+      window.activateCombatDashForPlayer?.(selectedPlayer);
+      window.syncSelectedPlayerUi?.();window.renderCombatMoveOverlay?.();api.requestSync();
+    });dash.dataset.action='dash';combat.append(summary,dash);
+    const legend=document.createElement('div');legend.className='board-3d-fog-legend';legend.hidden=true;
+    legend.innerHTML='<span class="fog-visible">Видно</span><span class="fog-explored">Исследовано</span><span class="fog-unknown">Неизвестно</span>';
+    root.append(toolbar, status, caption,combat,legend); document.getElementById('board-wrapper')?.append(root);
   }
   api.setActive = async function (value) {
     const wasActive = active;
@@ -100,6 +109,7 @@
   function snapshot() {
     const st = getState(); if (!st || !window.FogWar) return null;
     const view = window.FogWar.getViewSnapshot();
+    const combat=editingWalls() || toolTarget() ? null : window.getCombatMoveOverlaySnapshot?.() || null;
     const tokens = (typeof players !== 'undefined' ? players : []).map(p => {
       const el = playerElements.get(p.id);
       return { id: String(p.id), name: String(p.name || 'Токен'), color: p.color || '#c6a35e',
@@ -125,7 +135,7 @@
         thickness: parseFloat(el.style.getPropertyValue('--t')) || 4 };
     }).filter(Boolean);
     const legacy = (st.walls || []).filter(w => !w.dir);
-    return { view, tokens, walls: [...walls, ...legacy], marks: window.BoardMarks?.getRenderMarks?.() || [],
+    return { view, tokens, combat, walls: [...walls, ...legacy], marks: window.BoardMarks?.getRenderMarks?.() || [],
       mapKey: `${typeof currentRoomId !== 'undefined' ? currentRoomId : ''}:${st.currentMapId || ''}`,
       background: st.boardBgUrl || st.boardBgDataUrl || '', gridAlpha: st.gridAlpha ?? 1, wallAlpha: st.wallAlpha ?? 1 };
   }
@@ -134,9 +144,19 @@
     if (!active || !engine || syncFrame) return;
     syncFrame = requestAnimationFrame(() => {
       syncFrame = 0; if (!active) return;
-      const data = snapshot(); if (data) engine.sync(data);
+      const data = snapshot(); if (data) { engine.sync(data);updateCombatUi(data); }
     });
   };
+  function updateCombatUi(data) {
+    const panel=root.querySelector('.board-3d-combat'),model=data.combat;
+    panel.hidden=!model || !data.tokens.some(t=>t.id===model.tokenId && !t.ghost);
+    if(model) {
+      const name=data.tokens.find(t=>t.id===model.tokenId)?.name || 'Токен';
+      panel.querySelector('.board-3d-combat__summary').textContent=`${name} · ${model.mode==='dash'?'Рывок':model.mode==='teleport'?'Телепортация':'Ход'} · ${model.remainingFeet} / ${model.totalFeet} фт`;
+      const dash=panel.querySelector('button');dash.hidden=!model.canDash;dash.setAttribute('aria-pressed',String(model.dashActive));
+    }
+    root.querySelector('.board-3d-fog-legend').hidden=!data.view.showFog;
+  }
   api.projectToken = id => active ? engine?.projectToken(String(id)) : null;
   api.projectCell = (x, y, height = 0) => active ? engine?.projectCell(x, y, height) : null;
   api.inspect = () => ({ active, loading: !!loading && !engine, ...(engine?.inspect() || {}) });
@@ -192,7 +212,7 @@
         gesture.moved ||= Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 6;
         if (point) gesture.point = point;
         if (gesture.target) { event.stopImmediatePropagation(); dispatch(gesture.moveTarget, 'mousemove', event, point); }
-      } else if (event.buttons === 0 && (toolTarget() || editingWalls() || (typeof selectedPlayer !== 'undefined' && selectedPlayer))) dispatch(toolTarget() || cell(point), 'mousemove', event, point);
+      } else if (event.buttons === 0 && (toolTarget() || editingWalls())) dispatch(toolTarget() || cell(point), 'mousemove', event, point);
       const tool = toolTarget();
       const editing = tool || editingWalls();
       const brushSize = tool?.id === 'fog-layer' ? Math.max(1, Math.min(20, Number(document.getElementById('fog-square-size')?.value) || 1))

@@ -2623,14 +2623,11 @@ addPlayerBtn.addEventListener('click', () => {
     layer.appendChild(cell);
   }
 
-  function renderOverlayForSelected() {
+  function combatOverlayForSelected() {
     dropSelectionIfInvalid();
 
-    const layer = ensureLayer();
-    if (!layer) return;
-    layer.innerHTML = '';
 
-    if (!selectedPlayer || editEnvironment) return;
+    if (!selectedPlayer || editEnvironment || document.getElementById('edit-environment')?.classList.contains('is-on')) return null;
     if (!shouldShowCombatOverlay(selectedPlayer)) return;
 
     const live = getLivePlayer(selectedPlayer) || selectedPlayer;
@@ -2645,7 +2642,10 @@ addPlayerBtn.addEventListener('click', () => {
     if (!rec) return;
 
     const size = Math.max(1, Number(live?.size) || 1);
-    appendOverlayCell(layer, 'combat-move-cell--origin', rec.originX, rec.originY, size);
+    const cells=[];
+    const overlay={tokenId:String(live.id),size,cells,canDash:canUseDashAction(live),dashActive:!!rec.dashActive,
+      remainingFeet:getRemainingFeet(live),totalFeet:rec.totalFeet,mode:rec.teleportActive?'teleport':rec.dashActive?'dash':'walk'};
+    cells.push({kind:'origin',x:rec.originX,y:rec.originY,size});
 
     const tp = getTeleportInfo(live);
     if (tp && rec.teleportActive) {
@@ -2654,10 +2654,10 @@ addPlayerBtn.addEventListener('click', () => {
       for (let y = 0; y <= maxY; y++) {
         for (let x = 0; x <= maxX; x++) {
           if (!canTeleportTo(live, x, y)) continue;
-          appendOverlayCell(layer, 'combat-move-cell--teleport', x, y, size);
+          cells.push({kind:'teleport',x:x,y:y,size});
         }
       }
-      return;
+      return overlay;
     }
 
     const dash = getDashInfo(live);
@@ -2669,9 +2669,9 @@ addPlayerBtn.addEventListener('click', () => {
         const y = Number(parts[1]);
         if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
         if (x === rec.currentX && y === rec.currentY) continue;
-        appendOverlayCell(layer, 'combat-move-cell--dash', x, y, size);
+        cells.push({kind:'dash',x:x,y:y,size});
       }
-      return;
+      return overlay;
     }
 
     const walkMap = buildWalkReachableMap(live, rec);
@@ -2681,12 +2681,23 @@ addPlayerBtn.addEventListener('click', () => {
       const y = Number(parts[1]);
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       if (x === rec.originX && y === rec.originY) continue;
-      appendOverlayCell(layer, 'combat-move-cell--reachable', x, y, size);
+      cells.push({kind:'reachable',x:x,y:y,size});
     }
+    return overlay;
   }
+
+  function renderOverlayForSelected() {
+    const layer=ensureLayer();if(!layer)return;
+    layer.innerHTML='';
+    const overlay=combatOverlayForSelected();
+    for(const cell of overlay?.cells || [])appendOverlayCell(layer,'combat-move-cell--'+cell.kind,cell.x,cell.y,cell.size);
+    window.Board3D?.requestSync?.();
+  }
+  window.getCombatMoveOverlaySnapshot=combatOverlayForSelected;
 
   function hideOverlay() {
     clearLayer();
+    window.Board3D?.requestSync?.();
   }
 
   window.getCombatMoveBudgetInfo = function(player) {

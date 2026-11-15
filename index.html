@@ -7,16 +7,16 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
 <link rel="shortcut icon" href="favicon.ico">
-<link rel="stylesheet" href="style/base.css?v=20261115-board-3d-polish-7">
-<link rel="stylesheet" href="style/layout.css?v=20261115-board-3d-polish-7">
-<link rel="stylesheet" href="style/lobby.css?v=20261115-board-3d-polish-7">
+<link rel="stylesheet" href="style/base.css?v=20261115-board-3d-combat-8">
+<link rel="stylesheet" href="style/layout.css?v=20261115-board-3d-combat-8">
+<link rel="stylesheet" href="style/lobby.css?v=20261115-board-3d-combat-8">
 <link rel="stylesheet" href="style/board.css">
-<link rel="stylesheet" href="style/isometric-view.css?v=20261115-board-3d-polish-7">
-<link rel="stylesheet" href="style/board-3d.css?v=20261115-board-3d-polish-7">
-<link rel="stylesheet" href="style/token-navigation.css?v=20261115-board-3d-polish-7">
-<link rel="stylesheet" href="style/players.css?v=20261115-board-3d-polish-7">
-<link rel="stylesheet" href="style/gameplay.css?v=20261115-board-3d-polish-7">
-<link rel="stylesheet" href="style/cursors.css?v=20261115-board-3d-polish-7">
+<link rel="stylesheet" href="style/map-editor.css?v=20261115-board-3d-combat-8">
+<link rel="stylesheet" href="style/board-3d.css?v=20261115-board-3d-combat-8">
+<link rel="stylesheet" href="style/token-navigation.css?v=20261115-board-3d-combat-8">
+<link rel="stylesheet" href="style/players.css?v=20261115-board-3d-combat-8">
+<link rel="stylesheet" href="style/gameplay.css?v=20261115-board-3d-combat-8">
+<link rel="stylesheet" href="style/cursors.css?v=20261115-board-3d-combat-8">
 </head>
 <body class="lobby-active">
 
@@ -740,7 +740,7 @@
 
           <div id="gm-panel-map" class="gm-flyout-panel">
             <div id="env-editor" class="side-box gm-side-box">
-              <h3>Редактирование карты</h3>
+              <header class="map-editor-header"><span class="map-editor-header__icon" aria-hidden="true">⌘</span><div><h3>Редактирование карты</h3><p>Вид поля, размеры и подложка</p></div><button type="button" class="map-editor-close" aria-label="Закрыть редактирование карты" onclick="setActiveGmQuickPanel('')">×</button></header>
               <div id="cell-feet-gm-box" class="board-settings-box cell-feet-box" style="display:none;">
                 <label id="cell-feet-gm-wrap" class="cell-feet-inline cell-feet-inline--gm-box">
                   <span>1 клетка =</span>
@@ -756,52 +756,51 @@
                 1 клетка = <span id="cell-feet-player-value">10</span> футов
               </div>
               <div id="board-view-mode-box" class="board-settings-box board-view-mode-box">
-                <label for="board-view-mode-select">Режим отображения:</label>
+                <label for="board-view-mode-select">Режим просмотра</label>
                 <select id="board-view-mode-select" title="Персональный режим просмотра поля">
                   <option value="topdown">2D сверху</option>
-                  <option value="isometric">Изометрия</option>
                   <option value="3d">3D · объёмное поле</option>
                 </select>
-                <p class="board-view-mode-box__hint">3D: правая кнопка — вращение, зажатое колесо — перемещение, прокрутка — масштаб. Изометрия: Ctrl + колесо — вращение, Ctrl + Shift + колесо — перемещение.</p>
+                <p class="board-view-mode-box__hint">3D: правая кнопка — вращение, зажатое колесо — перемещение, прокрутка — масштаб.</p>
               </div>
               <div class="board-settings-row gm-map-size-settings">
-                <div id="board-settings-viewport" class="board-settings-box">
-                  <label>Ширина поля:
+                <section id="board-settings-viewport" class="board-settings-box"><h4>Рамка просмотра <span>Личная</span></h4><p class="map-editor-note">Размер области карты на вашем экране.</p>
+                  <label>Ширина
                     <span class="board-stepper">
                       <button type="button" class="board-stepper__btn" data-step-target="board-width" data-step-dir="-1" aria-label="Уменьшить ширину поля">◀</button>
                       <input type="number" id="board-width" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
                       <button type="button" class="board-stepper__btn" data-step-target="board-width" data-step-dir="1" aria-label="Увеличить ширину поля">▶</button>
                     </span>
                   </label>
-                  <label>Высота поля:
+                  <label>Высота
                     <span class="board-stepper">
                       <button type="button" class="board-stepper__btn" data-step-target="board-height" data-step-dir="-1" aria-label="Уменьшить высоту поля">◀</button>
                       <input type="number" id="board-height" value="10" min="5" max="80" title="Сколько клеток видно в рамке (персональная настройка)">
                       <button type="button" class="board-stepper__btn" data-step-target="board-height" data-step-dir="1" aria-label="Увеличить высоту поля">▶</button>
                     </span>
                   </label>
-                  <button id="create-board" type="button" title="Применить размер рамки (только для вас)">Применить вид</button>
-                </div>
-                <div id="board-settings-gm" class="board-settings-box">
-                  <label>Ширина поля (ГМ):
+                  <button id="create-board" type="button" title="Применить размер рамки (только для вас)">Применить рамку</button>
+                </section>
+                <section id="board-settings-gm" class="board-settings-box"><h4>Размер карты <span>Для всех</span></h4><p class="map-editor-note">Количество клеток игрового поля.</p>
+                  <label>Ширина
                     <span class="board-stepper">
                       <button type="button" class="board-stepper__btn" data-step-target="board-width-gm" data-step-dir="-1" aria-label="Уменьшить ширину поля ГМ">◀</button>
                       <input type="number" id="board-width-gm" value="10" min="5" max="150" title="Реальная ширина карты в клетках (5–150)">
                       <button type="button" class="board-stepper__btn" data-step-target="board-width-gm" data-step-dir="1" aria-label="Увеличить ширину поля ГМ">▶</button>
                     </span>
                   </label>
-                  <label>Высота поля (ГМ):
+                  <label>Высота
                     <span class="board-stepper">
                       <button type="button" class="board-stepper__btn" data-step-target="board-height-gm" data-step-dir="-1" aria-label="Уменьшить высоту поля ГМ">◀</button>
                       <input type="number" id="board-height-gm" value="10" min="5" max="150" title="Реальная высота карты в клетках (5–150)">
                       <button type="button" class="board-stepper__btn" data-step-target="board-height-gm" data-step-dir="1" aria-label="Увеличить высоту поля ГМ">▶</button>
                     </span>
                   </label>
-                  <button id="create-board-gm" type="button" title="Изменить реальный размер карты (видно всем)">Применить карту</button>
-                </div>
+                  <button id="create-board-gm" type="button" title="Изменить реальный размер карты (видно всем)">Изменить карту</button>
+                </section>
               </div>
               <div id="map-bg-controls" class="env-bg-controls">
-              <div class="env-bg-title">Подложка карты</div>
+              <h4 class="env-bg-title">Подложка карты</h4>
               <div class="env-bg-url-row">
                 <input id="board-bg-url" type="text" placeholder="Ссылка на изображение или GIF (https://...)" />
                 <button id="board-bg-url-apply" type="button">Загрузить</button>
@@ -815,7 +814,7 @@
                 <input id="grid-opacity" type="range" min="0" max="100" value="0" />
               </div>
 
-              <input id="board-bg-file" type="file" accept="image/*,.gif" />
+              <label class="map-editor-upload" for="board-bg-file"><span>↑ Загрузить изображение</span><input id="board-bg-file" type="file" accept="image/*,.gif" /></label>
               <button id="board-bg-clear" type="button">Убрать подложку</button>
             </div>
             </div>
@@ -886,62 +885,62 @@
 </div>
 
 <!-- App config + Supabase client. -->
-<script src="client/app-config.js?v=20261115-board-3d-polish-7"></script>
+<script src="client/app-config.js?v=20261115-board-3d-combat-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <script src="controlbox.js?v=20261115-board-3d-polish-7"></script>
+  <script src="controlbox.js?v=20261115-board-3d-combat-8"></script>
   <script src="monsters-library.js"></script>
 
  <!-- Client scripts (split from former client.js) -->
-  <script src="client/dom-and-setup.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/token-permissions.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/board-3d-data.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/board-3d.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/isometric-view.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/app/lobby-shell.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/rooms/lobby-room-ui.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/chat-notifications.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/chat-ui.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/board-fog.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/board-marks.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/messages/lobby-room-messages.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/messages/session-ui-messages.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/message-ui.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/board-players.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/gameplay-ui.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/board-navigation.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/room-state-core.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/room-state-maps.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/detached-room-cache.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/vps-api.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/rooms-api.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/characters-api.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/room-rows-api.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/room-state-persistence.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/room-ownership.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/realtime-channel-helpers.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/network/room-detached-sync.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/core-helpers-network.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/initiative-sync.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/bg-music.js?v=20261115-board-3d-polish-7"></script>
-  <script src="client/rooms-controlbox.js?v=20261115-board-3d-polish-7"></script>
+  <script src="client/dom-and-setup.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/token-permissions.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/board-3d-data.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/board-3d.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/board-view.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/app/lobby-shell.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/rooms/lobby-room-ui.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/chat-notifications.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/chat-ui.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/board-fog.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/board-marks.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/messages/lobby-room-messages.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/messages/session-ui-messages.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/message-ui.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/board-players.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/gameplay-ui.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/board-navigation.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/room-state-core.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/room-state-maps.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/detached-room-cache.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/vps-api.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/rooms-api.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/characters-api.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/room-rows-api.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/room-state-persistence.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/room-ownership.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/realtime-channel-helpers.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/network/room-detached-sync.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/core-helpers-network.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/initiative-sync.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/bg-music.js?v=20261115-board-3d-combat-8"></script>
+  <script src="client/rooms-controlbox.js?v=20261115-board-3d-combat-8"></script>
   <!-- Character sheet (split from info-sheet-player.js) -->
-  <script src="char_sheet/sheet-utils.js?v=20261115-board-3d-polish-7"></script>
-  <script src="char_sheet/sheet-saved-bases.js?v=20261115-board-3d-polish-7"></script>
+  <script src="char_sheet/sheet-utils.js?v=20261115-board-3d-combat-8"></script>
+  <script src="char_sheet/sheet-saved-bases.js?v=20261115-board-3d-combat-8"></script>
   
-<script src="char_sheet/sheet-modal-core.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/sheet-modal-popups.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/sheet-modal-data.js?v=20261115-board-3d-polish-7"></script>
-<script src="backend/shared/damage-rolls.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/weapon-damage.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/sheet-modal-combat-ui.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/sheet-modal-richtext.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/sheet-modal-spells.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/inventory-transfer.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/sheet-modal-bindings.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/monster-sheet-modal.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/sheet-token-access.js?v=20261115-board-3d-polish-7"></script>
-<script src="char_sheet/sheet-modal-render.js?v=20261115-board-3d-polish-7"></script>
+<script src="char_sheet/sheet-modal-core.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/sheet-modal-popups.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/sheet-modal-data.js?v=20261115-board-3d-combat-8"></script>
+<script src="backend/shared/damage-rolls.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/weapon-damage.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/sheet-modal-combat-ui.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/sheet-modal-richtext.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/sheet-modal-spells.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/inventory-transfer.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/sheet-modal-bindings.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/monster-sheet-modal.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/sheet-token-access.js?v=20261115-board-3d-combat-8"></script>
+<script src="char_sheet/sheet-modal-render.js?v=20261115-board-3d-combat-8"></script>
 
 </body>
 </html>

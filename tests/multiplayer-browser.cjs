@@ -369,17 +369,10 @@ async function main() {
       await gm.screenshot({ path: path.join(screenshotDir, 'token-access.png') });
     }
     console.log('PASS: middle drag interpolates movement; offscreen base and named allies have separate arrows');
-    await p3.evaluate(() => applyBoardViewMode('isometric'));
-    const isoBefore = await p3.locator('#board-wrapper').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
-    await p3.mouse.move(rect.x + 320, rect.y + 260);
-    await p3.mouse.down({ button: 'middle' });
-    await p3.mouse.move(rect.x + 240, rect.y + 200, { steps: 6 });
-    await p3.mouse.up({ button: 'middle' });
-    await p3.waitForTimeout(350);
-    const isoAfter = await p3.locator('#board-wrapper').evaluate(el => ({ x: el.scrollLeft, y: el.scrollTop }));
-    assert.ok(isoAfter.x > isoBefore.x && isoAfter.y > isoBefore.y);
-    assert.equal(await p3.locator('#board-wrapper').evaluate(el => el.classList.contains('board-view--panning')), false);
-    console.log('PASS: middle drag also pans in isometric mode and stops on release');
+    assert.deepEqual(await p3.locator('#board-view-mode-select option').evaluateAll(items=>items.map(el=>el.value)),['topdown','3d']);
+    await p3.evaluate(()=>applyBoardViewMode('isometric'));
+    assert.equal(await p3.evaluate(()=>window.__boardViewMode),'topdown');
+    console.log('PASS: only 2D/3D remain; obsolete view values safely fall back to 2D');
     for (const page of pages) await page.evaluate(() => InfoModal.close());
     await p3.evaluate(() => InfoModal.open(players.find(p => p.id === 'player-1')));
     const titleRect = await p3.locator('#sheet-title').boundingBox();

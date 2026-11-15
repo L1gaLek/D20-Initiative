@@ -1,6 +1,7 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
 import { loadBoardImage } from './background.mjs';
+import { fogMaterial, magicMaterial } from './effects.mjs';
 
 const WALL_HEIGHT = 1.35;
 const data = window.Board3DData;
@@ -44,19 +45,6 @@ function labelTexture(name) {
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
-function fogMaterial(opacity) {
-  return new THREE.ShaderMaterial({
-    transparent: opacity < 1, depthWrite: opacity === 1,
-    uniforms: { time: { value: 0 }, opacity: { value: opacity } },
-    vertexShader: 'varying vec3 world; void main(){vec4 p=modelMatrix*instanceMatrix*vec4(position,1.);world=p.xyz;gl_Position=projectionMatrix*viewMatrix*p;}',
-    fragmentShader: `varying vec3 world; uniform float time; uniform float opacity;
-      float noise(vec3 p){return sin(p.x*1.83+sin(p.z*1.41+time*.11))*sin(p.z*2.31-p.x*.37+time*.08)*.5+.5;}
-      void main(){float n=noise(world*.8);float n2=noise(world*2.4+4.);
-      vec3 col=mix(vec3(.045,.057,.085),vec3(.17,.19,.25),n*.52+n2*.14);
-      col*=.75+min(world.y/3.,1.)*.25;gl_FragColor=vec4(col,opacity);}`
-  });
-}
-
 function gridMaterial() {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide,
@@ -112,8 +100,8 @@ export function createBoard3D(root, callbacks) {
   scene.add(new THREE.HemisphereLight(0xdce8ff, 0x3b3030, 2.4));
   const sun = new THREE.DirectionalLight(0xffdfb2, 3.1); sun.position.set(-15, 25, 12); scene.add(sun);
   const terrain = new THREE.Group(), wallGroup = new THREE.Group(), fogGroup = new THREE.Group();
-  const pawnGroup = new THREE.Group(), markGroup = new THREE.Group();
-  scene.add(terrain, wallGroup, fogGroup, pawnGroup, markGroup);
+  const pawnGroup = new THREE.Group(), markGroup = new THREE.Group(), combatGroup = new THREE.Group();
+  scene.add(terrain, wallGroup, fogGroup, pawnGroup, markGroup,combatGroup);
   const hover = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
     color: 0xe5c271, transparent: true, opacity: .32, depthWrite: false, side: THREE.DoubleSide
   }));
@@ -130,7 +118,7 @@ export function createBoard3D(root, callbacks) {
   baseGeometry.userData.shared=true;
   const counters = { frames:0, syncs:0, pawnBuilds:0, terrainBuilds:0, picks:0, panMoves:0 };
   let active = false, raf = 0, current = null, mapKey = null, animation = null;
-  let terrainKey = '', wallKey = '', fogKey = '', marksKey = '';
+  let terrainKey = '', wallKey = '', fogKey = '', marksKey = '', combatKey = '';
   let mapTexture = null, textureUrl = '', textureGeneration = 0, textureAbort = null, textureState = { status:'empty' }, fadeWalls = false, showGrid = true;
   let lastFrame = 0, dirty = true, cameraEventTime = 0, idleTimer = 0, navigating = false, pan = null;
   let drawable = false, wallBounds = [];
@@ -168,11 +156,11 @@ export function createBoard3D(root, callbacks) {
     controls.dampingFactor=1-Math.exp(-seconds/.065);
     const changed=controls.update();
     if (dirty || changed) {
-      fogGroup.children.forEach(mesh => { if (mesh.material.uniforms?.time) mesh.material.uniforms.time.value = time / 1000; });
+      for(const group of [fogGroup,wallGroup])group.children.forEach(mesh=>{if(mesh.material.uniforms?.time)mesh.material.uniforms.time.value=time/1000;});
       renderer.render(scene, camera); counters.frames++; dirty=false;
     }
     if (animation || changed || navigating || pan) { if (!raf) raf=requestAnimationFrame(frame); }
-    else if (fogGroup.children.some(mesh=>mesh.material.uniforms?.time)) idleTimer=setTimeout(invalidate,100);
+    else if ([fogGroup,wallGroup].some(group=>group.children.some(mesh=>mesh.material.uniforms?.time))) idleTimer=setTimeout(invalidate,100);
   }
   function fly(position, target, immediate = false, smoothing=.035) {
     if (immediate) { animation=null; camera.position.copy(position); controls.target.copy(target); controls.update(); invalidate(); return; }
@@ -265,7 +253,7 @@ export function createBoard3D(root, callbacks) {
       const mask = view.omniscient ? new Uint8Array(view.width * view.height).fill(2) : view.mask;
       const rectangles = data.rectangles(mask, view.width, view.height, value);
       if (!rectangles.length) continue;
-      const floor = surface(rectangles, view.width, view.height, value === 2 ? '#ffffff' : '#676c78');
+      const floor = surface(rectangles, view.width, view.height, value === 2 ? '#ffffff' : '#343b4c');
       floor.userData.floor = true; floor.material.map = mapTexture; terrain.add(floor);
       // Grid is clipped to known terrain, so it cannot disclose hidden geometry.
       const grid = surface(rectangles,view.width,view.height,'#ffffff');
@@ -284,21 +272,22 @@ export function createBoard3D(root, callbacks) {
     for (const w of walls) {
       const shape = data.wall(w, view); if (!shape) continue;
       wallBounds.push(new THREE.Box3(new THREE.Vector3(shape.x-shape.w/2,0,shape.z-shape.d/2),new THREE.Vector3(shape.x+shape.w/2,WALL_HEIGHT+.05,shape.z+shape.d/2)));
-      const type = shape.explored ? 'explored' : shape.type;
+      const type = shape.explored ? shape.type==='magic'?'magic-explored':'explored' : shape.type;
       if (!groups.has(type)) groups.set(type, []); groups.get(type).push(shape);
     }
     for (const [type, segments] of groups) {
       const opacity = Math.max(0, Math.min(1, Number(alpha))) * (fadeWalls ? .27 : 1);
-      const material = new THREE.MeshStandardMaterial({ color: colors[type], roughness: type === 'metal' ? .4 : .92,
+      const magical=type.startsWith('magic');
+      const material = magical ? magicMaterial(opacity,type==='magic-explored') : new THREE.MeshStandardMaterial({ color: colors[type], roughness: type === 'metal' ? .4 : .92,
         metalness: type === 'metal' ? .6 : .04, transparent: opacity < 1, opacity, depthWrite: opacity >= .9 });
       const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), material, segments.length);
       segments.forEach((s, index) => {
         transform.position.set(s.x, WALL_HEIGHT / 2, s.z); transform.scale.set(s.w, WALL_HEIGHT, s.d); transform.updateMatrix();
         mesh.setMatrixAt(index, transform.matrix);
-      }); mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); wallGroup.add(mesh);
+      }); mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); mesh.userData.wallType=type;wallGroup.add(mesh);
       // Pale caps make wall thickness and junctions legible from any angle.
-      const cap = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), material.clone(), segments.length);
-      cap.material.color.multiplyScalar(1.22);
+      const cap = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), magical ? new THREE.MeshBasicMaterial({color:type==='magic-explored'?'#665686':'#9ce9ff',transparent:true,opacity:opacity*.72,depthWrite:false}) : material.clone(), segments.length);
+      if(!magical)cap.material.color.multiplyScalar(1.22);
       segments.forEach((s, index) => {
         transform.position.set(s.x, WALL_HEIGHT+.025, s.z); transform.scale.set(s.w+.025, .05, s.d+.025); transform.updateMatrix(); cap.setMatrixAt(index, transform.matrix);
       }); cap.instanceMatrix.needsUpdate = true; cap.computeBoundingSphere(); wallGroup.add(cap);
@@ -309,15 +298,19 @@ export function createBoard3D(root, callbacks) {
     for (const value of view.showFog ? [0, 1] : []) {
       const rectangles = data.rectangles(view.mask, view.width, view.height, value);
       if (!rectangles.length) continue;
-      // Unknown content is absent from the scene, so fog can stay low enough to
-      // leave the figures in adjacent discovered cells comfortably visible.
-      const height = view.omniscient ? .07 : value === 0 ? .95 : .08;
-      const opacity = view.omniscient ? (value === 0 ? .4 : .18) : value === 0 ? 1 : .22;
-      const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), fogMaterial(opacity), rectangles.length);
-      rectangles.forEach((r, index) => {
-        transform.position.set(r.x+r.w/2, height/2+.025, r.y+r.h/2);
-        transform.scale.set(r.w, height, r.h); transform.updateMatrix(); mesh.setMatrixAt(index, transform.matrix);
-      }); mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); fogGroup.add(mesh);
+      // Unknown cells are absent below this raised opaque core. A lighter,
+      // rippling outer layer gives depth without revealing hidden content.
+      const height=value===0?(view.omniscient ? .95 : 1.45):.24;
+      const opacity=view.omniscient?(value===0 ? .62 : .42):value===0?1:.68;
+      const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1,8,1,8),fogMaterial(opacity,value===1),rectangles.length);
+      mesh.userData.fogState=value===0?'unknown':'explored';mesh.userData.height=height;
+      rectangles.forEach((r,index)=>{transform.position.set(r.x+r.w/2,height/2+.025,r.y+r.h/2);transform.scale.set(r.w,height,r.h);transform.updateMatrix();mesh.setMatrixAt(index,transform.matrix);});
+      mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();fogGroup.add(mesh);
+      if(value===0){
+        const shell=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1,8,1,8),fogMaterial(view.omniscient ? .12 : .22,false,true),rectangles.length);
+        rectangles.forEach((r,index)=>{transform.position.set(r.x+r.w/2,height/2+.14,r.y+r.h/2);transform.scale.set(r.w,height+.15,r.h);transform.updateMatrix();shell.setMatrixAt(index,transform.matrix);});
+        shell.instanceMatrix.needsUpdate=true;shell.computeBoundingSphere();fogGroup.add(shell);
+      }
     }
     if (view.npcMask?.length === view.width*view.height) {
       const npc=surface(data.rectangles(view.npcMask,view.width,view.height,1),view.width,view.height,'#dc4545');
@@ -352,6 +345,29 @@ export function createBoard3D(root, callbacks) {
         pawnGroup.add(group);pawns.set(token.id,group);
       }
       group.position.set(x+token.size/2,0,y+token.size/2);
+    }
+  }
+  function rebuildCombat(model,view) {
+    disposeTree(combatGroup);
+    const colors={reachable:'#63e899',dash:'#fa9648',origin:'#ffd276',teleport:'#b899ff'};
+    for(const [kind,color] of Object.entries(colors)){
+      const mask=new Uint8Array(view.width*view.height);
+      for(const cell of model?.cells||[]){
+        if(cell.kind!==kind)continue;
+        for(let y=cell.y;y<cell.y+cell.size;y++)for(let x=cell.x;x<cell.x+cell.size;x++){
+          if(x>=0&&y>=0&&x<view.width&&y<view.height&&(view.omniscient||data.cellState(view,x,y)>0))mask[y*view.width+x]=1;
+        }
+      }
+      const rectangles=data.rectangles(mask,view.width,view.height,1);if(!rectangles.length)continue;
+      const mesh=surface(rectangles,view.width,view.height,color);mesh.material.dispose();
+      mesh.material=new THREE.MeshBasicMaterial({color,transparent:true,opacity:kind==='origin' ? .5 : .32,depthWrite:false,side:THREE.DoubleSide});
+      mesh.position.y=kind==='origin' ? .048 : .04;mesh.userData.kind=kind;mesh.userData.cells=mask.reduce((sum,n)=>sum+n,0);combatGroup.add(mesh);
+      // Per-cell bright borders remain visible above the ordinary map grid.
+      const lines=[];for(let y=0;y<view.height;y++)for(let x=0;x<view.width;x++)if(mask[y*view.width+x]){
+        for(const [ax,az,bx,bz] of [[x,y,x+1,y],[x+1,y,x+1,y+1],[x+1,y+1,x,y+1],[x,y+1,x,y]])lines.push(ax,.052,az,bx,.052,bz);
+      }
+      const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(lines,3));
+      combatGroup.add(new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color,transparent:true,opacity:.85})));
     }
   }
   function rebuildMarks(marks, view) {
@@ -418,6 +434,8 @@ export function createBoard3D(root, callbacks) {
     const fk=maskKey+':'+(v.npcMask?.join('') || '');
     if (fk !== fogKey) { rebuildFog(v); fogKey = fk; }
     updatePawns(next.tokens);
+    const ck=maskKey+JSON.stringify(next.combat);
+    if(ck!==combatKey){rebuildCombat(next.combat,v);combatKey=ck;}
     const mk = maskKey + JSON.stringify(next.marks);
     if (mk !== marksKey) { rebuildMarks(next.marks,v); marksKey = mk; }
     if (firstMap) {
@@ -500,10 +518,13 @@ export function createBoard3D(root, callbacks) {
     setWallFade(value) { fadeWalls=!!value; if(current) sync(current); },
     inspect() {
       return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost })),
+        combat:{mode:current?.combat?.mode||null,cells:combatGroup.children.filter(m=>m.userData.kind).map(m=>({kind:m.userData.kind,count:m.userData.cells}))},
+        magicWalls:wallGroup.children.filter(m=>m.userData.wallType?.startsWith('magic')).reduce((sum,m)=>sum+m.count,0),
+        fogLayers:fogGroup.children.filter(m=>m.userData.fogState).map(m=>({state:m.userData.fogState,height:m.userData.height,opacity:m.material.uniforms.opacity.value})),
         wallSegments:wallGroup.children.filter(m=>m.isInstancedMesh).reduce((sum,m)=>sum+m.count,0)/2,
         fogVolumes:fogGroup.children.reduce((sum,m)=>sum+(m.isInstancedMesh?m.count:0),0), wallFade:fadeWalls, camera:camera.position.toArray(), target:controls.target.toArray(),
         render: { calls:renderer.info.render.calls, triangles:renderer.info.render.triangles, geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures }, controlState:pan?2:controls.state, running:active&&drawable, framePending:!!raf };
     },
-    dispose() { setActive(false);textureGeneration++;textureAbort?.abort();window.removeEventListener('blur',blur);observer.disconnect();controls.dispose();[terrain,wallGroup,fogGroup,pawnGroup,markGroup].forEach(disposeTree);mapTexture?.dispose();bodyGeometry.dispose();baseGeometry.dispose();hover.geometry.dispose();hover.material.dispose();hoverBorder.geometry.dispose();hoverBorder.material.dispose();renderer.dispose();canvas.remove(); }
+    dispose() { setActive(false);textureGeneration++;textureAbort?.abort();window.removeEventListener('blur',blur);observer.disconnect();controls.dispose();[terrain,wallGroup,fogGroup,pawnGroup,markGroup,combatGroup].forEach(disposeTree);mapTexture?.dispose();bodyGeometry.dispose();baseGeometry.dispose();hover.geometry.dispose();hover.material.dispose();hoverBorder.geometry.dispose();hoverBorder.material.dispose();renderer.dispose();canvas.remove(); }
   };
 }

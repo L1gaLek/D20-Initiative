@@ -105,6 +105,16 @@
 }
 #board-3d-fallback { color: #e5ba7d; font-size: 12px; margin: 8px 0 0; }
 #board-wrapper:fullscreen { width: 100vw !important; height: 100vh !important; border: 0; }
+.board-3d-combat { position:absolute; z-index:2; right:12px; bottom:12px; display:flex; align-items:center; flex-wrap:wrap; gap:10px; max-width:calc(100% - 24px); padding:10px 12px; border:1px solid #ddb96666; border-radius:12px; background:#191e28f2; box-shadow:0 6px 24px #0006; }
+.board-3d-combat[hidden], .board-3d-fog-legend[hidden], .board-3d-combat button[hidden] { display:none; }
+.board-3d-combat__summary { color:#eadbb8; font-size:12px; overflow-wrap:anywhere; }
+.board-3d-combat button { margin:0; padding:7px 13px; min-height:32px; border-radius:8px; font-size:12px; }
+.board-3d-combat button[aria-pressed='true'] { border-color:#ffc06d; background:linear-gradient(#b86428,#763410); box-shadow:0 0 12px #fa964833; }
+.board-3d-fog-legend { position:absolute; left:14px; bottom:42px; display:flex; flex-wrap:wrap; gap:10px; padding:6px 9px; border:1px solid #acbad42b; border-radius:7px; background:#141c28de; font-size:10px; pointer-events:none; color:#c7cbd4; }
+.board-3d-fog-legend span { display:flex; align-items:center; gap:5px; }
+.board-3d-fog-legend span::before { content:''; width:8px; height:8px; border:1px solid #b9c7e166; border-radius:3px; background:#afc79d; }
+.board-3d-fog-legend .fog-explored::before { background:#4d556e; }
+.board-3d-fog-legend .fog-unknown::before { background:#10192a; }
 @media (max-width: 600px) {
   .board-3d-toolbar { top: 6px; left: 6px; right: 6px; max-width: calc(100% - 12px); gap: 1px; }
   .board-3d-toolbar button, .board-3d-help summary { padding: 7px 8px; font-size: 12px; }
