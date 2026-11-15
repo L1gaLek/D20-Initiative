@@ -69,12 +69,38 @@ test('human appearance resolves worn inventory items and legacy names, validates
 test('a shield occupies exactly one hand, follows the chosen weapon hand, and resolves legacy saves without modifying them',()=>{
   const db=require('../equipment_srd5_ru.json').tabs;
   const sheet={inventory:db,appearance:{slots:{right:'weapon_longsword',left:'weapon_shortsword',shield:'armor_shield'}}};
-  const original=structuredClone(sheet);assert.deepEqual(AvatarData.hands(sheet),{right:'weapon_longsword',left:'',shield:true,shieldHand:'left'});assert.deepEqual(sheet,original);
+  const original=structuredClone(sheet);assert.deepEqual(AvatarData.hands(sheet),{right:'weapon_longsword',left:'',shield:true,shieldHand:'left',twoHanded:null});assert.deepEqual(sheet,original);
   AvatarData.syncHands(sheet,'shield');assert.equal(sheet.appearance.slots.left,'');
   sheet.appearance.slots.left='weapon_shortsword';AvatarData.syncHands(sheet,'left');assert.equal(sheet.appearance.slots.right,'');assert.equal(sheet.appearance.slots.shieldHand,'right');
   sheet.appearance.slots.right='weapon_longsword';AvatarData.syncHands(sheet,'right');assert.equal(sheet.appearance.slots.left,'');assert.equal(sheet.appearance.slots.shieldHand,'left');
   sheet.appearance.slots.shield='';sheet.appearance.slots.left='weapon_shortsword';AvatarData.syncHands(sheet,'left');assert.equal(sheet.appearance.slots.right,'weapon_longsword');assert.equal(AvatarData.hands(sheet).shieldHand,null);
   sheet.appearance.slots.shield='armor_shield';sheet.appearance.slots.right='deleted-item';assert.equal(AvatarData.hands(sheet).shieldHand,'right');assert.equal(AvatarData.hands(sheet).left,'weapon_shortsword');
+});
+
+test('two-handed properties occupy both hands, remove shield AC and resolve competing new choices without changing inventory',()=>{
+  const db=require('../equipment_srd5_ru.json').tabs,utils= require('node:fs').readFileSync(require('node:path').resolve(__dirname,'../char_sheet/sheet-utils.js'),'utf8');
+  const vm=require('node:vm'),ctx={window:{},console};vm.createContext(ctx);vm.runInContext(utils,ctx);
+  const sheet={inventory:structuredClone(db),appearance:{slots:{armor:'armor_plate',right:'weapon_longsword',left:'weapon_shortsword',shield:'armor_shield'}}};
+  const inventory=structuredClone(sheet.inventory),slots=sheet.appearance.slots;
+  assert.equal(AvatarData.isTwoHanded(db.weapons.find(i=>i.id==='weapon_longsword')),false,'versatile is not two-handed');
+  for(const item of db.weapons.filter(i=>/two|двуруч/i.test(i.weapon.properties_en+' '+i.weapon.properties_ru))){
+    assert.equal(AvatarData.isTwoHanded(item),true,item.name_ru);
+    for(const hand of ['right','left']){
+      Object.assign(slots,{right:'weapon_longsword',left:'weapon_shortsword',shield:'armor_shield',[hand]:item.id});
+      ctx.window.__equipAc.applyAutoAcToSheet(sheet);assert.equal(sheet.vitality.ac.value,20);
+      const before=JSON.stringify(sheet),display=AvatarData.hands(sheet);assert.equal(display.twoHanded,hand);assert.equal(display.shield,false);assert.equal(JSON.stringify(sheet),before);
+      AvatarData.syncHands(sheet,hand);assert.equal(slots[hand],item.id);assert.equal(slots[hand==='right'?'left':'right'],'');assert.equal(slots.shield,'');
+      ctx.window.__equipAc.applyAutoAcToSheet(sheet);assert.equal(sheet.vitality.ac.value,18,'removed shield no longer contributes AC');
+    }
+  }
+  assert.equal(AvatarData.isTwoHanded({weapon:{properties_ru:'Тяжёлое; Двуручное'}}),true);
+  assert.equal(AvatarData.isTwoHanded({weapon:{properties_en:'Heavy, Two-‐handed'}}),true);
+  assert.equal(AvatarData.isTwoHanded({properties:['two-handed']}),true);
+  Object.assign(slots,{right:'weapon_greatsword',left:'weapon_shortsword',shield:''});AvatarData.syncHands(sheet,'left');assert.equal(slots.right,'');assert.equal(slots.left,'weapon_shortsword');
+  Object.assign(slots,{right:'weapon_greatsword',left:'',shield:'armor_shield'});AvatarData.syncHands(sheet,'shield');assert.equal(slots.right,'');assert.equal(slots.shield,'armor_shield');
+  slots.armor='';sheet.vitality.ac.value=17;ctx.window.__equipAc.applyAutoAcToSheet(sheet);assert.equal(sheet.vitality.ac.value,19);
+  slots.right='weapon_greatsword';AvatarData.syncHands(sheet,'right');ctx.window.__equipAc.applyAutoAcToSheet(sheet);ctx.window.__equipAc.applyAutoAcToSheet(sheet);assert.equal(sheet.vitality.ac.value,17,'natural/class AC is restored once after unequipping the shield');
+  assert.deepEqual(sheet.inventory,inventory,'unequipped items are still in inventory');
 });
 
 test('men and women have distinct hairstyles and retain each selection when changing gender',()=>{

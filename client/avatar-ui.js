@@ -1,6 +1,6 @@
 (function(){
   'use strict';
-  const moduleUrl=new URL('board-3d/portrait.mjs?v=20261115-human-poses-2',document.currentScript.src);
+  const moduleUrl=new URL('board-3d/portrait.mjs?v=20261115-armory-1',document.currentScript.src);
   let loading=null,current=null,generation=0;
   const api=window.Character3D={inspect:()=>current?.view?.inspect()||null};
   api.dispose=()=>{generation++;current?.observer?.disconnect();current?.abort?.abort();current?.view?.dispose();current=null;};
@@ -15,7 +15,8 @@
       if(hairGender!==gender){select.replaceChildren(...data.hairstylesFor(gender).map(([value,label])=>new Option(label,value)));hairGender=gender;}
       select.value=data.hairFor(gender,sheet.appearance?.model3d?.hairStyle);
       const equipped=data.hands(sheet);
-      for(const hand of ['right','left']){const input=root.querySelector(`[data-appearance-slot="${hand}"]`);if(input){input.value=equipped[hand];input.title=equipped.shieldHand===hand?'В этой руке щит. Выберите оружие, чтобы перенести щит в другую руку.':'';}}
+      for(const hand of ['right','left']){const input=root.querySelector(`[data-appearance-slot="${hand}"]`);if(input){input.value=equipped[hand];input.title=equipped.twoHanded&&equipped.twoHanded!==hand?'Рука занята двуручным оружием. Выбор другого оружия снимет двуручное.':equipped.shieldHand===hand?'В этой руке щит. Выберите оружие, чтобы перенести щит в другую руку.':'';}}
+      const shield=root.querySelector('[data-appearance-slot="shield"]');if(shield){if(equipped.twoHanded)shield.value='';shield.title=equipped.twoHanded?'Для щита нужно снять двуручное оружие. При выборе щита оно снимется автоматически.':'';}
       const config=desc();entry.view?.update(config);
       status.textContent=config?'Человек · '+(gender==='female'?'Женский':'Мужской'):'3D-модели доступны для расы «Человек».';
       host.classList.toggle('avatar-portrait--empty',!config);

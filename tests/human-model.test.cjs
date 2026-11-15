@@ -27,7 +27,7 @@ test('anatomical model and every database armor have valid surfaces and normaliz
           assert.ok(Math.abs(sum-1)<1e-5,'clipped seams retain normalized weights');
         }
       });
-      assert.equal(skeletons.size,1);assert.equal(anatomy,true);assert.ok(triangles>25000);assert.ok(meshes<=20,'bounded draw calls despite detailed equipment');
+      assert.equal(skeletons.size,1);assert.equal(anatomy,true);assert.ok(triangles>25000&&triangles<150000,'detailed fittings retain a bounded geometry budget');assert.ok(meshes<=20,'bounded draw calls despite detailed equipment');
       const skeleton=[...skeletons][0];assert.equal(skeleton.bones.length,163);assert.ok(skeleton.bones.some(b=>b.name==='finger3-3.R'));
       skeleton.computeBoneTexture();let released=false;skeleton.boneTexture.addEventListener('dispose',()=>{released=true;});figure.userData.dispose();assert.equal(released,true);
     }finally{dispose(figure);}
@@ -64,6 +64,10 @@ test('weapons sit inside curled palms and shields clear both forearms, including
             const side=shield.userData.hand,handle=shield.getObjectByName('shield-hand-grip').getWorldPosition(new T.Vector3()),knuckles=new T.Vector3();
             for(let finger=2;finger<=5;finger++)knuckles.addScaledVector(bones.get(`finger${finger}-1.${side}`).getWorldPosition(new T.Vector3()),.25);
             assert.ok(handle.distanceTo(knuckles)<.04,'shield hand retains the back grip throughout the gait');
+            const across=bones.get(`finger2-1.${side}`).getWorldPosition(new T.Vector3()).sub(bones.get(`finger5-1.${side}`).getWorldPosition(new T.Vector3())).normalize();
+            const forward=bones.get(`finger3-1.${side}`).getWorldPosition(new T.Vector3()).sub(bones.get(`wrist.${side}`).getWorldPosition(new T.Vector3()));forward.addScaledVector(across,-forward.dot(across)).normalize();
+            const palm=new T.Vector3().crossVectors(across,forward).multiplyScalar(side==='R'?1:-1).normalize(),outside=new T.Vector3(0,0,1).applyQuaternion(shield.getWorldQuaternion(new T.Quaternion()));
+            assert.ok(palm.dot(outside)<-.98,'knuckles face the wooden back and the palm faces the wearer');
             const elbow=bones.get(`lowerarm01.${side}`).getWorldPosition(new T.Vector3()),wrist=bones.get(`wrist.${side}`).getWorldPosition(new T.Vector3());
             const axis=wrist.clone().sub(elbow).normalize(),body=figure.getObjectByName('anatomical-body'),a=body.geometry.attributes;
             for(const strap of shield.children.filter(o=>o.name==='shield-forearm-strap')){
@@ -84,6 +88,39 @@ test('weapons sit inside curled palms and shields clear both forearms, including
         }
       }finally{dispose(figure);}
     }
+  }
+});
+
+test('one enlarged greatsword is held by both hands throughout walking, for either dominant hand and both bodies',async()=>{
+  const {createHuman}=await human,T=await three;
+  for(const model of ['human-male','human-female'])for(const side of ['R','L']){
+    const {default:asset}=await import(pathToFileURL(path.resolve(__dirname,`../assets/models/human/${model.slice(6)}.mjs`)).href),defs=new Map(asset.bones.map(b=>[b.name,b]));
+    const hand=side==='R'?'right':'left',figure=createHuman({...config,model,armor:'half-plate',[hand]:'great',twoHanded:hand,shield:true});
+    try{
+      const weapons=[],shields=[];let skeleton;figure.traverse(o=>{if(o.isSkinnedMesh)skeleton=o.skeleton;if(o.userData.attachment==='weapon')weapons.push(o);if(o.userData.attachment==='shield')shields.push(o);});
+      assert.equal(figure.userData.stance,'two-handed');assert.equal(weapons.length,1);assert.equal(shields.length,0);
+      const weapon=weapons[0],bones=new Map(skeleton.bones.map(b=>[b.name,b]));
+      for(const moving of [false,true,true,false]){
+        figure.userData.pose(.14,moving);figure.updateMatrixWorld(true);
+        const center=weapon.getWorldPosition(new T.Vector3()),axis=new T.Vector3(0,1,0).applyQuaternion(weapon.getWorldQuaternion(new T.Quaternion()));
+        const centers=[];
+        for(const h of ['R','L']){
+          const p=new T.Vector3();for(let finger=2;finger<=5;finger++)p.addScaledVector(bones.get(`finger${finger}-1.${h}`).getWorldPosition(new T.Vector3()),.25);
+          const delta=p.clone().sub(center),along=delta.dot(axis);centers.push(along);
+          assert.ok(delta.addScaledVector(axis,-along).length()<.055,'both palms stay wrapped around the same hilt');
+          assert.ok(along>-.05&&along<.17,'both hands remain on the extended grip');
+          for(let finger=2;finger<=5;finger++){
+            const name=`finger${finger}-3.${h}`,definition=defs.get(name),gripCenter=center.clone().addScaledVector(axis,h===side?0:.115);
+            const tip=new T.Vector3(...definition.tail).sub(new T.Vector3(...definition.head)).applyMatrix4(bones.get(name).matrixWorld).sub(gripCenter),axial=tip.dot(axis),radial=tip.addScaledVector(axis,-axial).length();
+            assert.ok(radial>.008&&radial<.036,'both sets of fingers curl around the shared handle');assert.ok(Math.abs(axial)<.055);
+          }
+        }
+        assert.ok(Math.abs(centers[0]-centers[1])>.085,'hands do not overlap on the grip');
+        let tip=0;
+        figure.traverse(o=>{if(!o.isSkinnedMesh)return;const a=o.geometry.attributes;for(let i=0;i<a.position.count;i++){if(skeleton.bones[a.skinIndex.array[i*4]].name!==`wrist.${side}`)continue;const p=o.localToWorld(o.getVertexPosition(i,new T.Vector3())).sub(center);tip=Math.max(tip,-p.dot(axis));}});
+        assert.ok(tip>1.10,'the actual blade is over twice the longsword blade length');
+      }
+    }finally{dispose(figure);}
   }
 });
 

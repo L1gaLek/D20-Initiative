@@ -1,9 +1,9 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
-import maleModel from '../../assets/models/human/male.mjs?v=20261115-human-poses-2';
-import femaleModel from '../../assets/models/human/female.mjs?v=20261115-human-poses-2';
-import { createHair, headMapping } from './human-hair.mjs?v=20261115-human-poses-2';
-import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261115-human-poses-2';
-import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261115-human-poses-2';
+import maleModel from '../../assets/models/human/male.mjs?v=20261115-armory-1';
+import femaleModel from '../../assets/models/human/female.mjs?v=20261115-armory-1';
+import { createHair, headMapping } from './human-hair.mjs?v=20261115-armory-1';
+import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261115-armory-1';
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261115-armory-1';
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
 function prepare(model){
@@ -112,8 +112,10 @@ export function createHuman(config){
     geometry.setAttribute('skinWeight',new THREE.Float32BufferAttribute(weights,4));
     const mesh=new THREE.SkinnedMesh(geometry,material);mesh.frustumCulled=false;body.add(mesh);mesh.bind(skeleton);return mesh;
   }
+  // Keep the continuous body under fitted pieces. Open necklines, shoulders,
+  // waist and gaps between articulated armor must reveal skin rather than holes.
   const armored=config.armor&&config.armor!=='none';
-  const skin=surface(materials.skin,(p,b)=>!armored||p[1]>1.415||config.armor!=='plate'&&/^(wrist|metacarpal|finger)/.test(b));skin.name='anatomical-body';
+  const skin=surface(materials.skin,p=>!armored||p[1]>.34);skin.name='anatomical-body';
   const skinPositions=skin.geometry.attributes.position.array,colors=new Float32Array(skinPositions.length);const color=new THREE.Color();
   for(let i=0;i<skinPositions.length/3;i++){
     const [x,y,z]=headFit.inverse(Array.from(skinPositions.slice(i*3,i*3+3)));color.setRGB(1,1,1);
@@ -152,8 +154,8 @@ export function createHuman(config){
     for(const [i,side] of ['L','R'].entries()){
       const sign=i?1:-1,leg=byName.get(`upperleg01.${side}`),knee=byName.get(`lowerleg01.${side}`),arm=byName.get(`upperarm01.${side}`),elbow=byName.get(`lowerarm01.${side}`);
       leg.rotation.x=rest.get(leg.name).x+stride*.43*sign;knee.rotation.x=rest.get(knee.name).x+Math.max(0,-stride*sign)*.62;
-      arm.rotation.x=rest.get(arm.name).x-stride*(side===posePlan.shieldSide?.06:(config.right||config.left)?.12:.26)*sign;
-      elbow.rotation.x=rest.get(elbow.name).x+Math.abs(stride)*.09;
+      arm.rotation.x=rest.get(arm.name).x-(posePlan.twoSide?0:stride*(side===posePlan.shieldSide?.06:(config.right||config.left)?.12:.26)*sign);
+      elbow.rotation.x=rest.get(elbow.name).x+(posePlan.twoSide?0:Math.abs(stride)*.09);
     }
     body.position.y=moving?Math.abs(Math.sin(phase))*.015:0;body.rotation.y=moving?stride*.025:0;
   };

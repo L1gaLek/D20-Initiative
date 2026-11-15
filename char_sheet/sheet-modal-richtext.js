@@ -1064,7 +1064,7 @@ function bindEditableInputs(root, player, canEdit) {
         setByPath(player.sheet.parsed, path, val);
         if(path.startsWith('appearance.slots.')){
           window.AvatarData?.syncHands(player.sheet.parsed,path.split('.')[2]);
-          for(const hand of ['right','left']){const select=root.querySelector(`[data-appearance-slot="${hand}"]`);if(select)select.value=player.sheet.parsed.appearance.slots[hand]||'';}
+          for(const hand of ['right','left','shield']){const select=root.querySelector(`[data-appearance-slot="${hand}"]`);if(select)select.value=player.sheet.parsed.appearance.slots[hand]||'';}
         }
         if(path==='notes.details.gender.value')window.AvatarData?.rememberHair(player.sheet.parsed,previousGender);
         if(path==='appearance.model3d.hairStyle')window.AvatarData?.rememberHair(player.sheet.parsed);

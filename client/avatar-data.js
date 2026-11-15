@@ -18,21 +18,40 @@
     else hair.hairStyle=hairFor(gender,hair.hairStyle);
     styles[gender]=hair.hairStyle;
   }
+  function isTwoHanded(item){
+    if(!item)return false;
+    const w=item.weapon||{};
+    if(w.twoHanded===true||w.two_handed===true||item.twoHanded===true)return true;
+    const properties=[w.properties_ru,w.properties_en,w.properties,item.properties];
+    const value=JSON.stringify(properties).toLowerCase().replace(/[^a-zа-яё]/g,'');
+    return value.includes('twohanded')||value.includes('двуручн');
+  }
   function hands(sheet,changed){
     const slots=sheet?.appearance?.slots||{},inv=sheet?.inventory||{},shield=itemIn(inv.armor,slots.shield);
-    const hasShield=!!shield&&(shield.armor?.type==='shield'||/щит|shield/i.test(text(shield)));
-    let right=itemIn(inv.weapons,slots.right)?String(slots.right):'',left=itemIn(inv.weapons,slots.left)?String(slots.left):'',shieldHand=null;
+    let hasShield=!!shield&&(shield.armor?.type==='shield'||/щит|shield/i.test(text(shield)));
+    let right=itemIn(inv.weapons,slots.right)?String(slots.right):'',left=itemIn(inv.weapons,slots.left)?String(slots.left):'',shieldHand=null,twoHanded=null;
+    const two=hand=>isTwoHanded(itemIn(inv.weapons,hand==='right'?right:left));
+    // The last selected item wins. Read-only legacy saves resolve without
+    // mutation; an actual edit writes the same resolution in syncHands below.
+    if(changed==='shield'&&hasShield){if(two('right'))right='';if(two('left'))left='';}
+    if(changed==='right'&&right&&!two('right')&&two('left'))left='';
+    if(changed==='left'&&left&&!two('left')&&two('right'))right='';
+    if(two('right')||two('left')){
+      twoHanded=changed==='left'&&two('left')?'left':two('right')?'right':'left';
+      if(twoHanded==='right')left='';else right='';hasShield=false;
+    }
     if(hasShield){
       shieldHand=slots.shieldHand==='right'?'right':'left';
       if(changed==='right'&&right)shieldHand='left';else if(changed==='left'&&left)shieldHand='right';
       else if(left&&!right)shieldHand='right';else if(right&&!left)shieldHand='left';
       if(shieldHand==='left')left='';else right='';
     }
-    return {right,left,shield:hasShield,shieldHand};
+    return {right,left,shield:hasShield,shieldHand,twoHanded};
   }
   function syncHands(sheet,changed){
     const slots=(sheet.appearance||={}).slots||={},resolved=hands(sheet,changed);
-    slots.right=resolved.right;slots.left=resolved.left;if(resolved.shieldHand)slots.shieldHand=resolved.shieldHand;return resolved;
+    slots.right=resolved.right;slots.left=resolved.left;if(resolved.shieldHand)slots.shieldHand=resolved.shieldHand;
+    if(resolved.twoHanded)slots.shield='';return resolved;
   }
   const armorKinds=[
     ['studded-leather',/studded|прокл[её]пан/i],['chain-shirt',/chain.?shirt|кольчужная рубаха/i],
@@ -69,9 +88,9 @@
     const hair=ap.model3d||{};
     return {model:'human-'+gender,hair:hairFor(gender,hair.hairStyle),
       hairColor:/^#[\da-f]{6}$/i.test(hair.hairColor)?hair.hairColor:'#493124',
-      armor:armorKind(itemIn(inv.armor,slots.armor)),shield:equipped.shield,shieldHand:equipped.shieldHand,
+      armor:armorKind(itemIn(inv.armor,slots.armor)),shield:equipped.shield,shieldHand:equipped.shieldHand,twoHanded:equipped.twoHanded,
       right:swordKind(itemIn(inv.weapons,equipped.right)),left:swordKind(itemIn(inv.weapons,equipped.left))};
   }
-  const api={describe,armorKind,swordKind,hairstyles,hairstylesFor,genderOf,hairFor,rememberHair,hands,syncHands};
+  const api={describe,armorKind,swordKind,isTwoHanded,hairstyles,hairstylesFor,genderOf,hairFor,rememberHair,hands,syncHands};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.AvatarData=api;
 })(typeof window!=='undefined'?window:globalThis);

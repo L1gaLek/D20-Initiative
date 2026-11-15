@@ -1,6 +1,6 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
-import { createHuman } from './human.mjs?v=20261115-human-poses-2';
+import { createHuman } from './human.mjs?v=20261115-armory-1';
 
 function disposeFigure(figure){
   if(!figure)return;const materials=new Set();figure.traverse(o=>{o.userData.dispose?.();o.geometry?.dispose();if(o.material)materials.add(o.material);});materials.forEach(m=>m.dispose());figure.removeFromParent();
@@ -17,7 +17,15 @@ export function createPortrait(host){
   const rim=new THREE.DirectionalLight('#9bbbd4',2.0);rim.position.set(3,2,-3);scene.add(rim);
   const base=new THREE.Mesh(new THREE.CylinderGeometry(.43,.47,.1,48),new THREE.MeshStandardMaterial({color:'#34343c',metalness:.3,roughness:.5}));base.position.y=.065;scene.add(base);
   const ring=new THREE.Mesh(new THREE.TorusGeometry(.445,.009,6,48),new THREE.MeshStandardMaterial({color:'#ba9556',metalness:.7,roughness:.3}));ring.rotation.x=Math.PI/2;ring.position.y=.117;scene.add(ring);
-  let figure=null,config=null,styleKey='',frame=0,walking=false,disposed=false,last=0;
+  let figure=null,config=null,styleKey='',frame=0,walking=false,disposed=false,last=0,regularDistance=null;
+  const tall=value=>!!(value?.twoHanded||value?.right==='great'||value?.left==='great');
+  function fitGreatsword(){
+    if(!figure||!tall(config))return;
+    const box=new THREE.Box3().setFromObject(figure,true),offset=camera.position.clone().sub(controls.target);let radius=0;
+    for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z])radius=Math.max(radius,new THREE.Vector3(x,y,z).distanceTo(controls.target));
+    const fov=THREE.MathUtils.degToRad(camera.fov),horizontal=2*Math.atan(Math.tan(fov/2)*camera.aspect),distance=radius/Math.sin(Math.min(fov,horizontal)/2)*1.05,currentDistance=offset.length();
+    controls.maxDistance=Math.max(5,distance+.3,currentDistance);camera.position.copy(controls.target).addScaledVector(offset.normalize(),Math.max(currentDistance,distance));controls.update();
+  }
   function draw(time){
     frame=0;if(disposed)return;
     if(walking&&figure){figure.userData.pose(Math.min(.06,(time-(last||time-16))/1000)*1.5,true);last=time;}
@@ -25,11 +33,16 @@ export function createPortrait(host){
   }
   function invalidate(){if(!disposed&&!frame)frame=requestAnimationFrame(draw);}
   controls.addEventListener('change',invalidate);
-  const resize=new ResizeObserver(()=>{if(!host.clientWidth||!host.clientHeight)return;renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/host.clientHeight;camera.updateProjectionMatrix();invalidate();});resize.observe(host);
+  const resize=new ResizeObserver(()=>{if(!host.clientWidth||!host.clientHeight)return;renderer.setSize(host.clientWidth,host.clientHeight,false);camera.aspect=host.clientWidth/host.clientHeight;camera.updateProjectionMatrix();fitGreatsword();invalidate();});resize.observe(host);
   const visibility=()=>{if(document.hidden){if(frame)cancelAnimationFrame(frame);frame=0;last=0;}else invalidate();};document.addEventListener('visibilitychange',visibility);
   canvas.addEventListener('contextmenu',e=>e.preventDefault());
   return {
-    update(next){const k=JSON.stringify(next);if(k===styleKey)return;config=next;styleKey=k;disposeFigure(figure);figure=next?createHuman(next):null;if(figure)scene.add(figure);base.visible=ring.visible=!!figure;invalidate();},
+    update(next){
+      const k=JSON.stringify(next);if(k===styleKey)return;
+      const changedHeight=tall(next)!==tall(config);
+      if(changedHeight){const offset=camera.position.clone().sub(controls.target),distance=offset.length();if(tall(next))regularDistance=distance;controls.target.y=tall(next)?1.10:.85;camera.position.copy(controls.target).addScaledVector(offset.normalize(),tall(next)?distance:regularDistance||distance);controls.maxDistance=5;controls.update();}
+      config=next;styleKey=k;disposeFigure(figure);figure=next?createHuman(next):null;if(figure)scene.add(figure);if(changedHeight)fitGreatsword();base.visible=ring.visible=!!figure;invalidate();
+    },
     walk(value){walking=!!value;last=0;if(!walking)figure?.userData.pose(0,false);invalidate();},
     inspect(){return {ready:!!figure,config,walking,stance:figure?.userData.stance||null,angle:figure?.userData.walkAngle||0,camera:camera.position.toArray(),render:{geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};},
     dispose(){disposed=true;cancelAnimationFrame(frame);resize.disconnect();controls.dispose();document.removeEventListener('visibilitychange',visibility);disposeFigure(figure);for(const m of [base,ring]){m.geometry.dispose();m.material.dispose();}renderer.dispose();renderer.forceContextLoss();canvas.remove();}
