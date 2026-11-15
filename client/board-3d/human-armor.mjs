@@ -169,7 +169,7 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
       if(light)for(let i=0;i<12;i++){const y=min+.025+i*.022;if(y>top(0)-.015)break;for(const s of [-1,1])line([point(y,s*.10,.015),point(y+.013,-s*.10,.015)],m.linen,.0013);}
     }
     if(kind==='studded-leather')for(let row=0;row<Math.ceil((max-min)/.031);row++)for(let col=0;col<26;col++){
-      const a=(col+(row%2)*.5)/26*tau,y=min+.016+row*.031,raised=Math.cos(a)>.75&&Math.abs(Math.sin(a))>.10&&y<1.32;
+      const a=(col+(row%2)*.5)/26*tau,y=min+.016+row*.031,raised=!female&&Math.cos(a)>.75&&Math.abs(Math.sin(a))>.10&&y<1.32;
       if(y<top(a)-.012)stud(point(y,a,raised?.027:.016),.0042,bone,row%3?m.edge:m.trim);
     }
     if(kind==='hide'){

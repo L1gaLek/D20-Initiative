@@ -1,9 +1,9 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
-import maleModel from '../../assets/models/human/male.mjs?v=20261116-reference-armory-1';
-import femaleModel from '../../assets/models/human/female.mjs?v=20261116-reference-armory-1';
-import { createHair, headMapping } from './human-hair.mjs?v=20261116-reference-armory-1';
-import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261116-reference-armory-1';
-import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261116-reference-armory-1';
+import maleModel from '../../assets/models/human/male.mjs?v=20261116-reference-armory-2';
+import femaleModel from '../../assets/models/human/female.mjs?v=20261116-reference-armory-2';
+import { createHair, headMapping } from './human-hair.mjs?v=20261116-reference-armory-2';
+import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261116-reference-armory-2';
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261116-reference-armory-2';
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
 function prepare(model){
