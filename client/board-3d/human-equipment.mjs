@@ -1,7 +1,7 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 
-import { dressArmor } from './human-armor.mjs?v=20261115-armory-1';
-export { femaleTorsoProfile } from './human-armor.mjs?v=20261115-armory-1';
+import { dressArmor } from './human-armor.mjs?v=20261115-fitted-armor-1';
+export { femaleTorsoProfile } from './human-armor.mjs?v=20261115-fitted-armor-1';
 
 // Rigid fittings share their parent's animation joint. Merge by material after
 // construction, while leaving skinned clothing and the bone hierarchy intact.
@@ -73,7 +73,8 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     // Evaluate the actual shield curvature at their X positions, not a guessed
     // offset at its center, so switching hands does not mirror a collision.
     const backDepth=x=>.007+Math.max(0,1-(x/.16)**2)*.037;
-    const clearance=Math.max(...[[arm.joint,.038],[arm.target,.033],[hand,.022]].map(([p,r])=>{const q=p.clone().sub(center).applyQuaternion(shieldInverse);return q.z+r+.006-backDepth(q.x);}));
+    const samples=[[arm.joint,armored?.046:.038],[arm.target,armored?.043:.033],[hand,.022],[arm.joint.clone().lerp(arm.target,.23),armored?.067:.044],[arm.joint.clone().lerp(arm.target,.66),armored?.052:.030]];
+    const clearance=Math.max(...samples.map(([p,r])=>{const q=p.clone().sub(center).applyQuaternion(shieldInverse);return q.z+r+.006-backDepth(q.x);}));
     center.addScaledVector(normal,clearance);
     const inverse=arm.lowerQ.clone().invert();g.position.copy(center).sub(arm.joint).applyQuaternion(inverse);g.quaternion.copy(inverse).multiply(shieldQ);bone.add(g);g.name='detailed-shield';g.userData.attachment='shield';g.userData.hand=side;
     const wood=mat('#50402f'),paint=mat('#314d59',.32,.48),rear=mat('#342c24');texture(wood,'leather');
@@ -92,7 +93,7 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     // Back straps and hand grip are modeled too, visible when orbiting the token.
     const forearm=arm.target.clone().sub(arm.joint).applyQuaternion(shieldInverse).normalize(),up=new THREE.Vector3(0,1,0).addScaledVector(forearm,-forearm.y).normalize(),out=new THREE.Vector3().crossVectors(forearm,up).normalize();
     for(const t of [.23,.66]){
-      const p=arm.joint.clone().lerp(arm.target,t).sub(center).applyQuaternion(shieldInverse),points=[],radius=t<.5?(armored?.054:.048):(armored?.044:.033);
+      const p=arm.joint.clone().lerp(arm.target,t).sub(center).applyQuaternion(shieldInverse),points=[],radius=t<.5?(armored?.068:.048):(armored?.056:.033);
       for(let i=0;i<=28;i++){const a=i/28*Math.PI*2;points.push(p.clone().addScaledVector(up,Math.cos(a)*radius).addScaledVector(out,Math.sin(a)*radius).toArray());}
       line(points,.006,m.leather);
       const strap=new THREE.Object3D();strap.name='shield-forearm-strap';strap.position.copy(p);strap.userData.radius=radius;g.add(strap);

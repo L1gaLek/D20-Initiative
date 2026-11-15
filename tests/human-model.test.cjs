@@ -132,6 +132,73 @@ test('every male and female hairstyle builds a finite, batched anatomical model'
   }
 });
 
+test('held wrists continue the forearm without backward bending or a twist at the wrist seam',async()=>{
+  const {createHuman}=await human,T=await three;
+  const variants=[{right:'long'},{left:'long'},{right:'long',left:'short'},{right:'long',shield:true},{left:'long',shield:true,shieldHand:'right'},{right:'great',twoHanded:'right'},{left:'great',twoHanded:'left'}];
+  for(const model of ['human-male','human-female']){
+    const {default:asset}=await import(pathToFileURL(path.resolve(__dirname,`../assets/models/human/${model.slice(6)}.mjs`)).href),defs=new Map(asset.bones.map(b=>[b.name,b]));
+    for(const variant of variants){
+      const f=createHuman({...config,model,armor:'plate',...variant});
+      try{
+        let skeleton;f.traverse(o=>{if(o.isSkinnedMesh)skeleton=o.skeleton;});const bones=new Map(skeleton.bones.map(b=>[b.name,b]));
+        for(const moving of [false,true,false]){
+          f.userData.pose(.14,moving);f.updateMatrixWorld(true);
+          for(const side of ['R','L']){
+            if(!variant[side==='R'?'right':'left']&&!variant.twoHanded)continue;
+            const point=n=>bones.get(`${n}.${side}`).getWorldPosition(new T.Vector3()),rest=n=>new T.Vector3(...defs.get(`${n}.${side}`).head);
+            const forearm=point('wrist').sub(point('lowerarm01')).normalize(),forward=point('finger3-1').sub(point('wrist')).normalize();
+            assert.ok(forearm.angleTo(forward)<30*Math.PI/180,`${model}/${side} has a neutral wrist, not a hand folded back over the forearm`);
+            const across=point('finger2-1').sub(point('finger5-1')).normalize(),palm=new T.Vector3().crossVectors(across,forward).normalize();
+            const restAcross=rest('finger2-1').sub(rest('finger5-1')).normalize(),restForward=rest('finger3-1').sub(rest('wrist')).normalize();
+            const forearmPalm=new T.Vector3().crossVectors(restAcross,restForward).normalize().applyQuaternion(bones.get(`lowerarm01.${side}`).getWorldQuaternion(new T.Quaternion()));
+            assert.ok(palm.angleTo(forearmPalm)<12*Math.PI/180,'pronation is carried by the forearm, without twisting the wrist seam');
+          }
+        }
+      }finally{dispose(f);}
+    }
+  }
+});
+
+test('both greatsword forearms remain in front of the thick cuirass for either dominant hand',async()=>{
+  const {createHuman}=await human,T=await three;
+  for(const model of ['human-male','human-female'])for(const hand of ['right','left']){
+    const f=createHuman({...config,model,armor:'plate',[hand]:'great',twoHanded:hand});
+    try{
+      f.updateMatrixWorld(true);let skeleton;const armor=[];
+      f.traverse(o=>{if(o.isSkinnedMesh){skeleton=o.skeleton;if(o.name.includes('armor-plate'))armor.push(o);}});
+      const bones=new Map(skeleton.bones.map(b=>[b.name,b])),torso=skeleton.bones.findIndex(b=>b.name==='spine03');let checked=0;
+      for(const side of ['R','L'])for(const t of [.25,.5,.75,1]){
+        const elbow=bones.get(`lowerarm01.${side}`).getWorldPosition(new T.Vector3()),wrist=bones.get(`wrist.${side}`).getWorldPosition(new T.Vector3()),point=elbow.lerp(wrist,t);
+        const ray=new T.Raycaster(new T.Vector3(point.x,point.y,1),new T.Vector3(0,0,-1));
+        for(const hit of ray.intersectObjects(armor)){
+          if(hit.object.geometry.attributes.skinIndex.getX(hit.face.a)!==torso||hit.point.z<.05)continue;
+          checked++;assert.ok(point.z-.035>hit.point.z,`${model}/${hand}/${side} leaves room for the forearm and its bracer outside the breastplate`);
+        }
+      }
+      assert.ok(checked>0,'the test samples the forearm where it crosses the actual cuirass');
+    }finally{dispose(f);}
+  }
+});
+
+test('armor has separate outer/inner surfaces and the female cut covers the waist and upper legs',async()=>{
+  const {createHuman}=await human,T=await three;
+  for(const model of ['human-male','human-female'])for(const armor of database.armor.filter(a=>a.armor.type!=='shield').map(AvatarData.armorKind)){
+    const f=createHuman({...config,model,armor});
+    try{
+      f.updateMatrixWorld(true);const torso=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.name.includes(`armor-${armor}-${model.slice(6)}-torso`))torso.push(o);});assert.equal(torso.length,1);
+      const mesh=torso[0],side=mesh.material.side;mesh.material.side=T.DoubleSide;
+      try{
+        const ray=new T.Raycaster(new T.Vector3(.06,1.242,1),new T.Vector3(0,0,-1)),hits=ray.intersectObject(mesh).map(h=>h.point.z).filter(z=>z>.08);
+        assert.ok(hits.some((z,i)=>hits.some((q,j)=>j!==i&&Math.abs(q-z)>.0035&&Math.abs(q-z)<.008)),`${model}/${armor} has real shell thickness`);
+        if(model==='human-female'){
+          ray.set(new T.Vector3(.04,1.075,1),new T.Vector3(0,0,-1));assert.ok(ray.intersectObject(mesh).some(h=>h.point.z>.1),'the fitted torso covers the waist');
+          ray.set(new T.Vector3(.10,.825,1),new T.Vector3(0,0,-1));assert.ok(ray.intersectObject(mesh).some(h=>h.point.z>.12),'the longer skirt covers the upper legs');
+        }
+      }finally{mesh.material.side=side;}
+    }finally{dispose(f);}
+  }
+});
+
 test('walking deforms the anatomical legs and equipped hand, then restores the idle pose',async()=>{
   const {createHuman}=await human,{Vector3}=await three;
   const figure=createHuman({...config,armor:'plate',right:'long',shield:true});
