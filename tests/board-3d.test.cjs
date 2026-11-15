@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { rectangles, wall, tokenVisible } = require('../client/board-3d-data');
+const { movementRoute } = require('../client/board-3d-data');
+const AvatarData = require('../client/avatar-data');
 
 test('fog rectangles reconstruct every visibility cell exactly without overlap, including irregular boundaries', () => {
   for (const [width,height] of [[1,1],[7,5],[60,45]]) {
@@ -45,4 +47,39 @@ test('hidden live tokens are never rendered, while last-known silhouettes stay a
   assert.equal(tokenVisible({...token,x:-5},view),false);
   assert.equal(tokenVisible({...token,x:2},{...view,omniscient:true}),true);
   assert.equal(tokenVisible({...token,hidden:true},{...view,omniscient:true}),false);
+});
+
+test('human appearance resolves worn inventory items and legacy names, validates customization and excludes other forms',()=>{
+  const db=require('../equipment_srd5_ru.json').tabs;
+  const sheet={info:{race:{value:'Человек'}},notes:{details:{gender:{value:'Мужской'}}},inventory:{armor:db.armor,weapons:db.weapons},appearance:{slots:{}}};
+  const desc=()=>AvatarData.describe(sheet);
+  assert.equal(desc().armor,'none');assert.equal(desc().hair,'short');
+  const keys=new Set();for(const a of db.armor.filter(a=>a.armor.type!=='shield')){sheet.appearance.slots.armor=a.id;const kind=desc().armor;assert.notEqual(kind,'none');assert.equal(keys.has(kind),false,a.name_ru);keys.add(kind);}
+  sheet.appearance.slots.armor='Кольчужная рубаха';assert.equal(desc().armor,'chain-shirt');
+  sheet.appearance.slots.right='weapon_longsword';sheet.appearance.slots.left='weapon_shortsword';assert.equal(desc().right,'long');assert.equal(desc().left,'short');
+  sheet.appearance.slots.shield='armor_shield';assert.equal(desc().shield,true);assert.equal(desc().left,null);
+  sheet.appearance.slots.right='weapon_club';assert.equal(desc().right,null);
+  sheet.appearance.slots.armor='deleted-item';assert.equal(desc().armor,'none');
+  sheet.appearance.model3d={hairStyle:'tied',hairColor:'#c78432'};assert.equal(desc().hair,'tied');assert.equal(desc().hairColor,'#c78432');
+  sheet.appearance.model3d={hairStyle:'<bad>',hairColor:'red; url(secret)'};assert.equal(desc().hair,'short');assert.equal(desc().hairColor,'#493124');
+  assert.equal(AvatarData.describe(sheet,true),null);sheet.wildShape={active:true};assert.equal(desc(),null);sheet.wildShape.active=false;
+  sheet.notes.details.gender.value='female';assert.equal(desc(),null);sheet.notes.details.gender.value='male';sheet.info.race.value='Эльф';assert.equal(desc(),null);
+});
+
+test('visual walk routes respect walls, corners, occupied footprints and current fog, with safe snapping when no route exists',()=>{
+  const view={width:7,height:5,mask:new Uint8Array(35).fill(2),omniscient:false};
+  const from={x:1,y:1},to={x:4,y:1};
+  const walls=[{x:2,y:0,dir:'E'},{x:2,y:1,dir:'E'},{x:2,y:2,dir:'E'}];
+  const route=movementRoute(from,to,1,view,walls);
+  assert.deepEqual(movementRoute(from,to,1,view,walls.map(w=>({...w,x:String(w.x),y:String(w.y)}))),route);
+  assert.ok(route.some(p=>p.y===3));assert.deepEqual(route.at(-1),to);
+  for(const p of route)view.mask[p.y*7+p.x]=0;
+  view.mask[1*7+4]=2;view.mask[1*7+1]=2;
+  const hidden=movementRoute(from,to,1,view,walls);assert.ok(!hidden||hidden.every(p=>view.mask[p.y*7+p.x]===2));
+  view.mask.fill(2);
+  assert.equal(movementRoute(from,{x:2,y:1},1,view,[],[{id:'other',x:2,y:1,size:1}]),null);
+  assert.equal(movementRoute(from,to,1,view,Array.from({length:5},(_,y)=>({x:2,y,dir:'E'}))),null);
+  const diagonal=movementRoute(from,{x:2,y:2},1,view,[{x:1,y:1,dir:'E'},{x:1,y:1,dir:'S'}]);assert.ok(!diagonal||diagonal.length>1);
+  view.mask.fill(0);assert.equal(movementRoute(from,to,1,view),null);
+  assert.ok(movementRoute(from,to,1,{...view,omniscient:true}));
 });

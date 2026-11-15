@@ -188,6 +188,7 @@ function updateTokenPreview(root, player, sheet) {
 
 function bindAppearanceUi(root, player, canEdit) {
   if (!root || !player?.sheet?.parsed) return;
+  window.Character3D?.mount(root,player);
   const sheet = player.sheet.parsed;
 
   // ensure containers exist

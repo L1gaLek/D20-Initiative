@@ -54,6 +54,7 @@
 
   function closeModal() {
     if (!sheetModal) return;
+    globalThis.Character3D?.dispose();
     if (openedSheetPlayer) captureUiStateFromDom(openedSheetPlayer);
     sheetContent.__monsterRenderGeneration = (sheetContent.__monsterRenderGeneration || 0) + 1;
     if (sheetContent.dataset) sheetContent.dataset.sheetPlayerId = '';

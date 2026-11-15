@@ -134,18 +134,17 @@
 }
 
 
-  function renderBasicTab(vm, canEdit) {
-    const RACES = [
+  const SHEET_RACES = [
       "Аасимар","Ааракокра","Багбир","Ведалкен","Вердан","Гифф","Гит","Гном","Грунг","Гоблин","Голиаф","Дварф",
       "Дженази","Драконорожденный","Зайцегон","Калаштар","Кенку","Кобольд","Кованый","Кентавр","Леонин","Локата","Локсодон",
       "Людокрыса","Людоящер","Мурлок","Минотавр","Орк","Полурослик","Полуорк","Полуэльф","Плазмоид","Сатир","Совлин","Табакси",
       "Тифлинг","Тортл","Тритон","Три-крин","Фирболг","Фэйри","Хобгоблин","Человек","Чейнджлинг","Эладрин","Эльф","Юань-Ти"
     ];
-
+  function renderBasicTab(vm, canEdit) {
     const raceVal = String(vm?.race || "-");
     const raceOptions = [
       `<option value="">—</option>`,
-      ...RACES.map(r => `<option value="${escapeHtml(r)}" ${r===raceVal ? "selected" : ""}>${escapeHtml(r)}</option>`)
+      ...SHEET_RACES.map(r => `<option value="${escapeHtml(r)}" ${r===raceVal ? "selected" : ""}>${escapeHtml(r)}</option>`)
     ].join("");
 
     return `
@@ -1222,6 +1221,9 @@ function renderShopTab(vm, canEdit) {
 
   function renderAppearanceTab(vm, canEdit) {
     const baseUrl = String(vm?.appearanceBaseUrl || "");
+    const races=`<option value="">—</option>`+SHEET_RACES.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+    const hairstyles=(window.AvatarData?.hairstyles||[]).map(([id,label])=>`<option value="${id}">${label}</option>`).join('');
+    const palette=[['#201b19','Чёрный'],['#493124','Каштановый'],['#825838','Светло-каштановый'],['#ba7136','Рыжий'],['#d6bd7a','Светлый'],['#bab6ad','Седой'],['#e9e1d0','Белый']];
     // Inventory lists (new format): vm.inventory.weapons / vm.inventory.armor
     const inv = (vm?.inventory && typeof vm.inventory === 'object') ? vm.inventory : {};
     const weapons = Array.isArray(inv.weapons) ? inv.weapons : [];
@@ -1250,11 +1252,24 @@ function renderShopTab(vm, canEdit) {
 
     return `
       <div class="sheet-section" data-appearance-root>
-        <h3>Персонаж</h3>
+        <div class="avatar-section-head"><h3>Персонаж</h3><span>ВНЕШНОСТЬ И ЭКИПИРОВКА</span></div>
 
         <div class="sheet-card fullwidth">
           <div class="appearance-layout">
             <div class="appearance-left">
+              <div class="avatar-portrait" data-avatar-preview></div>
+              <div class="avatar-preview-footer"><p data-avatar-status>Загрузка модели…</p><button type="button" data-avatar-walk aria-pressed="false" disabled>Проверить ходьбу</button></div>
+              <section class="avatar-customize"><h4>Внешность в 3D</h4>
+                <div class="avatar-fields">
+                  <label>Раса<select data-sheet-path="info.race.value" data-race-select ${canEdit?'':'disabled'}>${races}</select></label>
+                  <label>Пол<select data-sheet-path="notes.details.gender.value" data-gender-select ${canEdit?'':'disabled'}><option value="male">Мужской</option><option value="female">Женский</option></select></label>
+                  <label>Причёска<select data-sheet-path="appearance.model3d.hairStyle" ${canEdit?'':'disabled'}>${hairstyles}</select></label>
+                  <label>Цвет волос<div class="avatar-hair-color"><input type="color" aria-label="Цвет волос" data-sheet-path="appearance.model3d.hairColor" ${canEdit?'':'disabled'}><span>Палитра</span></div></label>
+                </div>
+                <div class="avatar-palette">${palette.map(([color,name])=>`<button type="button" data-hair-color="${color}" style="--hair-color:${color}" title="${name}" aria-label="Цвет волос: ${name}" ${canEdit?'':'disabled'}></button>`).join('')}</div>
+                <p class="avatar-help">Модель человека мужского пола. При перемещении по карте включается ходьба. Внешность сохраняется автоматически.</p>
+              </section>
+              <details class="avatar-2d-details"><summary>Изображение для 2D</summary>
               <div class="appearance-preview-wrap">
                 <img class="appearance-preview" data-appearance-preview src="${escapeHtml(baseUrl)}" alt="Персонаж" />
               </div>
@@ -1264,9 +1279,12 @@ function renderShopTab(vm, canEdit) {
                   <input type="text" data-sheet-path="appearance.baseUrl" placeholder="(необязательно)" ${canEdit ? "" : "disabled"} style="width:100%" data-appearance-base-override>
                 </div>
               </div>
+              </details>
             </div>
 
             <div class="appearance-right">
+              <h4>Надето на персонаже</h4>
+              <p class="avatar-help" style="margin:0 0 14px">Выберите предметы из инвентаря. Доспех, щит и мечи сразу появятся на модели. Без доспеха персонаж остаётся в нижнем белье.</p>
               <div class="appearance-slots">
                 <div class="appearance-slot">
                   <div class="lbl">Правая рука</div>
@@ -1328,7 +1346,7 @@ function renderShopTab(vm, canEdit) {
 
                   <!-- Token display settings (separate framed box) -->
                   <div class="appearance-tokenbox" data-tokenbox>
-                    <div class="appearance-tokenbox__title">Токен на поле</div>
+                    <div class="appearance-tokenbox__title">Токен в 2D</div>
                     <div class="appearance-tokenbox__body">
                       <div class="appearance-tokenbox__preview" data-token-preview aria-label="Превью токена"></div>
 
@@ -1826,7 +1844,7 @@ function renderShopTab(vm, canEdit) {
     const sidebarHtml = `
       <div class="sheet-sidebar">
         ${mainTabs.map(t => `
-          <button class="sheet-tab ${t.id === activeTab ? "active" : ""}" data-tab="${t.id}">
+          <button class="sheet-tab ${t.id === activeTab ? "active" : ""}" data-tab="${t.id}" title="${escapeHtml(t.label)}">
             <span class="sheet-tab__icon" aria-hidden="true">${escapeHtml(t.icon || "•")}</span>
             <span class="sheet-tab__label">${escapeHtml(t.label)}</span>
           </button>
@@ -1835,7 +1853,7 @@ function renderShopTab(vm, canEdit) {
         <div class="sheet-tab-sep"></div>
 
         ${wildShapeTab ? `
-          <button class="sheet-tab sheet-tab--wildshape ${wildShapeTab.id === activeTab ? "active" : ""}" data-tab="${wildShapeTab.id}">
+          <button class="sheet-tab sheet-tab--wildshape ${wildShapeTab.id === activeTab ? "active" : ""}" data-tab="${wildShapeTab.id}" title="${escapeHtml(wildShapeTab.label)}">
             <span class="sheet-tab__icon" aria-hidden="true">${escapeHtml(wildShapeTab.icon || "вЂў")}</span>
             <span class="sheet-tab__label">${escapeHtml(wildShapeTab.label)}</span>
           </button>
@@ -1844,7 +1862,7 @@ function renderShopTab(vm, canEdit) {
         <div class="sheet-tab-spacer"></div>
 
         ${shopTab ? `
-          <button class="sheet-tab sheet-tab--shop ${shopTab.id === activeTab ? "active" : ""}" data-tab="${shopTab.id}">
+          <button class="sheet-tab sheet-tab--shop ${shopTab.id === activeTab ? "active" : ""}" data-tab="${shopTab.id}" title="${escapeHtml(shopTab.label)}">
             <span class="sheet-tab__icon" aria-hidden="true">${escapeHtml(shopTab.icon || "•")}</span>
             <span class="sheet-tab__label">${escapeHtml(shopTab.label)}</span>
           </button>
@@ -1946,6 +1964,7 @@ function renderShopTab(vm, canEdit) {
           bindCombatEditors(sheetContent, player, canEdit);
           bindInventoryEditors(sheetContent, player, canEdit);
           bindEquipmentUi(sheetContent, player, canEdit);
+          bindAppearanceUi(sheetContent, player, canEdit);
           bindLanguagesUi(sheetContent, player, canEdit);
           bindWildShapeTab(sheetContent, player, canEdit);
           try { updateHeroChips(sheetContent, player.sheet?.parsed); } catch {}

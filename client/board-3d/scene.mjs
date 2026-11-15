@@ -2,6 +2,7 @@ import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
 import { loadBoardImage } from './background.mjs';
 import { fogMaterial, magicMaterial } from './effects.mjs';
+import { createHuman } from './human.mjs?v=20261115-human-avatar-9';
 
 const WALL_HEIGHT = 1.35;
 const data = window.Board3DData;
@@ -155,11 +156,12 @@ export function createBoard3D(root, callbacks) {
     }
     controls.dampingFactor=1-Math.exp(-seconds/.065);
     const changed=controls.update();
-    if (dirty || changed) {
+    const walking=animatePawns(seconds);
+    if (dirty || changed || walking) {
       for(const group of [fogGroup,wallGroup])group.children.forEach(mesh=>{if(mesh.material.uniforms?.time)mesh.material.uniforms.time.value=time/1000;});
       renderer.render(scene, camera); counters.frames++; dirty=false;
     }
-    if (animation || changed || navigating || pan) { if (!raf) raf=requestAnimationFrame(frame); }
+    if (animation || changed || navigating || pan || walking) { if (!raf) raf=requestAnimationFrame(frame); }
     else if ([fogGroup,wallGroup].some(group=>group.children.some(mesh=>mesh.material.uniforms?.time))) idleTimer=setTimeout(invalidate,100);
   }
   function fly(position, target, immediate = false, smoothing=.035) {
@@ -317,13 +319,30 @@ export function createBoard3D(root, callbacks) {
       npc.position.y=.105; npc.material.transparent=true; npc.material.opacity=.2; npc.material.depthWrite=false; fogGroup.add(npc);
     }
   }
-  function updatePawns(tokens) {
+  function animatePawns(seconds) {
+    let walking=false;
+    for(const group of pawns.values()){
+      const motion=group.userData.motion;if(!motion)continue;
+      const next=motion.points[0],delta=next.clone().sub(group.position),distance=delta.length(),step=Math.min(distance,motion.speed*seconds);
+      if(distance>0)group.position.addScaledVector(delta,step/distance);
+      const figure=group.userData.figure;
+      if(figure){figure.rotation.y=Math.atan2(delta.x,delta.z);figure.userData.pose(step,true);}
+      if(distance<=step+.00001){group.position.copy(next);motion.points.shift();}
+      if(!motion.points.length){group.userData.motion=null;figure?.userData.pose?.(0,false);}
+      walking=true;
+    }return walking;
+  }
+  function updatePawns(tokens,firstMap=false) {
     const present=new Set(tokens.map(t=>t.id));
     for (const [id,group] of pawns) if (!present.has(id)) { disposeTree(group); pawnGroup.remove(group); pawns.delete(id); }
     for (const token of tokens) {
       const {x,y,...style}=token, key=JSON.stringify(style);
       let group=pawns.get(token.id);
-      if (group && group.userData.styleKey!==key) { disposeTree(group); pawnGroup.remove(group); pawns.delete(token.id); group=null; }
+      let previous=null;
+      if (group && group.userData.styleKey!==key) {
+        previous={position:group.position.clone(),target:group.userData.target,motion:group.userData.motion,angle:group.userData.figure?.rotation.y||0};
+        disposeTree(group); pawnGroup.remove(group); pawns.delete(token.id); group=null;
+      }
       if (!group) {
         counters.pawnBuilds++;
         group=new THREE.Group();
@@ -332,19 +351,38 @@ export function createBoard3D(root, callbacks) {
         const material=new THREE.MeshStandardMaterial({color,roughness:.68,metalness:.12,transparent:token.ghost,opacity:token.ghost ? .35 : 1});
         const baseMat=new THREE.MeshStandardMaterial({color:token.selected?'#edcb71':token.enemy?'#9d3d40':token.ally?'#3b9770':'#58677d',roughness:.72,transparent:token.ghost,opacity:token.ghost ? .35 : 1});
         const base=new THREE.Mesh(baseGeometry,baseMat);base.position.y=.065;base.scale.set(token.size/scale,1,token.size/scale);group.add(base);
-        group.add(new THREE.Mesh(bodyGeometry,material));
+        let figure=null;
+        if(token.avatar){figure=createHuman(token.avatar);group.add(figure);material.dispose();}
+        else group.add(new THREE.Mesh(bodyGeometry,material));
         if (token.selected) {
           const ring=new THREE.Mesh(new THREE.TorusGeometry(.49,.035,6,32),new THREE.MeshBasicMaterial({color:'#ffe2a0'}));
           ring.scale.setScalar(token.size/scale);ring.rotation.x=Math.PI/2;ring.position.y=.08;group.add(ring);
         }
         const nameMat=new THREE.SpriteMaterial({map:labelTexture(token.ghost?token.name+' · след':token.name),transparent:true,depthTest:false,opacity:token.ghost ? .5 : 1});
         nameMat.userData.ownedMap=true;
-        const label=new THREE.Sprite(nameMat);label.position.y=1.65;label.scale.set(2.35,.44,1);label.renderOrder=5;group.add(label);
+        const label=new THREE.Sprite(nameMat);label.position.y=token.avatar?1.93:1.65;label.scale.set(2.35,.44,1);label.renderOrder=5;group.add(label);
         group.scale.setScalar(scale);
-        group.userData={tokenId:token.id,ghost:token.ghost,size:token.size,styleKey:key};
+        group.userData={tokenId:token.id,ghost:token.ghost,size:token.size,styleKey:key,figure};
+        if(previous&&!firstMap&&!token.ghost){group.position.copy(previous.position);Object.assign(group.userData,{target:previous.target,motion:previous.motion});if(figure)figure.rotation.y=previous.angle;}
         pawnGroup.add(group);pawns.set(token.id,group);
       }
-      group.position.set(x+token.size/2,0,y+token.size/2);
+      const target=new THREE.Vector3(x+token.size/2,0,y+token.size/2),oldTarget=group.userData.target;
+      if(!oldTarget||firstMap||token.ghost||!active){group.position.copy(target);group.userData.motion=null;}
+      else if(!oldTarget.equals(target)){
+        const route=token.avatar?data.movementRoute({x:oldTarget.x-token.size/2,y:oldTarget.z-token.size/2},{x,y},token.size,current.view,current.walls,tokens,token.id):null;
+        if(route?.length){
+          const points=[...(group.userData.motion?.points||[]),...route.map(p=>new THREE.Vector3(p.x+token.size/2,0,p.y+token.size/2))];
+          let distance=0,last=group.position;for(const p of points){distance+=last.distanceTo(p);last=p;}
+          group.userData.motion={points,speed:distance/Math.min(2,Math.max(.4,distance*.20))};
+        }else{group.position.copy(target);group.userData.motion=null;group.userData.figure?.userData.pose?.(0,false);}
+      }
+      group.userData.target=target;
+      // A newly hidden route must disappear immediately rather than finishing
+      // its animation outside the current visible footprint.
+      if(group.userData.motion&&!current.view.omniscient){
+        const visible=p=>{for(let yy=Math.floor(p.z-token.size/2);yy<p.z+token.size/2;yy++)for(let xx=Math.floor(p.x-token.size/2);xx<p.x+token.size/2;xx++)if(data.cellState(current.view,xx,yy)!==2)return false;return true;};
+        if(![group.position,...group.userData.motion.points].every(visible)){group.position.copy(target);group.userData.motion=null;group.userData.figure?.userData.pose?.(0,false);}
+      }
     }
   }
   function rebuildCombat(model,view) {
@@ -433,7 +471,7 @@ export function createBoard3D(root, callbacks) {
     if (wk !== wallKey) { rebuildWalls(next.walls,v,next.wallAlpha); wallKey = wk; }
     const fk=maskKey+':'+(v.npcMask?.join('') || '');
     if (fk !== fogKey) { rebuildFog(v); fogKey = fk; }
-    updatePawns(next.tokens);
+    updatePawns(next.tokens,firstMap);
     const ck=maskKey+JSON.stringify(next.combat);
     if(ck!==combatKey){rebuildCombat(next.combat,v);combatKey=ck;}
     const mk = maskKey + JSON.stringify(next.marks);
@@ -473,7 +511,7 @@ export function createBoard3D(root, callbacks) {
     for (const [id,group] of pawns) {
       if (group.userData.ghost) continue;
       const radius=Math.max(.34*group.scale.x,.47*group.userData.size), p=group.position;
-      box.min.set(p.x-radius,0,p.z-radius); box.max.set(p.x+radius,1.35*group.scale.x,p.z+radius);
+      box.min.set(p.x-radius,0,p.z-radius); box.max.set(p.x+radius,(group.userData.figure?1.65:1.35)*group.scale.x,p.z+radius);
       if (raycaster.ray.intersectBox(box,hitPoint)) {
         const distance=hitPoint.distanceToSquared(raycaster.ray.origin);
         if(distance<nearest){nearest=distance;tokenId=id;}
@@ -492,7 +530,9 @@ export function createBoard3D(root, callbacks) {
   function setActive(value) {
     active = !!value; controls.enabled = active;
     if (active) { resized(); dirty=true; if (!raf) raf=requestAnimationFrame(frame); }
-    else { if (raf) cancelAnimationFrame(raf); clearTimeout(idleTimer); raf=0; animation=null; pan=null; navigating=false; delete canvas.dataset.cursor; }
+    else { if (raf) cancelAnimationFrame(raf); clearTimeout(idleTimer); raf=0; animation=null; pan=null; navigating=false; delete canvas.dataset.cursor;
+      for(const group of pawns.values()){if(group.userData.target)group.position.copy(group.userData.target);group.userData.motion=null;group.userData.figure?.userData.pose?.(0,false);}
+    }
   }
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); setActive(false); callbacks.failed(new Error('WebGL context lost')); });
   return {
@@ -517,7 +557,8 @@ export function createBoard3D(root, callbacks) {
     },
     setWallFade(value) { fadeWalls=!!value; if(current) sync(current); },
     inspect() {
-      return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost })),
+      return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,
+        avatar:g.userData.figure?.userData.avatar||null,walking:!!g.userData.motion,limbAngle:g.userData.figure?.userData.walkAngle||0 })),
         combat:{mode:current?.combat?.mode||null,cells:combatGroup.children.filter(m=>m.userData.kind).map(m=>({kind:m.userData.kind,count:m.userData.cells}))},
         magicWalls:wallGroup.children.filter(m=>m.userData.wallType?.startsWith('magic')).reduce((sum,m)=>sum+m.count,0),
         fogLayers:fogGroup.children.filter(m=>m.userData.fogState).map(m=>({state:m.userData.fogState,height:m.userData.height,opacity:m.material.uniforms.opacity.value})),

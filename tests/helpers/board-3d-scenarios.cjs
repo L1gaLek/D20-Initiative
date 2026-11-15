@@ -204,6 +204,7 @@ module.exports = async function ({ pages, h, broadcast, screenshotDir, clone }) 
   await applyFixture();
   await require('./board-3d-polish-scenarios.cjs')({gm,screenshotDir});
   await require('./board-3d-combat-scenarios.cjs')({pages,fixture,applyFixture,mode,screenshotDir});
+  await require('./human-avatar-scenarios.cjs')({pages,fixture,applyFixture,h,screenshotDir});
   // Exercise lazy-load failure without modifying the already working clients.
   await p4.evaluate(()=>{
     const get=HTMLCanvasElement.prototype.getContext;

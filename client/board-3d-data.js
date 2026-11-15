@@ -55,7 +55,44 @@
     // their authoritative (currently hidden) coordinates into a rendered pawn.
     return view.omniscient || (token.ghost ? best > 0 : best === 2);
   }
-  const api = { rectangles, cellState, wall, tokenVisible };
+  // A visual route only. Authoritative movement/permissions stay in the game
+  // handlers. Never animate a figure through unseen cells or through a wall.
+  function movementRoute(from,to,size,view,walls=[],tokens=[],id='') {
+    if(![from.x,from.y,to.x,to.y].every(Number.isInteger)||Math.max(Math.abs(to.x-from.x),Math.abs(to.y-from.y))>24)return null;
+    const edge=(ax,ay,bx,by)=>ax<bx||ax===bx&&ay<by?`${ax},${ay}|${bx},${by}`:`${bx},${by}|${ax},${ay}`;
+    const edges=new Set(),blocks=new Set();
+    for(const w of walls){const d=String(w.dir||'').toUpperCase(),x=Number(w.x),y=Number(w.y);if(!Number.isInteger(x)||!Number.isInteger(y))continue;
+      if(!['N','E','S','W'].includes(d))blocks.add(`${x},${y}`);
+      else edges.add(edge(x,y,x+(d==='E'?1:d==='W'?-1:0),y+(d==='S'?1:d==='N'?-1:0)));
+    }
+    for(const t of tokens)if(t.id!==id&&!t.ghost)for(let y=t.y;y<t.y+t.size;y++)for(let x=t.x;x<t.x+t.size;x++)blocks.add(`${x},${y}`);
+    const free=(x,y)=>{
+      if(x<0||y<0||x+size>view.width||y+size>view.height)return false;
+      for(let yy=y;yy<y+size;yy++)for(let xx=x;xx<x+size;xx++)if(blocks.has(`${xx},${yy}`)||!view.omniscient&&cellState(view,xx,yy)!==2)return false;
+      return true;
+    };
+    const cross=(x,y,dx,dy)=>{
+      for(let k=0;k<size;k++){
+        const ax=x+(dx>0?size-1:0)+(dy?k:0),ay=y+(dy>0?size-1:0)+(dx?k:0);
+        if(edges.has(edge(ax,ay,ax+dx,ay+dy)))return false;
+      }return true;
+    };
+    if(!free(from.x,from.y)||!free(to.x,to.y))return null;
+    const key=(x,y)=>y*view.width+x,start=key(from.x,from.y),end=key(to.x,to.y);
+    const queue=[{...from,depth:0}],parents=new Map([[start,null]]);
+    for(let head=0;head<queue.length&&head<6000;head++){
+      const p=queue[head],k=key(p.x,p.y);
+      if(k===end){const path=[];let q=p;while(q){path.push({x:q.x,y:q.y});q=parents.get(key(q.x,q.y));}return path.reverse().slice(1);}
+      if(p.depth>=32)continue;
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){
+        const x=p.x+dx,y=p.y+dy,n=key(x,y);if(parents.has(n)||!free(x,y))continue;
+        if(dx&&dy){if(!free(p.x+dx,p.y)||!free(p.x,p.y+dy)||!cross(p.x,p.y,dx,0)||!cross(p.x,p.y,0,dy)||!cross(p.x+dx,p.y,0,dy)||!cross(p.x,p.y+dy,dx,0))continue;}
+        else if(!cross(p.x,p.y,dx,dy))continue;
+        parents.set(n,p);queue.push({x,y,depth:p.depth+1});
+      }
+    }return null;
+  }
+  const api = { rectangles, cellState, wall, tokenVisible, movementRoute };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Board3DData = api;
 })(typeof window !== 'undefined' ? window : globalThis);

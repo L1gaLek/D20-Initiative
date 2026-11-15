@@ -1018,6 +1018,7 @@ function bindEditableInputs(root, player, canEdit) {
       const isRte = (String(inp.getAttribute?.('contenteditable') || '') === 'true');
       if (inp.type === "checkbox") inp.checked = !!raw;
       else if (inp.type === "radio") inp.checked = (String(raw ?? '') === String(inp.value));
+      else if (inp.type === "color") inp.value = /^#[\da-f]{6}$/i.test(raw) ? raw : '#493124';
       else if (isRte) inp.innerHTML = String(raw ?? "");
       else inp.value = (raw ?? "");
 
