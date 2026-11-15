@@ -49,7 +49,7 @@ module.exports = async function ({ pages, h, broadcast, screenshotDir, clone }) 
   const rotated=await gm.evaluate(()=>Board3D.inspect());
   assert.ok(rotated.camera.some((v,i)=>Math.abs(v-initial.camera[i])>.5));
   await gm.mouse.move(center.x,center.y); await gm.mouse.down({button:'middle'}); await gm.mouse.move(center.x+65,center.y-40,{steps:12}); await gm.mouse.up({button:'middle'}); await gm.waitForTimeout(300);
-  const panned=await gm.evaluate(()=>Board3D.inspect()); assert.ok(panned.target.some((v,i)=>Math.abs(v-rotated.target[i])>.1));
+  const panned=await gm.evaluate(()=>Board3D.inspect()); assert.ok(panned.target.some((v,i)=>Math.abs(v-rotated.target[i])>.1),JSON.stringify({rotated,panned,center,target:await gm.evaluate(p=>document.elementFromPoint(p.x,p.y)?.outerHTML.slice(0,300),center)}));
   const distance=s=>Math.hypot(...s.camera.map((v,i)=>v-s.target[i]));
   await gm.mouse.move(center.x,center.y); await gm.mouse.wheel(0,-400); await gm.waitForTimeout(350); const zoomed=await gm.evaluate(()=>Board3D.inspect());
   assert.ok(distance(zoomed)<distance(panned),JSON.stringify({panned,zoomed}));
@@ -138,6 +138,7 @@ module.exports = async function ({ pages, h, broadcast, screenshotDir, clone }) 
   await gm.waitForFunction(()=>BoardMarks.getRenderMarks().some(m=>m.id==='__preview'));
   await gm.mouse.up();
   await p3.waitForFunction(()=>BoardMarks.getRenderMarks().some(m=>m.kind==='rect'));
+  await gm.waitForFunction(()=>BoardMarks.getRenderMarks().some(m=>m.kind==='rect' && m.id!=='__preview'));
   const drawnMark=await gm.evaluate(()=>BoardMarks.getRenderMarks().find(m=>m.kind==='rect'));
   await gm.evaluate(()=>document.querySelector('#marks-toolbar [data-tool="select"]').click());
   const dragFrom=await gm.evaluate(m=>Board3D.projectCell(m.x+m.w/2,m.y+m.h/2,.04),drawnMark);
@@ -155,6 +156,7 @@ module.exports = async function ({ pages, h, broadcast, screenshotDir, clone }) 
   const memoryAfter=await gm.evaluate(()=>Board3D.inspect().render);
   assert.ok(memoryAfter.geometries<=memoryBefore.geometries+5); assert.ok(memoryAfter.textures<=memoryBefore.textures+2);
   await mode(gm,'topdown'); assert.equal(await gm.evaluate(()=>Board3D.inspect().running),false);
+  assert.equal(await gm.locator('#board-wrapper').evaluate(el=>getComputedStyle(el).overflow),'auto');
   assert.equal(await gm.locator('#game-board').evaluate(el=>getComputedStyle(el).visibility),'visible');
   await mode(gm,'3d'); await gm.waitForFunction(()=>Board3D.inspect().running);
   const firstCamera=await gm.evaluate(()=>Board3D.inspect().camera);
@@ -199,6 +201,8 @@ module.exports = async function ({ pages, h, broadcast, screenshotDir, clone }) 
   assert.equal(await p3.evaluate(()=>Board3D.inspect().wallFade),false);
   await gm.locator('.board-3d-toolbar').getByRole('button',{name:'Стены',exact:true}).click();
   console.log('PASS 3D: touch orbit/pinch keep token positions unchanged; wall transparency is a personal camera option');
+  await applyFixture();
+  await require('./board-3d-polish-scenarios.cjs')({gm,screenshotDir});
   // Exercise lazy-load failure without modifying the already working clients.
   await p4.evaluate(()=>{
     const get=HTMLCanvasElement.prototype.getContext;

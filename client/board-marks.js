@@ -533,7 +533,7 @@
       shape.dataset.id = id;
       if (id && id === String(selectedId)) shape.classList.add('is-selected');
       if (id && id === String(hoverId)) shape.classList.add('is-hover');
-      shape.style.cursor = 'url("cursor/pointer.cur"), pointer';
+      shape.style.cursor = 'var(--cursor-select)';
       svg.appendChild(shape);
 
       const lab = String(activeMark?.label || '').trim();

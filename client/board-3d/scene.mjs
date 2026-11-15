@@ -1,5 +1,6 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
+import { loadBoardImage } from './background.mjs';
 
 const WALL_HEIGHT = 1.35;
 const data = window.Board3DData;
@@ -8,7 +9,7 @@ const up = new THREE.Vector3(0, 1, 0);
 function disposeTree(group) {
   const geometries = new Set(), materials = new Set(), textures = new Set();
   group.traverse(object => {
-    if (object.geometry) geometries.add(object.geometry);
+    if (object.geometry && !object.isSprite && !object.geometry.userData.shared) geometries.add(object.geometry);
     for (const material of [].concat(object.material || [])) {
       materials.add(material);
       if (material.userData.ownedMap && material.map) textures.add(material.map);
@@ -56,8 +57,43 @@ function fogMaterial(opacity) {
   });
 }
 
+function gridMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: 'varying vec2 cell; void main(){cell=position.xz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+    fragmentShader: `varying vec2 cell;
+      void main(){vec2 pixel=max(fwidth(cell),vec2(.0001));
+      vec2 edge=abs(fract(cell-.5)-.5)/pixel; float distance=min(edge.x,edge.y);
+      float line=1.-smoothstep(.45,1.25,distance); float halo=1.-smoothstep(1.2,2.25,distance);
+      float fade=1.-smoothstep(.18,.55,max(pixel.x,pixel.y));
+      gl_FragColor=vec4(mix(vec3(.055,.075,.09),vec3(.93,.83,.61),line),max(line*.78,halo*.7)*fade);}`
+  });
+}
+
+function pawnGeometry() {
+  const parts = [];
+  function add(geometry, x, y, z, sx=1, sy=1, sz=1, angle=0) {
+    geometry.scale(sx,sy,sz); geometry.rotateZ(angle); geometry.translate(x,y,z);
+    const flat = geometry.toNonIndexed(); geometry.dispose(); parts.push(flat);
+  }
+  add(new THREE.CylinderGeometry(.21,.31,.61,12),0,.57,0);
+  add(new THREE.SphereGeometry(1,12,8),0,1.1,0,.2,.23,.2);
+  add(new THREE.SphereGeometry(1,12,6),0,.88,0,.25,.08,.22);
+  for (const side of [-1,1]) {
+    add(new THREE.CapsuleGeometry(.075,.34,3,6),side*.29,.61,0,1,1,1,side*.17);
+    add(new THREE.SphereGeometry(1,10,6),side*.13,.23,.035,.115,.18,.15);
+  }
+  const geometry = new THREE.BufferGeometry();
+  for (const name of ['position','normal']) {
+    const array = new Float32Array(parts.reduce((sum,p)=>sum+p.attributes[name].array.length,0));
+    let offset=0; for (const part of parts) { array.set(part.attributes[name].array,offset); offset+=part.attributes[name].array.length; }
+    geometry.setAttribute(name,new THREE.BufferAttribute(array,3));
+  }
+  parts.forEach(p=>p.dispose()); geometry.userData.shared=true; return geometry;
+}
+
 export function createBoard3D(root, callbacks) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'default' });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor('#161c28');
@@ -66,12 +102,13 @@ export function createBoard3D(root, callbacks) {
   const camera = new THREE.PerspectiveCamera(43, 1, .08, 2500);
   camera.position.set(12, 14, 18);
   const controls = new OrbitControls(camera, canvas);
+  canvas.style.removeProperty('cursor');
   controls.enableDamping = true; controls.dampingFactor = .085;
   controls.minPolarAngle = .035; controls.maxPolarAngle = Math.PI / 2 - .10;
   controls.minDistance = 2; controls.maxDistance = 800;
   controls.zoomSpeed = .85; controls.rotateSpeed = .65; controls.panSpeed = .8;
-  controls.screenSpacePanning = false; controls.zoomToCursor = true;
-  controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+  controls.screenSpacePanning = true; controls.zoomToCursor = true;
+  controls.mouseButtons = { LEFT: null, MIDDLE: null, RIGHT: THREE.MOUSE.ROTATE };
   scene.add(new THREE.HemisphereLight(0xdce8ff, 0x3b3030, 2.4));
   const sun = new THREE.DirectionalLight(0xffdfb2, 3.1); sun.position.set(-15, 25, 12); scene.add(sun);
   const terrain = new THREE.Group(), wallGroup = new THREE.Group(), fogGroup = new THREE.Group();
@@ -81,52 +118,99 @@ export function createBoard3D(root, callbacks) {
     color: 0xe5c271, transparent: true, opacity: .32, depthWrite: false, side: THREE.DoubleSide
   }));
   hover.rotation.x = -Math.PI / 2; hover.visible = false; scene.add(hover);
+  const hoverBorder = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-.5,-.5,0),new THREE.Vector3(.5,-.5,0),new THREE.Vector3(.5,.5,0),new THREE.Vector3(-.5,.5,0)
+  ]),new THREE.LineBasicMaterial({color:'#ffe1a0',depthWrite:false}));
+  hover.add(hoverBorder);
   const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const floorPlane = new THREE.Plane(up, 0), intersection = new THREE.Vector3();
   const transform = new THREE.Object3D();
   const pawns = new Map(), cameraMemory = new Map();
+  const bodyGeometry = pawnGeometry(), baseGeometry = new THREE.CylinderGeometry(.43,.47,.1,24);
+  baseGeometry.userData.shared=true;
+  const counters = { frames:0, syncs:0, pawnBuilds:0, terrainBuilds:0, picks:0, panMoves:0 };
   let active = false, raf = 0, current = null, mapKey = null, animation = null;
-  let terrainKey = '', wallKey = '', fogKey = '', pawnKey = '', marksKey = '';
-  let mapTexture = null, textureUrl = '', textureGeneration = 0, fadeWalls = false;
-  let lastRender = 0, dirty = true, cameraEventTime = 0;
-  let drawable = false;
+  let terrainKey = '', wallKey = '', fogKey = '', marksKey = '';
+  let mapTexture = null, textureUrl = '', textureGeneration = 0, textureAbort = null, textureState = { status:'empty' }, fadeWalls = false, showGrid = true;
+  let lastFrame = 0, dirty = true, cameraEventTime = 0, idleTimer = 0, navigating = false, pan = null;
+  let drawable = false, wallBounds = [];
+
+  function invalidate() {
+    dirty=true;
+    if (active && drawable && !raf) { clearTimeout(idleTimer); raf=requestAnimationFrame(frame); }
+  }
 
   function resized() {
     const w = root.clientWidth, h = root.clientHeight;
     drawable = w >= 2 && h >= 2;
     if (!drawable) { if (raf) cancelAnimationFrame(raf); raf=0; return; }
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true;
-    if (active && !raf) raf = requestAnimationFrame(frame);
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); invalidate();
   }
   const observer = new ResizeObserver(resized); observer.observe(root);
-  controls.addEventListener('start', () => { animation = null; });
+  controls.addEventListener('start', () => { animation = null; navigating=true; canvas.dataset.cursor='rotate'; invalidate(); });
+  controls.addEventListener('end', () => { navigating=false; delete canvas.dataset.cursor; invalidate(); });
   controls.addEventListener('change', () => {
-    dirty = true;
+    invalidate();
     const now = performance.now();
-    if (now - cameraEventTime > 30) { cameraEventTime = now; callbacks.cameraChanged(); }
+    if (now - cameraEventTime > 45) { cameraEventTime = now; callbacks.cameraChanged(); }
   });
   function frame(time) {
     raf = 0; if (!active || !drawable) return;
-    raf = requestAnimationFrame(frame);
+    const seconds=Math.min(.1,Math.max(.001,(time-(lastFrame || time-16))/1000)); lastFrame=time;
     if (animation) {
-      const t = Math.min(1, (time - animation.start) / 550), k = 1 - (1-t)**3;
-      camera.position.lerpVectors(animation.fromPosition, animation.position, k);
-      controls.target.lerpVectors(animation.fromTarget, animation.target, k);
-      if (t === 1) animation = null;
+      const k=1-Math.exp(-seconds/animation.smoothing);
+      camera.position.lerp(animation.position,k); controls.target.lerp(animation.target,k);
+      if (camera.position.distanceToSquared(animation.position)+controls.target.distanceToSquared(animation.target)<.000001) {
+        camera.position.copy(animation.position); controls.target.copy(animation.target); animation=null;
+      }
       dirty = true;
     }
-    controls.update();
-    if (!dirty && (!fogGroup.children.length || time - lastRender < 66)) return;
-    if (time - lastRender < 30) return;
-    fogGroup.children.forEach(mesh => { if (mesh.material.uniforms?.time) mesh.material.uniforms.time.value = time / 1000; });
-    renderer.render(scene, camera); lastRender = time; dirty = false;
+    controls.dampingFactor=1-Math.exp(-seconds/.065);
+    const changed=controls.update();
+    if (dirty || changed) {
+      fogGroup.children.forEach(mesh => { if (mesh.material.uniforms?.time) mesh.material.uniforms.time.value = time / 1000; });
+      renderer.render(scene, camera); counters.frames++; dirty=false;
+    }
+    if (animation || changed || navigating || pan) { if (!raf) raf=requestAnimationFrame(frame); }
+    else if (fogGroup.children.some(mesh=>mesh.material.uniforms?.time)) idleTimer=setTimeout(invalidate,100);
   }
-  function fly(position, target, immediate = false) {
-    if (immediate) { camera.position.copy(position); controls.target.copy(target); controls.update(); dirty = true; return; }
-    animation = { fromPosition: camera.position.clone(), fromTarget: controls.target.clone(), position, target, start: performance.now() };
+  function fly(position, target, immediate = false, smoothing=.035) {
+    if (immediate) { animation=null; camera.position.copy(position); controls.target.copy(target); controls.update(); invalidate(); return; }
+    animation = { position, target, smoothing }; invalidate();
   }
-  // Wheel dolly uses the same easing as toolbar zoom. OrbitControls handles
-  // rotation/pan/touch; intercept only wheel to avoid abrupt distance jumps.
+  // Match L1Volt: anchor the scale to the depth under the pointer, translate
+  // along camera Right/Up (including world height), and follow with a 35ms lag.
+  canvas.addEventListener('pointerdown',event=>{
+    if (!active || event.button!==1) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    const hit=pick(event.clientX,event.clientY);
+    const focus=hit?.tokenId ? pawns.get(hit.tokenId).position.clone().add(new THREE.Vector3(0,.7,0))
+      : hit?.point ? new THREE.Vector3(hit.point.x+hit.point.u,0,hit.point.y+hit.point.v) : controls.target;
+    const forward=camera.getWorldDirection(new THREE.Vector3());
+    const depth=Math.max(camera.near,focus.clone().sub(camera.position).dot(forward));
+    pan={id:event.pointerId,x:event.clientX,y:event.clientY,scale:2*depth*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))/root.clientHeight*1.5};
+    canvas.setPointerCapture(event.pointerId); canvas.dataset.cursor='grabbing'; invalidate();
+  },true);
+  canvas.addEventListener('pointermove',event=>{
+    if (!pan || event.pointerId!==pan.id) return;
+    counters.panMoves++;
+    event.preventDefault(); event.stopImmediatePropagation();
+    const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
+    const cameraUp=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
+    const displacement=right.multiplyScalar(-(event.clientX-pan.x)*pan.scale).addScaledVector(cameraUp,(event.clientY-pan.y)*pan.scale);
+    pan.x=event.clientX; pan.y=event.clientY;
+    fly((animation?.position.clone() || camera.position.clone()).add(displacement),(animation?.target.clone() || controls.target.clone()).add(displacement));
+  },true);
+  const endPan=event=>{
+    if (!pan || event.pointerId!==pan.id) return;
+    event.preventDefault();event.stopImmediatePropagation(); pan=null; delete canvas.dataset.cursor;
+    if(canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId); invalidate();
+  };
+  canvas.addEventListener('pointerup',endPan,true); canvas.addEventListener('pointercancel',endPan,true);
+  const blur=()=>{pan=null;navigating=false;delete canvas.dataset.cursor;invalidate();};
+  window.addEventListener('blur',blur);
+  canvas.addEventListener('auxclick',event=>{if(event.button===1)event.preventDefault();});
+  // Wheel dolly follows the same short camera goal as middle-button panning.
   canvas.addEventListener('wheel', event => {
     if (!active) return;
     event.preventDefault(); event.stopImmediatePropagation();
@@ -146,42 +230,46 @@ export function createBoard3D(root, callbacks) {
     const target = new THREE.Vector3(width/2, 0, height/2);
     const fov = camera.fov * Math.PI / 180;
     const distance = Math.max(height, width / Math.max(.3, camera.aspect)) / (2 * Math.tan(fov/2)) * 1.1;
-    fly(target.clone().add(new THREE.Vector3(.32,.85,.9).normalize().multiplyScalar(distance)), target, immediate);
+    fly(target.clone().add(new THREE.Vector3(.32,.85,.9).normalize().multiplyScalar(distance)), target, immediate,.08);
   }
-  function loadTexture(url) {
+  async function loadTexture(url) {
     if (url === textureUrl) return;
     textureUrl = url; const generation = ++textureGeneration;
+    textureAbort?.abort(); textureAbort=new AbortController();
     mapTexture?.dispose(); mapTexture = null;
     terrain.children.forEach(mesh => { if (mesh.userData.floor) { mesh.material.map=null; mesh.material.needsUpdate=true; } });
-    if (!url) return;
-    new THREE.TextureLoader().load(url, texture => {
-      if (generation !== textureGeneration) { texture.dispose(); return; }
+    textureState={status:url?'loading':'empty'};
+    if (!url) { callbacks.status(''); return; }
+    try {
+      const image=await loadBoardImage(url,{signal:textureAbort.signal,maxSize:Math.min(4096,renderer.capabilities.maxTextureSize)});
+      if (generation !== textureGeneration) return;
+      const texture=new THREE.CanvasTexture(image.canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
       mapTexture = texture;
       terrain.children.forEach(mesh => { if (mesh.userData.floor) { mesh.material.map = texture; mesh.material.needsUpdate = true; } });
-      callbacks.status(''); dirty = true;
-    }, undefined, () => {
-      if (generation === textureGeneration) callbacks.status('Подложка карты не загрузилась в 3D. Токены, стены и туман доступны.');
-    });
+      textureState={status:'ready',width:image.width,height:image.height,sourceWidth:image.sourceWidth,sourceHeight:image.sourceHeight};
+      callbacks.status(''); invalidate();
+    } catch {
+      if (generation === textureGeneration && !textureAbort.signal.aborted) {
+        textureState={status:'error'};
+        callbacks.status('Подложка недоступна. Проверьте ссылку и разрешение на загрузку изображения; кнопка «Подложка» повторит загрузку.');
+      }
+    }
   }
-  function rebuildTerrain(view, alpha) {
+  function rebuildTerrain(view) {
+    counters.terrainBuilds++;
     disposeTree(terrain);
     for (const value of [2, 1]) {
       if (view.omniscient && value === 1) continue;
       const mask = view.omniscient ? new Uint8Array(view.width * view.height).fill(2) : view.mask;
       const rectangles = data.rectangles(mask, view.width, view.height, value);
       if (!rectangles.length) continue;
-      const floor = surface(rectangles, view.width, view.height, value === 2 ? '#aeb6bb' : '#454c59');
+      const floor = surface(rectangles, view.width, view.height, value === 2 ? '#ffffff' : '#676c78');
       floor.userData.floor = true; floor.material.map = mapTexture; terrain.add(floor);
       // Grid is clipped to known terrain, so it cannot disclose hidden geometry.
-      const lines = [];
-      for (const r of rectangles) {
-        for (let x = r.x; x <= r.x+r.w; x++) lines.push(x,.018,r.y, x,.018,r.y+r.h);
-        for (let y = r.y; y <= r.y+r.h; y++) lines.push(r.x,.018,y, r.x+r.w,.018,y);
-      }
-      const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
-      const grid = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: '#17232b', transparent: true, opacity: Math.max(0, Math.min(1, Number(alpha))) * .42 }));
+      const grid = surface(rectangles,view.width,view.height,'#ffffff');
+      grid.material.dispose(); grid.material=gridMaterial(); grid.position.y=.02; grid.userData.grid=true; grid.visible=showGrid;
       terrain.add(grid);
     }
     // A neutral base shows only board bounds, not the undiscovered map texture.
@@ -190,10 +278,12 @@ export function createBoard3D(root, callbacks) {
   }
   function rebuildWalls(walls, view, alpha) {
     disposeTree(wallGroup);
+    wallBounds=[];
     const colors = { stone: '#8b939d', wood: '#947045', metal: '#8596a7', explored: '#414750' };
     const groups = new Map();
     for (const w of walls) {
       const shape = data.wall(w, view); if (!shape) continue;
+      wallBounds.push(new THREE.Box3(new THREE.Vector3(shape.x-shape.w/2,0,shape.z-shape.d/2),new THREE.Vector3(shape.x+shape.w/2,WALL_HEIGHT+.05,shape.z+shape.d/2)));
       const type = shape.explored ? 'explored' : shape.type;
       if (!groups.has(type)) groups.set(type, []); groups.get(type).push(shape);
     }
@@ -234,41 +324,34 @@ export function createBoard3D(root, callbacks) {
       npc.position.y=.105; npc.material.transparent=true; npc.material.opacity=.2; npc.material.depthWrite=false; fogGroup.add(npc);
     }
   }
-  function rebuildPawns(tokens) {
-    disposeTree(pawnGroup); pawns.clear();
-    const sphere = new THREE.SphereGeometry(1, 16, 12);
-    const body = new THREE.CylinderGeometry(.21, .31, .61, 16);
-    const baseGeometry = new THREE.CylinderGeometry(.43, .47, .1, 32);
-    const armGeometry = new THREE.CapsuleGeometry(.075, .34, 4, 8);
+  function updatePawns(tokens) {
+    const present=new Set(tokens.map(t=>t.id));
+    for (const [id,group] of pawns) if (!present.has(id)) { disposeTree(group); pawnGroup.remove(group); pawns.delete(id); }
     for (const token of tokens) {
-      const group = new THREE.Group();
-      const scale = Math.min(3, Math.sqrt(token.size));
-      const color = /^#[0-9a-f]{3,8}$/i.test(token.color) ? token.color : '#c6a35e';
-      const material = new THREE.MeshStandardMaterial({ color, roughness: .68, metalness: .12, transparent: token.ghost, opacity: token.ghost ? .35 : 1 });
-      const baseMat = new THREE.MeshStandardMaterial({ color: token.selected ? '#edcb71' : token.enemy ? '#9d3d40' : token.ally ? '#3b9770' : '#58677d', roughness: .72,
-        transparent: token.ghost, opacity: token.ghost ? .35 : 1 });
-      const base = new THREE.Mesh(baseGeometry, baseMat); base.position.y = .065; group.add(base);
-      base.scale.set(token.size/scale,1,token.size/scale);
-      const torso = new THREE.Mesh(body, material); torso.position.y = .57; group.add(torso);
-      const head = new THREE.Mesh(sphere, material); head.scale.set(.20,.23,.20); head.position.y = 1.1; group.add(head);
-      const collar = new THREE.Mesh(sphere, baseMat); collar.scale.set(.25,.08,.22); collar.position.y = .88; group.add(collar);
-      for (const side of [-1,1]) {
-        const arm = new THREE.Mesh(armGeometry, material); arm.position.set(side*.29,.61,0); arm.rotation.z = side * .17; group.add(arm);
-        const foot = new THREE.Mesh(sphere, material); foot.scale.set(.115,.18,.15); foot.position.set(side*.13,.23,.035); group.add(foot);
+      const {x,y,...style}=token, key=JSON.stringify(style);
+      let group=pawns.get(token.id);
+      if (group && group.userData.styleKey!==key) { disposeTree(group); pawnGroup.remove(group); pawns.delete(token.id); group=null; }
+      if (!group) {
+        counters.pawnBuilds++;
+        group=new THREE.Group();
+        const scale=Math.min(3,Math.sqrt(token.size));
+        const color=/^#[0-9a-f]{3,8}$/i.test(token.color)?token.color:'#c6a35e';
+        const material=new THREE.MeshStandardMaterial({color,roughness:.68,metalness:.12,transparent:token.ghost,opacity:token.ghost ? .35 : 1});
+        const baseMat=new THREE.MeshStandardMaterial({color:token.selected?'#edcb71':token.enemy?'#9d3d40':token.ally?'#3b9770':'#58677d',roughness:.72,transparent:token.ghost,opacity:token.ghost ? .35 : 1});
+        const base=new THREE.Mesh(baseGeometry,baseMat);base.position.y=.065;base.scale.set(token.size/scale,1,token.size/scale);group.add(base);
+        group.add(new THREE.Mesh(bodyGeometry,material));
+        if (token.selected) {
+          const ring=new THREE.Mesh(new THREE.TorusGeometry(.49,.035,6,32),new THREE.MeshBasicMaterial({color:'#ffe2a0'}));
+          ring.scale.setScalar(token.size/scale);ring.rotation.x=Math.PI/2;ring.position.y=.08;group.add(ring);
+        }
+        const nameMat=new THREE.SpriteMaterial({map:labelTexture(token.ghost?token.name+' · след':token.name),transparent:true,depthTest:false,opacity:token.ghost ? .5 : 1});
+        nameMat.userData.ownedMap=true;
+        const label=new THREE.Sprite(nameMat);label.position.y=1.65;label.scale.set(2.35,.44,1);label.renderOrder=5;group.add(label);
+        group.scale.setScalar(scale);
+        group.userData={tokenId:token.id,ghost:token.ghost,size:token.size,styleKey:key};
+        pawnGroup.add(group);pawns.set(token.id,group);
       }
-      if (token.selected) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(.49,.035,8,40), new THREE.MeshBasicMaterial({ color: '#ffe2a0' }));
-        ring.scale.setScalar(token.size/scale);
-        ring.rotation.x = Math.PI/2; ring.position.y = .08; group.add(ring);
-      }
-      const nameMat = new THREE.SpriteMaterial({ map: labelTexture(token.ghost ? `${token.name} · след` : token.name), transparent: true, depthTest: false,
-        opacity: token.ghost ? .5 : 1 }); nameMat.userData.ownedMap = true;
-      const label = new THREE.Sprite(nameMat); label.position.y = 1.65; label.scale.set(2.35,.44,1); label.renderOrder = 5; group.add(label);
-      group.scale.setScalar(scale); group.position.set(token.x + token.size/2, 0, token.y + token.size/2);
-      group.userData.tokenId = token.id; group.userData.ghost = token.ghost; group.userData.size = token.size;
-      // Labels are excluded from hit testing: they may visually overlap another pawn.
-      group.traverse(object => { if (object.isMesh) object.userData.tokenId = token.ghost ? null : token.id; });
-      pawnGroup.add(group); pawns.set(token.id, group);
+      group.position.set(x+token.size/2,0,y+token.size/2);
     }
   }
   function rebuildMarks(marks, view) {
@@ -320,21 +403,21 @@ export function createBoard3D(root, callbacks) {
     }
   }
   function sync(next) {
+    counters.syncs++;
     const firstMap = mapKey !== next.mapKey;
     if (firstMap && current) cameraMemory.set(mapKey, { position: camera.position.clone(), target: controls.target.clone() });
     current = next; mapKey = next.mapKey;
     const v = next.view;
     const maskKey = `${v.width},${v.height},${v.omniscient},${v.showFog}:` + v.mask.join('');
     loadTexture(next.background);
-    const tk = maskKey + ':' + next.gridAlpha;
-    if (tk !== terrainKey) { rebuildTerrain(v, next.gridAlpha); terrainKey = tk; }
-    const wk = maskKey + JSON.stringify(next.walls) + ':' + next.wallAlpha + ':' + fadeWalls;
+    const geometryMaskKey=v.omniscient ? [v.width,v.height,'gm'].join(',') : maskKey;
+    const tk = geometryMaskKey;
+    if (tk !== terrainKey) { rebuildTerrain(v); terrainKey = tk; }
+    const wk = geometryMaskKey + JSON.stringify(next.walls) + ':' + next.wallAlpha + ':' + fadeWalls;
     if (wk !== wallKey) { rebuildWalls(next.walls,v,next.wallAlpha); wallKey = wk; }
     const fk=maskKey+':'+(v.npcMask?.join('') || '');
     if (fk !== fogKey) { rebuildFog(v); fogKey = fk; }
-    const pk = JSON.stringify(next.tokens.map(({ x, y, ...style }) => style));
-    if (pk !== pawnKey) { rebuildPawns(next.tokens); pawnKey = pk; }
-    else for (const token of next.tokens) pawns.get(token.id)?.position.set(token.x+token.size/2,0,token.y+token.size/2);
+    updatePawns(next.tokens);
     const mk = maskKey + JSON.stringify(next.marks);
     if (mk !== marksKey) { rebuildMarks(next.marks,v); marksKey = mk; }
     if (firstMap) {
@@ -342,7 +425,7 @@ export function createBoard3D(root, callbacks) {
       const saved = cameraMemory.get(mapKey);
       if (saved) fly(saved.position,saved.target,true); else overview(true);
     }
-    dirty = true;
+    invalidate();
   }
   function projectCell(x,z,height=0) {
     const rect = canvas.getBoundingClientRect();
@@ -356,7 +439,8 @@ export function createBoard3D(root, callbacks) {
     const group = pawns.get(String(id));
     return group && !group.userData.ghost ? projectCell(group.position.x,group.position.z,.7*group.scale.x) : null;
   }
-  function pick(x,y) {
+  function pick(x,y,withMarks=false) {
+    counters.picks++;
     if (!current) return null;
     const rect = canvas.getBoundingClientRect();
     ndc.set((x-rect.left)/rect.width*2-1, -(y-rect.top)/rect.height*2+1);
@@ -365,34 +449,43 @@ export function createBoard3D(root, callbacks) {
     const px=intersection.x, pz=intersection.z, { width,height }=current.view;
     const cx=Math.floor(px), cy=Math.floor(pz);
     const point = cx>=0&&cy>=0&&cx<width&&cy<height ? { x:cx,y:cy,u:px-cx,v:pz-cy,px:px*50,py:pz*50 } : null;
-    const hits = raycaster.intersectObjects(pawnGroup.children,true).filter(h => h.object.isMesh && h.object.userData.tokenId);
-    let tokenId = hits[0]?.object.userData.tokenId || null;
-    if (tokenId) {
-      const group=pawns.get(tokenId);
-      // Walls block clicking through them, but faded walls allow access inside rooms.
-      const wallHit = !fadeWalls && raycaster.intersectObjects(wallGroup.children,false)[0];
-      if (wallHit && wallHit.distance < hits[0].distance) tokenId=null;
-      else if (!point) return { tokenId, point:{ x:Math.floor(group.position.x),y:Math.floor(group.position.z),u:.5,v:.5 } };
+    // Bounding proxies avoid testing every triangle of every figure on hover.
+    let tokenId=null, nearest=Infinity;
+    const box=new THREE.Box3(), hitPoint=new THREE.Vector3();
+    for (const [id,group] of pawns) {
+      if (group.userData.ghost) continue;
+      const radius=Math.max(.34*group.scale.x,.47*group.userData.size), p=group.position;
+      box.min.set(p.x-radius,0,p.z-radius); box.max.set(p.x+radius,1.35*group.scale.x,p.z+radius);
+      if (raycaster.ray.intersectBox(box,hitPoint)) {
+        const distance=hitPoint.distanceToSquared(raycaster.ray.origin);
+        if(distance<nearest){nearest=distance;tokenId=id;}
+      }
     }
-    const markHit=raycaster.intersectObjects(markGroup.children,false).find(hit => {
+    if (tokenId && !fadeWalls) for (const bounds of wallBounds) {
+      if(raycaster.ray.intersectBox(bounds,hitPoint) && hitPoint.distanceToSquared(raycaster.ray.origin)<nearest){tokenId=null;break;}
+    }
+    if(tokenId && !point){const group=pawns.get(tokenId);return {tokenId,point:{x:Math.floor(group.position.x),y:Math.floor(group.position.z),u:.5,v:.5}};}
+    const markHit=withMarks ? raycaster.intersectObjects(markGroup.children,false).find(hit => {
       const x=Math.floor(hit.point.x), y=Math.floor(hit.point.z);
       return hit.object.userData.markId && (current.view.omniscient || data.cellState(current.view,x,y)>0);
-    });
+    }) : null;
     return { point, tokenId, markId:markHit?.object.userData.markId || null };
   }
   function setActive(value) {
     active = !!value; controls.enabled = active;
     if (active) { resized(); dirty=true; if (!raf) raf=requestAnimationFrame(frame); }
-    else { if (raf) cancelAnimationFrame(raf); raf=0; animation=null; }
+    else { if (raf) cancelAnimationFrame(raf); clearTimeout(idleTimer); raf=0; animation=null; pan=null; navigating=false; delete canvas.dataset.cursor; }
   }
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); setActive(false); callbacks.failed(new Error('WebGL context lost')); });
   return {
     canvas, sync, setActive, pick, projectCell, projectToken, overview,
     hover(point, editing=false, size=1) {
-      hover.visible=!!point && (!!editing || !!current?.tokens.some(t => t.selected));
-      if (point) { hover.position.set(point.x+size/2,.055,point.y+size/2); hover.scale.set(size,size,1); hover.material.color.set(editing ? '#e5c271' : '#73b8dc'); }
-      dirty=true;
+      hover.visible=!!point && !!current && (current.view.omniscient || data.cellState(current.view,point.x,point.y)>0);
+      if (point) { hover.position.set(point.x+size/2,.055,point.y+size/2); hover.scale.set(size,size,1); hover.material.color.set(editing || !current?.tokens.some(t=>t.selected) ? '#e5c271' : '#73b8dc'); }
+      invalidate();
     },
+    setGrid(value) { showGrid=!!value; terrain.children.forEach(mesh=>{if(mesh.userData.grid)mesh.visible=showGrid;});invalidate(); },
+    reloadBackground() { const url=textureUrl;textureUrl=null;loadTexture(url); },
     focusToken(id) {
       const group=pawns.get(String(id)); if (!group || group.userData.ghost) return false;
       const target=group.position.clone();
@@ -406,11 +499,11 @@ export function createBoard3D(root, callbacks) {
     },
     setWallFade(value) { fadeWalls=!!value; if(current) sync(current); },
     inspect() {
-      return { ready:!!current, mapKey, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost })),
+      return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost })),
         wallSegments:wallGroup.children.filter(m=>m.isInstancedMesh).reduce((sum,m)=>sum+m.count,0)/2,
         fogVolumes:fogGroup.children.reduce((sum,m)=>sum+(m.isInstancedMesh?m.count:0),0), wallFade:fadeWalls, camera:camera.position.toArray(), target:controls.target.toArray(),
-        render: { calls:renderer.info.render.calls, triangles:renderer.info.render.triangles, geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures }, controlState:controls.state, running:!!raf };
+        render: { calls:renderer.info.render.calls, triangles:renderer.info.render.triangles, geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures }, controlState:pan?2:controls.state, running:active&&drawable, framePending:!!raf };
     },
-    dispose() { setActive(false);observer.disconnect();controls.dispose();[terrain,wallGroup,fogGroup,pawnGroup,markGroup].forEach(disposeTree);mapTexture?.dispose();hover.geometry.dispose();hover.material.dispose();renderer.dispose();canvas.remove(); }
+    dispose() { setActive(false);textureGeneration++;textureAbort?.abort();window.removeEventListener('blur',blur);observer.disconnect();controls.dispose();[terrain,wallGroup,fogGroup,pawnGroup,markGroup].forEach(disposeTree);mapTexture?.dispose();bodyGeometry.dispose();baseGeometry.dispose();hover.geometry.dispose();hover.material.dispose();hoverBorder.geometry.dispose();hoverBorder.material.dispose();renderer.dispose();canvas.remove(); }
   };
 }

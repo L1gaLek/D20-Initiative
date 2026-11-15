@@ -125,5 +125,5 @@
 }
 
 #board-wrapper.board-view--isometric.board-view--dragging{
-  cursor: grabbing;
+  cursor:var(--cursor-grabbing);
 }

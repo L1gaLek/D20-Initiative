@@ -1,7 +1,7 @@
 // Adapter: 3D gestures enter the existing board handlers and permission checks.
 (function () {
   'use strict';
-  const moduleUrl = new URL('board-3d/scene.mjs?v=20261115-board-3d-6', document.currentScript.src);
+  const moduleUrl = new URL('board-3d/scene.mjs?v=20261115-board-3d-polish-7', document.currentScript.src);
   let active = false, loading = null, engine = null, root = null, status = null;
   let syncFrame = 0, state = null, gesture = null, lastTap = null;
   let savedScroll = null;
@@ -49,6 +49,11 @@
       const pressed = fade.getAttribute('aria-pressed') !== 'true';
       fade.setAttribute('aria-pressed', String(pressed)); engine?.setWallFade(pressed);
     }); fade.setAttribute('aria-pressed', 'false'); toolbar.append(fade);
+    const grid = button('Сетка', 'Показать или скрыть клетки в 3D; настройка 2D не меняется', () => {
+      const pressed = grid.getAttribute('aria-pressed') !== 'true';
+      grid.setAttribute('aria-pressed', String(pressed)); engine?.setGrid(pressed);
+    }); grid.setAttribute('aria-pressed', 'true'); toolbar.append(grid);
+    toolbar.append(button('Подложка', 'Повторить загрузку изображения карты', () => engine?.reloadBackground()));
     toolbar.append(button('⛶', 'Поле на весь экран / выйти из полного экрана', async () => {
       try { if (document.fullscreenElement) await document.exitFullscreen(); else await root.parentElement.requestFullscreen(); }
       catch { notify('Полноэкранный режим недоступен.'); }
@@ -169,7 +174,7 @@
         }
       }
       if (event.button !== 0) return;
-      const hit = engine.pick(event.clientX, event.clientY);
+      const hit = engine.pick(event.clientX, event.clientY, document.getElementById('marks-enabled')?.checked);
       const target = toolTarget(hit);
       gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, target,
         moveTarget: target?.ownerSVGElement || target, isMarks: !!target?.closest('#marks-layer'), point: hit?.point };
@@ -179,27 +184,38 @@
       }
       if (event.pointerType === 'mouse' || target) event.preventDefault();
     }, true);
-    canvas.addEventListener('pointermove', event => {
-      const hit = engine.pick(event.clientX, event.clientY);
+    let hoverFrame=0, latestPointer=null;
+    function updateHover(event) {
+      const hit = engine.pick(event.clientX, event.clientY, document.getElementById('marks-enabled')?.checked);
       const point = hit?.point;
       if (gesture && event.pointerId === gesture.id) {
         gesture.moved ||= Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 6;
         if (point) gesture.point = point;
         if (gesture.target) { event.stopImmediatePropagation(); dispatch(gesture.moveTarget, 'mousemove', event, point); }
-      } else if (event.buttons === 0) dispatch(toolTarget() || cell(point), 'mousemove', event, point);
+      } else if (event.buttons === 0 && (toolTarget() || editingWalls() || (typeof selectedPlayer !== 'undefined' && selectedPlayer))) dispatch(toolTarget() || cell(point), 'mousemove', event, point);
       const tool = toolTarget();
       const editing = tool || editingWalls();
       const brushSize = tool?.id === 'fog-layer' ? Math.max(1, Math.min(20, Number(document.getElementById('fog-square-size')?.value) || 1))
         : !editing && typeof selectedPlayer !== 'undefined' ? Number(selectedPlayer?.size) || 1 : 1;
       engine.hover(point, !!editing, brushSize);
-      canvas.style.cursor = hit?.tokenId && !editing ? 'pointer' : editing ? 'crosshair' : event.buttons ? 'grabbing' : 'grab';
-      api.requestSync();
+      const moving = !editing && point && typeof selectedPlayer !== 'undefined' && selectedPlayer;
+      canvas.dataset.cursor = hit?.tokenId && !editing ? 'select' : editing ? 'crosshair' : event.buttons ? 'grabbing' : moving ? 'move' : 'grab';
+      // Only editors mutate preview geometry. Ordinary hover/camera movement
+      // must not rescan all tokens, wall DOM and visibility masks.
+      if (editing) api.requestSync();
+    }
+    canvas.addEventListener('pointermove', event => {
+      if ((event.buttons & 6) || touchPointers.size>1) return;
+      if (gesture && event.pointerId===gesture.id) gesture.moved ||= Math.hypot(event.clientX-gesture.x,event.clientY-gesture.y)>6;
+      if (gesture?.target) { updateHover(event); return; }
+      latestPointer=event;
+      if (!hoverFrame) hoverFrame=requestAnimationFrame(()=>{hoverFrame=0;if(active && latestPointer && !(latestPointer.buttons&6))updateHover(latestPointer);});
     }, true);
     canvas.addEventListener('pointerup', event => {
       if (event.pointerType === 'touch') touchPointers.delete(event.pointerId);
       if (!gesture || gesture.id !== event.pointerId) return;
       const g = gesture; gesture = null;
-      const hit = engine.pick(event.clientX, event.clientY);
+      const hit = engine.pick(event.clientX, event.clientY, document.getElementById('marks-enabled')?.checked);
       if (g.target) {
         dispatch(g.moveTarget, 'mouseup', event, hit?.point || g.point); event.stopImmediatePropagation();
         if (g.isMarks && !g.moved) {
@@ -227,7 +243,7 @@
       api.requestSync();
     }, true);
     canvas.addEventListener('pointercancel', event => { touchPointers.delete(event.pointerId); gesture = null; window.dispatchEvent(new MouseEvent('mouseup')); });
-    canvas.addEventListener('pointerleave', () => engine.hover(null));
+    canvas.addEventListener('pointerleave', () => { latestPointer=null; engine.hover(null); });
     canvas.addEventListener('keydown', e => {
       if (e.key.toLowerCase() === 'f') document.querySelector('.board-3d-toolbar button:nth-child(2)')?.click();
       if (e.key === 'Home') engine.overview();

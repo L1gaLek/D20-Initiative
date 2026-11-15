@@ -97,8 +97,8 @@ function getOffscreenTokenPointer(x, y, bounds) {
       if (window.FogWar?.isEnabled?.() && !window.FogWar.canInteractWithToken(player)) continue;
       const projected = window.__boardViewMode === '3d' ? window.Board3D?.projectToken?.(player.id) : null;
       if (window.__boardViewMode === '3d' && !projected) continue;
-      const tokenRect = token.getBoundingClientRect();
-      if (!tokenRect.width || !tokenRect.height) continue;
+      const tokenRect = projected ? null : token.getBoundingClientRect();
+      if (!projected && (!tokenRect.width || !tokenRect.height)) continue;
       const tokenX = projected ? projected.x : tokenRect.left + tokenRect.width / 2;
       const tokenY = projected ? projected.y : tokenRect.top + tokenRect.height / 2;
       const point = getOffscreenTokenPointer(tokenX, tokenY, bounds);

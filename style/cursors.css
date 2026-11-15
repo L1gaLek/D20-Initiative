@@ -1,0 +1,27 @@
+/* Native 36px cursors: parchment, brass and the board's dark blue outline. */
+:root {
+  --cursor-default: url('../cursor/arrow.svg') 4 3, default;
+  --cursor-select: url('../cursor/select.svg') 14 4, pointer;
+  --cursor-pressed: url('../cursor/pressed.svg') 6 7, pointer;
+  --cursor-grab: url('../cursor/grab.svg') 18 18, grab;
+  --cursor-grabbing: url('../cursor/grabbing.svg') 18 18, grabbing;
+  --cursor-move: url('../cursor/move.svg') 18 18, move;
+  --cursor-rotate: url('../cursor/rotate.svg') 18 18, grabbing;
+  --cursor-crosshair: url('../cursor/crosshair.svg') 18 18, crosshair;
+  --cursor-text: url('../cursor/text.svg') 18 18, text;
+  --cursor-blocked: url('../cursor/blocked.svg') 18 18, not-allowed;
+}
+html, body { cursor: var(--cursor-default); }
+a[href], summary, [role='button'], label[for], input[type='range'], input[type='checkbox'], input[type='radio'] { cursor: var(--cursor-select); }
+body input:is([type='text'],[type='password'],[type='number'],[type='search'],[type='email'],[type='url'],[type='tel']),
+body textarea, body [contenteditable='true'] { cursor: var(--cursor-text); }
+body button:disabled, body [aria-disabled='true'], body input:disabled, body textarea:disabled { cursor: var(--cursor-blocked); }
+body button:active:not(:disabled), body a[href]:active, body [role='button']:active:not([aria-disabled='true']), body .player:active { cursor: var(--cursor-pressed); }
+body .board-3d-canvas { cursor: var(--cursor-grab); }
+body .board-3d-canvas[data-cursor='select'] { cursor: var(--cursor-select); }
+body .board-3d-canvas[data-cursor='crosshair'] { cursor: var(--cursor-crosshair); }
+body .board-3d-canvas[data-cursor='grab'] { cursor: var(--cursor-grab); }
+body .board-3d-canvas[data-cursor='move'] { cursor: var(--cursor-move); }
+body .board-3d-canvas[data-cursor='grabbing'] { cursor: var(--cursor-grabbing); }
+body .board-3d-canvas[data-cursor='rotate'] { cursor: var(--cursor-rotate); }
+body .board-3d-canvas:active[data-cursor='select'] { cursor: var(--cursor-pressed); }

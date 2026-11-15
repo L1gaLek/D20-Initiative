@@ -65,7 +65,7 @@
     // делаем полосу прокрутки (включаем overflow) + задаем размер рамки в пикселях
     function applyViewportToWrapper() {
       if (!boardWrapper) return;
-      boardWrapper.style.overflow = 'auto';
+      boardWrapper.style.overflow = window.__boardViewMode === '3d' ? 'hidden' : 'auto';
       boardWrapper.style.width = `${viewportCols * CELL}px`;
       boardWrapper.style.height = `${viewportRows * CELL}px`;
     }
@@ -156,6 +156,7 @@
     }
     applyZoom();
     window.addEventListener('board-view-mode-changed', () => {
+      if (boardWrapper) boardWrapper.style.overflow = window.__boardViewMode === '3d' ? 'hidden' : 'auto';
       applyZoom();
     });
 

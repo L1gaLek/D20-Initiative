@@ -1,11 +1,13 @@
 #board-wrapper.board-view--3d {
   position: relative;
-  overflow: hidden;
-  overflow: clip;
+  overflow: hidden !important;
+  overflow: clip !important;
+  scrollbar-width: none;
   padding: 0;
   isolation: isolate;
   background: #161c28;
 }
+#board-wrapper.board-view--3d::-webkit-scrollbar { display: none; width: 0; height: 0; }
 /* Keep the rules' DOM grid measurable for legacy movement handlers. */
 #board-wrapper.board-view--3d #game-board {
   position: absolute !important;

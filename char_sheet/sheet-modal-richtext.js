@@ -167,7 +167,7 @@ function upgradeSheetTextareasToRte(root, player, canEdit) {
       st.setAttribute('data-rte-link-style', '1');
       st.textContent = `
         .rte-editor a.rte-link, .rte-modal a.rte-link {
-          cursor: url("cursor/pointer.cur"), pointer;
+          cursor: var(--cursor-select);
           text-decoration: underline;
           font-weight: 700;
         }

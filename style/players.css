@@ -100,7 +100,7 @@
   border-radius: 6px;
   background: #141414;
   color: #ddd;
-  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
+  cursor: var(--cursor-select);
   font-weight: 700;
   font-size: 12px;
 }
@@ -503,7 +503,7 @@
   padding: 2px 6px;
   line-height: 16px;
   font-size: 12px;
-  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
+  cursor: var(--cursor-select);
 }
 .eye-btn:hover{ border-color: #777; }
 
@@ -641,7 +641,7 @@
   color: inherit;
   padding: 4px 8px;
   border-radius: 8px;
-  cursor: url("/D20-Initiative/cursor/pointer.cur"), pointer;
+  cursor: var(--cursor-select);
 }
 .rte-btn:active { transform: translateY(1px); }
 

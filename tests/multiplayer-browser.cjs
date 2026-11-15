@@ -180,6 +180,7 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    if (!process.env.D20_3D_ONLY) {
     await gm.locator('#content-row').evaluate(el => { el.style.flexWrap = 'nowrap'; });
     const panelBefore = await gm.locator('#initiative-players-box').evaluate(el => el.getBoundingClientRect().height);
     await gm.locator('#board-col').evaluate(el => { el.style.minHeight = '1900px'; });
@@ -515,6 +516,7 @@ async function main() {
     await p1.evaluate(message => RoomChat.hydrateFromRows([{ ...message, id: 'old-history' }]), incoming);
     assert.equal(await p1.evaluate(() => window.__notificationOscillators), toneBefore + 2);
     console.log('PASS: new incoming DM flashes a centered icon and schedules a short real Web Audio chime; reading, history, own messages and duplicates stay quiet');
+    }
     await require('./helpers/board-3d-scenarios.cjs')({ pages, h, broadcast, screenshotDir, clone, start });
     assert.deepEqual(errors, []);
     console.log(`Browser regression complete; ${requests.filter(r => r.path.endsWith('/initiative')).length} confirmed initiative requests.`);
