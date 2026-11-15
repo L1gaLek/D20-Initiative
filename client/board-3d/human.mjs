@@ -1,189 +1,182 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
+import model from '../../assets/models/human/male.mjs?v=20261115-human-detail-1';
+import { dressHuman, batchRigid } from './human-equipment.mjs?v=20261115-human-detail-1';
 
-// Original modular miniature. Every part belongs to an articulated joint;
-// equipment follows the same joints as skin during the walk cycle.
+function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
+const positions=decode(model.positions,Float32Array),indices=decode(model.indices,Uint16Array);
+const skinIndices=decode(model.skinIndices,Uint8Array),skinWeights=decode(model.skinWeights,Uint8Array);
+const source=new THREE.BufferGeometry();
+source.setAttribute('position',new THREE.BufferAttribute(positions,3));source.setIndex(new THREE.BufferAttribute(indices,1));source.computeVertexNormals();
+const normals=source.attributes.normal.array;
+const definitions=new Map(model.bones.map((b,i)=>[b.name,{...b,index:i}]));
+// Immutable topology/weights are classified once, not again for every garment
+// or every player. Only cut-edge vertices need new interpolated influences.
+const sourcePoints=Array.from({length:positions.length/3},(_,id)=>{
+  const w=new Map();for(let k=0;k<4;k++){const index=id*4+k,value=skinWeights[index]/255;if(value)w.set(skinIndices[index],(w.get(skinIndices[index])||0)+value);}
+  return {p:Array.from(positions.slice(id*3,id*3+3)),n:Array.from(normals.slice(id*3,id*3+3)),w,id};
+});
+const sourceFaces=[];
+for(let i=0;i<indices.length;i+=3){
+  const ids=[indices[i],indices[i+1],indices[i+2]],center=[0,0,0],weights=new Map();
+  for(const id of ids){for(let c=0;c<3;c++)center[c]+=positions[id*3+c]/3;for(const [bone,w] of sourcePoints[id].w)weights.set(bone,(weights.get(bone)||0)+w);}
+  const main=[...weights].sort((a,b)=>b[1]-a[1])[0]?.[0];sourceFaces.push({ids,center,bone:model.bones[main]?.name||''});
+}
+
+// A continuous anatomical mesh, with authored joint weights (including fingers),
+// replaces the former collection of spheres. CPU source buffers are immutable;
+// each avatar owns its GPU geometry, skeleton and materials.
 export function createHuman(config){
-  const root=new THREE.Group(),body=new THREE.Group();root.add(body);
-  root.userData.avatar=config;
-  const mat=(color,metalness=0,roughness=.75)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
-  const skin=mat('#b88b71'),shadow=mat('#926a58'),hair=mat(config.hairColor),eye=mat('#29302c'),white=mat('#bfb6a3');
-  const hairLight=hair.clone();hairLight.color.offsetHSL(0,-.07,.055);
-  const cloth=mat('#343942'),linen=mat('#c3b89c'),leather=mat('#65412b'),dark=mat('#30251e'),trim=mat('#b69857',.68,.34);
-  const steel=mat('#879da9',.72,.34),edge=mat('#cbd7dc',.82,.23);
-  const kind=config.armor,armored=kind!=='none';
-  const metallic=['breastplate','half-plate','plate','splint'].includes(kind);
-  const chain=['chain-shirt','chain-mail','ring-mail'].includes(kind);
-  const coat=mat(kind==='hide'?'#8a6d4a':kind==='ring-mail'?'#52454a':kind==='leather'||kind==='studded-leather'?'#795236':'#788994',chain ? .5 : .15,chain ? .66 : .6);
-  if(chain||kind==='scale-mail'){
-    coat.customProgramCacheKey=()=>`human-armor-${kind}`;
-    coat.onBeforeCompile=shader=>{
-      shader.vertexShader='varying vec3 armorPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\narmorPoint=position;');
-      shader.fragmentShader='varying vec3 armorPoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-        vec2 p=armorPoint.xy*${kind==='ring-mail'?'38.':'70.'};p.x+=mod(floor(p.y),2.)*.5;
-        vec2 q=fract(p)-.5;float ring=1.-smoothstep(.07,.15,abs(length(q)-.31));
-        diffuseColor.rgb*=.55+ring*.55;`);
+  const root=new THREE.Group(),body=new THREE.Group();root.add(body);root.userData.avatar=config;
+  const bones=model.bones.map(b=>{const bone=new THREE.Bone();bone.name=b.name;return bone;});
+  const byName=new Map(bones.map(b=>[b.name,b]));
+  model.bones.forEach((b,i)=>{
+    const parent=b.parent<0?body:bones[b.parent],origin=b.parent<0?[0,0,0]:model.bones[b.parent].head;
+    bones[i].position.fromArray(b.head.map((v,a)=>v-origin[a]));parent.add(bones[i]);
+  });
+  root.updateMatrixWorld(true);const skeleton=new THREE.Skeleton(bones);skeleton.calculateInverses();
+  const mat=(color,metalness=0,roughness=.7)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
+  const materials={skin:mat('#b7917c'),hair:mat(config.hairColor||'#493124'),linen:mat('#a89f8c'),cloth:mat('#333b43'),leather:mat('#61402b'),dark:mat('#282321'),steel:mat('#8e9da6',.78,.3),edge:mat('#c1cbd0',.85,.23),trim:mat('#a68b51',.72,.35)};
+  // Fine surface variation is evaluated locally: no remote skin/armor textures.
+  const texture=(material,type)=>{
+    material.customProgramCacheKey=()=>`human-detail-${type}`;
+    material.onBeforeCompile=shader=>{
+      shader.vertexShader='varying vec3 surfacePoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nsurfacePoint=position;');
+      shader.fragmentShader='varying vec3 surfacePoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+        vec3 p=surfacePoint;float grain=fract(sin(dot(floor(p*${type==='skin'?'2200.':'1300.'}),vec3(12.9898,78.233,43.14)))*43758.5453);
+        diffuseColor.rgb*= ${type==='skin'?'(.965+.055*grain)':'(.90+.13*grain)'};
+      `);
     };
-  }
-  function mesh(parent,geometry,material,x=0,y=0,z=0,sx=1,sy=1,sz=1){
-    const m=new THREE.Mesh(geometry,material);m.position.set(x,y,z);m.scale.set(sx,sy,sz);parent.add(m);return m;
-  }
-  const orb=(p,m,x,y,z,sx,sy,sz)=>mesh(p,new THREE.SphereGeometry(1,12,8),m,x,y,z,sx,sy,sz);
-  const box=(p,m,x,y,z,sx,sy,sz)=>mesh(p,new THREE.BoxGeometry(1,1,1),m,x,y,z,sx,sy,sz);
-  const tube=(p,m,x,y,z,r1,r2,h)=>mesh(p,new THREE.CylinderGeometry(r1,r2,h,12),m,x,y,z);
-  function joint(parent,x,y,z){const g=new THREE.Group();g.position.set(x,y,z);parent.add(g);return g;}
-  // A shaped torso, shoulders and pelvis rather than a chess-piece cylinder.
-  const torso=new THREE.LatheGeometry([[.13,.81],[.14,.88],[.15,.94],[.17,1.0],[.185,1.04],[.20,1.08],[.215,1.12],[.225,1.16],[.225,1.20],[.22,1.23],[.165,1.26],[.12,1.28]].map(p=>new THREE.Vector2(...p)),24);
-  torso.scale(1,1,.65);
-  if(!armored){const a=torso.attributes.position;for(let i=0;i<a.count;i++){
-    const x=a.getX(i),y=a.getY(i),z=a.getZ(i);if(z>0){const muscle=.016*Math.exp(-(((Math.abs(x)-.09)/.085)**2)-(((y-1.145)/.065)**2));a.setZ(i,z+muscle);}
-  }torso.computeVertexNormals();}
-  mesh(body,torso,armored?(metallic?steel:coat):skin);
-  orb(body,armored?cloth:skin,0,.83,0,.17,.13,.12);
-  if(!armored){
-    box(body,linen,0,.785,0,.32,.17,.24);
-    for(const s of [-1,1])box(body,linen,s*.094,.72,0,.14,.14,.235);
-    box(body,dark,0,.866,.002,.316,.022,.244);
-  }else{
-    box(body,leather,0,.868,.006,.34,.055,.255);box(body,trim,0,.87,.146,.065,.047,.023);
-    const longCoat=['chain-mail','ring-mail','scale-mail','splint'].includes(kind);
-    if(longCoat){const skirt=tube(body,coat,0,.775,0,.17,.23,.22);skirt.scale.z=.68;}
-    if(metallic){
-      box(body,edge,0,1.12,.152,.009,.245,.012);
-      for(const s of [-1,1]){const rim=box(body,edge,s*.105,1.225,.106,.19,.018,.025);rim.rotation.z=s*.14;}
-      for(let i=0;i<3;i++)box(body,i%2?steel:edge,0,.94-i*.037,.125,.30-i*.018,.035,.025);
-    }
-    if(kind==='hide'){
-      for(let i=0;i<12;i++){const a=i/12*Math.PI*2;orb(body,linen,Math.sin(a)*.17,1.24+Math.cos(a)*.018,Math.cos(a)*.1,.059,.052,.046);}
-    }
-    if(kind==='studded-leather'){
-      for(let row=0;row<4;row++)for(let col=0;col<5;col++)orb(body,trim,(col-2)*.07,1.19-row*.075,.147-Math.abs(col-2)*.009,.012,.012,.008);
-    }
-    if(kind==='scale-mail'){
-      for(const back of [-1,1])for(let row=0;row<6;row++)for(let col=0;col<6;col++){
-        const x=(col-2.5)*.057+(row%2)*.012;
-        orb(body,row%2?steel:edge,x,1.19-row*.056,back*(.138-Math.abs(x)*.15),.035,.041,.012);
+  };
+  texture(materials.skin,'skin');texture(materials.leather,'leather');texture(materials.linen,'linen');
+  materials.hair.customProgramCacheKey=()=>`human-hair-${config.hair}`;
+  materials.hair.onBeforeCompile=shader=>{
+    shader.vertexShader='varying vec3 hairPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nhairPoint=position;');
+    shader.fragmentShader='varying vec3 hairPoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+      vec3 h=hairPoint-vec3(0.,1.585,.043);float angle=atan(h.x,h.z);
+      float strands=.5+.5*sin(angle*155.+h.y*130.+sin(angle*17.)*.7);
+      diffuseColor.rgb*=.77+.26*strands;
+    `).replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=.52+strands*.16;');
+  };
+  function surface(material,predicate=()=>true,offset=0,deform,clips=[]){
+    const geometry=new THREE.BufferGeometry(),selected=[],points=sourcePoints.slice();
+    const interpolate=(a,b,t)=>{
+      const w=new Map();for(const [k,v] of a.w)w.set(k,v*(1-t));for(const [k,v] of b.w)w.set(k,(w.get(k)||0)+v*t);
+      const point={p:a.p.map((v,i)=>THREE.MathUtils.lerp(v,b.p[i],t)),n:a.n.map((v,i)=>THREE.MathUtils.lerp(v,b.n[i],t)),w,id:points.length};points.push(point);return point;
+    };
+    for(const {ids,center,bone} of sourceFaces){
+      if(!predicate(center,bone,ids))continue;
+      let polygon=ids.map(id=>points[id]);
+      for(const clip of clips){
+        const next=[];for(let j=0;j<polygon.length;j++){
+          const a=polygon[j],b=polygon[(j+1)%polygon.length],da=clip(a.p),db=clip(b.p);
+          if(da>=0)next.push(a);if((da>=0)!==(db>=0))next.push(interpolate(a,b,da/(da-db)));
+        }polygon=next;
       }
+      for(let j=1;j<polygon.length-1;j++)selected.push(polygon[0].id,polygon[j].id,polygon[j+1].id);
     }
-    if(kind==='splint')for(let i=-3;i<=3;i++)box(body,steel,i*.048,1.08,.15-Math.abs(i)*.007,.027,.32,.02);
-    if(['leather','studded-leather','hide'].includes(kind)){
-      const strap=box(body,dark,.08,1.09,.155,.038,.31,.018);strap.rotation.z=-.32;
+    if(!selected.length){geometry.dispose();return null;}
+    const used=[...new Set(selected)].sort((a,b)=>a-b),remap=new Map(used.map((v,i)=>[v,i])),pos=[],joints=[],weights=[];
+    for(const id of used){
+      const data=points[id],normal=new THREE.Vector3(...data.n).normalize(),point=data.p.map((v,i)=>v+normal.getComponent(i)*offset);
+      if(deform)deform(point,id);pos.push(...point);
+      const w=[...data.w].sort((a,b)=>b[1]-a[1]).slice(0,4),sum=w.reduce((s,v)=>s+v[1],0);
+      for(let i=0;i<4;i++){joints.push(w[i]?.[0]||0);weights.push((w[i]?.[1]||0)/sum);}
+    }
+    geometry.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geometry.setIndex(selected.map(i=>remap.get(i)));
+    geometry.deleteAttribute('normal');geometry.computeVertexNormals();
+    geometry.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(joints,4));
+    geometry.setAttribute('skinWeight',new THREE.Float32BufferAttribute(weights,4));
+    const mesh=new THREE.SkinnedMesh(geometry,material);mesh.frustumCulled=false;body.add(mesh);mesh.bind(skeleton);return mesh;
+  }
+  const armored=config.armor&&config.armor!=='none';
+  const skin=surface(materials.skin,(p,b)=>!armored||p[1]>1.415||config.armor!=='plate'&&/^(wrist|metacarpal|finger)/.test(b));skin.name='anatomical-body';
+  const skinPositions=skin.geometry.attributes.position.array,colors=new Float32Array(skinPositions.length);const color=new THREE.Color();
+  for(let i=0;i<skinPositions.length/3;i++){
+    const x=skinPositions[i*3],y=skinPositions[i*3+1],z=skinPositions[i*3+2];color.setRGB(1,1,1);
+    if(z>.13&&Math.abs(x)<.026&&y>1.51&&y<1.534){const lip=Math.max(0,1-Math.abs(y-1.522)/.012)*Math.max(0,1-Math.abs(x)/.026);color.setRGB(1-.08*lip,1-.27*lip,1-.22*lip);}
+    if(y>1.48&&y<1.58&&z>.075){const blush=Math.exp(-(((Math.abs(x)-.044)/.02)**2)-((y-1.55)/.026)**2)*.08;color.g-=blush;color.b-=blush*.5;}
+    color.toArray(colors,i*3);
+  }
+  skin.geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));materials.skin.vertexColors=true;
+  const attach=(name,geometry,material)=>{const head=definitions.get(name).head;geometry.translate(-head[0],-head[1],-head[2]);const mesh=new THREE.Mesh(geometry,material);byName.get(name).add(mesh);return mesh;};
+  const sphere=(name,material,center,radii,segments=24)=>{const g=new THREE.SphereGeometry(1,segments,16);g.scale(...radii);g.translate(...center);return attach(name,g,material);};
+  const curve=(name,material,points,radius=.0015,segments=20)=>attach(name,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p))),segments,radius,4,false),material);
+  const ivory=mat('#c7c2ae',0,.4),iris=mat('#5c6a4c',.05,.35),pupil=mat('#111817',.1,.18),glint=mat('#e1e4d7',0,.1);
+  for(const side of ['L','R']){
+    const eye=definitions.get(`eye.${side}`),p=eye.head,sign=side==='L'?1:-1;
+    sphere('head',ivory,p,[.0131,.0126,.0140]);
+    sphere('head',iris,[p[0]+sign*.0004,p[1]-.0007,p[2]+.0131],[.0058,.0058,.0011]);
+    sphere('head',pupil,[p[0]+sign*.0004,p[1]-.0007,p[2]+.0141],[.0025,.0025,.0004]);
+    sphere('head',glint,[p[0]-.0014,p[1]+.0011,p[2]+.0145],[.0007,.0007,.0003],10);
+    // Brows follow the actual brow ridge instead of floating over a round head.
+    curve('head',materials.hair,[[sign*.011,1.599,.14],[sign*.027,1.603,.138],[sign*.044,1.600,.126]],.0012,18);
+    for(let i=0;i<21;i++){
+      const x=sign*(.012+i*.0016),y=1.600+Math.sin(i/20*Math.PI)*.003,z=.140-Math.max(0,i-6)*.0009;
+      curve('head',materials.hair,[[x,y,z],[x+sign*.001,y+.0013,z-.0005]],.00035,2);
     }
   }
-  tube(body,skin,0,1.302,0,.067,.078,.1);
-  const head=joint(body,0,1.43,0);
-  const skull=new THREE.SphereGeometry(1,18,12),positions=skull.attributes.position;
-  for(let i=0;i<positions.count;i++){
-    const y=positions.getY(i),jaw=y<-.25?1+(y+.25)*.22:1;
-    positions.setXYZ(i,positions.getX(i)*.11*jaw,y*.145+.008,Math.min(.078,positions.getZ(i)*.103));
-  }
-  skull.computeVertexNormals();mesh(head,skull,skin);
-  for(const s of [-1,1]){
-    orb(head,skin,s*.108,.005,0,.013,.028,.016);
-    orb(head,white,s*.039,.025,.079,.020,.007,.002);
-    orb(head,eye,s*.039,.025,.081,.006,.006,.001);
-    const brow=box(head,hair,s*.039,.044,.080,.039,.008,.006);brow.rotation.z=-s*.1;
-  }
-  const nose=new THREE.BufferGeometry();nose.setAttribute('position',new THREE.Float32BufferAttribute([
-    -.008,.027,.077,-.012,-.01,.079,0,-.008,.102, .008,.027,.077,0,-.008,.102,.012,-.01,.079,
-    -.008,.027,.077,0,-.008,.102,.008,.027,.077, -.012,-.01,.079,.012,-.01,.079,0,-.008,.102
-  ],3));nose.computeVertexNormals();mesh(head,nose,skin);
-  box(head,shadow,0,-.049,.079,.035,.004,.002);
-  // Hair caps stop above the eyebrows, keeping the face legible in every style.
   if(config.hair!=='bald'){
-    const cap=new THREE.SphereGeometry(1,16,10,0,Math.PI*2,0,Math.PI*.44);
-    mesh(head,cap,hair,0,.035,-.009,.119,.135,.113);
-    if(config.hair==='short')for(let i=0;i<7;i++)orb(head,hair,(i-3)*.027,.135+Math.sin(i)*.006,.02,.031,.022,.072);
-    if(config.hair==='parted')for(let i=0;i<6;i++){
-      const lock=orb(head,hair,(i-2.5)*.031,.149-Math.abs(i-3)*.005,.027,.027,.038,.087);lock.rotation.z=-.18;
-    }
-    if(config.hair==='swept')for(let i=0;i<5;i++){
-      const lock=orb(head,hair,(i-2)*.038,.155,-.025,.029,.045,.11);lock.rotation.x=.2;
-    }
-    if(config.hair==='tied'){
-      for(const s of [-1,1])orb(head,hair,s*.098,-.025,-.055,.036,.10,.057);
-      orb(head,hair,0,-.045,-.12,.074,.08,.06);tube(head,trim,0,-.078,-.141,.035,.035,.025);
-      const tail=orb(head,hair,0,-.18,-.14,.045,.12,.042);tail.rotation.x=-.25;
-    }
-    if(config.hair==='mohawk'){
-      // Close-cropped sides with a raised central ridge.
-      for(let i=0;i<6;i++)orb(head,hair,0,.15-Math.abs(i-2)*.014,(i-2)*.034,.031,.076,.037);
-    }
-    for(let i=0;i<13;i++){
-      const phi=i/13*Math.PI*2,points=[];
-      for(let j=0;j<9;j++){const t=.18+j*.145;points.push(new THREE.Vector3(Math.sin(phi)*Math.sin(t)*.121,.035+Math.cos(t)*.137,Math.cos(phi)*Math.sin(t)*.115-.009));}
-      mesh(head,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),10,.0017,3,false),hairLight);
-    }
-  }
-  const legs=[],arms=[],knees=[],elbows=[];
-  for(const s of [-1,1]){
-    const hip=joint(body,s*.102,.806,0);legs.push(hip);
-    orb(hip,armored?cloth:skin,0,-.155,0,.085,.19,.08);
-    const knee=joint(hip,0,-.32,0);knees.push(knee);
-    orb(knee,armored?cloth:skin,0,-.145,0,.065,.16,.065);
-    orb(knee,armored?leather:skin,0,-.302,.042,.071,.046,.119);
-    if(armored){tube(knee,leather,0,-.23,0,.072,.064,.16);box(knee,dark,0,-.324,.052,.139,.024,.21);}
-    if(['half-plate','plate','splint'].includes(kind)){
-      orb(knee,steel,0,-.005,.058,.081,.065,.04);
-      const greave=orb(knee,steel,0,-.17,.044,.069,.14,.042);
-      if(kind==='splint')for(let i=-1;i<=1;i++)box(knee,edge,i*.04,-.15,.078,.02,.23,.015);
-      if(kind==='plate')orb(hip,steel,0,-.13,.047,.082,.14,.054);
-      greave.rotation.x=-.035;
-    }
-    const shoulder=joint(body,s*.231,1.225,0);arms.push(shoulder);shoulder.rotation.z=s*.08;
-    orb(shoulder,skin,0,-.036,0,.081,.10,.079);
-    orb(shoulder,armored&&['chain-mail','ring-mail','scale-mail'].includes(kind)?coat:skin,0,-.14,0,.067,.14,.064);
-    const elbow=joint(shoulder,0,-.262,0);elbows.push(elbow);
-    orb(elbow,skin,0,-.117,.006,.056,.135,.055);orb(elbow,skin,0,-.246,.008,.052,.065,.041);
-    if(armored)tube(elbow,metallic?steel:leather,0,-.14,0,.062,.05,.15);
-    if(['half-plate','plate'].includes(kind)){
-      orb(shoulder,steel,s*.025,-.014,0,.112,.057,.10);
-      if(kind==='plate'){orb(shoulder,edge,s*.036,-.052,.005,.107,.029,.098);tube(shoulder,steel,0,-.15,0,.075,.06,.17);orb(elbow,steel,0,-.25,.008,.057,.059,.047);}
-    }
-  }
-  function sword(parent,type){
-    const g=joint(parent,0,-.247,.026);g.rotation.x=-.20;g.rotation.z=parent===elbows[1]?-.10:.10;
-    const length=type==='great'?.68:type==='short'?.36:type==='rapier'?.59:.52;
-    tube(g,dark,0,-.022,0,.025,.025,.13);orb(g,trim,0,.058,0,.037,.028,.033);
-    box(g,trim,0,-.09,0,type==='great'?.22:.17,.031,.04);
-    const blade=new THREE.Shape();const w=type==='rapier'?.018:type==='great'?.045:.032;
-    blade.moveTo(-w,0);blade.lineTo(w,0);blade.lineTo(type==='curved'?.09:w*.65,-length*.8);blade.lineTo(type==='curved'?.055:0,-length);blade.lineTo(-w*.7,-length*.8);blade.closePath();
-    mesh(g,new THREE.ExtrudeGeometry(blade,{depth:.012,bevelEnabled:true,bevelThickness:.005,bevelSize:.005,bevelSegments:1,steps:1}),edge,0,-.108,0);
-  }
-  // +X is the figure's left side when facing +Z.
-  if(config.right)sword(elbows[0],config.right);if(config.left)sword(elbows[1],config.left);
-  if(config.shield){
-    const g=joint(elbows[1],.025,-.12,.07);g.rotation.y=-.34;
-    const shape=new THREE.Shape();shape.moveTo(-.18,.20);shape.lineTo(.18,.20);shape.lineTo(.16,-.08);shape.quadraticCurveTo(.12,-.19,0,-.26);shape.quadraticCurveTo(-.12,-.19,-.16,-.08);shape.closePath();
-    const shieldGeometry=new THREE.ExtrudeGeometry(shape,{depth:.035,bevelEnabled:true,bevelThickness:.012,bevelSize:.014,bevelSegments:1,steps:1});
-    mesh(g,shieldGeometry,steel);box(g,trim,0,-.005,.056,.036,.37,.012);box(g,trim,0,.1,.057,.30,.027,.012);orb(g,trim,0,.015,.066,.046,.046,.018);
-    elbows[1].rotation.x=-.3;
-  }
-  // Merge static siblings by material on each joint to bound draw calls. Joints
-  // remain separate so animation never needs geometry uploads or skin textures.
-  function batch(group){
-    for(const child of [...group.children])if(child.isGroup)batch(child);
-    const groups=new Map();for(const m of group.children.filter(c=>c.isMesh)){if(!groups.has(m.material))groups.set(m.material,[]);groups.get(m.material).push(m);}
-    for(const [material,meshes] of groups){
-      const parts=meshes.map(m=>{m.updateMatrix();const g=m.geometry.index?m.geometry.toNonIndexed():m.geometry.clone();g.applyMatrix4(m.matrix);return g;});
-      const merged=new THREE.BufferGeometry();for(const key of ['position','normal']){
-        const buffer=new Float32Array(parts.reduce((n,g)=>n+g.attributes[key].array.length,0));let offset=0;
-        for(const g of parts){buffer.set(g.attributes[key].array,offset);offset+=g.attributes[key].array.length;}
-        merged.setAttribute(key,new THREE.BufferAttribute(buffer,3));
+    const style=config.hair||'short';
+    const hairline=([x,y,z])=>{const front=THREE.MathUtils.smoothstep(z,.035,.115);return y-(1.555+front*.067+Math.abs(x)*.10);};
+    const cap=surface(materials.hair,p=>p[1]>1.53,.0048,(p)=>{
+      const top=THREE.MathUtils.smoothstep(p[1],1.62,1.67);
+      if(style==='parted'){p[1]+=.010*top;p[0]+=.004*top;}
+      if(style==='swept'){p[1]+=.018*top;p[2]-=.009*top;}
+      if(style==='mohawk')p[1]+=.035*top*Math.exp(-((p[0]/.018)**2));
+    },[hairline]);cap.name='fitted-hair';
+    const highlight=materials.hair.clone();highlight.color.offsetHSL(0,-.03,.055);
+    // Fine combed locks, not isolated spherical clumps. Strand roots remain in
+    // the cap; their direction and silhouette vary with the chosen haircut.
+    for(let i=0;i<86;i++){
+      const angle=i/86*Math.PI*2,points=[];
+      for(let j=0;j<8;j++){
+        const t=.12+j*.13,front=Math.cos(angle),max=front>0?1.0:1.5,theta=t*max;
+        let x=Math.sin(angle)*Math.sin(theta)*.068,y=1.585+Math.cos(theta)*.092,z=.046+front*Math.sin(theta)*.079;
+        if(style==='parted'){x+=.007*Math.cos(theta);y+=.009*Math.cos(theta);}
+        if(style==='swept'){z-=.008*Math.cos(theta);y+=.016*Math.cos(theta);}
+        if(style==='mohawk')y+=.028*Math.exp(-((x/.018)**2))*Math.cos(theta);
+        points.push([x,y,z]);
       }
-      for(const m of meshes){group.remove(m);m.geometry.dispose();}for(const p of parts)p.dispose();group.add(new THREE.Mesh(merged,material));
+      curve('head',i%3?materials.hair:highlight,points,.00065,12);
+    }
+    if(style==='tied'){
+      sphere('head',materials.hair,[0,1.576,-.066],[.035,.031,.027]);
+      curve('head',materials.hair,[[0,1.575,-.075],[.006,1.53,-.086],[.008,1.479,-.079]],.016);
+      for(let i=0;i<9;i++)curve('head',highlight,[[Math.sin(i)*.018,1.58,-.085],[Math.sin(i)*.012,1.53,-.099],[Math.sin(i)*.008,1.486,-.09]],.0009,12);
+      const band=new THREE.TorusGeometry(.018,.003,6,18);band.rotateX(Math.PI/2);band.translate(0,1.552,-.078);attach('head',band,materials.dark);
     }
   }
-  batch(root);
-  // Materials constructed for an unequipped module have no GPU allocation, but
-  // release them too so repeated equipment previews leave no retained resources.
-  const used=new Set();root.traverse(o=>{if(o.material)used.add(o.material);});
-  for(const m of [skin,shadow,hair,hairLight,eye,white,cloth,linen,leather,dark,trim,steel,edge,coat])if(!used.has(m))m.dispose();
+  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture});
+  batchRigid(body,skeleton);
+  // Bind-pose bones use world-aligned axes; rest rotations relax the A-pose.
+  const rest=new Map();
+  for(const side of ['L','R']){
+    const sign=side==='L'?1:-1;
+    byName.get(`upperarm01.${side}`).rotation.z=-sign*.57;
+    byName.get(`lowerarm01.${side}`).rotation.x=.62;
+    byName.get(`upperleg01.${side}`).rotation.z=-sign*.075;
+    const holding=side==='R'?config.right:(config.left||config.shield);
+    byName.get(`wrist.${side}`).rotation.x=holding?-.24:-.06;
+    if(holding){
+      for(let finger=2;finger<=5;finger++)for(let segment=1;segment<=3;segment++){
+        const b=byName.get(`finger${finger}-${segment}.${side}`);b.rotation.z=-sign*.12;b.rotation.x=.95;
+      }
+      byName.get(`finger1-2.${side}`).rotation.x=-.3;
+    }
+    if(side==='L'&&config.shield)byName.get(`lowerarm01.${side}`).rotation.x=.95;
+  }
+  bones.forEach(b=>rest.set(b.name,b.rotation.clone()));
   let phase=0;
   root.userData.pose=(distance=0,moving=false)=>{
-    phase+=distance*11;const stride=moving?Math.sin(phase):0;root.userData.walkAngle=stride*.48;
-    legs.forEach((g,i)=>{const sign=i?1:-1;g.rotation.x=stride*.48*sign;knees[i].rotation.x=moving?Math.max(0,-stride*sign)*.62:0;});
-    arms.forEach((g,i)=>{g.rotation.x=-stride*.30*(i?1:-1);elbows[i].rotation.x=(i===1&&config.shield?-.3:-.09)-Math.abs(stride)*.08;});
-    body.position.y=moving?Math.abs(Math.sin(phase))*.024:0;body.rotation.y=moving?stride*.035:0;
+    phase+=distance*10;const stride=moving?Math.sin(phase):0;root.userData.walkAngle=stride*.43;
+    for(const [i,side] of ['L','R'].entries()){
+      const sign=i?1:-1,leg=byName.get(`upperleg01.${side}`),knee=byName.get(`lowerleg01.${side}`),arm=byName.get(`upperarm01.${side}`),elbow=byName.get(`lowerarm01.${side}`);
+      leg.rotation.x=rest.get(leg.name).x+stride*.43*sign;knee.rotation.x=rest.get(knee.name).x+Math.max(0,-stride*sign)*.62;
+      arm.rotation.x=rest.get(arm.name).x-stride*(config.shield&&side==='L'?.09:.26)*sign;
+      elbow.rotation.x=rest.get(elbow.name).x+Math.abs(stride)*.09;
+    }
+    body.position.y=moving?Math.abs(Math.sin(phase))*.015:0;body.rotation.y=moving?stride*.025:0;
   };
-  root.userData.pose(0,false);return root;
+  root.userData.dispose=()=>skeleton.dispose();
+  root.userData.pose(0,false);root.updateMatrixWorld(true);return root;
 }

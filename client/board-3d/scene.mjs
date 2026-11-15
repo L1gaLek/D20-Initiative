@@ -2,7 +2,7 @@ import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
 import { loadBoardImage } from './background.mjs';
 import { fogMaterial, magicMaterial } from './effects.mjs';
-import { createHuman } from './human.mjs?v=20261115-human-avatar-9';
+import { createHuman } from './human.mjs?v=20261115-human-detail-1';
 
 const WALL_HEIGHT = 1.35;
 const data = window.Board3DData;
@@ -11,6 +11,7 @@ const up = new THREE.Vector3(0, 1, 0);
 function disposeTree(group) {
   const geometries = new Set(), materials = new Set(), textures = new Set();
   group.traverse(object => {
+    object.userData.dispose?.();
     if (object.geometry && !object.isSprite && !object.geometry.userData.shared) geometries.add(object.geometry);
     for (const material of [].concat(object.material || [])) {
       materials.add(material);

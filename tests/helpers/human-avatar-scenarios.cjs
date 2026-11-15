@@ -44,9 +44,12 @@ module.exports=async function({pages,fixture,applyFixture,h,screenshotDir}){
   await owner.locator('[data-sheet-path="appearance.model3d.hairStyle"]').scrollIntoViewIfNeeded();
   if(screenshotDir)await owner.screenshot({path:path.join(screenshotDir,'human-character-mobile.png')});
   await owner.setViewportSize({width:1440,height:1000});
-  const memory=await owner.evaluate(()=>Character3D.inspect().render.geometries);
+  const memory=await owner.evaluate(()=>Character3D.inspect().render);
   for(const hair of ['bald','mohawk','short','parted','swept','tied'])await owner.locator('[data-sheet-path="appearance.model3d.hairStyle"]').selectOption(hair);
-  await owner.waitForTimeout(100);assert.ok(await owner.evaluate(()=>Character3D.inspect().render.geometries)<=memory+4,'replacing hair releases old geometry');
+  await owner.waitForTimeout(100);const after=await owner.evaluate(()=>Character3D.inspect().render);
+  assert.ok(after.geometries<=memory.geometries+4,'replacing hair releases old geometry');
+  assert.ok(after.textures<=memory.textures+1,'replacing an anatomical model releases its previous bone texture');
+  assert.ok(after.calls<=22,'detailed body and fittings remain batched in the real portrait');
   await owner.locator('[data-sheet-path="notes.details.gender.value"]').selectOption('female');await owner.waitForFunction(()=>!Character3D.inspect()?.ready);
   await owner.locator('[data-sheet-path="notes.details.gender.value"]').selectOption('male');await owner.waitForFunction(()=>Character3D.inspect()?.ready);
   await owner.evaluate(()=>InfoModal.close());
