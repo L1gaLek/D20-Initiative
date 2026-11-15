@@ -1,5 +1,14 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 
+// Cloth spans the bust smoothly, without reproducing the bare body's small
+// anatomical contours. The same sections fit underwear and soft armor.
+export function femaleTorsoProfile(y){
+  const rows=[[1.025,.137,.151,-.037],[1.10,.124,.155,-.031],[1.14,.127,.160,-.032],[1.18,.132,.166,-.035],[1.22,.145,.180,-.047],[1.26,.154,.185,-.062],[1.30,.161,.164,-.074],[1.34,.165,.136,-.077],[1.38,.170,.110,-.076],[1.405,.135,.087,-.060],[1.43,.068,.083,-.037]];
+  let i=1;while(i<rows.length-1&&y>rows[i][0])i++;
+  const a=rows[i-1],b=rows[i],t=THREE.MathUtils.clamp((y-a[0])/(b[0]-a[0]),0,1);
+  return [1,2,3].map(k=>THREE.MathUtils.lerp(a[k],b[k],t));
+}
+
 // Rigid fittings share their parent's animation joint. Merge by material after
 // construction, while leaving skinned clothing and the bone hierarchy intact.
 export function batchRigid(group,skeleton){
@@ -25,7 +34,7 @@ export function batchRigid(group,skeleton){
   }
 }
 
-export function dressHuman({config,materials:m,definitions,byName,surface,attach,sphere,curve,texture}){
+export function dressHuman({config,materials:m,definitions,byName,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female,posePlan}){
   const kind=config.armor||'none',armored=kind!=='none';
   const plate=['breastplate','half-plate','plate','splint'].includes(kind),mail=['chain-shirt','chain-mail','ring-mail'].includes(kind),leather=['leather','studded-leather','hide'].includes(kind);
   const mat=(color,metalness=0,roughness=.65)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
@@ -47,7 +56,14 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
   const legs=([x,y])=>y<1.06&&Math.abs(x)<.25;
   const arms=([x,y],bone)=>/^(upperarm|lowerarm)/.test(bone);
   const bodybone='spine03';
-  function box(bone,material,p,size,rotation){const g=new THREE.BoxGeometry(...size);if(rotation)g.rotateZ(rotation);g.translate(...p);return attach(bone,g,material);}
+  const detailPoint=p=>{
+    if(!female||plate||p[1]<1.02||p[1]>1.43||p[2]<.07)return p;
+    const [rx,front,back]=femaleTorsoProfile(p[1]),z=(front+back)/2+(front-back)/2*Math.sqrt(Math.max(0,1-(p[0]/rx)**2));
+    return [p[0],p[1],Math.max(p[2],z+.005)];
+  };
+  const curve=(bone,material,points,...args)=>makeCurve(bone,material,bone===bodybone?points.map(detailPoint):points,...args);
+  const sphere=(bone,material,p,...args)=>makeSphere(bone,material,bone===bodybone?detailPoint(p):p,...args);
+  function box(bone,material,p,size,rotation){const g=new THREE.BoxGeometry(...size);if(rotation)g.rotateZ(rotation);g.translate(...(bone===bodybone?detailPoint(p):p));return attach(bone,g,material);}
   function rivet(bone,p,r=.0023){return sphere(bone,m.trim,p,[r,r,r*.48],8);}
   function strap(bone,points,width=.008,material=m.leather){return curve(bone,material,points,width/2,28);}
   function band(bone,p,radiusX,radiusZ,width,material=m.leather){
@@ -55,12 +71,26 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
   }
   const cut=(min,max)=>[p=>p[1]-min,p=>max-p[1]];
   function shell(material,predicate,offset=.007,deform,clips=[]){const mesh=surface(material,predicate,offset,deform,clips);if(mesh)mesh.name='fitted-equipment';return mesh;}
+  function bodice(material,min,max){
+    const positions=[],indices=[],rows=28,segments=64;
+    for(let row=0;row<=rows;row++){
+      const y=min+row/rows*(max-min),[rx,front,back]=femaleTorsoProfile(y),center=(front+back)/2,depth=(front-back)/2;
+      for(let col=0;col<=segments;col++){const a=col/segments*Math.PI*2;positions.push(Math.sin(a)*(rx+.003),y,center+Math.cos(a)*(depth+.005));}
+    }
+    for(let row=0;row<rows;row++)for(let col=0;col<segments;col++){const a=row*(segments+1)+col,b=a+segments+1;indices.push(a,a+1,b,a+1,b+1,b);}
+    const top=new THREE.BufferGeometry();top.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));top.setIndex(indices);top.computeVertexNormals();attach(bodybone,top,material);
+  }
   // The same fitted garment follows all pelvis/thigh weights, including a wide,
   // opaque waistband. Skin underneath remains covered during every walk pose.
   shell(armored?m.cloth:m.linen,legs,.008,(p)=>{
     if(p[1]>.82&&p[1]<.99){p[0]*=1.025;p[2]*=1.04;}
   },cut(armored?.24:.82,1.04));
   band('root',[0,1.028,.031],.14,.108,.018,armored?m.leather:m.linen);
+  if(female&&!armored){
+    bodice(m.linen,1.155,1.36);
+    for(const y of [1.155,1.36]){const [rx,front,back]=femaleTorsoProfile(y),points=[];for(let i=0;i<=64;i++){const a=i/64*Math.PI*2;points.push([Math.sin(a)*(rx+.003),y,(front+back)/2+Math.cos(a)*((front-back)/2+.005)]);}curve(bodybone,m.linen,points,.0024,64);}
+    for(const sign of [-1,1])curve(bodybone,m.linen,[[sign*.085,1.345,.119],[sign*.104,1.415,.04],[sign*.103,1.39,-.052],[sign*.085,1.35,-.061]],.006);
+  }
   if(armored){
     shell(padding,(p,b)=>arms(p,b)||torso(p,b)&&p[1]>1.40,.006,null,cut(1.025,1.43));
     for(const side of ['L','R']){
@@ -110,7 +140,8 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
       }
     }else{
       const sleeves=mail&&kind!=='chain-shirt'||kind==='scale-mail';
-      shell(coat,(p,b)=>torso(p,b)||sleeves&&arms(p,b),.012,null,cut(1.025,1.43));
+      if(female){bodice(coat,1.025,1.43);if(sleeves)shell(coat,arms,.012,null,cut(1.025,1.43));}
+      else shell(coat,(p,b)=>torso(p,b)||sleeves&&arms(p,b),.012,null,cut(1.025,1.43));
       if(['chain-mail','ring-mail','scale-mail','hide'].includes(kind))shell(coat,legs,.015,null,cut(.84,1.05));
       if(leather){
         for(const s of [-1,1]){
@@ -131,7 +162,8 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
         // Embossed, overlapping metal scales, fitted around the curved chest.
         for(const front of [-1,1])for(let row=0;row<11;row++)for(let col=-5;col<=5;col++){
           const x=col*.025+(row%2)*.0125,y=1.36-row*.026;if(Math.abs(x)>.13)continue;
-          const z=.027+front*(.128*Math.sqrt(1-(x/.19)**2));
+          const [rx,f,b]=female?femaleTorsoProfile(y):[.19,.155,-.101];
+          const z=(f+b)/2+front*((f-b)/2*Math.sqrt(Math.max(0,1-(x/rx)**2))+.004);
           const shape=new THREE.Shape();shape.moveTo(-.011,.009);shape.lineTo(.011,.009);shape.lineTo(.010,-.007);shape.quadraticCurveTo(0,-.022,-.010,-.007);shape.closePath();
           const g=new THREE.ExtrudeGeometry(shape,{depth:.002,bevelEnabled:true,bevelSize:.001,bevelThickness:.001,bevelSegments:1,steps:1});g.translate(x,y,z);attach(bodybone,g,row%2?m.steel:m.edge);
         }
@@ -150,7 +182,7 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
       const elbowPos=definitions.get(elbow).head,kneePos=definitions.get(knee).head,shoulder=definitions.get(upper).head;
       shell(plate?m.steel:m.leather,(p,b)=>b.endsWith(`.${side}`)&&/^lowerarm/.test(b),.010,null,cut(1.09,1.158));
       if(['plate','half-plate','splint'].includes(kind)){
-        shell(m.steel,(p,b)=>b.endsWith(`.${side}`)&&/^lowerleg/.test(b),.012,null,cut(.24,.53));
+        shell(m.steel,p=>p[0]*sign>0&&Math.abs(p[0])<.25&&p[1]<.60,.012,null,cut(.24,.53));
         for(const [y,rx,rz] of [[.53,.047,.043],[.24,.033,.032]]){
           const t=(.569-y)/(.569-.181),x=THREE.MathUtils.lerp(kneePos[0],definitions.get(`foot.${side}`).head[0],t),points=[];
           for(let i=0;i<=28;i++){const a=i/28*Math.PI*2;points.push([x+Math.sin(a)*rx,y,.024+Math.cos(a)*rz]);}
@@ -171,7 +203,7 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
         for(const z of [-.026,.058])rivet(upper,[shoulder[0]+sign*.038,shoulder[1]-.01,z],.003);
       }
       if(kind==='plate'){
-        shell(m.steel,(p,b)=>b.endsWith(`.${side}`)&&/^upperleg/.test(b),.012,null,cut(.63,.87));
+        shell(m.steel,p=>p[0]*sign>0&&Math.abs(p[0])<.25&&p[1]<.95,.012,null,cut(.63,.87));
         shell(m.steel,(p,b)=>b.endsWith(`.${side}`)&&/^upperarm/.test(b),.012,null,cut(1.225,1.29));
         sphere(elbow,m.steel,[elbowPos[0],elbowPos[1],elbowPos[2]],[.032,.036,.038]);
         shell(m.steel,(p,b)=>b.endsWith(`.${side}`)&&/^(wrist|finger|metacarpal)/.test(b),.0025);
@@ -185,9 +217,9 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
   }
   function weapon(side,type){
     const name=`wrist.${side}`,bone=byName.get(name),hand=definitions.get(name),g=new THREE.Group();
-    // Equipment axes are local to the palm; the blade points down at rest.
-    const palm=definitions.get(`finger3-1.${side}`).head;
-    g.position.fromArray(palm.map((v,i)=>v-hand.head[i]));g.position.z-=.012;g.rotation.set(-.25,0,side==='R'?-.15:.15);bone.add(g);
+    const grip=posePlan.arms[side].grip;
+    g.position.copy(grip.center).sub(grip.wrist);g.quaternion.copy(grip.quaternion);bone.add(g);
+    g.userData.attachment='weapon';g.userData.hand=side;
     const add=(geo,mat)=>{const mesh=new THREE.Mesh(geo,mat);g.add(mesh);return mesh;};
     const length=type==='great'?.68:type==='short'?.34:type==='rapier'?.59:.51,width=type==='great'?.031:type==='rapier'?.009:.021;
     const section=(y,w,z)=>[-w,y,0,0,y,z,w,y,0,0,y,-z];
@@ -200,7 +232,7 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
       const shape=new THREE.Shape();shape.moveTo(-.0025,-.10);shape.lineTo(.0025,-.10);shape.lineTo(.0012,-length*.72);shape.lineTo(-.0012,-length*.72);shape.closePath();
       const groove=new THREE.ShapeGeometry(shape);groove.translate(0,0,s*.0052);if(s<0)groove.rotateY(Math.PI);add(groove,m.steel);
     }
-    const grip=new THREE.CylinderGeometry(.012,.010,type==='great'?.15:.105,16);add(grip,m.dark);
+    const gripGeometry=new THREE.CylinderGeometry(.012,.010,type==='great'?.15:.105,16);add(gripGeometry,m.dark);
     const wraps=[];for(let i=0;i<110;i++){const a=i/110*Math.PI*18;wraps.push(new THREE.Vector3(Math.cos(a)*.0122,-.046+i/110*.096,Math.sin(a)*.0122));}
     add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wraps),130,.0013,4,false),m.leather);
     const guard=new THREE.CatmullRomCurve3([new THREE.Vector3(-.093,-.087,.004),new THREE.Vector3(-.067,-.061,0),new THREE.Vector3(0,-.06,0),new THREE.Vector3(.067,-.061,0),new THREE.Vector3(.093,-.087,.004)]);
@@ -213,9 +245,20 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     }
     g.name='detailed-sword';
   }
-  if(config.right)weapon('R',config.right);if(config.left)weapon('L',config.left);
+  for(const side of ['R','L'])if(posePlan.arms[side].weapon)weapon(side,posePlan.arms[side].weapon);
   if(config.shield){
-    const bone=byName.get('lowerarm01.L'),head=definitions.get('lowerarm01.L').head,g=new THREE.Group();g.position.set(.055,-.073,.067);g.rotation.set(.07,-.65,.05);bone.add(g);g.name='detailed-shield';
+    const side=posePlan.shieldSide,arm=posePlan.arms[side],bone=byName.get(`lowerarm01.${side}`),g=new THREE.Group();
+    const hand=arm.grip.center.clone().sub(arm.wrist).applyQuaternion(arm.wristQ).add(arm.target);
+    const center=arm.joint.clone().lerp(hand,.55);
+    const normal=arm.grip.normal.clone().applyQuaternion(arm.wristQ).normalize(),upAxis=new THREE.Vector3(0,1,0);upAxis.addScaledVector(normal,-upAxis.dot(normal)).normalize();
+    const acrossAxis=new THREE.Vector3().crossVectors(upAxis,normal),shieldQ=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(acrossAxis,upAxis,normal)),shieldInverse=shieldQ.clone().invert();
+    // The curved wooden back clears the forearm, bracer and folded fingers.
+    // Evaluate the actual shield curvature at their X positions, not a guessed
+    // offset at its center, so switching hands does not mirror a collision.
+    const backDepth=x=>.007+Math.max(0,1-(x/.16)**2)*.037;
+    const clearance=Math.max(...[[arm.joint,.038],[arm.target,.033],[hand,.022]].map(([p,r])=>{const q=p.clone().sub(center).applyQuaternion(shieldInverse);return q.z+r+.006-backDepth(q.x);}));
+    center.addScaledVector(normal,clearance);
+    const inverse=arm.lowerQ.clone().invert();g.position.copy(center).sub(arm.joint).applyQuaternion(inverse);g.quaternion.copy(inverse).multiply(shieldQ);bone.add(g);g.name='detailed-shield';g.userData.attachment='shield';g.userData.hand=side;
     const wood=mat('#50402f'),paint=mat('#314d59',.32,.48),rear=mat('#342c24');texture(wood,'leather');
     const outline=[[-.145,.19],[.145,.19],[.153,.12],[.128,-.08],[.076,-.185],[0,-.24],[-.076,-.185],[-.128,-.08],[-.153,.12]];
     const curveZ=x=>.025+Math.max(0,1-(x/.16)**2)*.037;
@@ -230,8 +273,16 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     for(let x=-.12;x<=.12;x+=.04)line([[x,.17,curveZ(x)-.0185],[x,-.16+Math.abs(x)*.7,curveZ(x)-.0185]],.0015,rear);
     for(const [x,y] of outline){const r=new THREE.SphereGeometry(.0037,8,6);r.scale(1,1,.5);r.translate(x*.91,y*.91,curveZ(x*.91)+.004);g.add(new THREE.Mesh(r,m.trim));}
     // Back straps and hand grip are modeled too, visible when orbiting the token.
-    for(const y of [-.06,.07])line([[-.075,y,.012],[-.036,y,-.018],[.03,y,-.021],[.068,y,.015]],.009,m.leather);
-    line([[0,-.082,.015],[.013,-.02,-.026],[.01,.063,.012]],.007,m.dark);
+    const forearm=arm.target.clone().sub(arm.joint).applyQuaternion(shieldInverse).normalize(),up=new THREE.Vector3(0,1,0).addScaledVector(forearm,-forearm.y).normalize(),out=new THREE.Vector3().crossVectors(forearm,up).normalize();
+    for(const t of [.23,.66]){
+      const p=arm.joint.clone().lerp(arm.target,t).sub(center).applyQuaternion(shieldInverse),points=[];
+      for(let i=0;i<=28;i++){const a=i/28*Math.PI*2;points.push(p.clone().addScaledVector(up,Math.cos(a)*.034).addScaledVector(out,Math.sin(a)*.034).toArray());}
+      line(points,.006,m.leather);
+      for(const sign of [-1,1])line([[p.x+sign*.037,p.y,.026],[p.x+sign*.033,p.y,p.z]],.006,m.leather);
+    }
+    const handle=hand.sub(center).applyQuaternion(shieldInverse);
+    line([[handle.x,handle.y-.045,.023],[handle.x,handle.y-.034,handle.z],[handle.x,handle.y+.034,handle.z],[handle.x,handle.y+.045,.023]],.006,m.dark);
+    const marker=new THREE.Object3D();marker.name='shield-hand-grip';marker.position.copy(handle);g.add(marker);
     line([[0,.154,.066],[0,-.13,.066]],.005,m.trim);line([[-.104,.067,.05],[.104,.067,.05]],.005,m.trim);
     const boss=new THREE.SphereGeometry(1,24,12);boss.scale(.028,.028,.011);boss.translate(0,.037,.07);g.add(new THREE.Mesh(boss,m.steel));
   }

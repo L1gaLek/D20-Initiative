@@ -1,8 +1,12 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
-import model from '../../assets/models/human/male.mjs?v=20261115-human-detail-1';
-import { dressHuman, batchRigid } from './human-equipment.mjs?v=20261115-human-detail-1';
+import maleModel from '../../assets/models/human/male.mjs?v=20261115-human-poses-1';
+import femaleModel from '../../assets/models/human/female.mjs?v=20261115-human-poses-1';
+import { createHair, headMapping } from './human-hair.mjs?v=20261115-human-poses-1';
+import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261115-human-poses-1';
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261115-human-poses-1';
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
+function prepare(model){
 const positions=decode(model.positions,Float32Array),indices=decode(model.indices,Uint16Array);
 const skinIndices=decode(model.skinIndices,Uint8Array),skinWeights=decode(model.skinWeights,Uint8Array);
 const source=new THREE.BufferGeometry();
@@ -21,11 +25,31 @@ for(let i=0;i<indices.length;i+=3){
   for(const id of ids){for(let c=0;c<3;c++)center[c]+=positions[id*3+c]/3;for(const [bone,w] of sourcePoints[id].w)weights.set(bone,(weights.get(bone)||0)+w);}
   const main=[...weights].sort((a,b)=>b[1]-a[1])[0]?.[0];sourceFaces.push({ids,center,bone:model.bones[main]?.name||''});
 }
+for(const v of sourcePoints){
+  const p=v.p;v.fitted=p;
+  if(p[1]<1.13||p[1]>1.395||Math.abs(p[0])>.19)continue;
+  const [rx,front,back]=femaleTorsoProfile(p[1]),center=(front+back)/2,depth=(front-back)/2,angle=Math.atan2(p[0]/rx,(p[2]-center)/depth);
+  const blend=THREE.MathUtils.smoothstep(p[1],1.13,1.15)*(1-THREE.MathUtils.smoothstep(p[1],1.37,1.395));
+  v.fitted=[THREE.MathUtils.lerp(p[0],Math.sin(angle)*rx,blend),p[1],THREE.MathUtils.lerp(p[2],center+Math.cos(angle)*depth,blend)];
+}
+
+return {model,positions,indices,skinIndices,skinWeights,normals,definitions,sourcePoints,sourceFaces};
+}
+const templates={male:prepare(maleModel),female:prepare(femaleModel)};
 
 // A continuous anatomical mesh, with authored joint weights (including fingers),
 // replaces the former collection of spheres. CPU source buffers are immutable;
 // each avatar owns its GPU geometry, skeleton and materials.
 export function createHuman(config){
+  const female=config.model==='human-female',template=templates[female?'female':'male'];
+  const {model,definitions,sourcePoints,sourceFaces}=template;
+  const headFit=headMapping(definitions,templates.male.definitions);
+  const frontHead=sourcePoints.filter(({p})=>p[1]>1.49&&p[2]>.06);
+  headFit.front=p=>{
+    const nearest=[];
+    for(const {p:q} of frontHead){const d=(q[0]-p[0])**2+(q[1]-p[1])**2;if(nearest.length===5&&d>=nearest[4].d)continue;let i=0;while(i<nearest.length&&d>nearest[i].d)i++;nearest.splice(i,0,{p:q,d});if(nearest.length>5)nearest.pop();}
+    let total=0,z=0;for(const v of nearest){const w=1/(v.d+1e-7);z+=v.p[2]*w;total+=w;}return [p[0],p[1],Math.max(p[2],z/total+.0015)];
+  };
   const root=new THREE.Group(),body=new THREE.Group();root.add(body);root.userData.avatar=config;
   const bones=model.bones.map(b=>{const bone=new THREE.Bone();bone.name=b.name;return bone;});
   const byName=new Map(bones.map(b=>[b.name,b]));
@@ -61,7 +85,7 @@ export function createHuman(config){
     const geometry=new THREE.BufferGeometry(),selected=[],points=sourcePoints.slice();
     const interpolate=(a,b,t)=>{
       const w=new Map();for(const [k,v] of a.w)w.set(k,v*(1-t));for(const [k,v] of b.w)w.set(k,(w.get(k)||0)+v*t);
-      const point={p:a.p.map((v,i)=>THREE.MathUtils.lerp(v,b.p[i],t)),n:a.n.map((v,i)=>THREE.MathUtils.lerp(v,b.n[i],t)),w,id:points.length};points.push(point);return point;
+      const point={p:a.p.map((v,i)=>THREE.MathUtils.lerp(v,b.p[i],t)),fitted:a.fitted.map((v,i)=>THREE.MathUtils.lerp(v,b.fitted[i],t)),n:a.n.map((v,i)=>THREE.MathUtils.lerp(v,b.n[i],t)),w,id:points.length};points.push(point);return point;
     };
     for(const {ids,center,bone} of sourceFaces){
       if(!predicate(center,bone,ids))continue;
@@ -77,7 +101,7 @@ export function createHuman(config){
     if(!selected.length){geometry.dispose();return null;}
     const used=[...new Set(selected)].sort((a,b)=>a-b),remap=new Map(used.map((v,i)=>[v,i])),pos=[],joints=[],weights=[];
     for(const id of used){
-      const data=points[id],normal=new THREE.Vector3(...data.n).normalize(),point=data.p.map((v,i)=>v+normal.getComponent(i)*offset);
+      const data=points[id],normal=new THREE.Vector3(...data.n).normalize(),base=female&&material!==materials.skin&&material!==materials.hair?data.fitted:data.p,point=base.map((v,i)=>v+normal.getComponent(i)*offset);
       if(deform)deform(point,id);pos.push(...point);
       const w=[...data.w].sort((a,b)=>b[1]-a[1]).slice(0,4),sum=w.reduce((s,v)=>s+v[1],0);
       for(let i=0;i<4;i++){joints.push(w[i]?.[0]||0);weights.push((w[i]?.[1]||0)/sum);}
@@ -92,7 +116,7 @@ export function createHuman(config){
   const skin=surface(materials.skin,(p,b)=>!armored||p[1]>1.415||config.armor!=='plate'&&/^(wrist|metacarpal|finger)/.test(b));skin.name='anatomical-body';
   const skinPositions=skin.geometry.attributes.position.array,colors=new Float32Array(skinPositions.length);const color=new THREE.Color();
   for(let i=0;i<skinPositions.length/3;i++){
-    const x=skinPositions[i*3],y=skinPositions[i*3+1],z=skinPositions[i*3+2];color.setRGB(1,1,1);
+    const [x,y,z]=headFit.inverse(Array.from(skinPositions.slice(i*3,i*3+3)));color.setRGB(1,1,1);
     if(z>.13&&Math.abs(x)<.026&&y>1.51&&y<1.534){const lip=Math.max(0,1-Math.abs(y-1.522)/.012)*Math.max(0,1-Math.abs(x)/.026);color.setRGB(1-.08*lip,1-.27*lip,1-.22*lip);}
     if(y>1.48&&y<1.58&&z>.075){const blush=Math.exp(-(((Math.abs(x)-.044)/.02)**2)-((y-1.55)/.026)**2)*.08;color.g-=blush;color.b-=blush*.5;}
     color.toArray(colors,i*3);
@@ -109,62 +133,18 @@ export function createHuman(config){
     sphere('head',pupil,[p[0]+sign*.0004,p[1]-.0007,p[2]+.0141],[.0025,.0025,.0004]);
     sphere('head',glint,[p[0]-.0014,p[1]+.0011,p[2]+.0145],[.0007,.0007,.0003],10);
     // Brows follow the actual brow ridge instead of floating over a round head.
-    curve('head',materials.hair,[[sign*.011,1.599,.14],[sign*.027,1.603,.138],[sign*.044,1.600,.126]],.0012,18);
+    curve('head',materials.hair,[[sign*.011,1.599,.14],[sign*.027,1.603,.138],[sign*.044,1.600,.126]].map(p=>headFit.front(headFit.point(p))),female?.0009:.0012,18);
     for(let i=0;i<21;i++){
       const x=sign*(.012+i*.0016),y=1.600+Math.sin(i/20*Math.PI)*.003,z=.140-Math.max(0,i-6)*.0009;
-      curve('head',materials.hair,[[x,y,z],[x+sign*.001,y+.0013,z-.0005]],.00035,2);
+      curve('head',materials.hair,[[x,y,z],[x+sign*.001,y+.0013,z-.0005]].map(p=>headFit.front(headFit.point(p))),.00035,2);
     }
   }
-  if(config.hair!=='bald'){
-    const style=config.hair||'short';
-    const hairline=([x,y,z])=>{const front=THREE.MathUtils.smoothstep(z,.035,.115);return y-(1.555+front*.067+Math.abs(x)*.10);};
-    const cap=surface(materials.hair,p=>p[1]>1.53,.0048,(p)=>{
-      const top=THREE.MathUtils.smoothstep(p[1],1.62,1.67);
-      if(style==='parted'){p[1]+=.010*top;p[0]+=.004*top;}
-      if(style==='swept'){p[1]+=.018*top;p[2]-=.009*top;}
-      if(style==='mohawk')p[1]+=.035*top*Math.exp(-((p[0]/.018)**2));
-    },[hairline]);cap.name='fitted-hair';
-    const highlight=materials.hair.clone();highlight.color.offsetHSL(0,-.03,.055);
-    // Fine combed locks, not isolated spherical clumps. Strand roots remain in
-    // the cap; their direction and silhouette vary with the chosen haircut.
-    for(let i=0;i<86;i++){
-      const angle=i/86*Math.PI*2,points=[];
-      for(let j=0;j<8;j++){
-        const t=.12+j*.13,front=Math.cos(angle),max=front>0?1.0:1.5,theta=t*max;
-        let x=Math.sin(angle)*Math.sin(theta)*.068,y=1.585+Math.cos(theta)*.092,z=.046+front*Math.sin(theta)*.079;
-        if(style==='parted'){x+=.007*Math.cos(theta);y+=.009*Math.cos(theta);}
-        if(style==='swept'){z-=.008*Math.cos(theta);y+=.016*Math.cos(theta);}
-        if(style==='mohawk')y+=.028*Math.exp(-((x/.018)**2))*Math.cos(theta);
-        points.push([x,y,z]);
-      }
-      curve('head',i%3?materials.hair:highlight,points,.00065,12);
-    }
-    if(style==='tied'){
-      sphere('head',materials.hair,[0,1.576,-.066],[.035,.031,.027]);
-      curve('head',materials.hair,[[0,1.575,-.075],[.006,1.53,-.086],[.008,1.479,-.079]],.016);
-      for(let i=0;i<9;i++)curve('head',highlight,[[Math.sin(i)*.018,1.58,-.085],[Math.sin(i)*.012,1.53,-.099],[Math.sin(i)*.008,1.486,-.09]],.0009,12);
-      const band=new THREE.TorusGeometry(.018,.003,6,18);band.rotateX(Math.PI/2);band.translate(0,1.552,-.078);attach('head',band,materials.dark);
-    }
-  }
-  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture});
+  createHair({config,female,materials,surface,attach,sphere,curve,headFit});
+  const posePlan=planHumanPose(config,definitions);
+  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan});
   batchRigid(body,skeleton);
-  // Bind-pose bones use world-aligned axes; rest rotations relax the A-pose.
   const rest=new Map();
-  for(const side of ['L','R']){
-    const sign=side==='L'?1:-1;
-    byName.get(`upperarm01.${side}`).rotation.z=-sign*.57;
-    byName.get(`lowerarm01.${side}`).rotation.x=.62;
-    byName.get(`upperleg01.${side}`).rotation.z=-sign*.075;
-    const holding=side==='R'?config.right:(config.left||config.shield);
-    byName.get(`wrist.${side}`).rotation.x=holding?-.24:-.06;
-    if(holding){
-      for(let finger=2;finger<=5;finger++)for(let segment=1;segment<=3;segment++){
-        const b=byName.get(`finger${finger}-${segment}.${side}`);b.rotation.z=-sign*.12;b.rotation.x=.95;
-      }
-      byName.get(`finger1-2.${side}`).rotation.x=-.3;
-    }
-    if(side==='L'&&config.shield)byName.get(`lowerarm01.${side}`).rotation.x=.95;
-  }
+  applyHumanPose(byName,definitions,posePlan);
   bones.forEach(b=>rest.set(b.name,b.rotation.clone()));
   let phase=0;
   root.userData.pose=(distance=0,moving=false)=>{
@@ -172,11 +152,12 @@ export function createHuman(config){
     for(const [i,side] of ['L','R'].entries()){
       const sign=i?1:-1,leg=byName.get(`upperleg01.${side}`),knee=byName.get(`lowerleg01.${side}`),arm=byName.get(`upperarm01.${side}`),elbow=byName.get(`lowerarm01.${side}`);
       leg.rotation.x=rest.get(leg.name).x+stride*.43*sign;knee.rotation.x=rest.get(knee.name).x+Math.max(0,-stride*sign)*.62;
-      arm.rotation.x=rest.get(arm.name).x-stride*(config.shield&&side==='L'?.09:.26)*sign;
+      arm.rotation.x=rest.get(arm.name).x-stride*(side===posePlan.shieldSide?.06:(config.right||config.left)?.12:.26)*sign;
       elbow.rotation.x=rest.get(elbow.name).x+Math.abs(stride)*.09;
     }
     body.position.y=moving?Math.abs(Math.sin(phase))*.015:0;body.rotation.y=moving?stride*.025:0;
   };
+  root.userData.stance=posePlan.stance;
   root.userData.dispose=()=>skeleton.dispose();
   root.userData.pose(0,false);root.updateMatrixWorld(true);return root;
 }

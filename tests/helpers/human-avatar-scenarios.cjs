@@ -50,8 +50,7 @@ module.exports=async function({pages,fixture,applyFixture,h,screenshotDir}){
   assert.ok(after.geometries<=memory.geometries+4,'replacing hair releases old geometry');
   assert.ok(after.textures<=memory.textures+1,'replacing an anatomical model releases its previous bone texture');
   assert.ok(after.calls<=22,'detailed body and fittings remain batched in the real portrait');
-  await owner.locator('[data-sheet-path="notes.details.gender.value"]').selectOption('female');await owner.waitForFunction(()=>!Character3D.inspect()?.ready);
-  await owner.locator('[data-sheet-path="notes.details.gender.value"]').selectOption('male');await owner.waitForFunction(()=>Character3D.inspect()?.ready);
+  await require('./human-equipment-scenarios.cjs')({owner,gm,open,screenshotDir});
   await owner.evaluate(()=>InfoModal.close());
   await open(p1);assert.equal(await p1.locator('[data-sheet-path="appearance.model3d.hairStyle"]').isDisabled(),true);assert.equal(await p1.locator('[data-appearance-slot="armor"]').isDisabled(),true);await p1.evaluate(()=>InfoModal.close());
   await owner.locator('#board-wrapper').scrollIntoViewIfNeeded();

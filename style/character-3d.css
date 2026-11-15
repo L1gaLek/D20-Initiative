@@ -8,7 +8,7 @@
 .avatar-portrait:after { content:'Вращайте мышью · колесо — масштаб'; position:absolute; bottom:11px; left:0; width:100%; text-align:center; color:#aeb0b1; font-size:10px; pointer-events:none; }
 .avatar-portrait-canvas { display:block; width:100%; height:100%; touch-action:none; cursor:var(--cursor-grab,var(--cursor-select)); }
 .avatar-portrait-canvas:active { cursor:var(--cursor-grabbing,var(--cursor-select)); }
-.avatar-portrait--empty:before { content:'Выберите человека и мужской пол'; position:absolute; inset:0; display:grid; place-items:center; padding:20px; color:#b7ac98; font-size:13px; pointer-events:none; }
+.avatar-portrait--empty:before { content:'Выберите расу «Человек»'; position:absolute; inset:0; display:grid; place-items:center; padding:20px; color:#b7ac98; font-size:13px; pointer-events:none; }
 .avatar-preview-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin:10px 0 15px; }
 .avatar-preview-footer p { margin:0; color:#c4b18d; font-size:11px; line-height:1.5; }
 .avatar-preview-footer button { flex:0 0 auto; font-size:11px; padding:7px 10px; border-radius:7px; }

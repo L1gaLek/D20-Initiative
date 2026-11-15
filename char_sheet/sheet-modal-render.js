@@ -1222,7 +1222,7 @@ function renderShopTab(vm, canEdit) {
   function renderAppearanceTab(vm, canEdit) {
     const baseUrl = String(vm?.appearanceBaseUrl || "");
     const races=`<option value="">—</option>`+SHEET_RACES.map(r=>`<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
-    const hairstyles=(window.AvatarData?.hairstyles||[]).map(([id,label])=>`<option value="${id}">${label}</option>`).join('');
+    const hairstyles=(window.AvatarData?.hairstylesFor(window.AvatarData.genderOf(vm))||[]).map(([id,label])=>`<option value="${id}">${label}</option>`).join('');
     const palette=[['#201b19','Чёрный'],['#493124','Каштановый'],['#825838','Светло-каштановый'],['#ba7136','Рыжий'],['#d6bd7a','Светлый'],['#bab6ad','Седой'],['#e9e1d0','Белый']];
     // Inventory lists (new format): vm.inventory.weapons / vm.inventory.armor
     const inv = (vm?.inventory && typeof vm.inventory === 'object') ? vm.inventory : {};
@@ -1267,7 +1267,7 @@ function renderShopTab(vm, canEdit) {
                   <label>Цвет волос<div class="avatar-hair-color"><input type="color" aria-label="Цвет волос" data-sheet-path="appearance.model3d.hairColor" ${canEdit?'':'disabled'}><span>Палитра</span></div></label>
                 </div>
                 <div class="avatar-palette">${palette.map(([color,name])=>`<button type="button" data-hair-color="${color}" style="--hair-color:${color}" title="${name}" aria-label="Цвет волос: ${name}" ${canEdit?'':'disabled'}></button>`).join('')}</div>
-                <p class="avatar-help">Модель человека мужского пола. При перемещении по карте включается ходьба. Внешность сохраняется автоматически.</p>
+                <p class="avatar-help">Модели человека мужского и женского пола. При перемещении по карте включается ходьба. Внешность сохраняется автоматически.</p>
               </section>
               <details class="avatar-2d-details"><summary>Изображение для 2D</summary>
               <div class="appearance-preview-wrap">
@@ -1284,7 +1284,7 @@ function renderShopTab(vm, canEdit) {
 
             <div class="appearance-right">
               <h4>Надето на персонаже</h4>
-              <p class="avatar-help" style="margin:0 0 14px">Выберите предметы из инвентаря. Доспех, щит и мечи сразу появятся на модели. Без доспеха персонаж остаётся в нижнем белье.</p>
+              <p class="avatar-help" style="margin:0 0 14px">Выберите предметы из инвентаря. Доспех, щит и мечи сразу появятся на модели. Щит занимает свободную руку; выберите оружие в другой руке, чтобы поменять их местами. Без доспеха персонаж остаётся в нижнем белье.</p>
               <div class="appearance-slots">
                 <div class="appearance-slot">
                   <div class="lbl">Правая рука</div>

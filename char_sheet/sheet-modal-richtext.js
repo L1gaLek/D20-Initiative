@@ -1038,6 +1038,7 @@ function bindEditableInputs(root, player, canEdit) {
 
       const handler = () => {
         const sheetBefore = player.sheet.parsed;
+        const previousGender=window.AvatarData?.genderOf(sheetBefore);
         const oldLevel = Math.max(1, safeInt(getByPath(sheetBefore, 'info.level.value'), 1) || 1);
         const oldHdMax = oldLevel;
         const oldHdRem = Math.max(0, safeInt(getByPath(sheetBefore, 'vitality.hit-dice-total.value'), oldHdMax) || 0);
@@ -1061,6 +1062,12 @@ function bindEditableInputs(root, player, canEdit) {
         }
 
         setByPath(player.sheet.parsed, path, val);
+        if(path.startsWith('appearance.slots.')){
+          window.AvatarData?.syncHands(player.sheet.parsed,path.split('.')[2]);
+          for(const hand of ['right','left']){const select=root.querySelector(`[data-appearance-slot="${hand}"]`);if(select)select.value=player.sheet.parsed.appearance.slots[hand]||'';}
+        }
+        if(path==='notes.details.gender.value')window.AvatarData?.rememberHair(player.sheet.parsed,previousGender);
+        if(path==='appearance.model3d.hairStyle')window.AvatarData?.rememberHair(player.sheet.parsed);
 
         // Keep hit dice max (= level) in sync when user changes level.
         // We store only remaining in vitality.hit-dice-total.value.

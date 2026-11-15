@@ -3,6 +3,37 @@
 (function(root){
   'use strict';
   const hairstyles=[['short','Короткая'],['parted','Боковой пробор'],['swept','Зачёс назад'],['tied','Хвост'],['mohawk','Ирокез'],['bald','Без волос']];
+  const femaleHairstyles=[['pixie','Пикси'],['bob','Каре'],['long','Длинные волны'],['braid','Коса'],['bun','Пучок'],['tied','Хвост'],['bald','Без волос']];
+  function genderOf(sheet){return /^(female|f|женский|женщина|жен|ж)$/i.test(String(sheet?.notes?.details?.gender?.value||'').trim())?'female':'male';}
+  const hairstylesFor=gender=>gender==='female'?femaleHairstyles:hairstyles;
+  function hairFor(gender,value){
+    if(hairstylesFor(gender).some(([id])=>id===value))return value;
+    const aliases=gender==='female'?{short:'pixie',parted:'bob',swept:'long',mohawk:'pixie'}:{pixie:'short',bob:'parted',long:'swept',braid:'tied',bun:'tied'};
+    return aliases[value]||(gender==='female'?'bob':'short');
+  }
+  function rememberHair(sheet,previousGender){
+    const object=(parent,key)=>parent[key]&&typeof parent[key]==='object'&&!Array.isArray(parent[key])?parent[key]:(parent[key]={});
+    const ap=object(sheet,'appearance'),hair=object(ap,'model3d'),gender=genderOf(sheet),styles=object(hair,'hairStyles');
+    if(previousGender&&previousGender!==gender){styles[previousGender]=hairFor(previousGender,hair.hairStyle);hair.hairStyle=hairFor(gender,styles[gender]||hair.hairStyle);}
+    else hair.hairStyle=hairFor(gender,hair.hairStyle);
+    styles[gender]=hair.hairStyle;
+  }
+  function hands(sheet,changed){
+    const slots=sheet?.appearance?.slots||{},inv=sheet?.inventory||{},shield=itemIn(inv.armor,slots.shield);
+    const hasShield=!!shield&&(shield.armor?.type==='shield'||/щит|shield/i.test(text(shield)));
+    let right=itemIn(inv.weapons,slots.right)?String(slots.right):'',left=itemIn(inv.weapons,slots.left)?String(slots.left):'',shieldHand=null;
+    if(hasShield){
+      shieldHand=slots.shieldHand==='right'?'right':'left';
+      if(changed==='right'&&right)shieldHand='left';else if(changed==='left'&&left)shieldHand='right';
+      else if(left&&!right)shieldHand='right';else if(right&&!left)shieldHand='left';
+      if(shieldHand==='left')left='';else right='';
+    }
+    return {right,left,shield:hasShield,shieldHand};
+  }
+  function syncHands(sheet,changed){
+    const slots=(sheet.appearance||={}).slots||={},resolved=hands(sheet,changed);
+    slots.right=resolved.right;slots.left=resolved.left;if(resolved.shieldHand)slots.shieldHand=resolved.shieldHand;return resolved;
+  }
   const armorKinds=[
     ['studded-leather',/studded|прокл[её]пан/i],['chain-shirt',/chain.?shirt|кольчужная рубаха/i],
     ['scale-mail',/scale.?mail|чешуй/i],['breastplate',/breastplate|кираса/i],
@@ -31,17 +62,16 @@
   function describe(sheet,monster=false){
     if(!sheet || monster || sheet.wildShape?.active)return null;
     const race=String(sheet.info?.race?.value||'').trim().toLowerCase();
-    const gender=String(sheet.notes?.details?.gender?.value||'male').trim().toLowerCase();
-    if(!['человек','human'].includes(race) || !/^(male|m|мужской|мужчина|муж|м)$/.test(gender))return null;
+    const gender=genderOf(sheet);
+    if(!['человек','human'].includes(race))return null;
     const ap=sheet.appearance||{},slots=ap.slots||{},inv=sheet.inventory||{};
-    const shield=itemIn(inv.armor,slots.shield);
-    const hasShield=!!shield && (shield.armor?.type==='shield'||/щит|shield/i.test(text(shield)));
+    const equipped=hands(sheet);
     const hair=ap.model3d||{};
-    return {model:'human-male',hair:hairstyles.some(([id])=>id===hair.hairStyle)?hair.hairStyle:'short',
+    return {model:'human-'+gender,hair:hairFor(gender,hair.hairStyle),
       hairColor:/^#[\da-f]{6}$/i.test(hair.hairColor)?hair.hairColor:'#493124',
-      armor:armorKind(itemIn(inv.armor,slots.armor)),shield:hasShield,
-      right:swordKind(itemIn(inv.weapons,slots.right)),left:hasShield?null:swordKind(itemIn(inv.weapons,slots.left))};
+      armor:armorKind(itemIn(inv.armor,slots.armor)),shield:equipped.shield,shieldHand:equipped.shieldHand,
+      right:swordKind(itemIn(inv.weapons,equipped.right)),left:swordKind(itemIn(inv.weapons,equipped.left))};
   }
-  const api={describe,armorKind,swordKind,hairstyles};
+  const api={describe,armorKind,swordKind,hairstyles,hairstylesFor,genderOf,hairFor,rememberHair,hands,syncHands};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.AvatarData=api;
 })(typeof window!=='undefined'?window:globalThis);

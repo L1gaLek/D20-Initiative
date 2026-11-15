@@ -1,6 +1,6 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
-import { createHuman } from './human.mjs?v=20261115-human-detail-1';
+import { createHuman } from './human.mjs?v=20261115-human-poses-1';
 
 function disposeFigure(figure){
   if(!figure)return;const materials=new Set();figure.traverse(o=>{o.userData.dispose?.();o.geometry?.dispose();if(o.material)materials.add(o.material);});materials.forEach(m=>m.dispose());figure.removeFromParent();
@@ -31,7 +31,7 @@ export function createPortrait(host){
   return {
     update(next){const k=JSON.stringify(next);if(k===styleKey)return;config=next;styleKey=k;disposeFigure(figure);figure=next?createHuman(next):null;if(figure)scene.add(figure);base.visible=ring.visible=!!figure;invalidate();},
     walk(value){walking=!!value;last=0;if(!walking)figure?.userData.pose(0,false);invalidate();},
-    inspect(){return {ready:!!figure,config,walking,angle:figure?.userData.walkAngle||0,camera:camera.position.toArray(),render:{geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};},
+    inspect(){return {ready:!!figure,config,walking,stance:figure?.userData.stance||null,angle:figure?.userData.walkAngle||0,camera:camera.position.toArray(),render:{geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};},
     dispose(){disposed=true;cancelAnimationFrame(frame);resize.disconnect();controls.dispose();document.removeEventListener('visibilitychange',visibility);disposeFigure(figure);for(const m of [base,ring]){m.geometry.dispose();m.material.dispose();}renderer.dispose();renderer.forceContextLoss();canvas.remove();}
   };
 }

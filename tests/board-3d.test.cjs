@@ -63,7 +63,30 @@ test('human appearance resolves worn inventory items and legacy names, validates
   sheet.appearance.model3d={hairStyle:'tied',hairColor:'#c78432'};assert.equal(desc().hair,'tied');assert.equal(desc().hairColor,'#c78432');
   sheet.appearance.model3d={hairStyle:'<bad>',hairColor:'red; url(secret)'};assert.equal(desc().hair,'short');assert.equal(desc().hairColor,'#493124');
   assert.equal(AvatarData.describe(sheet,true),null);sheet.wildShape={active:true};assert.equal(desc(),null);sheet.wildShape.active=false;
-  sheet.notes.details.gender.value='female';assert.equal(desc(),null);sheet.notes.details.gender.value='male';sheet.info.race.value='Эльф';assert.equal(desc(),null);
+  sheet.notes.details.gender.value='female';assert.equal(desc().model,'human-female');sheet.notes.details.gender.value='male';sheet.info.race.value='Эльф';assert.equal(desc(),null);
+});
+
+test('a shield occupies exactly one hand, follows the chosen weapon hand, and resolves legacy saves without modifying them',()=>{
+  const db=require('../equipment_srd5_ru.json').tabs;
+  const sheet={inventory:db,appearance:{slots:{right:'weapon_longsword',left:'weapon_shortsword',shield:'armor_shield'}}};
+  const original=structuredClone(sheet);assert.deepEqual(AvatarData.hands(sheet),{right:'weapon_longsword',left:'',shield:true,shieldHand:'left'});assert.deepEqual(sheet,original);
+  AvatarData.syncHands(sheet,'shield');assert.equal(sheet.appearance.slots.left,'');
+  sheet.appearance.slots.left='weapon_shortsword';AvatarData.syncHands(sheet,'left');assert.equal(sheet.appearance.slots.right,'');assert.equal(sheet.appearance.slots.shieldHand,'right');
+  sheet.appearance.slots.right='weapon_longsword';AvatarData.syncHands(sheet,'right');assert.equal(sheet.appearance.slots.left,'');assert.equal(sheet.appearance.slots.shieldHand,'left');
+  sheet.appearance.slots.shield='';sheet.appearance.slots.left='weapon_shortsword';AvatarData.syncHands(sheet,'left');assert.equal(sheet.appearance.slots.right,'weapon_longsword');assert.equal(AvatarData.hands(sheet).shieldHand,null);
+  sheet.appearance.slots.shield='armor_shield';sheet.appearance.slots.right='deleted-item';assert.equal(AvatarData.hands(sheet).shieldHand,'right');assert.equal(AvatarData.hands(sheet).left,'weapon_shortsword');
+});
+
+test('men and women have distinct hairstyles and retain each selection when changing gender',()=>{
+  const male=AvatarData.hairstylesFor('male').map(([id])=>id),female=AvatarData.hairstylesFor('female').map(([id])=>id);
+  assert.deepEqual(male.filter(id=>female.includes(id)),['tied','bald']);
+  const sheet={notes:{details:{gender:{value:'male'}}},appearance:{model3d:{hairStyle:'mohawk',hairColor:'#825838'}}};
+  sheet.notes.details.gender.value='Женский';AvatarData.rememberHair(sheet,'male');assert.ok(female.includes(sheet.appearance.model3d.hairStyle));
+  sheet.appearance.model3d.hairStyle='braid';AvatarData.rememberHair(sheet);
+  sheet.notes.details.gender.value='male';AvatarData.rememberHair(sheet,'female');assert.equal(sheet.appearance.model3d.hairStyle,'mohawk');
+  sheet.notes.details.gender.value='female';AvatarData.rememberHair(sheet,'male');assert.equal(sheet.appearance.model3d.hairStyle,'braid');assert.equal(sheet.appearance.model3d.hairColor,'#825838');
+  assert.equal(AvatarData.hairFor('female','tied'),'tied');assert.equal(AvatarData.hairFor('female','bad'),'bob');
+  sheet.appearance.model3d.hairStyles='invalid legacy value';assert.doesNotThrow(()=>AvatarData.rememberHair(sheet));
 });
 
 test('visual walk routes respect walls, corners, occupied footprints and current fog, with safe snapping when no route exists',()=>{

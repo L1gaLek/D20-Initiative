@@ -12,8 +12,8 @@ function dispose(figure){const materials=new Set();figure.traverse(o=>{o.userDat
 test('anatomical model and every database armor have valid surfaces and normalized skin weights',async()=>{
   const {createHuman}=await human;
   const kinds=['none',...database.armor.filter(a=>a.armor.type!=='shield').map(AvatarData.armorKind)];
-  for(const armor of kinds){
-    const figure=createHuman({...config,armor,right:'long',shield:true});
+  for(const model of ['human-male','human-female'])for(const armor of kinds){
+    const figure=createHuman({...config,model,hair:model==='human-female'?'bob':'parted',armor,right:'long',shield:true});
     try{
       const skeletons=new Set();let meshes=0,triangles=0,anatomy=false;
       figure.traverse(o=>{
@@ -31,6 +31,56 @@ test('anatomical model and every database armor have valid surfaces and normaliz
       const skeleton=[...skeletons][0];assert.equal(skeleton.bones.length,163);assert.ok(skeleton.bones.some(b=>b.name==='finger3-3.R'));
       skeleton.computeBoneTexture();let released=false;skeleton.boneTexture.addEventListener('dispose',()=>{released=true;});figure.userData.dispose();assert.equal(released,true);
     }finally{dispose(figure);}
+  }
+});
+
+test('weapons sit inside curled palms and shields clear both forearms, including during walking',async()=>{
+  const {createHuman}=await human,T=await three;
+  const variants=[{stance:'unarmed'},{stance:'single',right:'long'},{stance:'single',left:'short'},{stance:'dual',right:'long',left:'short'},
+    {stance:'shield',right:'long',shield:true,shieldHand:'left'},{stance:'shield',left:'long',shield:true,shieldHand:'right'}];
+  for(const model of ['human-male','human-female']){
+    const {default:asset}=await import(pathToFileURL(path.resolve(__dirname,`../assets/models/human/${model.slice(6)}.mjs`)).href);
+    const defs=new Map(asset.bones.map(b=>[b.name,b]));
+    for(const variant of variants){
+      const figure=createHuman({...config,model,...variant});
+      try{
+        assert.equal(figure.userData.stance,variant.stance);let skeleton;const weapons=[],shields=[];
+        figure.traverse(o=>{if(o.isSkinnedMesh)skeleton=o.skeleton;if(o.userData.attachment==='weapon')weapons.push(o);if(o.userData.attachment==='shield')shields.push(o);});
+        assert.equal(weapons.length,Number(!!variant.right)+Number(!!variant.left));assert.equal(shields.length,Number(!!variant.shield));
+        const bones=new Map(skeleton.bones.map(b=>[b.name,b]));
+        for(const walk of [false,true,false]){
+          figure.userData.pose(.12,walk);figure.updateMatrixWorld(true);
+          for(const weapon of weapons){
+            const side=weapon.userData.hand,center=weapon.getWorldPosition(new T.Vector3()),axis=new T.Vector3(0,1,0).applyQuaternion(weapon.getWorldQuaternion(new T.Quaternion()));
+            const a=bones.get(`finger2-1.${side}`).getWorldPosition(new T.Vector3()),b=bones.get(`finger5-1.${side}`).getWorldPosition(new T.Vector3());
+            assert.ok(Math.abs(a.sub(b).normalize().dot(axis))>.98,'handle runs across the palm, not out of its fingertips');
+            for(let finger=2;finger<=5;finger++){
+              const name=`finger${finger}-3.${side}`,definition=defs.get(name),tip=new T.Vector3(...definition.tail).sub(new T.Vector3(...definition.head)).applyMatrix4(bones.get(name).matrixWorld).sub(center);
+              const along=tip.dot(axis),radius=tip.addScaledVector(axis,-along).length();
+              assert.ok(radius>.008&&radius<.036,'fingertips wrap the grip surface');assert.ok(Math.abs(along)<.055,'all fingers remain on the handle');
+            }
+          }
+          for(const shield of shields){
+            const side=shield.userData.hand,handle=shield.getObjectByName('shield-hand-grip').getWorldPosition(new T.Vector3()),knuckles=new T.Vector3();
+            for(let finger=2;finger<=5;finger++)knuckles.addScaledVector(bones.get(`finger${finger}-1.${side}`).getWorldPosition(new T.Vector3()),.25);
+            assert.ok(handle.distanceTo(knuckles)<.04,'shield hand retains the back grip throughout the gait');
+            const elbow=bones.get(`lowerarm01.${side}`).getWorldPosition(new T.Vector3()),wrist=bones.get(`wrist.${side}`).getWorldPosition(new T.Vector3());
+            for(const t of [0,.25,.5,.75,1]){
+              const p=shield.worldToLocal(elbow.clone().lerp(wrist,t)),back=.007+Math.max(0,1-(p.x/.16)**2)*.037;
+              assert.ok(p.z+.033<back,'wooden back never intersects the forearm or bracer');
+            }
+          }
+        }
+      }finally{dispose(figure);}
+    }
+  }
+});
+
+test('every male and female hairstyle builds a finite, batched anatomical model',async()=>{
+  const {createHuman}=await human;
+  for(const gender of ['male','female'])for(const [hair] of AvatarData.hairstylesFor(gender)){
+    const f=createHuman({...config,model:'human-'+gender,hair});let count=0;
+    try{f.traverse(o=>{if(o.isMesh){count++;assert.ok(o.geometry.attributes.position.array.every(Number.isFinite));}});assert.ok(count<=20);}finally{dispose(f);}
   }
 });
 
