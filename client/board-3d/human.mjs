@@ -1,9 +1,9 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
-import maleModel from '../../assets/models/human/male.mjs?v=20261116-sculpted-armor-1';
-import femaleModel from '../../assets/models/human/female.mjs?v=20261116-sculpted-armor-1';
-import { createHair, headMapping } from './human-hair.mjs?v=20261116-sculpted-armor-1';
-import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261116-sculpted-armor-1';
-import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261116-sculpted-armor-1';
+import maleModel from '../../assets/models/human/male.mjs?v=20261116-reference-armory-1';
+import femaleModel from '../../assets/models/human/female.mjs?v=20261116-reference-armory-1';
+import { createHair, headMapping } from './human-hair.mjs?v=20261116-reference-armory-1';
+import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261116-reference-armory-1';
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261116-reference-armory-1';
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
 function prepare(model){
@@ -141,7 +141,7 @@ export function createHuman(config){
       curve('head',materials.hair,[[x,y,z],[x+sign*.001,y+.0013,z-.0005]].map(p=>headFit.front(headFit.point(p))),.00035,2);
     }
   }
-  createHair({config,female,materials,surface,attach,sphere,curve,headFit});
+  if(female||config.armor!=='plate')createHair({config,female,materials,surface,attach,sphere,curve,headFit});
   const posePlan=planHumanPose(config,definitions);
   dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan});
   batchRigid(body,skeleton);

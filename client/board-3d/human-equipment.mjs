@@ -1,7 +1,7 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 
-import { dressArmor } from './human-armor.mjs?v=20261116-sculpted-armor-1';
-export { femaleTorsoProfile } from './human-armor.mjs?v=20261116-sculpted-armor-1';
+import { dressArmor } from './human-armor.mjs?v=20261116-reference-armory-1';
+export { femaleTorsoProfile } from './human-armor.mjs?v=20261116-reference-armory-1';
 
 // Rigid fittings share their parent's animation joint. Merge by material after
 // construction, while leaving skinned clothing and the bone hierarchy intact.
@@ -36,6 +36,11 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     const name=`wrist.${side}`,bone=byName.get(name),hand=definitions.get(name),g=new THREE.Group();
     const grip=posePlan.arms[side].grip;
     g.position.copy(grip.center).sub(grip.wrist);g.quaternion.copy(grip.quaternion);bone.add(g);
+    // A round hilt can roll inside the grip. Keep its axis and palm contact,
+    // while presenting the flat blade and guard in the reference's front view.
+    const wristQ=posePlan.arms[side].wristQ,worldQ=wristQ.clone().multiply(grip.quaternion),axis=new THREE.Vector3(0,1,0).applyQuaternion(worldQ);
+    const face=new THREE.Vector3(0,0,1).addScaledVector(axis,-axis.z).normalize(),edge=new THREE.Vector3().crossVectors(axis,face).normalize();
+    const facing=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(edge,axis,face));g.quaternion.copy(wristQ).invert().multiply(facing);
     g.userData.attachment='weapon';g.userData.hand=side;
     const add=(geo,mat)=>{const mesh=new THREE.Mesh(geo,mat);g.add(mesh);return mesh;};
     const great=type==='great',length=great?1.08:type==='short'?.34:type==='rapier'?.59:.51,width=great?.041:type==='rapier'?.009:.021;

@@ -43,7 +43,7 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
     };
   }
   const profile=female?femaleTorsoProfile:maleProfile,bone='spine03',tau=Math.PI*2;
-  const bulk=armored?(plate?(female?.030:.037):splint?.032:kind==='hide'?.034:.026):0;
+  const bulk=armored?(plate?(female?.020:.023):splint?.020:kind==='hide'?.025:.016):0;
   const torso=([x,y],b)=>y>1.0&&y<1.44&&Math.abs(x)<.195&&!/arm|finger|wrist/.test(b);
   const legs=([x,y])=>y<1.06&&Math.abs(x)<.25;
   const arm=(p,b)=>/^(upperarm|lowerarm)/.test(b);
@@ -51,7 +51,7 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
   function shell(material,predicate,offset=.009,deform,clips=[]){const mesh=surface(material,predicate,offset,deform,clips);if(mesh)mesh.name=`armor-${kind}`;return mesh;}
   function point(y,a,extra=0){
     const [rx,front,back]=profile(y),offset=bulk+extra,c=Math.cos(a);
-    const keel=plate?Math.max(0,c)**6*Math.sin(THREE.MathUtils.clamp((y-1.09)/.33,0,1)*Math.PI)*.020:0;
+    const keel=plate?Math.max(0,c)**6*Math.sin(THREE.MathUtils.clamp((y-1.09)/.33,0,1)*Math.PI)*.010:0;
     return [Math.sin(a)*(rx+offset),y,(front+back)/2+c*((front-back)/2+offset)+keel];
   }
   const pvec=p=>new THREE.Vector3(...p);
@@ -78,10 +78,10 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
   function buckle(p,width=.026,height=.03,parent=bone){
     const [x,y,z]=p;line([[x-width/2,y-height/2,z],[x-width/2,y+height/2,z],[x+width/2,y+height/2,z],[x+width/2,y-height/2,z],[x-width/2,y-height/2,z]],m.trim,.002,parent);line([[x-width/2,y,z+.001],[x+width*.35,y,z+.001]],m.edge,.0014,parent);
   }
-  const min=female?1.09:1.026,max=female?1.383:1.408;
-  const top=a=>max-(female?.065:.015)*Math.max(0,Math.cos(a))**4;
+  const min=female?1.075:1.026,max=female?1.325:1.408;
+  const top=a=>female?1.292-.025*Math.max(0,Math.cos(a))**12+.026*Math.exp(-(((Math.abs(Math.sin(a))-.45)/.28)**2))*Math.max(0,Math.cos(a)):max-(light?.045:.025)*Math.max(0,Math.cos(a))**4;
   function garment(material,low=min,high=top,extra=.009,range=[0,tau],name='torso'){
-    const faceted=plate&&name==='torso',positions=[],indices=[],rows=typeof low==='number'&&typeof high==='number'&&high-low<.05?2:faceted?8:16,segments=Math.max(2,Math.ceil((range[1]-range[0])/tau*(faceted?32:48))),count=(rows+1)*(segments+1);
+    const faceted=false,positions=[],indices=[],rows=typeof low==='number'&&typeof high==='number'&&high-low<.05?2:faceted?8:16,segments=Math.max(2,Math.ceil((range[1]-range[0])/tau*(faceted?32:48))),count=(rows+1)*(segments+1);
     const thickness=material===m.steel||material===m.edge?.009:material===m.linen?.003:.010;
     for(const layer of [0,1])for(let row=0;row<=rows;row++)for(let col=0;col<=segments;col++){
       const a=range[0]+col/segments*(range[1]-range[0]),bottom=typeof low==='function'?low(a):low,t=typeof high==='function'?high(a):high,y=THREE.MathUtils.lerp(bottom,t,row/rows);positions.push(...point(y,a,extra-layer*thickness));
@@ -94,8 +94,8 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
     if(faceted){const indexed=g;g=g.toNonIndexed();indexed.dispose();}g.computeVertexNormals();const mesh=add(g,material);mesh.name=`armor-${kind}-${female?'female':'male'}-${name}`;return mesh;
   }
   function edge(high=top,material=m.edge,r=.0025,extra=.012){line(Array.from({length:73},(_,i)=>{const a=i/72*tau;return point(typeof high==='function'?high(a):high,a,extra);}),material,r);}
-  function link(y,a,r=.006,material=m.steel){
-    const g=new THREE.TorusGeometry(r,.00115,4,12);g.rotateY(a);g.translate(...point(y,a,.013));add(g,material);
+  function link(y,a,r=.006,material=m.steel,extra=.013){
+    const g=new THREE.TorusGeometry(r,.00115,4,12);g.rotateY(a);g.translate(...point(y,a,extra));add(g,material);
   }
   function frontPoint(x,y,extra){const [rx]=profile(y);return [x,y,point(y,Math.asin(THREE.MathUtils.clamp(x/(rx+bulk+extra),-.98,.98)),extra)[2]];}
   function frontPanel(outline,material,extra,depth){
@@ -107,7 +107,7 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
     }
     pos.push(...frontPoint(...center,extra+depth*1.45));const crown=count*3;
     for(let i=0;i<count;i++){const j=(i+1)%count;ix.push(i,j,i+count,j,j+count,i+count,i+count,j+count,crown,i,i+count*2,j,j,i+count*2,j+count*2);}
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(ix);const flat=g.toNonIndexed();g.dispose();flat.computeVertexNormals();add(flat,material);
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(ix);g.computeVertexNormals();add(g,material);
     line([...outline,outline[0]].map(([x,y])=>frontPoint(x,y,extra+.002)),plate?m.edge:m.dark,.0022);
   }
   // A tapered, closed shell follows the limb axis; its end bevels and raised
@@ -118,7 +118,7 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
     // The calf bulges behind its joint axis. Extend the back of the ellipse
     // while preserving the shin face, rather than letting skin cut through it.
     for(const layer of [0,1])for(let row=0;row<rows.length;row++)for(let i=0;i<segments;i++){
-      const t=rows[row],angle=i/segments*tau,r=radius(t)+(row===1||row===2?.004:0)-layer*thickness;
+      const angle=i/segments*tau,t=rows[row]+(rearAllowance&&row===0?.05*(1-Math.cos(angle)):0),r=radius(t)+(row===1||row===2?.004:0)-layer*thickness;
       pos.push(...a.clone().addScaledVector(axis,t*length).addScaledVector(normal,Math.cos(angle)*(r+rearAllowance)-rearAllowance).addScaledVector(tangent,Math.sin(angle)*r));
     }
     for(let row=0;row<rows.length-1;row++)for(let i=0;i<segments;i++){
@@ -126,28 +126,27 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
     }
     for(const row of [0,rows.length-1])for(let i=0;i<segments;i++){const a=row*segments+i,b=row*segments+(i+1)%segments;ix.push(...(row?[a,b,a+count,b,b+count,a+count]:[a,a+count,b,b,a+count,b+count]));}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(ix);g.computeVertexNormals();const mesh=add(g,material,parent);mesh.name=`armor-${kind}-${name}`;
-    for(const t of [from+.02,to-.02])line(Array.from({length:25},(_,i)=>{const angle=i/24*tau,r=radius(t)+.005;return a.clone().addScaledVector(axis,t*length).addScaledVector(normal,Math.cos(angle)*(r+rearAllowance)-rearAllowance).addScaledVector(tangent,Math.sin(angle)*r).toArray();}),material===m.steel?m.edge:m.dark,.0035,parent);
+    for(const t of [from+.02,to-.02])line(Array.from({length:25},(_,i)=>{const angle=i/24*tau,at=t+(rearAllowance&&t<.3?.05*(1-Math.cos(angle)):0),r=radius(at)+.005;return a.clone().addScaledVector(axis,at*length).addScaledVector(normal,Math.cos(angle)*(r+rearAllowance)-rearAllowance).addScaledVector(tangent,Math.sin(angle)*r).toArray();}),material===m.steel?m.edge:m.dark,.0035,parent);
     for(const t of [from+.07,(from+to)/2,to-.07])stud(a.clone().addScaledVector(axis,t*length).addScaledVector(normal,radius(t)+.006).toArray(),.0035,parent);
   }
   // A shaped neckline and short split skirt leave female shoulders, a narrow
   // waist band and the thighs open, while the chest and shorts stay covered.
-  shell(armored?m.cloth:m.linen,legs,armored?.012:.008,p=>{if(p[1]>.82&&p[1]<.99){p[0]*=1.025;p[2]*=1.04;}},cut(armored?(female?.865:.24):.82,1.04));
+  shell(armored?m.cloth:m.linen,legs,armored?.012:.008,p=>{if(p[1]>.82&&p[1]<.99){p[0]*=1.025;p[2]*=1.04;}},cut(armored?(female?.835:.24):.82,1.04));
   if(!armored){
     if(female){garment(m.linen,1.155,1.36,.005);edge(1.155,m.linen,.0024,.006);edge(1.36,m.linen,.0024,.006);}
     for(const s of female?[-1,1]:[])ribbon([[s*.085,1.345,.12],[s*.104,1.415,.04],[s*.103,1.39,-.052],[s*.085,1.35,-.061]],.012,m.linen);
     return;
   }
-  const liningTop=a=>female?top(a)+.018:1.428-.014*Math.max(0,Math.cos(a))**4;
+  const liningTop=a=>female||light?top(a)+.005:1.428-.014*Math.max(0,Math.cos(a))**4;
   garment(lining,min-.004,liningTop,.002,[0,tau],'padded-undercoat');
   edge(liningTop,m.dark,.0035,.004);
-  shell(lining,(p,b)=>arm(p,b)&&Math.abs(p[0])>.14,female?.015:.012,null,[...cut(female?1.275:1.025,1.43),p=>Math.abs(p[0])-.145]);
+  if(!female)shell(lining,(p,b)=>arm(p,b)&&Math.abs(p[0])>.14,female?.015:.012,null,[...cut(female?1.305:1.025,1.43),p=>Math.abs(p[0])-.145]);
   // Quilting follows the padded sleeve and adds a separate, rounded cuff.
   for(const side of ['L','R']){
-    for(const y of female?[1.285,1.315]:[1.08,1.15,1.22,1.29])shell(m.dark,(p,b)=>b.endsWith(`.${side}`)&&arm(p,b),female?.017:.014,null,cut(y-.0013,y+.0013));
+    for(const y of female?[]:[1.08,1.15,1.22,1.29])shell(m.dark,(p,b)=>b.endsWith(`.${side}`)&&arm(p,b),female?.017:.014,null,cut(y-.0013,y+.0013));
   }
   if(plate){
     garment(m.steel,min,top,.016);edge(top,m.edge,.0035,.018);edge(min,m.edge,.003,.018);
-    frontPanel([[-.155,1.315],[-.12,1.36],[0,1.35],[.12,1.36],[.155,1.315],[.132,1.23],[.072,1.175],[0,1.155],[-.072,1.175],[-.132,1.23]].map(([x,y])=>[x,Math.min(y,top(Math.asin(x/.23))-.008)]),m.steel,.020,.010);
     // A raised medial ridge, gothic flutes and recessed brass border on the
     // actual fitted surface give steel a manufactured, rigid silhouette.
     for(const a of [0,-.26,.26,-.53,.53])line([min+.015,min+.07,1.23,1.29,top(a)-.015].filter(y=>y>min&&y<top(a)).map(y=>point(y,a,.019)),a?m.edge:m.steel,a?.0013:.003);
@@ -155,10 +154,10 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
       line([[s*.030,1.28,point(1.28,.2,.02)[2]],[s*.064,1.245,point(1.245,.42,.02)[2]],[s*.075,1.20,point(1.20,.55,.02)[2]]],m.trim,.0012);
       for(const y of [min+.025,1.22,1.29])stud(point(y,s*1.12,.02),.003);
     }
-    for(let row=0;row<(female?3:4);row++){const y=min+.006+row*.022;garment(m.steel,y,y+.027,.021+row*.001,[0,tau],'fauld-lame');loop(y,m.edge,.002,.024+row*.001);}
+    for(let row=0;row<(female?2:3);row++){const y=min+.006+row*.022;garment(m.steel,y,y+.027,.021+row*.001,[0,tau],'fauld-lame');loop(y,m.edge,.002,.024+row*.001);}
   }else{
     garment(coat,min,top,.011);edge(top,light?m.dark:m.edge,.003,.013);edge(min,light?m.dark:m.edge,.003,.013);
-    if(light)for(const sign of [-1,1])frontPanel([[.026,1.30],[.082,1.334],[.15,1.301],[.133,1.16],[.10,min+.015],[.026,min+.015]].map(([x,y])=>[x*sign,Math.min(y,top(Math.asin(x/.21))-.012)]),m.leather,.016,.005);
+    if(light&&!female)for(const sign of [-1,1])frontPanel([[.025,1.34],[.10,1.38],[.155,1.31],[.11,min+.018],[.026,min+.018]].map(([x,y])=>[x*sign,Math.min(y,top(Math.asin(x/.21))-.010)]),m.leather,.016,.003);
     if(light||splint||kind==='ring-mail'){
       if(light)for(const range of [[.70,1.32],[tau-1.32,tau-.70]])garment(m.leather,min+.003,a=>top(a)-.003,.022,range,'side-panel');
       // Double stitched, inset panels and a laced center seam remain readable
@@ -167,7 +166,7 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
         const extra=light&&Math.abs(a)>.70&&Math.abs(a)<1.32?.025:.014,ys=Array.from({length:18},(_,i)=>min+.008+i/17*(top(a)-min-.016));line(ys.map(y=>point(y,a,extra)),m.dark,.0015);
         for(const y of ys)line([point(y,a-.017,extra+.001),point(y+.003,a+.017,extra+.001)],m.linen,.0008);
       }
-      if(light)for(let i=0;i<8;i++){const y=min+.025+i*.022;if(y>top(0)-.015)break;for(const s of [-1,1])line([point(y,s*.10,.015),point(y+.013,-s*.10,.015)],m.linen,.0013);}
+      if(light)for(let i=0;i<12;i++){const y=min+.025+i*.022;if(y>top(0)-.015)break;for(const s of [-1,1])line([point(y,s*.10,.015),point(y+.013,-s*.10,.015)],m.linen,.0013);}
     }
     if(kind==='studded-leather')for(let row=0;row<Math.ceil((max-min)/.031);row++)for(let col=0;col<26;col++){
       const a=(col+(row%2)*.5)/26*tau,y=min+.016+row*.031,raised=Math.cos(a)>.75&&Math.abs(Math.sin(a))>.10&&y<1.32;
@@ -182,8 +181,8 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
     }
     if(mail){
       if(kind==='ring-mail'){
-        for(let row=0;row<Math.ceil((max-min)/.027);row++)for(let col=0;col<26;col++){
-          const a=(col+(row%2)*.5)/26*tau,y=min+.014+row*.027;if(y<top(a)-.01)link(y,a,.0102,col%4?m.steel:m.edge);
+        for(let row=0;row<Math.ceil((max-min)/.043);row++)for(let col=0;col<20;col++){
+          const a=(col+(row%2)*.5)/20*tau,y=min+.021+row*.043;if(y<top(a)-.022){garment(coat,y-.020,y+.020,.014,[a-.13,a+.13],'ring-plaque');link(y,a,.013,col%4?m.steel:m.edge,.024);}
         }
       }else{
         // Real interlocking links at the hem and neckline complement the
@@ -194,49 +193,59 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
       }
     }
     if(scale){
-      for(let row=0;row<Math.ceil((max-min)/.021);row++)for(let col=0;col<32;col++){
-        const a=(col+(row%2)*.5)/32*tau,y=max-.014-row*.021;if(y<min+.009||y>top(a)-.008)continue;
-        const shape=new THREE.Shape();shape.moveTo(-.013,.011);shape.lineTo(.013,.011);shape.lineTo(.012,-.004);shape.quadraticCurveTo(0,-.024,-.012,-.004);shape.closePath();
+      for(let row=0;row<Math.ceil((max-min)/.028);row++)for(let col=0;col<26;col++){
+        const a=(col+(row%2)*.5)/26*tau,y=max-.014-row*.028;if(y<min+.009||y>top(a)-.008)continue;
+        const shape=new THREE.Shape();shape.moveTo(-.018,.014);shape.lineTo(.018,.014);shape.lineTo(.017,-.006);shape.quadraticCurveTo(0,-.031,-.017,-.006);shape.closePath();
         const g=new THREE.ExtrudeGeometry(shape,{depth:.005,bevelEnabled:true,bevelSize:.0018,bevelThickness:.0016,bevelSegments:1,curveSegments:3,steps:1});g.rotateY(a);g.translate(...point(y,a,.019));add(g,row%3?m.steel:m.edge);
         if(col%2===0)stud(point(y+.006,a,.022),.0018);
       }
     }
     if(splint){
-      for(let col=0;col<24;col++){
-        const a=col/24*tau;garment(col%3?m.steel:m.edge,min+.006,x=>top(x)-.008,.018,[a+.025,a+tau/24-.025],'splint');
-        for(const y of [min+.027,1.20,1.29])if(y<top(a)-.01)stud(point(y,a+tau/48,.023),.0023);
+      for(let row=0;row<7;row++){
+        const y=min+.008+row*.045;if(y+.032>top(0))continue;
+        garment(m.steel,y,a=>Math.min(y+.037,top(a)-.005),.018,[0,tau],'banded-plate');
+        for(const a of [-.8,0,.8,Math.PI])if(y+.02<top(a))stud(point(y+.02,a,.024),.003);
       }
-      for(const y of [min+.055,1.245])loop(y,m.leather,.007,.023);
     }
   }
+
   // Shoulder straps have front and back anchors, rather than floating cords.
-  if(female||light||splint)for(const s of [-1,1]){
+  if(!female&&(light||splint))for(const s of [-1,1]){
     ribbon([[s*.108,1.29,point(1.29,s*.72,.014)[2]],[s*.129,1.365,.097],[s*.124,1.414,.02],[s*.123,1.375,-.055],[s*.108,1.30,-.075]],female?.017:.024,plate?m.leather:coat);
     buckle([s*.122,1.356,.108],.019,.025);
   }
-  if(light||mail||scale||splint){
+  if(!female&&(light||mail||scale||splint)){
     const points=[[1.36,-.86],[1.28,-.45],[1.19,0],[1.10,.50],[1.055,.85]].map(([y,a])=>point(y,a,.034));ribbon(points,.027,m.leather);buckle(point(1.20,-.05,.041),.031,.036);
   }
-  // The split skirt sits over the breeches. Its curved, closed-edge panels have
-  // actual thickness instead of single-sided triangles resembling body paint.
-  const skirtMat=plate?m.steel:coat,skirtMin=female?.885:mail?.83:.89;
-  for(let col=0;col<12;col++){
-    const a=col/12*tau;
-    const lo=skirtMin+(col%3)*.008,hi=1.025;
-    // Hip sections use the pelvis, and do not stretch with either thigh.
-    const pos=[],ix=[],segments=5;
-    for(let row=0;row<=4;row++)for(let i=0;i<=segments;i++){
-      const angle=a+.025+i/segments*(tau/12-.05),y=THREE.MathUtils.lerp(lo,hi,row/4),bevel=Math.sin(row/4*Math.PI)*.012,rx=THREE.MathUtils.lerp((female?.210:.200)+bulk,(female?.165:.155)+bulk+.006,row/4)+bevel,rz=THREE.MathUtils.lerp(.169+bulk,.150+bulk,row/4)+bevel;pos.push(Math.sin(angle)*rx,y,.026+Math.cos(angle)*rz);
+  const hems={leather:.74,'studded-leather':.70,hide:.66,'chain-shirt':.73,'chain-mail':.53,'ring-mail':.68,'scale-mail':.67,splint:.65,breastplate:.66,'half-plate':.68,plate:.65};
+  const skirtMin=female?(mail?.79:.81):hems[kind],heavy=plate||splint;
+  for(let col=0;col<8;col++){
+    const angleCenter=(col+.5)/8*tau,front=Math.cos(angleCenter)>.65,back=Math.cos(angleCenter)<-.65,parent='upperleg01.'+(Math.sin(angleCenter)>0?'L':'R');
+    const a=female&&(front||back)?(front?(Math.sin(angleCenter)>0?.13:-.13):Math.PI+(Math.sin(angleCenter)>0?-.13:.13)):angleCenter,half=female&&(front||back)?.115:tau/16;
+    const material=heavy?(front||back?m.linen:plate?m.steel:m.leather):coat;
+    const lo=skirtMin+(kind==='hide'?(col%3)*.026:(col%2)*.012),hi=1.018,pos=[],ix=[],segments=5,rows=6,count=(rows+1)*(segments+1);
+    for(const layer of [0,1])for(let row=0;row<=rows;row++)for(let i=0;i<=segments;i++){
+      const angle=a-half+.015+i/segments*(half*2-.03),t=row/rows,tip=(1-t)*(front||back?.060:.020)*(1-Math.abs(i/segments-.5)*2),y=THREE.MathUtils.lerp(lo,hi,t)-tip;
+      const rx=THREE.MathUtils.lerp(female?.221:.224,.171,t)+bulk*.4-layer*.007,rz=THREE.MathUtils.lerp(.163,.140,t)+bulk*.4-layer*.007;
+      pos.push(Math.sin(angle)*rx,y,.026+Math.cos(angle)*rz);
     }
-    for(let r=0;r<4;r++)for(let i=0;i<segments;i++){const x=r*(segments+1)+i,b=x+segments+1;ix.push(x,x+1,b,x+1,b+1,b);}
-    const count=pos.length/3;for(let i=0;i<count;i++){const x=pos[i*3],y=pos[i*3+1],z=pos[i*3+2],v=new THREE.Vector3(x,0,z-.026).normalize().multiplyScalar(plate?.009:.011);pos.push(x-v.x,y,z-v.z);}
-    const outer=ix.slice();for(let i=0;i<outer.length;i+=3)ix.push(outer[i]+count,outer[i+2]+count,outer[i+1]+count);
+    for(let r=0;r<rows;r++)for(let i=0;i<segments;i++){const p=r*(segments+1)+i,b=p+segments+1;ix.push(p,p+1,b,p+1,b+1,b,p+count,b+count,p+1+count,p+1+count,b+count,b+1+count);}
     const bridge=(a,b)=>ix.push(a,b,a+count,b,b+count,a+count);
-    for(let i=0;i<segments;i++){bridge(i+1,i);const x=4*(segments+1)+i;bridge(x,x+1);}
-    for(let r=0;r<4;r++){const x=r*(segments+1),b=x+segments+1;bridge(x,b);bridge(b+segments,x+segments);}
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(ix);g.computeVertexNormals();add(g,skirtMat,'root');
-    const angle=a+tau/24;stud([Math.sin(angle)*((female?.168:.158)+bulk+.006),1.017,.026+Math.cos(angle)*(.153+bulk)],.0028,'root');
-    const hem=Array.from({length:9},(_,i)=>{const v=a+.025+i/8*(tau/12-.05);return [Math.sin(v)*((female?.210:.200)+bulk),lo,.026+Math.cos(v)*(.169+bulk)];});line(hem,plate?m.edge:m.dark,.0018,'root');
+    for(let i=0;i<segments;i++){bridge(i+1,i);const x=rows*(segments+1)+i;bridge(x,x+1);}
+    for(let r=0;r<rows;r++){const x=r*(segments+1),b=x+segments+1;bridge(x,b);bridge(b+segments,x+segments);}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(ix);g.computeVertexNormals();add(g,material,parent).name='armor-'+kind+'-split-skirt';
+    const hem=pos.slice(0,(segments+1)*3);line(Array.from({length:segments+1},(_,i)=>hem.slice(i*3,i*3+3)),heavy?m.dark:m.leather,.002,parent);
+    if(kind==='ring-mail'||splint)for(let row=0;row<4;row++){
+      const y=hi-.04-row*(hi-lo-.04)/4,rx=.185+(1.018-y)*.09,rz=.155+(1.018-y)*.025;
+      for(const off of [-.17,.17]){
+        const angle=a+off,p=[Math.sin(angle)*rx,y,.026+Math.cos(angle)*rz],tile=new THREE.BoxGeometry(.038,.042,.006);tile.rotateY(angle);tile.translate(...p);add(tile,splint?m.steel:coat,parent);
+        if(!splint){const ring=new THREE.TorusGeometry(.011,.0015,4,12);ring.rotateY(angle);ring.translate(p[0]+Math.sin(angle)*.005,p[1],p[2]+Math.cos(angle)*.005);add(ring,m.edge,parent);}
+      }
+    }
+    if(scale)for(let row=0;row<Math.floor((hi-lo)/.036);row++)for(let i=0;i<3;i++){
+      const angle=a-.26+i*.26+(row%2)*.06,y=hi-.025-row*.036,shape=new THREE.Shape();shape.moveTo(-.019,.015);shape.lineTo(.019,.015);shape.lineTo(.018,-.008);shape.quadraticCurveTo(0,-.032,-.018,-.008);shape.closePath();
+      const tile=new THREE.ExtrudeGeometry(shape,{depth:.004,bevelEnabled:true,bevelSize:.001,bevelThickness:.001,bevelSegments:1,curveSegments:3,steps:1});tile.rotateY(angle);tile.translate(Math.sin(angle)*(.19+(hi-y)*.09),y,.026+Math.cos(angle)*(.167+(hi-y)*.025));add(tile,row%3?m.steel:m.edge,parent);
+    }
   }
   // Wide belt, framed buckle, tongue, punched holes and a stitched pouch.
   garment(m.leather,1.018,1.052,.031,[0,tau],'belt');edge(1.018,m.dark,.0015,.033);edge(1.052,m.dark,.0015,.033);buckle(point(1.035,0,.038),.042,.033);
@@ -245,7 +254,7 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
   for(const side of ['L','R']){
     const s=side==='L'?1:-1,upper=`upperarm01.${side}`,lower=`lowerarm01.${side}`,knee=`lowerleg01.${side}`,foot=`foot.${side}`;
     const shoulder=definitions.get(upper).head,elbow=definitions.get(lower).head,k=definitions.get(knee).head,f=definitions.get(foot).head;
-    limbGuard(lower,elbow,definitions.get(`wrist.${side}`).head,.13,.86,.065,.043,plate?m.steel:m.leather,`bracer-${side}`);
+    limbGuard(lower,elbow,definitions.get(`wrist.${side}`).head,.20,.90,.063,.044,plate?m.steel:m.leather,`bracer-${side}`);
     const sections=[[-.058,.006,.155],[-.046,.035,.20],[0,.046,.239],[.05,.049,.22],[.10,.051,.193],[.16,.049,.173],[.195,.040,.161],[.21,.004,.143]];
     function shoe(material,sole=false){
       const pos=[],ix=[],steps=24;
@@ -254,18 +263,23 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
       for(const row of [0,sections.length-1]){const center=pos.length/3;pos.push(f[0],sole?.122:.135,sections[row][0]);for(let i=0;i<steps;i++){const a=row*(steps+1)+i;ix.push(center,row===0?a+1:a,row===0?a:a+1);}}
       const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setIndex(ix);g.computeVertexNormals();add(g,material,foot);
     }
-    shoe(full?m.steel:m.leather);shoe(m.dark,true);shell(m.leather,(p,b)=>b.endsWith(`.${side}`)&&/^(lowerleg|foot)/.test(b),.012,null,cut(.18,.38));
+    shoe(full?m.steel:m.leather);shoe(m.dark,true);shell(m.leather,(p,b)=>b.endsWith(`.${side}`)&&/^(lowerleg|foot)/.test(b),.012,null,cut(.18,heavy?.38:.49));
     if(full)for(let row=0;row<5;row++){
       const z=.018+row*.035,top=.239-z*.33;line(Array.from({length:13},(_,i)=>{const x=-.042+i/12*.084;return [f[0]+x,.131+Math.sqrt(1-(x/.05)**2)*(top-.128),z];}),m.edge,.0021,foot);
     }
     for(let row=0;row<5;row++){const y=.28-row*.021;for(const sign of [-1,1])line([[f[0]+sign*.014,y,.067],[f[0]-sign*.014,y-.013,.070]],m.linen,.0012,knee);}
+    const kneeMaterial=light?m.leather:m.steel,outline=[[-.034,.026],[0,.048],[.034,.026],[.031,-.023],[0,-.058],[-.031,-.023]],shape=new THREE.Shape(outline.map(([x,y])=>new THREE.Vector2(x,y)));
+    const kneePlate=new THREE.ExtrudeGeometry(shape,{depth:.008,bevelEnabled:true,bevelSize:.004,bevelThickness:.003,bevelSegments:2,steps:1});kneePlate.translate(k[0],k[1],k[2]+.077);add(kneePlate,kneeMaterial,knee).name='armor-'+kind+'-pointed-knee';
+    line([...outline,outline[0]].map(([x,y])=>[k[0]+x,k[1]+y,k[2]+.091]),light?m.dark:m.edge,.0018,knee);
+    if(female){
+      const thigh='upperleg01.'+side,h=definitions.get(thigh).head,cx=THREE.MathUtils.lerp(h[0],k[0],.45),cy=.77;
+      const panel=new THREE.Shape([new THREE.Vector2(-.037,.072),new THREE.Vector2(.037,.072),new THREE.Vector2(.032,-.025),new THREE.Vector2(0,-.085),new THREE.Vector2(-.032,-.025)]);
+      const guard=new THREE.ExtrudeGeometry(panel,{depth:.006,bevelEnabled:true,bevelSize:.003,bevelThickness:.002,bevelSegments:1,steps:1});guard.translate(cx,cy,.135);add(guard,heavy||scale||kind==='studded-leather'?m.steel:m.leather,thigh).name='armor-'+kind+'-thigh-guard';
+      for(const y of [.815,.745])shell(m.leather,(p,b)=>b.endsWith('.'+side)&&/^upperleg/.test(b),.013,null,cut(y-.008,y+.008));
+    }
     if(['plate','half-plate','splint'].includes(kind)){
       limbGuard(knee,k,f,.15,.82,.084,.061,m.steel,`greave-${side}`);
       for(const off of splint?[-.026,-.013,0,.013,.026]:[0])line([[k[0]+off,.50,.101],[k[0]+off+s*.012,.39,.105],[f[0]+off,.26,.082]],m.edge,splint?.0035:.0022,knee);
-      const outline=[[-.047,.032],[0,.058],[.047,.032],[.055,-.012],[.028,-.047],[-.028,-.047],[-.055,-.012]],shape=new THREE.Shape(outline.map(([x,y])=>new THREE.Vector2(x,y)));
-      const poleyn=new THREE.ExtrudeGeometry(shape,{depth:.014,bevelEnabled:true,bevelSize:.005,bevelThickness:.004,bevelSegments:2,steps:1});poleyn.translate(k[0],k[1],k[2]+.090);add(poleyn,m.steel,knee);
-      sphere(knee,m.steel,[k[0],k[1],k[2]+.108],[.038,.041,.020]);
-      line([...outline,outline[0]].map(([x,y])=>[k[0]+x,k[1]+y,k[2]+.107]),m.edge,.0025,knee);line([[k[0],k[1]+.044,k[2]+.110],[k[0],k[1],k[2]+.130],[k[0],k[1]-.034,k[2]+.110]],m.trim,.0018,knee);
       if(full){
         shell(m.steel,p=>p[0]*s>0&&Math.abs(p[0])<.25&&p[1]<.95,.014,null,cut(female?.72:.63,.86));
         shell(m.steel,(p,b)=>b.endsWith(`.${side}`)&&/^upperarm/.test(b),.013,null,cut(1.245,1.31));
@@ -275,11 +289,11 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
     }
     // Broad, bevel-edged shoulder shells are part of every set's silhouette.
     // Steel lames, padded leather, mail mantles and scales use their own surface.
-    const shoulderMetal=['plate','half-plate','scale-mail'].includes(kind),shoulderMat=shoulderMetal?m.steel:mail?coat:m.leather,layers=full?3:['half-plate','scale-mail','leather','studded-leather'].includes(kind)?2:1;
+    const shoulderMetal=['plate','half-plate','scale-mail'].includes(kind),shoulderMat=shoulderMetal?m.steel:mail?coat:m.leather,layers=full?3:['half-plate','scale-mail','studded-leather'].includes(kind)?2:1;
     for(let row=0;row<layers;row++){
-      const center=[shoulder[0]+s*(.023+row*.023),shoulder[1]+.025-row*.039,shoulder[2]],rx=(female?.132:.143)-row*.009,rz=.117-row*.009,height=.080-row*.008;
-      let cap=new THREE.SphereGeometry(1,12,6,0,tau,0,Math.PI*.60);cap.scale(rx,height,rz);cap.translate(...center);solidify(cap,shoulderMetal?.009:.012);
-      const smooth=cap;cap=cap.toNonIndexed();smooth.dispose();cap.computeVertexNormals();add(cap,shoulderMat,upper).name=`armor-${kind}-pauldron-${side}`;
+      const center=[shoulder[0]+s*(.023+row*.023),shoulder[1]+(female?-.035:.014)-row*.022,shoulder[2]],rx=(female?.068:.093)-row*.005,rz=(female?.073:.085)-row*.004,height=(female?.036:.046)-row*.004;
+      let cap=new THREE.SphereGeometry(1,20,8,0,tau,0,Math.PI*.60);cap.scale(rx,height,rz);cap.translate(...center);solidify(cap,shoulderMetal?.009:.012);
+      cap.computeVertexNormals();add(cap,shoulderMat,upper).name=`armor-${kind}-pauldron-${side}`;
       line(Array.from({length:25},(_,i)=>{const a=i/24*tau;return [center[0]+Math.sin(a)*rx*.951,center[1]-height*.309,center[2]+Math.cos(a)*rz*.951];}),shoulderMetal?m.edge:m.dark,.0045,upper);
       for(const x of [-.045,.045])stud([center[0]+x,center[1]-.01,center[2]+rz*.94],.004,upper);
       if(kind==='hide')for(let i=0;i<18;i++){
@@ -290,4 +304,16 @@ export function dressArmor({config,materials:m,definitions,surface,attach,sphere
       for(let j=-2;j<=2;j++)line([[elbow[0]+j*.010,1.16,.058],[elbow[0]+s*.046+j*.010,1.085,.061]],m.edge,.003,lower);
     }
   }
+  if(kind==='hide')for(let i=0;i<46;i++){
+    const a=i/46*tau,y=(female?1.305:1.39)+.020*Math.abs(Math.sin(a)),p=point(y,a,.020),g=new THREE.SphereGeometry(1,7,5);g.scale(.019,.025+(i%3)*.004,.019);g.translate(...p);add(g,i%3?lining:coat);
+  }
+  if(full&&!female){
+    garment(m.steel,1.40,1.464,.006,[0,tau],'gorget');edge(1.46,m.edge,.002,.009);
+    const cap=new THREE.SphereGeometry(1,24,14,0,tau,0,Math.PI*.68);cap.scale(.098,.132,.143);cap.translate(0,1.607,.043);add(solidify(cap,.006),m.steel,'head').name='armor-plate-helmet';
+    const outline=[[-.075,1.635],[.075,1.635],[.066,1.54],[.026,1.50],[-.026,1.50],[-.066,1.54]],shape=new THREE.Shape(outline.map(([x,y])=>new THREE.Vector2(x,y))),visor=new THREE.ExtrudeGeometry(shape,{depth:.006,bevelEnabled:true,bevelSize:.003,bevelThickness:.003,bevelSegments:1,steps:1});visor.translate(0,0,.181);add(visor,m.steel,'head');
+    for(const sign of [-1,1]){const slit=new THREE.BoxGeometry(.043,.007,.003);slit.translate(sign*.031,1.600,.192);add(slit,m.dark,'head');}
+    line([[0,1.750,.065],[0,1.704,.146],[0,1.64,.192],[0,1.57,.205],[0,1.516,.192]],m.edge,.004,'head');
+    line([[-.065,1.57,.193],[0,1.55,.205],[.065,1.57,.193]],m.edge,.002,'head');
+  }
+
 }

@@ -42,7 +42,7 @@ function gripRotation(grip,side,axis,forearm){
   return frame(axis,normal).multiply(grip.quaternion.clone().invert());
 }
 
-function shoulderGrip(grip,side,palm,axis,shoulder,upper,lower){
+function solveGrip(grip,side,palm,axis,shoulder,upper,lower){
   const base=new THREE.Vector3(0,0,1).addScaledVector(axis,-axis.z).normalize(),inverse=grip.quaternion.clone().invert();
   const rawForward=grip.forward.clone().multiplyScalar(Math.sqrt(1-grip.axisSlope**2)).addScaledVector(grip.across,-grip.axisSlope);
   const desiredElbow=new THREE.Vector3(side==='R'?-.31:.31,1.15,.09);let best;
@@ -52,7 +52,8 @@ function shoulderGrip(grip,side,palm,axis,shoulder,upper,lower){
     const forward=rawForward.clone().applyQuaternion(wristQ),straight=target.clone().addScaledVector(forward,-lower).sub(shoulder);
     const joint=elbowFor(shoulder,target,upper,lower,straight);
     const intrusion=Math.max(0,.20+(side==='R'?joint.x:-joint.x))*Math.max(0,.28-joint.z);
-    const bend=target.clone().sub(joint).angleTo(forward),score=intrusion*10000+bend*bend*8+joint.distanceToSquared(desiredElbow)*.5+target.distanceToSquared(original)*1000;
+    let clearance=0;for(const t of [.25,.5,.75,1]){const p=joint.clone().lerp(target,t),rx=Math.abs(shoulder.x)<.16?.185:.205;if(p.y>1.075&&p.y<1.36&&Math.abs(p.x)<rx){const front=.022+Math.sqrt(1-(p.x/rx)**2)*.19;clearance+=Math.max(0,front+.038-p.z)**2;}}
+    const bend=target.clone().sub(joint).angleTo(forward),score=clearance*10000+intrusion*10000+bend*bend*8+joint.distanceToSquared(desiredElbow)*.5+target.distanceToSquared(original)*1000;
     if(!best||score<best.score)best={score,angle,target,joint,wristQ};
   };
   // Solve roll about the fixed hilt, rather than iterating a wrist-offset map
@@ -67,28 +68,26 @@ export function planHumanPose(config,definitions){
   const shieldSide=!twoSide&&config.shield?(config.shieldHand==='right'||!config.shieldHand&&config.left&&!config.right?'R':'L'):null;
   const right=shieldSide==='R'?null:config.right,left=shieldSide==='L'?null:config.left;
   const stance=twoSide?'two-handed':shieldSide?'shield':right&&left?'dual':right||left?'single':'unarmed',arms={};
-  // The idle greatsword rests over the wielding shoulder. Its equipment still
-  // occupies both slots, while the other hand rests naturally at the hip.
-  const twoAxis=new THREE.Vector3(twoSide==='R'?-.30:.30,-.30,.85).normalize(),twoCenter=new THREE.Vector3(twoSide==='R'?-.40:.40,1.44,.10);
+  // A low two-handed guard holds one hilt in front of the waist. The mirrored
+  // presets keep both palms attached to it while the blade rises to the side.
+  const twoAxis=new THREE.Vector3(twoSide==='R'?-.90:.90,-.55,-.65).normalize(),twoCenter=new THREE.Vector3(twoSide==='R'?.20:-.20,1.18,.30);
   for(const side of ['R','L']){
-    const sign=side==='L'?1:-1,hip=!!twoSide&&side!==twoSide,weapon=hip?null:side==='R'?right:left,shield=side===shieldSide;
+    const sign=side==='L'?1:-1,support=!!twoSide&&side!==twoSide,weapon=support?null:side==='R'?right:left,shield=side===shieldSide;
     const shoulder=vector(definitions.get(`upperarm01.${side}`).head),elbow=vector(definitions.get(`lowerarm01.${side}`).head),wrist=vector(definitions.get(`wrist.${side}`).head),grip=handGrip(definitions,side);
     const upper=elbow.clone().sub(shoulder),lower=wrist.clone().sub(elbow),l1=upper.length(),l2=lower.length();
-    const blade=new THREE.Vector3(sign*.74,-.65,.18).normalize();
-    const axis=hip?null:twoSide?twoAxis:weapon?blade.negate():null;
-    const target=hip?new THREE.Vector3(sign*.255,1.075,.095):shield?new THREE.Vector3(sign*.255,1.125,.245):weapon?new THREE.Vector3(sign*.25,.985,.16):new THREE.Vector3(sign*(Math.abs(shoulder.x)+.06),shoulder.y-.419,.035);
-    const preferred=hip?new THREE.Vector3(sign,.05,-.55):twoSide?new THREE.Vector3(sign,-1,-.1):shield?new THREE.Vector3(sign,.15,-.25):weapon?new THREE.Vector3(sign,0,-.22):new THREE.Vector3(sign*.15,0,-1);
+    const blade=new THREE.Vector3(sign*(shieldSide?.74:.88),shieldSide?-.65:.36,.18).normalize();
+    const axis=twoSide?twoAxis:weapon?blade.negate():null;
+    const target=shield?new THREE.Vector3(sign*.255,1.125,.245):weapon?new THREE.Vector3(sign*.25,shieldSide?.985:1.065,shieldSide?.16:.24):new THREE.Vector3(sign*(Math.abs(shoulder.x)+.06),shoulder.y-.419,.035);
+    const preferred=twoSide?new THREE.Vector3(sign,-.15,-.4):shield?new THREE.Vector3(sign,.15,-.25):weapon?new THREE.Vector3(sign,0,-.22):new THREE.Vector3(sign*.15,0,-1);
     let wristQ,joint;
-    if(twoSide&&!hip){
-      const solved=shoulderGrip(grip,side,twoCenter,axis,shoulder,l1,l2);
+    if(twoSide){
+      const palm=twoCenter.clone().addScaledVector(twoAxis,support?.115:0);
+      const solved=solveGrip(grip,side,palm,axis,shoulder,l1,l2);
       target.copy(solved.target);wristQ=solved.wristQ;joint=solved.joint;
     }
     if(!joint)joint=elbowFor(shoulder,target,l1,l2,preferred,axis,grip.axisSlope);
     const direction=target.clone().sub(joint).normalize();
-    if(hip){
-      const normal=new THREE.Vector3(-sign,0,.2).normalize();
-      wristQ=frame(direction,normal).multiply(frame(grip.forward,grip.normal).invert());
-    }else if(!twoSide&&weapon)wristQ=gripRotation(grip,side,axis,direction);
+    if(!twoSide&&weapon)wristQ=gripRotation(grip,side,axis,direction);
     else if(shield){
       const normal=new THREE.Vector3(0,0,-1).addScaledVector(direction,direction.z).normalize(),across=new THREE.Vector3().crossVectors(direction,normal).multiplyScalar(side==='R'?1:-1);
       wristQ=frame(across.negate(),normal).multiply(grip.quaternion.clone().invert());
@@ -100,7 +99,7 @@ export function planHumanPose(config,definitions){
     // arm so it is not introduced as a 120-180 degree twist at the wrist seam.
     const palmNormal=grip.normal.clone().applyQuaternion(wristQ);
     const lowerQ=frame(direction,palmNormal).multiply(frame(lower,grip.normal).invert());
-    arms[side]={side,weapon,shield,hip,grip,shoulder,elbow,wrist,target,joint,upperQ,lowerQ,wristQ};
+    arms[side]={side,weapon,shield,support,fist:!weapon&&!shield&&!support&&stance==='single',grip,shoulder,elbow,wrist,target,joint,upperQ,lowerQ,wristQ};
   }
   return {stance,arms,shieldSide,twoSide};
 }
@@ -111,7 +110,7 @@ export function applyHumanPose(byName,definitions,plan){
   // Fingers curl toward the palm around the handle's actual axis. Their lengths
   // and authored skin weights are preserved, for both mirrored hands and sexes.
   for(const side of ['L','R']){
-    const arm=plan.arms[side],holding=!!(arm.weapon||arm.shield),{forward,normal,across,center}=arm.grip;
+    const arm=plan.arms[side],holding=!!(arm.weapon||arm.shield||arm.support||arm.fist),{forward,normal,across,center}=arm.grip;
     for(let finger=2;finger<=5;finger++)for(let segment=1;segment<=3;segment++){
       const angle=holding?[.20,1.48,2.85][segment-1]:[.08,.22,.36][segment-1];
       const direction=forward.clone().multiplyScalar(Math.cos(angle)).addScaledVector(normal,Math.sin(angle));
@@ -125,7 +124,7 @@ export function applyHumanPose(byName,definitions,plan){
   }
   for(const side of ['L','R']){
     const arm=plan.arms[side],sign=side==='L'?1:-1;
-    byName.get(`upperleg01.${side}`).rotation.z=-sign*.075;
+    byName.get(`upperleg01.${side}`).rotation.z=-sign*.055;
     worldQuaternion(byName.get(`upperarm01.${side}`),arm.upperQ);
     worldQuaternion(byName.get(`lowerarm01.${side}`),arm.lowerQ);
     worldQuaternion(byName.get(`wrist.${side}`),arm.wristQ);
