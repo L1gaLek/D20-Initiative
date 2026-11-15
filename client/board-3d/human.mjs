@@ -15,6 +15,7 @@ export function createHuman(config){
   const chain=['chain-shirt','chain-mail','ring-mail'].includes(kind);
   const coat=mat(kind==='hide'?'#8a6d4a':kind==='ring-mail'?'#52454a':kind==='leather'||kind==='studded-leather'?'#795236':'#788994',chain ? .5 : .15,chain ? .66 : .6);
   if(chain||kind==='scale-mail'){
+    coat.customProgramCacheKey=()=>`human-armor-${kind}`;
     coat.onBeforeCompile=shader=>{
       shader.vertexShader='varying vec3 armorPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\narmorPoint=position;');
       shader.fragmentShader='varying vec3 armorPoint;\n'+shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
