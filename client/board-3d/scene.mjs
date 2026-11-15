@@ -2,7 +2,7 @@ import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
 import { loadBoardImage } from './background.mjs';
 import { fogMaterial, magicMaterial } from './effects.mjs';
-import { createHuman } from './human.mjs?v=20261115-fitted-armor-1';
+import { createHuman } from './human.mjs?v=20261116-sculpted-armor-1';
 
 const WALL_HEIGHT = 1.35;
 const data = window.Board3DData;

@@ -52,6 +52,7 @@ test('weapons sit inside curled palms and shields clear both forearms, including
           figure.userData.pose(.12,walk);figure.updateMatrixWorld(true);
           for(const weapon of weapons){
             const side=weapon.userData.hand,center=weapon.getWorldPosition(new T.Vector3()),axis=new T.Vector3(0,1,0).applyQuaternion(weapon.getWorldQuaternion(new T.Quaternion()));
+            const blade=axis.clone().negate();assert.ok(blade.y<-.5&&blade.x*(side==='R'?-1:1)>.6,'one-handed swords point down outside the leg, with or without a shield');
             const a=bones.get(`finger2-1.${side}`).getWorldPosition(new T.Vector3()),b=bones.get(`finger5-1.${side}`).getWorldPosition(new T.Vector3());
             assert.ok(Math.abs(a.sub(b).normalize().dot(axis))>.98,'handle runs across the palm, not out of its fingertips');
             for(let finger=2;finger<=5;finger++){
@@ -81,7 +82,7 @@ test('weapons sit inside curled palms and shields clear both forearms, including
               assert.ok(samples>5);assert.ok(radius<strap.userData.radius-.003,'strap clears the actual posed forearm surface');
             }
             for(const t of [0,.25,.5,.75,1]){
-              const p=shield.worldToLocal(elbow.clone().lerp(wrist,t)),back=.007+Math.max(0,1-(p.x/.16)**2)*.037;
+              const p=shield.worldToLocal(elbow.clone().lerp(wrist,t)),back=.007+Math.max(0,1-(p.x/shield.userData.backRadius)**2)*shield.userData.backBulge;
               assert.ok(p.z+.033<back,'wooden back never intersects the forearm or bracer');
             }
           }
@@ -91,34 +92,32 @@ test('weapons sit inside curled palms and shields clear both forearms, including
   }
 });
 
-test('one enlarged greatsword is held by both hands throughout walking, for either dominant hand and both bodies',async()=>{
+test('one enlarged greatsword rests over either shoulder with a curled grip and the free hand on the hip, including walking',async()=>{
   const {createHuman}=await human,T=await three;
   for(const model of ['human-male','human-female'])for(const side of ['R','L']){
-    const {default:asset}=await import(pathToFileURL(path.resolve(__dirname,`../assets/models/human/${model.slice(6)}.mjs`)).href),defs=new Map(asset.bones.map(b=>[b.name,b]));
+    const {default:asset}=await import(pathToFileURL(path.resolve(__dirname,'../assets/models/human/'+model.slice(6)+'.mjs')).href),defs=new Map(asset.bones.map(b=>[b.name,b]));
     const hand=side==='R'?'right':'left',figure=createHuman({...config,model,armor:'half-plate',[hand]:'great',twoHanded:hand,shield:true});
     try{
       const weapons=[],shields=[];let skeleton;figure.traverse(o=>{if(o.isSkinnedMesh)skeleton=o.skeleton;if(o.userData.attachment==='weapon')weapons.push(o);if(o.userData.attachment==='shield')shields.push(o);});
       assert.equal(figure.userData.stance,'two-handed');assert.equal(weapons.length,1);assert.equal(shields.length,0);
-      const weapon=weapons[0],bones=new Map(skeleton.bones.map(b=>[b.name,b]));
+      const weapon=weapons[0],bones=new Map(skeleton.bones.map(b=>[b.name,b])),other=side==='R'?'L':'R';
       for(const moving of [false,true,true,false]){
         figure.userData.pose(.14,moving);figure.updateMatrixWorld(true);
-        const center=weapon.getWorldPosition(new T.Vector3()),axis=new T.Vector3(0,1,0).applyQuaternion(weapon.getWorldQuaternion(new T.Quaternion()));
-        const centers=[];
-        for(const h of ['R','L']){
-          const p=new T.Vector3();for(let finger=2;finger<=5;finger++)p.addScaledVector(bones.get(`finger${finger}-1.${h}`).getWorldPosition(new T.Vector3()),.25);
-          const delta=p.clone().sub(center),along=delta.dot(axis);centers.push(along);
-          assert.ok(delta.addScaledVector(axis,-along).length()<.055,'both palms stay wrapped around the same hilt');
-          assert.ok(along>-.05&&along<.17,'both hands remain on the extended grip');
-          for(let finger=2;finger<=5;finger++){
-            const name=`finger${finger}-3.${h}`,definition=defs.get(name),gripCenter=center.clone().addScaledVector(axis,h===side?0:.115);
-            const tip=new T.Vector3(...definition.tail).sub(new T.Vector3(...definition.head)).applyMatrix4(bones.get(name).matrixWorld).sub(gripCenter),axial=tip.dot(axis),radial=tip.addScaledVector(axis,-axial).length();
-            assert.ok(radial>.008&&radial<.036,'both sets of fingers curl around the shared handle');assert.ok(Math.abs(axial)<.055);
-          }
+        const center=weapon.getWorldPosition(new T.Vector3()),axis=new T.Vector3(0,1,0).applyQuaternion(weapon.getWorldQuaternion(new T.Quaternion())),blade=axis.clone().negate();
+        assert.ok(blade.y>.2&&blade.z<-.75,'the blade points up and back over the shoulder');
+        assert.ok(center.y>1.38&&center.y<1.46&&Math.abs(center.x)>.36,'the raised grip sits outside the shoulder, away from the face');
+        const free=bones.get('wrist.'+other).getWorldPosition(new T.Vector3());
+        assert.ok(free.y>1.02&&free.y<1.12&&Math.abs(free.x)>.23,'the free hand rests at the hip');
+        assert.ok(free.distanceTo(center)>.55,'the carry pose does not pretend both hands hold the sword');
+        for(let finger=2;finger<=5;finger++){
+          const name='finger'+finger+'-3.'+side,definition=defs.get(name),tip=new T.Vector3(...definition.tail).sub(new T.Vector3(...definition.head)).applyMatrix4(bones.get(name).matrixWorld).sub(center),along=tip.dot(axis),radial=tip.addScaledVector(axis,-along).length();
+          assert.ok(radial>.008&&radial<.036,'all four finger pads stay curled around the hilt');assert.ok(Math.abs(along)<.055);
         }
-        assert.ok(Math.abs(centers[0]-centers[1])>.085,'hands do not overlap on the grip');
         let tip=0;
-        figure.traverse(o=>{if(!o.isSkinnedMesh)return;const a=o.geometry.attributes;for(let i=0;i<a.position.count;i++){if(skeleton.bones[a.skinIndex.array[i*4]].name!==`wrist.${side}`)continue;const p=o.localToWorld(o.getVertexPosition(i,new T.Vector3())).sub(center);tip=Math.max(tip,-p.dot(axis));}});
-        assert.ok(tip>1.10,'the actual blade is over twice the longsword blade length');
+        figure.traverse(o=>{if(!o.isSkinnedMesh)return;const a=o.geometry.attributes;for(let i=0;i<a.position.count;i++){if(skeleton.bones[a.skinIndex.array[i*4]].name!=='wrist.'+side)continue;const p=o.localToWorld(o.getVertexPosition(i,new T.Vector3())).sub(center);tip=Math.max(tip,-p.dot(axis));}});
+        assert.ok(tip>1.10,'the actual blade remains over twice the longsword blade length');
+        const ray=new T.Raycaster(center,blade,.10,1.15),skin=figure.getObjectByName('anatomical-body');
+        assert.ok(!ray.intersectObject(skin).some(h=>/^head|^neck/.test(skeleton.bones[skin.geometry.attributes.skinIndex.getX(h.face.a)].name)),'the carried blade clears the actual head and neck mesh');
       }
     }finally{dispose(figure);}
   }
@@ -144,7 +143,7 @@ test('held wrists continue the forearm without backward bending or a twist at th
         for(const moving of [false,true,false]){
           f.userData.pose(.14,moving);f.updateMatrixWorld(true);
           for(const side of ['R','L']){
-            if(!variant[side==='R'?'right':'left']&&!variant.twoHanded)continue;
+            if(!variant[side==='R'?'right':'left'])continue;
             const point=n=>bones.get(`${n}.${side}`).getWorldPosition(new T.Vector3()),rest=n=>new T.Vector3(...defs.get(`${n}.${side}`).head);
             const forearm=point('wrist').sub(point('lowerarm01')).normalize(),forward=point('finger3-1').sub(point('wrist')).normalize();
             assert.ok(forearm.angleTo(forward)<30*Math.PI/180,`${model}/${side} has a neutral wrist, not a hand folded back over the forearm`);
@@ -159,28 +158,28 @@ test('held wrists continue the forearm without backward bending or a twist at th
   }
 });
 
-test('both greatsword forearms remain in front of the thick cuirass for either dominant hand',async()=>{
+test('shoulder-carrying and hip arms clear the thick cuirass for either dominant hand',async()=>{
   const {createHuman}=await human,T=await three;
   for(const model of ['human-male','human-female'])for(const hand of ['right','left']){
     const f=createHuman({...config,model,armor:'plate',[hand]:'great',twoHanded:hand});
     try{
       f.updateMatrixWorld(true);let skeleton;const armor=[];
       f.traverse(o=>{if(o.isSkinnedMesh){skeleton=o.skeleton;if(o.name.includes('armor-plate'))armor.push(o);}});
-      const bones=new Map(skeleton.bones.map(b=>[b.name,b])),torso=skeleton.bones.findIndex(b=>b.name==='spine03');let checked=0;
+      const bones=new Map(skeleton.bones.map(b=>[b.name,b])),torso=skeleton.bones.findIndex(b=>b.name==='spine03');
       for(const side of ['R','L'])for(const t of [.25,.5,.75,1]){
         const elbow=bones.get(`lowerarm01.${side}`).getWorldPosition(new T.Vector3()),wrist=bones.get(`wrist.${side}`).getWorldPosition(new T.Vector3()),point=elbow.lerp(wrist,t);
         const ray=new T.Raycaster(new T.Vector3(point.x,point.y,1),new T.Vector3(0,0,-1));
         for(const hit of ray.intersectObjects(armor)){
           if(hit.object.geometry.attributes.skinIndex.getX(hit.face.a)!==torso||hit.point.z<.05)continue;
-          checked++;assert.ok(point.z-.035>hit.point.z,`${model}/${hand}/${side} leaves room for the forearm and its bracer outside the breastplate`);
+          assert.ok(point.z-.035>hit.point.z,`${model}/${hand}/${side} leaves room for the forearm and its bracer outside the breastplate`);
         }
       }
-      assert.ok(checked>0,'the test samples the forearm where it crosses the actual cuirass');
+      const control=new T.Raycaster(new T.Vector3(0,1.24,1),new T.Vector3(0,0,-1));assert.ok(control.intersectObjects(armor).some(hit=>hit.object.geometry.attributes.skinIndex.getX(hit.face.a)===torso),'the rendered cuirass is present even when both arms lie outside its silhouette');
     }finally{dispose(f);}
   }
 });
 
-test('armor has separate outer/inner surfaces and the female cut covers the waist and upper legs',async()=>{
+test('armor has thick outer/inner surfaces and a separate open female cut with covered chest and hips',async()=>{
   const {createHuman}=await human,T=await three;
   for(const model of ['human-male','human-female'])for(const armor of database.armor.filter(a=>a.armor.type!=='shield').map(AvatarData.armorKind)){
     const f=createHuman({...config,model,armor});
@@ -189,13 +188,37 @@ test('armor has separate outer/inner surfaces and the female cut covers the wais
       const mesh=torso[0],side=mesh.material.side;mesh.material.side=T.DoubleSide;
       try{
         const ray=new T.Raycaster(new T.Vector3(.06,1.242,1),new T.Vector3(0,0,-1)),hits=ray.intersectObject(mesh).map(h=>h.point.z).filter(z=>z>.08);
-        assert.ok(hits.some((z,i)=>hits.some((q,j)=>j!==i&&Math.abs(q-z)>.0035&&Math.abs(q-z)<.008)),`${model}/${armor} has real shell thickness`);
+        assert.ok(hits.some((z,i)=>hits.some((q,j)=>j!==i&&Math.abs(q-z)>.0075&&Math.abs(q-z)<.018)),`${model}/${armor} has real shell thickness`);
         if(model==='human-female'){
-          ray.set(new T.Vector3(.04,1.075,1),new T.Vector3(0,0,-1));assert.ok(ray.intersectObject(mesh).some(h=>h.point.z>.1),'the fitted torso covers the waist');
-          ray.set(new T.Vector3(.10,.825,1),new T.Vector3(0,0,-1));assert.ok(ray.intersectObject(mesh).some(h=>h.point.z>.12),'the longer skirt covers the upper legs');
+          ray.set(new T.Vector3(.04,1.067,1),new T.Vector3(0,0,-1));assert.ok(!ray.intersectObject(mesh).some(h=>h.point.z>.1),'the waist opening stays visible instead of being filled by a male undercoat');
+          ray.set(new T.Vector3(.10,.94,1),new T.Vector3(0,0,-1));assert.ok(ray.intersectObject(mesh).some(h=>h.point.z>.12),'solid hip panels remain over the opaque shorts');
         }
       }finally{mesh.material.side=side;}
     }finally{dispose(f);}
+  }
+});
+
+test('volumetric greaves enclose the actual calf surface on both bodies, including the back',async()=>{
+  const {createHuman}=await human,T=await three;
+  for(const model of ['human-male','human-female']){
+    const f=createHuman({...config,model,armor:'plate'}),anatomy=createHuman({...config,model,armor:'none',hair:'bald'});
+    try{
+      f.updateMatrixWorld(true);anatomy.updateMatrixWorld(true);const body=anatomy.getObjectByName('anatomical-body'),skeleton=body.skeleton,armor=[];
+      f.traverse(o=>{if(o.isSkinnedMesh&&o.name.includes('greave-'))armor.push(o);});assert.ok(armor.length);
+      let checked=0;
+      for(const side of ['R','L']){
+        const bone=skeleton.bones.find(b=>b.name==='lowerleg01.'+side),index=skeleton.bones.indexOf(bone),origin=bone.getWorldPosition(new T.Vector3()),axis=skeleton.bones.find(b=>b.name==='foot.'+side).getWorldPosition(new T.Vector3()).sub(origin).normalize(),a=body.geometry.attributes;
+        for(let i=0;i<a.position.count;i++){
+          if(a.position.getY(i)<.29||a.position.getY(i)>.45||a.position.getX(i)*(side==='R'?-1:1)<0)continue;
+          let dominant=0;for(let j=1;j<4;j++)if(a.skinWeight.array[i*4+j]>a.skinWeight.array[i*4+dominant])dominant=j;
+          if(!skeleton.bones[a.skinIndex.array[i*4+dominant]].name.startsWith('lowerleg'))continue;
+          const p=body.localToWorld(body.getVertexPosition(i,new T.Vector3())),radial=p.clone().sub(origin);radial.addScaledVector(axis,-radial.dot(axis)).normalize();
+          const ray=new T.Raycaster(p,radial,0,.08),hits=ray.intersectObjects(armor).filter(h=>h.object.geometry.attributes.skinIndex.getX(h.face.a)===index);
+          assert.ok(hits.length,`${model}/${side} calf point ${i} stays inside the greave`);checked++;
+        }
+      }
+      assert.ok(checked>20,'front, side and back calf vertices are sampled');
+    }finally{dispose(f);dispose(anatomy);}
   }
 });
 
