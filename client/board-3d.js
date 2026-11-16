@@ -1,7 +1,7 @@
 // Adapter: 3D gestures enter the existing board handlers and permission checks.
 (function () {
   'use strict';
-  const moduleUrl = new URL('board-3d/scene.mjs?v=20261116-reference-armory-2', document.currentScript.src);
+  const moduleUrl = new URL('board-3d/scene.mjs?v=20261116-master-plate-1', document.currentScript.src);
   let active = false, loading = null, engine = null, root = null, status = null;
   let syncFrame = 0, state = null, gesture = null, lastTap = null;
   let savedScroll = null;

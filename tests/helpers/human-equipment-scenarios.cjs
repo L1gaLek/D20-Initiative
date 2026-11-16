@@ -47,7 +47,7 @@ module.exports=async function({owner,gm,open,screenshotDir}){
   await owner.evaluate(()=>InfoModal.close());await open(owner);
   assert.equal(await gender.inputValue(),'female');assert.equal(await hair.inputValue(),'braid');assert.equal(await slot('right').inputValue(),'');assert.equal(await slot('left').inputValue(),'weapon_longsword');
   await owner.waitForTimeout(80);const after=await owner.evaluate(()=>Character3D.inspect().render);
-  assert.ok(after.geometries<=memory.geometries+4);assert.ok(after.textures<=memory.textures+1);assert.ok(after.calls<=22);
+  assert.ok(after.geometries<=memory.geometries+4);assert.ok(after.textures<=memory.textures+1);assert.ok(after.calls<=44);
   await saveScreenshot('human-female-shield-right');
   await owner.setViewportSize({width:420,height:900});assert.equal(await owner.locator('[data-appearance-root]').evaluate(e=>e.scrollWidth<=e.clientWidth+1),true);if(screenshotDir)await owner.screenshot({path:path.join(screenshotDir,'human-female-mobile.png')});await owner.setViewportSize({width:1440,height:1000});
   console.log('PASS human equipment: five actual stances; two-handed weapon clears shield and AC, persists and releases both hands on replacement; shield switches arms on both clients; both bodies/all 11 armors/all hairstyles render, persist and release old GPU resources');

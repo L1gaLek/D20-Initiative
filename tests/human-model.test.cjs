@@ -9,6 +9,37 @@ const three=import(pathToFileURL(path.resolve(__dirname,'../vendor/three/three.m
 const config={model:'human-male',armor:'none',hair:'parted',hairColor:'#493124',right:null,left:null,shield:false};
 function dispose(figure){const materials=new Set();figure.traverse(o=>{o.userData.dispose?.();o.geometry?.dispose();if(o.material)materials.add(o.material);});materials.forEach(m=>m.dispose());}
 
+test('prepared plate meshes retain UVs and shared reflections survive disposal of a neighboring token',async()=>{
+  const {createHuman}=await human,figures=['human-male','human-female'].map(model=>createHuman({...config,model,armor:'plate'}));
+  let reflection,disposed=0;
+  try{
+    for(const figure of figures){let plates=0;figure.traverse(o=>{
+      if(!o.isMesh||!o.material.userData.materialSource)return;plates++;
+      const a=o.geometry.attributes;assert.equal(a.uv.count,a.position.count);assert.ok(a.uv.array.every(Number.isFinite));
+      if(o.material.envMap){reflection??=o.material.envMap;assert.equal(o.material.envMap,reflection);}
+    });assert.ok(plates>=5);}
+    reflection.addEventListener('dispose',()=>disposed++);dispose(figures.shift());assert.equal(disposed,0,'one token cannot release another token’s reflection');
+  }finally{figures.forEach(dispose);}
+  assert.equal(disposed,1,'the last plate token releases the shared GPU reflection');
+});
+
+test('portable male and female plate models embed their skeleton, materials and looping walk',()=>{
+  const fs=require('node:fs');
+  for(const sex of ['male','female']){
+    const bytes=fs.readFileSync(path.resolve(__dirname,'../assets/models/plate/'+sex+'.glb'));
+    assert.equal(bytes.readUInt32LE(0),0x46546c67);assert.equal(bytes.readUInt32LE(4),2);assert.equal(bytes.readUInt32LE(8),bytes.length);
+    const jsonLength=bytes.readUInt32LE(12),doc=JSON.parse(bytes.subarray(20,20+jsonLength).toString()),bin=28+jsonLength;
+    assert.equal(bytes.readUInt32LE(24+jsonLength),0x004e4942);assert.equal(doc.skins[0].joints.length,163);
+    assert.equal(doc.images.length,9);assert.ok(doc.images.every(i=>i.bufferView!==undefined&&!i.uri));
+    assert.ok(doc.bufferViews.every(v=>v.byteOffset+v.byteLength<=doc.buffers[0].byteLength));
+    assert.ok(doc.buffers[0].byteLength<=bytes.length-bin);assert.equal(doc.animations[0].name,'Walk');assert.ok(doc.animations[0].channels.length>=4);
+    for(const sampler of doc.animations[0].samplers){
+      const a=doc.accessors[sampler.output],v=doc.bufferViews[a.bufferView],values=new Float32Array(bytes.buffer,bytes.byteOffset+bin+v.byteOffset,a.count*4);
+      for(let k=0;k<4;k++)assert.ok(Math.abs(values[k]-values[values.length-4+k])<1e-6,'walk loops without a pose jump');
+    }
+  }
+});
+
 test('anatomical model and every database armor have valid surfaces and normalized skin weights',async()=>{
   const {createHuman}=await human;
   const kinds=['none',...database.armor.filter(a=>a.armor.type!=='shield').map(AvatarData.armorKind)];
@@ -142,7 +173,7 @@ test('reference armor silhouettes distinguish long mail, short shirts and male p
   assert.ok(hem('chain-mail')<.57,'the hauberk reaches below the knee');assert.ok(hem('chain-shirt')>.65,'the shirt has a shorter split hem');
   for(const model of ['human-male','human-female']){
     const f=createHuman({...config,model,armor:'plate'});let helmet=false,thigh=false;
-    try{f.traverse(o=>{helmet||=o.name.includes('armor-plate-helmet');thigh||=o.name.includes('thigh-guard');});assert.equal(helmet,model==='human-male');assert.equal(thigh,model==='human-female');}finally{dispose(f);}
+    try{f.traverse(o=>{helmet||=o.name.includes('armor-plate-helmet');thigh||=o.name.includes('thigh-guard');});assert.equal(helmet,model==='human-male');assert.equal(thigh,true);}finally{dispose(f);}
   }
 });
 
@@ -204,7 +235,7 @@ test('armor has thick outer/inner surfaces and a separate open female cut with c
       const mesh=torso[0],side=mesh.material.side;mesh.material.side=T.DoubleSide;
       try{
         const ray=new T.Raycaster(new T.Vector3(.06,1.242,1),new T.Vector3(0,0,-1)),hits=ray.intersectObject(mesh).map(h=>h.point.z).filter(z=>z>.08);
-        assert.ok(hits.some((z,i)=>hits.some((q,j)=>j!==i&&Math.abs(q-z)>.0075&&Math.abs(q-z)<.018)),`${model}/${armor} has real shell thickness`);
+        assert.ok(hits.some((z,i)=>hits.some((q,j)=>j!==i&&Math.abs(q-z)>(armor==='plate'?.0025:.0075)&&Math.abs(q-z)<(armor==='plate'?.005:.018))),`${model}/${armor} has real shell thickness`);
         if(model==='human-female'){
           ray.set(new T.Vector3(.04,1.067,1),new T.Vector3(0,0,-1));assert.ok(!ray.intersectObject(mesh).some(h=>h.point.z>.1),'the waist opening stays visible instead of being filled by a male undercoat');
           ray.set(new T.Vector3(.10,.94,1),new T.Vector3(0,0,-1));const clothing=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.name!=='anatomical-body')clothing.push(o);});assert.ok(ray.intersectObjects(clothing).some(h=>h.point.z>.12),'the split hip panels have opaque shorts beneath their openings');

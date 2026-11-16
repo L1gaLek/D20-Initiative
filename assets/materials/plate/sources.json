@@ -1,0 +1,45 @@
+{
+  "license": "CC0-1.0",
+  "licenseUrl": "https://docs.ambientcg.com/license/",
+  "materials": {
+    "steel": {
+      "source": "Metal032",
+      "url": "https://ambientcg.com/view?id=Metal032",
+      "resolution": 512,
+      "color": "steel-color.jpg",
+      "normal": "steel-normal.jpg",
+      "metalRoughness": "steel-mr.png",
+      "sourceHashes": {
+        "Color": "49493d6ade78ccbbbd270c6a15e4b4c9b1a097e66ddf28a1073de3e85712d9af",
+        "NormalGL": "8537c1015de5cc33d20231e5b6aa27309edcb983e1c37e608d08bb00f733747d",
+        "Roughness": "55d3eee2b69008ad3701b18977495531d0e3515105102e56f40a4d1098d10bce"
+      }
+    },
+    "leather": {
+      "source": "Leather037",
+      "url": "https://ambientcg.com/view?id=Leather037",
+      "resolution": 512,
+      "color": "leather-color.jpg",
+      "normal": "leather-normal.jpg",
+      "metalRoughness": "leather-mr.png",
+      "sourceHashes": {
+        "Color": "e1033ea8a95a313bdd80ea52aa04b1eee9a8934f1c695430408dacfc8636cc1a",
+        "NormalGL": "b0684254670e067d88fa89d04b1dabb832e4652246c7e3878604c713eecd50f7",
+        "Roughness": "b67300743ff88fe4aafd0d303997d9acaa7f2f730262a3079814d5b673721e46"
+      }
+    },
+    "fabric": {
+      "source": "Fabric030",
+      "url": "https://ambientcg.com/view?id=Fabric030",
+      "resolution": 512,
+      "color": "fabric-color.jpg",
+      "normal": "fabric-normal.jpg",
+      "metalRoughness": "fabric-mr.png",
+      "sourceHashes": {
+        "Color": "6388762708722de48cdbdfb4878b9ae6d8012de5948d564006067b629f0b84ef",
+        "NormalGL": "c9a8f4ff15527af0b226b8a8840405f944c45a32c2e4462864d3b0136827e6e2",
+        "Roughness": "221bf708cb614b01ae83b856376fa79fff22dc249d8a397ab0f89dd3b7fe6da6"
+      }
+    }
+  }
+}

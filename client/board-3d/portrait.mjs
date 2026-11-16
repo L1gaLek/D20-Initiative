@@ -1,6 +1,6 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
-import { createHuman } from './human.mjs?v=20261116-reference-armory-2';
+import { createHuman } from './human.mjs?v=20261116-master-plate-1';
 
 function disposeFigure(figure){
   if(!figure)return;const materials=new Set();figure.traverse(o=>{o.userData.dispose?.();o.geometry?.dispose();if(o.material)materials.add(o.material);});materials.forEach(m=>m.dispose());figure.removeFromParent();
@@ -8,14 +8,15 @@ function disposeFigure(figure){
 export function createPortrait(host){
   const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
   const canvas=renderer.domElement;canvas.className='avatar-portrait-canvas';canvas.tabIndex=0;canvas.setAttribute('aria-label','3D-превью персонажа: перетащите для вращения, колесо для приближения');host.prepend(canvas);
   const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(35,1,.05,30);camera.position.set(1.55,1.32,3.2);
   const controls=new OrbitControls(camera,canvas);controls.target.set(0,.85,0);controls.enablePan=false;controls.minDistance=1.9;controls.maxDistance=5;controls.minPolarAngle=.3;controls.maxPolarAngle=Math.PI*.53;
   controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};controls.update();
   scene.add(new THREE.HemisphereLight(0xf3e5ce,0x36313f,1.5));
-  const key=new THREE.DirectionalLight('#ffe8d2',3.2);key.position.set(-3,5,4);scene.add(key);
+  const key=new THREE.DirectionalLight('#ffe8d2',3.2);key.position.set(-3,5,4);key.castShadow=true;key.shadow.mapSize.set(1024,1024);Object.assign(key.shadow.camera,{left:-1.4,right:1.4,top:2,bottom:-.6,near:.1,far:12});key.shadow.normalBias=.002;key.shadow.bias=-.0001;scene.add(key);
   const rim=new THREE.DirectionalLight('#9bbbd4',2.0);rim.position.set(3,2,-3);scene.add(rim);
-  const base=new THREE.Mesh(new THREE.CylinderGeometry(.43,.47,.1,48),new THREE.MeshStandardMaterial({color:'#34343c',metalness:.3,roughness:.5}));base.position.y=.065;scene.add(base);
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(.43,.47,.1,48),new THREE.MeshStandardMaterial({color:'#34343c',metalness:.3,roughness:.5}));base.receiveShadow=true;base.position.y=.065;scene.add(base);
   const ring=new THREE.Mesh(new THREE.TorusGeometry(.445,.009,6,48),new THREE.MeshStandardMaterial({color:'#ba9556',metalness:.7,roughness:.3}));ring.rotation.x=Math.PI/2;ring.position.y=.117;scene.add(ring);
   let figure=null,config=null,styleKey='',frame=0,walking=false,disposed=false,last=0,regularDistance=null;
   const tall=value=>!!(value?.twoHanded||value?.right==='great'||value?.left==='great');

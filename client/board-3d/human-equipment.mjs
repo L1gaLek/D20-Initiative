@@ -1,7 +1,8 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 
-import { dressArmor } from './human-armor.mjs?v=20261116-reference-armory-2';
-export { femaleTorsoProfile } from './human-armor.mjs?v=20261116-reference-armory-2';
+import { dressMasterPlate } from './plate-model.mjs?v=20261116-master-plate-1';
+import { dressArmor } from './human-armor.mjs?v=20261116-master-plate-1';
+export { femaleTorsoProfile } from './human-armor.mjs?v=20261116-master-plate-1';
 
 // Rigid fittings share their parent's animation joint. Merge by material after
 // construction, while leaving skinned clothing and the bone hierarchy intact.
@@ -9,27 +10,29 @@ export function batchRigid(group,skeleton){
   group.updateMatrixWorld(true);const groups=new Map();
   group.traverse(mesh=>{if(!mesh.isMesh)return;if(!groups.has(mesh.material))groups.set(mesh.material,[]);groups.get(mesh.material).push(mesh);});
   for(const [material,meshes] of groups){
-    const pos=[],normals=[],joints=[],weights=[],colors=[],indices=[],point=new THREE.Vector3(),normal=new THREE.Vector3();
+    const pos=[],normals=[],joints=[],weights=[],colors=[],uvs=[],indices=[],point=new THREE.Vector3(),normal=new THREE.Vector3();
     for(const mesh of meshes){
       const g=mesh.geometry,a=g.attributes,offset=pos.length/3,normalMatrix=new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
       let parent=mesh.parent;while(parent&&!parent.isBone)parent=parent.parent;const joint=Math.max(0,skeleton.bones.indexOf(parent));
       for(let i=0;i<a.position.count;i++){
         point.fromBufferAttribute(a.position,i).applyMatrix4(mesh.matrixWorld);normal.fromBufferAttribute(a.normal,i).applyNormalMatrix(normalMatrix);pos.push(...point);normals.push(...normal);
+        uvs.push(a.uv?a.uv.getX(i):Math.atan2(point.x,point.z)*.5,a.uv?a.uv.getY(i):point.y/.14);
         for(let k=0;k<4;k++){joints.push(mesh.isSkinnedMesh?a.skinIndex.array[i*4+k]:joint);weights.push(mesh.isSkinnedMesh?a.skinWeight.array[i*4+k]:(k===0?1:0));}
         if(a.color)colors.push(a.color.getX(i),a.color.getY(i),a.color.getZ(i));else colors.push(1,1,1);
       }
       if(g.index)for(const i of g.index.array)indices.push(i+offset);else for(let i=0;i<a.position.count;i++)indices.push(i+offset);
     }
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
-    geometry.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(joints,4));geometry.setAttribute('skinWeight',new THREE.Float32BufferAttribute(weights,4));
+    geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geometry.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(joints,4));geometry.setAttribute('skinWeight',new THREE.Float32BufferAttribute(weights,4));
     if(material.vertexColors)geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.setIndex(indices);
     for(const mesh of meshes){mesh.removeFromParent();mesh.geometry.dispose();}
-    const merged=new THREE.SkinnedMesh(geometry,material);merged.name=meshes.map(m=>m.name).filter(Boolean).join(' ');merged.frustumCulled=false;group.add(merged);merged.bind(skeleton);
+    const merged=new THREE.SkinnedMesh(geometry,material);merged.name=meshes.map(m=>m.name).filter(Boolean).join(' ');merged.frustumCulled=false;merged.castShadow=merged.receiveShadow=true;group.add(merged);merged.bind(skeleton);
   }
 }
 
 export function dressHuman({config,materials:m,definitions,byName,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female,posePlan}){
-  dressArmor({config,materials:m,definitions,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female});
+  if(config.armor==='plate')dressMasterPlate({materials:m,female,surface,attach});
+  else dressArmor({config,materials:m,definitions,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female});
   const armored=config.armor&&config.armor!=='none';
   const mat=(color,metalness=0,roughness=.65)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
   function weapon(side,type){
