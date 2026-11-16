@@ -4,10 +4,12 @@ Two separately fitted suits for the existing adult male and female human bodies.
 The in-game `plate` armor selection uses the baked meshes in `male.mjs` and
 `female.mjs`; the other armor families keep their existing models.
 
-Each suit has separate breast/back plates, overlapping waist and shoulder lames,
-fitted limb defenses, leather fastenings, rolled rims, rivets, finger plates,
-segmented sabatons and cloth underlayers. The female suit has a shorter cuirass,
-shorter thigh defenses and an open waist. The male suit includes a visored helmet.
+Each suit has shaped breast leaves and lower breast plates, layered pauldrons,
+pointed front and rear hip defenses, keeled greaves, winged joint guards, leather
+fastenings, rolled rims, rivets, finger plates, closed segmented sabatons and an
+ivory tabard. The female suit has individually shaped breast plates, shorter hip
+and thigh defenses, and an open waist. The male suit has a longer split tabard
+and a peaked helmet with a closed, angular visor and straight eye slits.
 These are game meshes with a PBR finish, not scanned historical artifacts.
 
 `male.glb` and `female.glb` are portable glTF 2.0 versions with the whole character,
@@ -23,8 +25,9 @@ node scripts/build-plate-armor.mjs
 node scripts/export-plate-glb.mjs
 ```
 
-The modelling source is `scripts/plate-design.mjs`. Source hashes are recorded in
-`source-hashes.json`. Runtime meshes share the existing skeletal pose and walking
+The modelling sources are `scripts/plate-design.mjs` (shells and anatomical fit)
+and `scripts/plate-reference-parts.mjs` (armor patterns). LF-normalized source
+hashes are recorded in `source-hashes.json`. Runtime meshes share the existing skeletal pose and walking
 system; they do not create one draw call per armor plate.
 
 The body is the existing MakeHuman CC0 asset: see `../human/README.md` and

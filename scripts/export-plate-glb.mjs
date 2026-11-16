@@ -22,7 +22,7 @@ function exportGLB(figure){
   function material(m){
     if(materials.has(m))return materials.get(m);const i=doc.materials.length,source=m.userData.materialSource,c=m.color;
     const out={name:m.userData.plateMaterial||m.name||'character-material',pbrMetallicRoughness:{baseColorFactor:[c.r,c.g,c.b,m.opacity],metallicFactor:m.metalness??0,roughnessFactor:m.roughness??1},doubleSided:m.side===2};
-    if(source){out.pbrMetallicRoughness.baseColorTexture=image(source,'color');out.pbrMetallicRoughness.metallicRoughnessTexture=image(source,'mr');out.normalTexture={...image(source,'normal'),scale:m.normalScale.x};}
+    if(source){if(!m.userData.plainAlbedo)out.pbrMetallicRoughness.baseColorTexture=image(source,'color');if(!m.userData.plainRoughness)out.pbrMetallicRoughness.metallicRoughnessTexture=image(source,'mr');out.normalTexture={...image(source,'normal'),scale:m.normalScale.x};}
     if(m.transparent)out.alphaMode='BLEND';doc.materials.push(out);materials.set(m,i);return i;
   }
   figure.traverse(o=>{nodes.set(o,doc.nodes.length);doc.nodes.push({name:o.name||o.type,translation:o.position.toArray(),rotation:o.quaternion.toArray(),scale:o.scale.toArray()});});

@@ -1,8 +1,8 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 
-import { dressMasterPlate } from './plate-model.mjs?v=20261116-master-plate-1';
-import { dressArmor } from './human-armor.mjs?v=20261116-master-plate-1';
-export { femaleTorsoProfile } from './human-armor.mjs?v=20261116-master-plate-1';
+import { dressMasterPlate } from './plate-model.mjs?v=20261117-reference-plate-1';
+import { dressArmor } from './human-armor.mjs?v=20261117-reference-plate-1';
+export { femaleTorsoProfile } from './human-armor.mjs?v=20261117-reference-plate-1';
 
 // Rigid fittings share their parent's animation joint. Merge by material after
 // construction, while leaving skinned clothing and the bone hierarchy intact.

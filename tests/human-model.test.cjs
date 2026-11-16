@@ -16,6 +16,7 @@ test('prepared plate meshes retain UVs and shared reflections survive disposal o
     for(const figure of figures){let plates=0;figure.traverse(o=>{
       if(!o.isMesh||!o.material.userData.materialSource)return;plates++;
       const a=o.geometry.attributes;assert.equal(a.uv.count,a.position.count);assert.ok(a.uv.array.every(Number.isFinite));
+      for(let i=0;i<a.normal.count;i++)assert.ok(Math.abs(Math.hypot(a.normal.getX(i),a.normal.getY(i),a.normal.getZ(i))-1)<1e-4,'prepared surfaces have usable unit normals');
       if(o.material.envMap){reflection??=o.material.envMap;assert.equal(o.material.envMap,reflection);}
     });assert.ok(plates>=5);}
     reflection.addEventListener('dispose',()=>disposed++);dispose(figures.shift());assert.equal(disposed,0,'one token cannot release another token’s reflection');
@@ -37,6 +38,24 @@ test('portable male and female plate models embed their skeleton, materials and 
       const a=doc.accessors[sampler.output],v=doc.bufferViews[a.bufferView],values=new Float32Array(bytes.buffer,bytes.byteOffset+bin+v.byteOffset,a.count*4);
       for(let k=0;k<4;k++)assert.ok(Math.abs(values[k]-values[values.length-4+k])<1e-6,'walk loops without a pose jump');
     }
+  }
+});
+
+test('prepared plate sources and portable geometry match the current game models',async()=>{
+  const fs=require('node:fs'),{createHash}=require('node:crypto'),{createHuman}=await human;
+  const digest=bytes=>createHash('sha256').update(bytes).digest('hex'),hashes=require('../assets/models/plate/source-hashes.json');
+  assert.ok(hashes['scripts/plate-reference-parts.mjs']);
+  for(const [file,hash]of Object.entries(hashes))assert.equal(digest(fs.readFileSync(path.resolve(__dirname,'..',file),'utf8').replace(/\r\n/g,'\n')),hash,'rebake armor after changing '+file);
+  for(const sex of ['male','female']){
+    const bytes=fs.readFileSync(path.resolve(__dirname,'../assets/models/plate/'+sex+'.glb')),jsonLength=bytes.readUInt32LE(12),doc=JSON.parse(bytes.subarray(20,20+jsonLength)),bin=28+jsonLength;
+    const f=createHuman({model:'human-'+sex,armor:'plate',hair:sex==='female'?'braid':'parted',hairColor:'#493124'}),meshes=[];
+    try{
+      f.traverse(o=>{if(o.isMesh)meshes.push(o);});assert.equal(meshes.length,doc.meshes.length);
+      for(const [i,mesh]of meshes.entries()){
+        const accessor=doc.accessors[doc.meshes[i].primitives[0].attributes.POSITION],view=doc.bufferViews[accessor.bufferView],array=mesh.geometry.attributes.position.array;
+        assert.equal(digest(bytes.subarray(bin+view.byteOffset,bin+view.byteOffset+view.byteLength)),digest(Buffer.from(array.buffer,array.byteOffset,array.byteLength)),'downloadable '+sex+' geometry equals the rendered character');
+      }
+    }finally{dispose(f);}
   }
 });
 
