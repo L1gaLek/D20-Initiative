@@ -1545,6 +1545,7 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
         bindCombatEditors(root, curPlayer, curCanEdit);
         bindInventoryEditors(root, curPlayer, curCanEdit);
         bindEquipmentUi(root, curPlayer, curCanEdit);
+        if (tabId === 'appearance') bindAppearanceUi(root, curPlayer, curCanEdit);
         bindLanguagesUi(root, curPlayer, curCanEdit);
         updateCoinsTotal(root, curPlayer.sheet?.parsed);
       }
