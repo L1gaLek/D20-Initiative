@@ -51,6 +51,7 @@ module.exports=async function({pages,fixture,applyFixture,h,screenshotDir}){
   assert.ok(after.textures<=memory.textures+1,'replacing an anatomical model releases its previous bone texture');
   assert.ok(after.calls<=44,'portrait stays within two bounded passes (shadow and main view)');
   await require('./human-equipment-scenarios.cjs')({owner,gm,open,screenshotDir});
+  await require('./studio-game-scenarios.cjs')({owner,gm});
   await owner.evaluate(()=>InfoModal.close());
   await open(p1);assert.equal(await p1.locator('[data-sheet-path="appearance.model3d.hairStyle"]').isDisabled(),true);assert.equal(await p1.locator('[data-appearance-slot="armor"]').isDisabled(),true);await p1.evaluate(()=>InfoModal.close());
   await owner.locator('#board-wrapper').scrollIntoViewIfNeeded();

@@ -656,6 +656,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
     }
 
     if (msg.type === "diceEvent" && msg.event) {
+      try { window.Board3D?.playDiceAction?.(msg.event); } catch {}
       const fromId = String(msg?.event?.fromId || '');
       if (fromId && String(fromId) !== String(myId || '')) {
         try {

@@ -1,0 +1,26 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{spawn}=require('node:child_process');
+const {_electron}=require(process.env.D20_PLAYWRIGHT_MODULE||'playwright'),ROOT=path.resolve(__dirname,'..');
+const BASE=process.env.D20_STUDIO_TEST_ROOT||fs.mkdtempSync(path.join(os.tmpdir(),'d20-roundtrip-')),EXE=process.env.D20_ELECTRON_EXEC,BLENDER=process.env.D20_BLENDER_EXEC;
+if(!EXE||!BLENDER)throw Error('Set D20_ELECTRON_EXEC and D20_BLENDER_EXEC.');
+const env={...process.env,D20_STUDIO_TEST:'1',D20_STUDIO_DATA:path.join(BASE,'data'),D20_STUDIO_PROJECTS:path.join(BASE,'projects')};delete env.ELECTRON_RUN_AS_NODE;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const idle=page=>page.waitForFunction(()=>document.getElementById('busy').hidden,null,{timeout:120000});
+function child(exe,args){return new Promise((resolve,reject)=>{const p=spawn(exe,args,{windowsHide:true}),log=[];p.stdout.on('data',b=>log.push(String(b)));p.stderr.on('data',b=>log.push(String(b)));p.on('error',reject);p.on('exit',code=>{fs.writeFileSync(path.join(BASE,'blender.log'),log.join(''));code===0?resolve():reject(Error('Blender failed: '+log.join('').slice(-2000)));});});}
+function document(file){const bytes=fs.readFileSync(file),length=bytes.readUInt32LE(12);return {bytes,doc:JSON.parse(bytes.subarray(20,20+length)),bin:28+length};}
+function hasTranslatedJoint(file){const {bytes,doc,bin}=document(file),clip=doc.animations.find(a=>a.name.includes('roundtrip_sword'));assert.ok(clip,'new Blender action survives');return clip.channels.some(c=>{if(c.target.path!=='translation'||!doc.nodes[c.target.node].name.includes('wrist'))return false;const a=doc.accessors[clip.samplers[c.sampler].output],v=doc.bufferViews[a.bufferView],values=new Float32Array(bytes.buffer,bytes.byteOffset+bin+v.byteOffset+(a.byteOffset||0),a.count*3);return values.some((n,i)=>Math.abs(n-values[i%3])>.02);});}
+(async()=>{
+  fs.mkdirSync(BASE,{recursive:true});const app=await _electron.launch({executablePath:EXE,args:[process.env.D20_STUDIO_APP||path.join(ROOT,'studio'),'--enable-unsafe-swiftshader'],env,timeout:30000}),page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.waitForFunction(()=>window.Studio?.ready,null,{timeout:120000});await page.evaluate(async()=>Studio.setProject((await import('../client/board-3d/studio-state.mjs')).defaultProject()));await idle(page);
+    await page.locator('#prepare-blender').click();await idle(page);let job;
+    for(let i=0;i<180;i++){job=(await page.evaluate(()=>D20Desktop.jobs())).at(-1);if(job?.status==='error')throw Error(job.log);if(job?.status==='ready')break;await wait(500);}assert.equal(job.status,'ready');
+    const report=path.join(BASE,'blender-edit.json');await child(BLENDER,['--background','--factory-startup','--disable-autoexec','--python',path.join(ROOT,'tests/helpers/studio-roundtrip.py'),'--',job.output,path.join(ROOT,'studio/blender/panel.py'),report]);assert.ok(hasTranslatedJoint(job.result));
+    await page.locator('#from-blender').click();await idle(page);assert.equal((await page.evaluate(()=>Studio.inspect())).external,true);assert.ok(Object.keys(await page.evaluate(()=>Studio.getProject().clips)).some(n=>n.includes('roundtrip_sword')));
+    const file=path.join(BASE,'returned.glb');await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},file);await page.locator('#export-glb').click();await idle(page);assert.ok(hasTranslatedJoint(file),'workshop preserves translated joints, not only rotations');
+    const folders=path.join(BASE,'packages');fs.mkdirSync(folders,{recursive:true});await app.evaluate(({dialog},folder)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[folder]});},folders);await page.locator('#export-package').click();await idle(page);
+    const folder=path.join(folders,fs.readdirSync(folders)[0]),manifest=JSON.parse(fs.readFileSync(path.join(folder,'manifest.json'))),projectFile=path.join(folder,manifest.project),p=JSON.parse(fs.readFileSync(projectFile));assert.equal(p.asset.file,'model.glb');assert.deepEqual(p.parts,{});assert.deepEqual(p.pose,{});assert.ok(!manifest.preset,'an imported mesh is not advertised as a procedural preset');
+    await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},projectFile);await page.locator('#open-project').click();await idle(page);assert.equal((await page.evaluate(()=>Studio.inspect())).external,true);
+    await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},path.join(BASE,'saved.d20studio.json'));await page.keyboard.press('Control+Shift+s');await wait(350);assert.ok(fs.existsSync(path.join(BASE,'saved.d20studio.model.glb')));assert.deepEqual(errors,[]);
+    await page.screenshot({path:path.join(BASE,'roundtrip-studio.png')});fs.writeFileSync(path.join(BASE,'result.json'),JSON.stringify({passed:true,returned:file,package:folder},null,2));console.log('PASS studio: actual Blender mesh edit, bone translation and animation, return, re-export, portable package reopen and native Ctrl+S');
+  }finally{await app.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -89,7 +89,8 @@
     return {model:'human-'+gender,hair:hairFor(gender,hair.hairStyle),
       hairColor:/^#[\da-f]{6}$/i.test(hair.hairColor)?hair.hairColor:'#493124',
       armor:armorKind(itemIn(inv.armor,slots.armor)),shield:equipped.shield,shieldHand:equipped.shieldHand,twoHanded:equipped.twoHanded,
-      right:swordKind(itemIn(inv.weapons,equipped.right)),left:swordKind(itemIn(inv.weapons,equipped.left))};
+      right:swordKind(itemIn(inv.weapons,equipped.right)),left:swordKind(itemIn(inv.weapons,equipped.left)),
+      ...(hair.studio?.format==='d20-studio'&&hair.studio.version===1&&hair.studio.appearance?.model==='human-'+gender&&!hair.studio.asset?{studio:hair.studio}:{})};
   }
   const api={describe,armorKind,swordKind,isTwoHanded,hairstyles,hairstylesFor,genderOf,hairFor,rememberHair,hands,syncHands};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.AvatarData=api;

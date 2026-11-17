@@ -7,7 +7,8 @@
     "dev": "node scripts/static-server.js",
     "start": "node scripts/static-server.js",
     "check": "node scripts/check-js-syntax.js",
-    "test": "npm run check && node --test tests/room-sync.test.cjs tests/board-3d.test.cjs tests/human-model.test.cjs",
+    "test": "npm run check && node --test tests/room-sync.test.cjs tests/board-3d.test.cjs tests/human-model.test.cjs tests/studio-state.test.cjs",
+    "test:studio": "node tests/studio-desktop.cjs",
     "test:browser": "node tests/multiplayer-browser.cjs"
   },
   "license": "UNLICENSED"

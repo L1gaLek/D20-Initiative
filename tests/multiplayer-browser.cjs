@@ -510,14 +510,25 @@ async function main() {
     assert.equal(await p1.evaluate(() => window.__notificationOscillators), toneBefore + 2);
     console.log('PASS: new incoming DM flashes a centered icon and schedules a short real Web Audio chime; reading, history, own messages and duplicates stay quiet');
     }
-    await require('./helpers/board-3d-scenarios.cjs')({ pages, h, broadcast, screenshotDir, clone, start });
+    if(process.env.D20_3D_ONLY){
+      await require('./helpers/board-3d-scenarios.cjs')({ pages, h, broadcast, screenshotDir, clone, start });
+    }else{
+      // Permissions/sheet scenarios intentionally transfer ownership and leave
+      // debounced network work behind. Give the map suite its own room fixture
+      // and browser contexts rather than layering synthetic maps over that room.
+      await browser.close();
+      await new Promise((resolve,reject)=>{
+        const child=require('node:child_process').spawn(process.execPath,[__filename],{env:{...process.env,D20_3D_ONLY:'1'},stdio:'inherit',windowsHide:true});
+        child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error('3D browser suite failed with exit code '+code)));
+      });
+    }
     assert.deepEqual(errors, []);
     console.log(`Browser regression complete; ${requests.filter(r => r.path.endsWith('/initiative')).length} confirmed initiative requests.`);
   } catch (error) {
     console.error(JSON.stringify({ diagnostics: diagnostics.slice(-15), errors,
       requests: requests.filter(r => /initiative|access/.test(r.path)),
       players: h.database().players.map(p => ({ id: p.id, initiative: p.initiative, rolled: p.hasRolledInitiative })) }, null, 2));
-    for (const page of pages) console.error(await page.evaluate(() => ({ id: myId, phase: lastState?.phase,
+    for (const page of pages.filter(p=>!p.isClosed())) console.error(await page.evaluate(() => ({ id: myId, phase: lastState?.phase,
       epoch: lastState?.initiativeEpoch, rolls: lastState?.players?.map(p => [p.id,p.hasRolledInitiative]), events: RealtimeDebug.events().slice(-5) })));
     throw error;
   } finally {

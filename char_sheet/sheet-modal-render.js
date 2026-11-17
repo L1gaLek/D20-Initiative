@@ -1268,6 +1268,7 @@ function renderShopTab(vm, canEdit) {
                 </div>
                 <div class="avatar-palette">${palette.map(([color,name])=>`<button type="button" data-hair-color="${color}" style="--hair-color:${color}" title="${name}" aria-label="Цвет волос: ${name}" ${canEdit?'':'disabled'}></button>`).join('')}</div>
                 <p class="avatar-help">Модели человека мужского и женского пола. При перемещении по карте включается ходьба. Внешность сохраняется автоматически.</p>
+                <div class="avatar-studio-tools"><button type="button" class="weapon-btn" data-studio-import ${canEdit?'':'disabled'}>Из D20 Studio</button><button type="button" class="weapon-btn" data-studio-reset ${canEdit?'':'disabled'}>Убрать пресет</button><input type="file" data-studio-file accept=".json,application/json" hidden><p class="avatar-help" data-studio-status>${vm?.appearance?.model3d?.studio?`Пресет: ${escapeHtml(vm.appearance.model3d.studio.name||'D20 Studio')}`:'Импорт подгонки, материалов и анимаций из мастерской. Предметы экипировки выбираются из инвентаря.'}</p></div>
               </section>
               <details class="avatar-2d-details"><summary>Изображение для 2D</summary>
               <div class="appearance-preview-wrap">

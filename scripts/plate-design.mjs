@@ -4,17 +4,18 @@ import {buildReferencePlate} from './plate-reference-parts.mjs';
 // Authored plate patterns in metres. This file is a build-time modelling source;
 // the browser receives baked, fitted meshes, not these construction operations.
 export function designPlate(body,female){
-  const parts=[],defs=new Map(body.bones.map(b=>[b.name,b])),tau=Math.PI*2;
+  const parts=[],defs=new Map(body.bones.map(b=>[b.name,b])),tau=Math.PI*2,owners=new Map(),ownerCounts=new Map();
+  const nextOwner=(name,parent)=>{const key=parent+'::'+name,count=(ownerCounts.get(key)||0)+1;ownerCounts.set(key,count);return name+'#'+count;};
   const bytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
   const pos=new Float32Array(bytes(body.positions).buffer),joints=bytes(body.skinIndices),weights=bytes(body.skinWeights);
   const points=Array.from({length:pos.length/3},(_,i)=>{let k=0;for(let n=1;n<4;n++)if(weights[i*4+n]>weights[i*4+k])k=n;return {p:new T.Vector3(...pos.slice(i*3,i*3+3)),bone:body.bones[joints[i*4+k]].name};});
   const V=a=>new T.Vector3(...a),bone=n=>V(defs.get(n).head),bodyIndices=new Uint16Array(bytes(body.indices).buffer);
   function skinTop(x,z){let y=1.20;for(let i=0;i<bodyIndices.length;i+=3){const a=bodyIndices[i]*3,b=bodyIndices[i+1]*3,c=bodyIndices[i+2]*3,dx=pos[b]-pos[a],dz=pos[b+2]-pos[a+2],ex=pos[c]-pos[a],ez=pos[c+2]-pos[a+2],d=dx*ez-dz*ex;if(Math.abs(d)<1e-10)continue;const u=((x-pos[a])*ez-(z-pos[a+2])*ex)/d,v=(dx*(z-pos[a+2])-dz*(x-pos[a]))/d;if(u<0||v<0||u+v>1)continue;const at=pos[a+1]+u*(pos[b+1]-pos[a+1])+v*(pos[c+1]-pos[a+1]);if(at<1.48)y=Math.max(y,at);}return y;}
-  const add=(name,parent,material,g)=>{if(!g.attributes.uv){const a=g.attributes.position,uv=[];for(let i=0;i<a.count;i++)uv.push(a.getX(i)/.14,a.getY(i)/.14);g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));}parts.push({name,parent,material,geometry:g});};
+  const add=(name,parent,material,g)=>{if(!g.attributes.uv){const a=g.attributes.position,uv=[];for(let i=0;i<a.count;i++)uv.push(a.getX(i)/.14,a.getY(i)/.14);g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));}if(g.userData.studioOwner)owners.set(parent,g.userData.studioOwner);const owner=owners.get(parent)||name;parts.push({id:parent+'::'+owner,name,parent,material,geometry:g});};
   function shell(name,parent,material,point,nu=28,nv=10,thickness=.0028,cut=null){
     const p=[],uv=[],ix=[];for(let j=0;j<=nv;j++)for(let i=0;i<=nu;i++){const q=point(i/nu,j/nv);p.push(...q);uv.push(i/nu*4,j/nv*2);}
     for(let j=0;j<nv;j++)for(let i=0;i<nu;i++){if(cut?.((i+.5)/nu,(j+.5)/nv))continue;const a=j*(nu+1)+i,b=a+nu+1;ix.push(a,a+1,b,a+1,b+1,b);}
-    const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(ix);g.computeVertexNormals();
+    const g=new T.BufferGeometry();g.userData.studioOwner=nextOwner(name,parent);g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(ix);g.computeVertexNormals();
     const count=p.length/3,a=g.attributes,outerNormals=a.normal.array.slice(),edges=new Map(),outer=ix.slice();
     for(let i=0;i<count;i++){p.push(a.position.getX(i)-a.normal.getX(i)*thickness,a.position.getY(i)-a.normal.getY(i)*thickness,a.position.getZ(i)-a.normal.getZ(i)*thickness);uv.push(a.uv.getX(i),a.uv.getY(i));}
     for(let i=0;i<outer.length;i+=3){ix.push(outer[i]+count,outer[i+2]+count,outer[i+1]+count);for(const [x,y]of [[outer[i],outer[i+1]],[outer[i+1],outer[i+2]],[outer[i+2],outer[i]]]){const k=x<y?x+','+y:y+','+x;if(edges.has(k))edges.delete(k);else edges.set(k,[x,y]);}}
@@ -33,7 +34,7 @@ export function designPlate(body,female){
     const path=new T.CatmullRomCurve3(pts.map(V)),samples=path.getPoints(Math.max(4,pts.length*3)),p=[],ix=[],borders=[[],[]];
     const preferred=Math.abs(path.getTangent(.03).x)<.75?new T.Vector3(1,0,0):new T.Vector3(0,1,0);let previous=preferred.clone();
     for(let i=0;i<samples.length;i++){const v=samples[i],t=path.getTangent(i/(samples.length-1)),side=preferred.clone().addScaledVector(t,-preferred.dot(t));if(side.lengthSq()<1e-8)side.copy(previous);side.normalize();if(side.dot(previous)<0)side.negate();previous.copy(side);side.multiplyScalar(width/2);const a=v.clone().sub(side),b=v.clone().add(side);p.push(...a,...b);borders[0].push(a.toArray());borders[1].push(b.toArray());if(i){const q=(i-1)*2;ix.push(q,q+1,q+2,q+1,q+3,q+2);}}
-    const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setIndex(ix);g.computeVertexNormals();add('stitched-leather-strap',parent,'leather',g);
+    const g=new T.BufferGeometry();g.userData.studioOwner=nextOwner('stitched-leather-strap',parent);g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setIndex(ix);g.computeVertexNormals();add('stitched-leather-strap',parent,'leather',g);
     for(const border of borders)seam('saddle-stitch',parent,'linen',border,.00045);
   }
   function buckle(parent,p,width=.020){const[x,y,z]=p;seam('forged-buckle',parent,'brass',[[x-width/2,y-.010,z],[x+width/2,y-.010,z],[x+width/2,y+.010,z],[x-width/2,y+.010,z],[x-width/2,y-.010,z]],.0018);seam('buckle-tongue',parent,'edge',[[x,y-.01,z],[x,y+.008,z+.001]],.0011);}

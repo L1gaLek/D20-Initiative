@@ -2,7 +2,7 @@ import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
 import { loadBoardImage } from './background.mjs';
 import { fogMaterial, magicMaterial } from './effects.mjs';
-import { createHuman } from './human.mjs?v=20261117-reference-plate-1';
+import { createHuman } from './human.mjs?v=20261118-studio-1';
 
 const WALL_HEIGHT = 1.35;
 const data = window.Board3DData;
@@ -158,11 +158,12 @@ export function createBoard3D(root, callbacks) {
     controls.dampingFactor=1-Math.exp(-seconds/.065);
     const changed=controls.update();
     const walking=animatePawns(seconds);
-    if (dirty || changed || walking) {
+    let actions=false;for(const pawn of pawns.values()){const figure=pawn.userData.figure;if(figure?.userData.studioAnimating){figure.userData.advanceStudio(seconds,!!pawn.userData.motion);actions=true;}}
+    if (dirty || changed || walking || actions) {
       for(const group of [fogGroup,wallGroup])group.children.forEach(mesh=>{if(mesh.material.uniforms?.time)mesh.material.uniforms.time.value=time/1000;});
       renderer.render(scene, camera); counters.frames++; dirty=false;
     }
-    if (animation || changed || navigating || pan || walking) { if (!raf) raf=requestAnimationFrame(frame); }
+    if (animation || changed || navigating || pan || walking || actions) { if (!raf) raf=requestAnimationFrame(frame); }
     else if ([fogGroup,wallGroup].some(group=>group.children.some(mesh=>mesh.material.uniforms?.time))) idleTimer=setTimeout(invalidate,100);
   }
   function fly(position, target, immediate = false, smoothing=.035) {
@@ -538,6 +539,7 @@ export function createBoard3D(root, callbacks) {
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); setActive(false); callbacks.failed(new Error('WebGL context lost')); });
   return {
     canvas, sync, setActive, pick, projectCell, projectToken, overview,
+    playAction(id,name){const figure=pawns.get(String(id))?.userData.figure;if(!figure?.userData.playStudioAction)return false;figure.userData.playStudioAction(name);invalidate();return !!figure.userData.studioAnimating;},
     hover(point, editing=false, size=1) {
       hover.visible=!!point && !!current && (current.view.omniscient || data.cellState(current.view,point.x,point.y)>0);
       if (point) { hover.position.set(point.x+size/2,.055,point.y+size/2); hover.scale.set(size,size,1); hover.material.color.set(editing || !current?.tokens.some(t=>t.selected) ? '#e5c271' : '#73b8dc'); }
@@ -559,7 +561,7 @@ export function createBoard3D(root, callbacks) {
     setWallFade(value) { fadeWalls=!!value; if(current) sync(current); },
     inspect() {
       return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,
-        avatar:g.userData.figure?.userData.avatar||null,stance:g.userData.figure?.userData.stance||null,walking:!!g.userData.motion,limbAngle:g.userData.figure?.userData.walkAngle||0 })),
+        avatar:g.userData.figure?.userData.avatar||null,stance:g.userData.figure?.userData.stance||null,walking:!!g.userData.motion,studioAnimating:!!g.userData.figure?.userData.studioAnimating,limbAngle:g.userData.figure?.userData.walkAngle||0 })),
         combat:{mode:current?.combat?.mode||null,cells:combatGroup.children.filter(m=>m.userData.kind).map(m=>({kind:m.userData.kind,count:m.userData.cells}))},
         magicWalls:wallGroup.children.filter(m=>m.userData.wallType?.startsWith('magic')).reduce((sum,m)=>sum+m.count,0),
         fogLayers:fogGroup.children.filter(m=>m.userData.fogState).map(m=>({state:m.userData.fogState,height:m.userData.height,opacity:m.material.uniforms.opacity.value})),

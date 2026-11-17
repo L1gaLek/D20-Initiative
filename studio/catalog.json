@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "races": [
+    {
+      "name": "Аасимар",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Ааракокра",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Багбир",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Ведалкен",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Вердан",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Гифф",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Гит",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Гном",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Грунг",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Гоблин",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Голиаф",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Дварф",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Дженази",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Драконорожденный",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Зайцегон",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Калаштар",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Кенку",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Кобольд",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Кованый",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Кентавр",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Леонин",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Локата",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Локсодон",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Людокрыса",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Людоящер",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Мурлок",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Минотавр",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Орк",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Полурослик",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Полуорк",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Полуэльф",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Плазмоид",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Сатир",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Совлин",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Табакси",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Тифлинг",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Тортл",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Тритон",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Три-крин",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Фирболг",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Фэйри",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Хобгоблин",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Человек",
+      "ready": true,
+      "variants": [
+        "male",
+        "female"
+      ]
+    },
+    {
+      "name": "Чейнджлинг",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Эладрин",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Эльф",
+      "ready": false,
+      "variants": []
+    },
+    {
+      "name": "Юань-Ти",
+      "ready": false,
+      "variants": []
+    }
+  ]
+}

@@ -1,12 +1,22 @@
 // Adapter: 3D gestures enter the existing board handlers and permission checks.
 (function () {
   'use strict';
-  const moduleUrl = new URL('board-3d/scene.mjs?v=20261117-reference-plate-1', document.currentScript.src);
+  const moduleUrl = new URL('board-3d/scene.mjs?v=20261118-studio-1', document.currentScript.src);
   let active = false, loading = null, engine = null, root = null, status = null;
   let syncFrame = 0, state = null, gesture = null, lastTap = null;
   let savedScroll = null;
   const touchPointers = new Set();
   const api = window.Board3D = {};
+  const recentStudioActions=new Map();
+  api.playDiceAction=event=>{
+    if(!active||!engine||!/^Атака:/i.test(String(event?.kindText||'')))return false;
+    const name=String(event.fromName||'').trim(),candidates=(getState()?.players||[]).filter(p=>String(p.name||'').trim()===name);if(candidates.length!==1)return false;
+    const actor=candidates[0],role=typeof usersById!=='undefined'&&usersById.get(String(event.fromId))?.role||'Player';
+    if(!window.canControlToken?.(actor,String(event.fromId),role))return false;
+    const avatar=window.AvatarData?.describe(actor.sheet?.parsed,!!actor.isMonster);if(!avatar?.studio||avatar.twoHanded||!avatar.right&&!avatar.left)return false;
+    const key=String(event.id||event.localNonce||'');const now=Date.now();for(const [k,t]of recentStudioActions)if(now-t>5000)recentStudioActions.delete(k);if(key&&recentStudioActions.has(key))return false;if(key)recentStudioActions.set(key,now);
+    return engine.playAction(actor.id,'attack_sword');
+  };
   api.beforeViewModeChange = mode => {
     const wrapper = document.getElementById('board-wrapper');
     if (mode === '3d' && !active && wrapper) savedScroll = { x:wrapper.scrollLeft, y:wrapper.scrollTop };

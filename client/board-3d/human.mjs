@@ -1,9 +1,11 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
-import maleModel from '../../assets/models/human/male.mjs?v=20261117-reference-plate-1';
-import femaleModel from '../../assets/models/human/female.mjs?v=20261117-reference-plate-1';
-import { createHair, headMapping } from './human-hair.mjs?v=20261117-reference-plate-1';
-import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261117-reference-plate-1';
-import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261117-reference-plate-1';
+import maleModel from '../../assets/models/human/male.mjs?v=20261118-studio-1';
+import femaleModel from '../../assets/models/human/female.mjs?v=20261118-studio-1';
+import { createHair, headMapping } from './human-hair.mjs?v=20261118-studio-1';
+import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261118-studio-1';
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261118-studio-1';
+import {normalizeProject} from './studio-state.mjs';
+import {installStudioRuntime} from './studio-runtime.mjs';
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
 function prepare(model){
@@ -40,7 +42,7 @@ const templates={male:prepare(maleModel),female:prepare(femaleModel)};
 // A continuous anatomical mesh, with authored joint weights (including fingers),
 // replaces the former collection of spheres. CPU source buffers are immutable;
 // each avatar owns its GPU geometry, skeleton and materials.
-export function createHuman(config){
+export function createHuman(config,options={}){
   const female=config.model==='human-female',template=templates[female?'female':'male'];
   const {model,definitions,sourcePoints,sourceFaces}=template;
   const headFit=headMapping(definitions,templates.male.definitions);
@@ -60,6 +62,7 @@ export function createHuman(config){
   root.updateMatrixWorld(true);const skeleton=new THREE.Skeleton(bones);skeleton.calculateInverses();
   const mat=(color,metalness=0,roughness=.7)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
   const materials={skin:mat('#b7917c'),hair:mat(config.hairColor||'#493124'),linen:mat('#a89f8c'),cloth:mat('#333b43'),leather:mat('#61402b'),dark:mat('#282321'),steel:mat('#8e9da6',.78,.3),edge:mat('#c1cbd0',.85,.23),trim:mat('#a68b51',.72,.35)};
+  for(const [key,m]of Object.entries(materials))m.userData.studioKey=key;
   // Fine surface variation is evaluated locally: no remote skin/armor textures.
   const texture=(material,type)=>{
     material.customProgramCacheKey=()=>`human-detail-${type}`;
@@ -143,13 +146,14 @@ export function createHuman(config){
   }
   if(female||config.armor!=='plate')createHair({config,female,materials,surface,attach,sphere,curve,headFit});
   const posePlan=planHumanPose(config,definitions);
-  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan});
-  batchRigid(body,skeleton);
+  const studio=config.studio?normalizeProject(config.studio):options.editable?normalizeProject({appearance:config}):null;
+  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan,editable:!!options.editable,studio});
+  if(!options.editable||config.armor!=='plate')batchRigid(body,skeleton);
   const rest=new Map();
   applyHumanPose(byName,definitions,posePlan);
   bones.forEach(b=>rest.set(b.name,b.rotation.clone()));
   let phase=0;
-  root.userData.pose=(distance=0,moving=false)=>{
+  const pose=(distance=0,moving=false)=>{
     phase+=distance*10;const stride=moving?Math.sin(phase):0;root.userData.walkAngle=stride*.43;
     for(const [i,side] of ['L','R'].entries()){
       const sign=i?1:-1,leg=byName.get(`upperleg01.${side}`),knee=byName.get(`lowerleg01.${side}`),arm=byName.get(`upperarm01.${side}`),elbow=byName.get(`lowerarm01.${side}`);
@@ -159,7 +163,8 @@ export function createHuman(config){
     }
     body.position.y=moving?Math.abs(Math.sin(phase))*.015:0;body.rotation.y=moving?stride*.025:0;
   };
+  root.userData.pose=pose;root.userData.walkPoseAt=(seconds,moving=false)=>{phase=seconds*15;pose(0,moving);};
   root.userData.stance=posePlan.stance;
   root.userData.dispose=()=>skeleton.dispose();
-  root.userData.pose(0,false);root.updateMatrixWorld(true);return root;
+  root.userData.pose(0,false);root.updateMatrixWorld(true);installStudioRuntime(root,studio);return root;
 }
