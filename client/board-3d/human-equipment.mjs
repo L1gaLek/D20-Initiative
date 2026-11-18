@@ -31,10 +31,12 @@ export function batchRigid(group,skeleton){
   }
 }
 
-export function dressHuman({config,materials:m,definitions,byName,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female,posePlan,editable=false,studio=null}){
+export function dressHuman({config,materials:m,definitions,byName,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female,posePlan,editable=false,studio=null,skipArmor=false}){
   const prepared=getArmorAsset(config);
-  if(prepared||config.armor==='plate')dressMasterPlate({config,asset:prepared,materials:m,female,surface,attach,byName,definitions,editable,studio});
-  else dressArmor({config,materials:m,definitions,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female});
+  if(!skipArmor){
+    if(prepared||config.armor==='plate')dressMasterPlate({config,asset:prepared,materials:m,female,surface,attach,byName,definitions,editable,studio});
+    else dressArmor({config,materials:m,definitions,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female});
+  }
   const armored=config.armor&&config.armor!=='none';
   const mat=(color,metalness=0,roughness=.65)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
   function weapon(side,type){
@@ -84,7 +86,8 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     // offset at its center, so switching hands does not mirror a collision.
     const backDepth=x=>.007+Math.max(0,1-(x/backRadius)**2)*backBulge;
     const samples=[[arm.joint,armored?.046:.038],[arm.target,armored?.043:.033],[hand,.022],[arm.joint.clone().lerp(arm.target,.23),armored?.082:.044],[arm.joint.clone().lerp(arm.target,.66),armored?.068:.030]];
-    const clearance=Math.max(...samples.map(([p,r])=>{const q=p.clone().sub(center).applyQuaternion(shieldInverse);return q.z+r+.006-backDepth(q.x);}));
+    const outfitPadding=skipArmor ? .025 : 0;
+    const clearance=Math.max(...samples.map(([p,r])=>{const q=p.clone().sub(center).applyQuaternion(shieldInverse);return q.z+r+outfitPadding+.006-backDepth(q.x);}));
     center.addScaledVector(normal,clearance);
     const inverse=arm.lowerQ.clone().invert();g.position.copy(center).sub(arm.joint).applyQuaternion(inverse);g.quaternion.copy(inverse).multiply(shieldQ);bone.add(g);g.name='detailed-shield';g.userData.attachment='shield';g.userData.hand=side;g.userData.backRadius=backRadius;g.userData.backBulge=backBulge;
     const wood=mat('#50402f'),paint=mat('#314d59',.32,.48),rear=mat('#342c24');texture(wood,'leather');
@@ -103,7 +106,7 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     // Back straps and hand grip are modeled too, visible when orbiting the token.
     const forearm=arm.target.clone().sub(arm.joint).applyQuaternion(shieldInverse).normalize(),up=new THREE.Vector3(0,1,0).addScaledVector(forearm,-forearm.y).normalize(),out=new THREE.Vector3().crossVectors(forearm,up).normalize();
     for(const t of [.23,.66]){
-      const p=arm.joint.clone().lerp(arm.target,t).sub(center).applyQuaternion(shieldInverse),points=[],radius=t<.5?(armored?.080:.048):(armored?.066:.033);
+      const p=arm.joint.clone().lerp(arm.target,t).sub(center).applyQuaternion(shieldInverse),points=[],radius=(t<.5?(armored?.080:.048):(armored?.066:.033))+outfitPadding;
       for(let i=0;i<=28;i++){const a=i/28*Math.PI*2;points.push(p.clone().addScaledVector(up,Math.cos(a)*radius).addScaledVector(out,Math.sin(a)*radius).toArray());}
       line(points,.006,m.leather);
       const strap=new THREE.Object3D();strap.name='shield-forearm-strap';strap.position.copy(p);strap.userData.radius=radius;g.add(strap);

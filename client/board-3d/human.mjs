@@ -7,6 +7,7 @@ import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mj
 import {normalizeProject} from './studio-state.mjs';
 import {installStudioRuntime} from './studio-runtime.mjs';
 import {getArmorAsset,ensureArmorAsset,armorAssetRevision} from './armor-assets.mjs';
+import {applyHumanOutfit} from './human-outfit.mjs';
 export {ensureArmorAsset,armorAssetRevision};
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
@@ -149,8 +150,9 @@ export function createHuman(config,options={}){
   if(female||config.armor!=='plate')createHair({config,female,materials,surface,attach,sphere,curve,headFit});
   const posePlan=planHumanPose(config,definitions);
   const studio=config.studio?normalizeProject(config.studio):options.editable?normalizeProject({appearance:config}):null;
-  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan,editable:!!options.editable,studio});
+  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan,editable:!!options.editable,studio,skipArmor:!!options.outfit});
   if(!options.editable||!getArmorAsset(config))batchRigid(body,skeleton);
+  if(options.outfit)applyHumanOutfit(root,options.outfit);
   const rest=new Map();
   applyHumanPose(byName,definitions,posePlan);
   bones.forEach(b=>rest.set(b.name,b.rotation.clone()));
