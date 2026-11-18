@@ -22,6 +22,8 @@ Invalid weights or missing joints are rejected before replacing the body.
 `tests/human-outfit.test.cjs` covers both bodies, reordered joint indices, live
 wrist motion and rejection without modifying the existing character.
 
-Game-specific third-party meshes and textures belong outside this repository.
-The local Skyrim fitting experiment is deliberately not part of the public
-assets, browser download catalogue, backend storage or database.
+The earlier local Skyrim leather experiment stays outside the repository.
+The separately supplied GirlHeavyArmor cuirass is integrated as the female
+breastplate; see `assets/models/outfits/README.md` for its source and bind-space
+format. This replacement uses static frontend assets and does not require a
+backend or database migration.

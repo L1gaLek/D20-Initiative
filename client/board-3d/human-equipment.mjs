@@ -1,9 +1,9 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 
-import { dressMasterPlate } from './plate-model.mjs?v=20261118-forged-1';
-import { dressArmor } from './human-armor.mjs?v=20261118-forged-1';
-import {getArmorAsset} from './armor-assets.mjs';
-export { femaleTorsoProfile } from './human-armor.mjs?v=20261118-forged-1';
+import { dressMasterPlate } from './plate-model.mjs?v=20261119-cuirass-1';
+import { dressArmor } from './human-armor.mjs?v=20261119-cuirass-1';
+import {getArmorAsset} from './armor-assets.mjs?v=20261119-cuirass-1';
+export { femaleTorsoProfile } from './human-armor.mjs?v=20261119-cuirass-1';
 
 // Rigid fittings share their parent's animation joint. Merge by material after
 // construction, while leaving skinned clothing and the bone hierarchy intact.
@@ -115,7 +115,8 @@ export function dressHuman({config,materials:m,definitions,byName,surface,attach
     const handle=hand.sub(center).applyQuaternion(shieldInverse);
     line([[handle.x,handle.y-.045,.023],[handle.x,handle.y-.034,handle.z],[handle.x,handle.y+.034,handle.z],[handle.x,handle.y+.045,.023]],.006,m.dark);
     const marker=new THREE.Object3D();marker.name='shield-hand-grip';marker.position.copy(handle);g.add(marker);
-    line([[0,.154,.066],[0,-.13,.066]],.005,m.trim);line([[-.104,.067,.05],[.104,.067,.05]],.005,m.trim);
+    line([[0,.154,curveZ(0)+.006],[0,-.13,curveZ(0)+.006]],.005,m.trim);
+    line(Array.from({length:13},(_,i)=>{const x=-.104+i*.208/12;return [x,.067,curveZ(x)+.006];}),.005,m.trim);
     const boss=new THREE.SphereGeometry(1,24,12);boss.scale(.028,.028,.011);boss.translate(0,.037,.07);g.add(new THREE.Mesh(boss,m.steel));
   }
 }

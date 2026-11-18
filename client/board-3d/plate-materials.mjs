@@ -23,6 +23,7 @@ function studio(){
   const t=new T.DataTexture(p,w,h,T.RGBAFormat,T.FloatType);t.mapping=T.EquirectangularReflectionMapping;t.colorSpace=T.LinearSRGBColorSpace;t.needsUpdate=true;t.userData.managedPlate=true;shared.set(t,0);return t;
 }
 const reflection=studio();
+export function sharePlateReflection(material){material.envMap=reflection;material.envMapIntensity=.75;return own(material,[reflection]);}
 function own(material,textures){
   const used=[...new Set(textures.filter(Boolean))];for(const t of used){const count=shared.get(t);shared.set(t,count+1);if(!count)t.needsUpdate=true;}
   material.addEventListener('dispose',()=>{for(const t of used){const left=shared.get(t)-1;shared.set(t,left);if(!left)t.dispose();}});return material;

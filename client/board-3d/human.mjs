@@ -1,13 +1,14 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
-import maleModel from '../../assets/models/human/male.mjs?v=20261118-forged-1';
-import femaleModel from '../../assets/models/human/female.mjs?v=20261118-forged-1';
-import { createHair, headMapping } from './human-hair.mjs?v=20261118-forged-1';
-import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261118-forged-1';
-import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261118-forged-1';
+import maleModel from '../../assets/models/human/male.mjs?v=20261119-cuirass-1';
+import femaleModel from '../../assets/models/human/female.mjs?v=20261119-cuirass-1';
+import { createHair, headMapping } from './human-hair.mjs?v=20261119-cuirass-1';
+import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261119-cuirass-1';
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261119-cuirass-1';
 import {normalizeProject} from './studio-state.mjs';
 import {installStudioRuntime} from './studio-runtime.mjs';
-import {getArmorAsset,ensureArmorAsset,armorAssetRevision} from './armor-assets.mjs';
+import {getArmorAsset,ensureArmorAsset,armorAssetRevision} from './armor-assets.mjs?v=20261119-cuirass-1';
 import {applyHumanOutfit} from './human-outfit.mjs';
+import {dressFittedOutfit} from './fitted-outfit.mjs?v=20261119-cuirass-1';
 export {ensureArmorAsset,armorAssetRevision};
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
@@ -150,9 +151,11 @@ export function createHuman(config,options={}){
   if(female||config.armor!=='plate')createHair({config,female,materials,surface,attach,sphere,curve,headFit});
   const posePlan=planHumanPose(config,definitions);
   const studio=config.studio?normalizeProject(config.studio):options.editable?normalizeProject({appearance:config}):null;
-  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan,editable:!!options.editable,studio,skipArmor:!!options.outfit});
-  if(!options.editable||!getArmorAsset(config))batchRigid(body,skeleton);
+  const fitted=getArmorAsset(config)?.format==='d20-fitted-outfit'?getArmorAsset(config):null;
+  dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan,editable:!!options.editable,studio,skipArmor:!!options.outfit||!!fitted});
   if(options.outfit)applyHumanOutfit(root,options.outfit);
+  else if(fitted)dressFittedOutfit(root,fitted,studio,!!options.editable);
+  if(!options.editable||!getArmorAsset(config))batchRigid(body,skeleton);
   const rest=new Map();
   applyHumanPose(byName,definitions,posePlan);
   bones.forEach(b=>rest.set(b.name,b.rotation.clone()));
@@ -169,7 +172,7 @@ export function createHuman(config,options={}){
   };
   root.userData.pose=pose;root.userData.walkPoseAt=(seconds,moving=false)=>{phase=seconds*15;pose(0,moving);};
   root.userData.stance=posePlan.stance;
-  root.userData.dispose=()=>skeleton.dispose();
+  const disposeOutfit=root.userData.dispose;root.userData.dispose=()=>{disposeOutfit?.();skeleton.dispose();};
   root.userData.armorQuality=getArmorAsset(config)?.style||'legacy';
   root.userData.pose(0,false);root.updateMatrixWorld(true);installStudioRuntime(root,studio);return root;
 }

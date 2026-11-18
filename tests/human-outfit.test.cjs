@@ -26,3 +26,17 @@ test('incompatible outfit fails before removing or changing the existing body',a
  mesh.skeleton.bones[mesh.geometry.attributes.skinIndex.getX(0)].name='foreign-unknown-wrist';
  assert.throws(()=>applyHumanOutfit(base,source),/incompatible skin weights/);assert.ok(body.parent);assert.ok(body.geometry.attributes.position.count>10000);
 });
+test('female breastplate uses the fitted source, keeps the native rig and edits only its selected piece',async()=>{
+ const [T,{createHuman}]=await modules;
+ const figure=createHuman({model:'human-female',armor:'breastplate',hair:'braid'},{editable:true});
+ try{
+  assert.equal(figure.userData.armorQuality,'fitted-cuirass');assert.deepEqual(figure.userData.outfit,{parts:9,bones:163});
+  const body=figure.getObjectByName('anatomical-body'),armor=figure.getObjectByName('Steel cuirass — Armor'),boots=figure.getObjectByName('Steel cuirass — Boots');assert.equal(armor.skeleton,body.skeleton);
+  assert.ok(armor.skeleton.bones.every(b=>!b.name.startsWith('NPC ')));
+  const original=armor.geometry.attributes.position.array.slice(),other=boots.geometry.attributes.position.array.slice(),id=armor.userData.outfitId;
+  figure.userData.applyStudioOutfitPart(id,{position:[.01,0,0],rotation:[0,0,0],scale:[1,1,1]});
+  assert.ok(Math.abs(armor.geometry.attributes.position.getX(0)-original[0]-.01)<1e-6);assert.deepEqual(boots.geometry.attributes.position.array,other);
+  figure.userData.applyStudioOutfitPart(id,{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});assert.deepEqual(armor.geometry.attributes.position.array,original);
+  for(const t of [0,.1,.2]){figure.userData.walkPoseAt(t,true);figure.updateMatrixWorld(true);assert.ok(armor.getVertexPosition(0,new T.Vector3()).toArray().every(Number.isFinite));}
+ }finally{const materials=new Set();figure.traverse(o=>{o.geometry?.dispose();if(o.material)materials.add(o.material);});materials.forEach(m=>m.dispose());figure.userData.dispose();}
+});

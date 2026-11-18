@@ -77,8 +77,9 @@ test('anatomical model and every database armor have valid surfaces and normaliz
           assert.ok(Math.abs(sum-1)<1e-5,'clipped seams retain normalized weights');
         }
       });
-      assert.equal(skeletons.size,1);assert.equal(anatomy,true);assert.ok(triangles>25000&&triangles<285000,'physical mail links and layered armor retain a bounded geometry budget');assert.ok(meshes<=20,'bounded draw calls despite detailed equipment');
-      if(armor!=='none')assert.equal(figure.userData.armorQuality,'forged-volume','every database armor uses its Blender-finished mesh');
+      const imported=model==='human-female'&&armor==='breastplate';
+      assert.equal(skeletons.size,1);assert.equal(anatomy,true);assert.ok(triangles>25000&&triangles<285000,'physical mail links and layered armor retain a bounded geometry budget');assert.ok(meshes<=(imported?22:20),'bounded draw calls despite detailed equipment');
+      if(armor!=='none')assert.equal(figure.userData.armorQuality,imported?'fitted-cuirass':'forged-volume','every database armor uses its fitted mesh');
       const skeleton=[...skeletons][0];assert.equal(skeleton.bones.length,163);assert.ok(skeleton.bones.some(b=>b.name==='finger3-3.R'));
       skeleton.computeBoneTexture();let released=false;skeleton.boneTexture.addEventListener('dispose',()=>{released=true;});figure.userData.dispose();assert.equal(released,true);
     }finally{dispose(figure);}
@@ -252,14 +253,15 @@ test('armor has thick outer/inner surfaces and a separate open female cut with c
     const f=createHuman({...config,model,armor});
     try{
       const steel=['plate','half-plate','breastplate'].includes(armor),structural=steel?'steel':['hide','chain-shirt','chain-mail'].includes(armor)?'gambeson':'leather';
-      f.updateMatrixWorld(true);const torso=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.material.userData.plateMaterial===structural&&(o.name.includes(`armor-plate-${model.slice(6)}-torso`)||o.name.includes(`fitted-${armor}-bodice-panel`)))torso.push(o);});assert.ok(torso.length>0,'the fitted structural torso is rendered');
+      const imported=model==='human-female'&&armor==='breastplate';
+      f.updateMatrixWorld(true);const torso=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.material.userData.plateMaterial===structural&&(o.name.includes(`armor-plate-${model.slice(6)}-torso`)||o.name.includes(`fitted-${armor}-bodice-panel`)||imported&&o.name.endsWith('— Armor')))torso.push(o);});assert.ok(torso.length>0,'the fitted structural torso is rendered');
       const mesh=torso[0],side=mesh.material.side;mesh.material.side=T.DoubleSide;
       try{
         const ray=new T.Raycaster(new T.Vector3(.06,1.242,1),new T.Vector3(0,0,-1)),hits=ray.intersectObject(mesh).map(h=>h.point.z).filter(z=>z>.08);
         assert.ok(hits.some((z,i)=>hits.some((q,j)=>j!==i&&Math.abs(q-z)>(steel?.0022:.0075)&&Math.abs(q-z)<(steel?.007:.018))),`${model}/${armor} has real shell thickness`);
         if(model==='human-female'){
-          ray.set(new T.Vector3(.04,1.067,1),new T.Vector3(0,0,-1));assert.ok(!ray.intersectObject(mesh).some(h=>h.point.z>.1),'the waist opening stays visible instead of being filled by a male undercoat');
-          ray.set(new T.Vector3(.10,.94,1),new T.Vector3(0,0,-1));const clothing=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.name!=='anatomical-body')clothing.push(o);});assert.ok(ray.intersectObjects(clothing).some(h=>h.point.z>.12),'the split hip panels have opaque shorts beneath their openings');
+          if(!imported){ray.set(new T.Vector3(.04,1.067,1),new T.Vector3(0,0,-1));assert.ok(!ray.intersectObject(mesh).some(h=>h.point.z>.1),'the waist opening stays visible instead of being filled by a male undercoat');}
+          ray.set(new T.Vector3(imported?.04:.10,.94,1),new T.Vector3(0,0,-1));const clothing=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.name!=='anatomical-body')clothing.push(o);});assert.ok(ray.intersectObjects(clothing).some(h=>h.point.z>.12),'the split hip panels retain opaque underwear beneath their openings');
         }
       }finally{mesh.material.side=side;}
     }finally{dispose(f);}

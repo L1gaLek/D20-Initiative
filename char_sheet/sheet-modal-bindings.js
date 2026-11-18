@@ -1291,7 +1291,7 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
       const before=getState(),id=String(before.player?.id||'');if(!before.canEdit||!canEditPlayer(before.player))return;
       try{
         if(input.files[0].size>600000)throw Error('Пресет слишком большой (предел 600 КБ).');
-        const module=await import(new URL('client/board-3d/studio-state.mjs?v=20261118-forged-1',document.baseURI).href),preset=module.parseProject(await input.files[0].text());
+        const module=await import(new URL('client/board-3d/studio-state.mjs?v=20261119-cuirass-1',document.baseURI).href),preset=module.parseProject(await input.files[0].text());
         if(preset.asset)throw Error('Для изменённой в Blender модели используйте пакет модели. Здесь импортируются пресеты параметров.');
         if(preset.race!=='Человек')throw Error('В этой версии поддерживается модель человека.');
         const {player:current,canEdit:editable}=getState();if(String(current?.id||'')!==id||!editable||!canEditPlayer(current))return;

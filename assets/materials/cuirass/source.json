@@ -1,0 +1,22 @@
+{
+  "source": "GirlHeavyArmor / SteelCuirassAA (GIGADUEX), supplied by project owner",
+  "sourcePack": "Girl's Heavy Armors (UUNP)-91248-1-6-1-1540809351",
+  "meshes": [
+    "cuirasslight_1.nif",
+    "gauntlets_1.nif",
+    "boots_1.nif"
+  ],
+  "targetSkeleton": 163,
+  "convertedTextures": {
+    "steelgauntlets.jpg": "9c4a61c16b0a97606c168664c7f855ee35274a571dc669b06bf1699760fd38d6",
+    "steelgauntlets_n.jpg": "feb2a38ed6aef2dcb5f6b0fc53136dece4117f8115d44288a5ac35071a8124ff",
+    "steelboot.jpg": "9651b6293e8685e3bfb331d11122081a0da1e4343faf7a345a59ba808b9fe474",
+    "steelboot_n.jpg": "f8b6de518d42bebd67b2690a22d366011c0055f1293905abbbc0c89ff89a8b8f",
+    "steel.jpg": "5968502aec9486cd3a527b2774bb11dc903ae769e4d8e095224d3f97ee4d719f",
+    "steel_n.jpg": "1a602bc04ac188526fafc14c2d1da490bcdef3509bec3b88a7bc5c4632e016fe",
+    "steel2.jpg": "cd1022772f5f526bca33972d71064d87ee0e7275c9ce64e27d40a25af324dcad",
+    "steel2_n.jpg": "7356153f73947a7f79dcb61ee55e2ad729b9ace11fd76b7ec4726899d5398cf3",
+    "steelarmor.png": "aeacd567aa417fe0a54cbea4b7eaf43ba4afae068c59f6c7945118f48456ba77",
+    "steelarmor_n.jpg": "744b0f881417b59102e36106cd0cd74f75359641f12816ea678e22e18bb7f77d"
+  }
+}

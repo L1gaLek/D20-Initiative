@@ -1,6 +1,6 @@
 (function(){
   'use strict';
-  const moduleUrl=new URL('board-3d/portrait.mjs?v=20261118-forged-1',document.currentScript.src);
+  const moduleUrl=new URL('board-3d/portrait.mjs?v=20261119-cuirass-1',document.currentScript.src);
   let loading=null,current=null,generation=0;
   const api=window.Character3D={inspect:()=>current?.view?.inspect()||null};
   api.dispose=()=>{generation++;current?.observer?.disconnect();current?.abort?.abort();current?.view?.dispose();current=null;};
