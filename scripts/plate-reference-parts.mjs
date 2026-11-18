@@ -56,11 +56,11 @@ export function buildReferencePlate(c){
     const outline=(female?
       [[.014,1.280],[.055,1.311],[.118,1.307],[.157,1.273],[.144,1.224],[.080,1.202],[.024,1.224]]:
       [[.004,1.356],[.108,1.386],[.160,1.342],[.153,1.273],[.104,1.221],[.020,1.180],[.004,1.230]]).map(([x,y])=>[x*sign,y]);
-    relief(female?'sculpted-breast-cup':'gothic-breast-leaf','spine03',outline,(x,y)=>front(x,y)+.0025,female?.007:.0055);
+    relief(female?'sculpted-breast-cup':'gothic-breast-leaf','spine03',outline,(x,y)=>front(x,y)+.008,female?.016:.018);
     const ribs=(female?
       [[.020,1.197],[.064,1.190],[.122,1.215],[.111,1.134],[.043,1.101],[.014,1.139]]:
       [[.012,1.174],[.107,1.222],[.134,1.181],[.125,1.085],[.040,1.050],[.010,1.091]]).map(([x,y])=>[x*sign,y]);
-    relief('articulated-plackart-flute','spine03',ribs,(x,y)=>front(x,y)+.004,.006);
+    relief('articulated-plackart-flute','spine03',ribs,(x,y)=>front(x,y)+.006,.013);
     const trace=(female?[[.054,1.184],[.073,1.159],[.064,1.126]]:[[.046,1.164],[.068,1.139],[.064,1.094]]).map(([x,y])=>[sign*x,y,front(sign*x,y)+.013]);
     curve('chased-plackart-line','spine03',trace,'edge',.0010);
     for(const y of [1.14,1.265]){const p=torsoPoint(sign*1.42,y);strap('spine03',[[p[0]-sign*.014,y,p[2]+.020],[p[0]+sign*.006,y,p[2]-.016]],.014);buckle('spine03',[p[0]-sign*.007,y,p[2]+.012],.016);}
@@ -84,7 +84,7 @@ export function buildReferencePlate(c){
     const fit=fitLimb(parent,end,pattern),frame=limbFrame(parent,end);
     for(const [suffix,lo,hi]of [['front',-Math.PI/2,Math.PI/2],['back',Math.PI/2,Math.PI*1.5]]){
       const point=(u,v)=>{
-        const a=lerp(lo,hi,u),f=Math.max(0,Math.cos(a)),t=lerp(from-.025*f**6,to+.025*f**4,v),p=V(fit(t,a,.003));
+        const a=lerp(lo,hi,u),f=Math.max(0,Math.cos(a)),t=lerp(from-.025*f**6,to+.025*f**4,v),p=V(fit(t,a,.009));
         p.addScaledVector(frame.front,keel*f**12*Math.sin(v*Math.PI));return p.toArray();
       };
       shell(name+'-'+suffix,parent,'steel',point,18,8,.0027);
@@ -102,14 +102,14 @@ export function buildReferencePlate(c){
   }
   function jointGuard(name,parent,center,sign,width,height){
     const [x,y,z]=center,outline=[[-.72,.40],[0,.92],[.72,.38],[.83,-.18],[.28,-.81],[0,-1.03],[-.46,-.71],[-.84,-.12]].map(([a,b])=>[x+a*width,y+b*height]);
-    relief(name,parent,outline,()=>z,.019);
+    relief(name,parent,outline,()=>z,.028);
     const wing=[[x+sign*width*.48,y+height*.45],[x+sign*width*1.59,y+height*.13],[x+sign*width*1.34,y-height*.33],[x+sign*width*.48,y-height*.34]];
     relief(name+'-fan-wing',parent,wing,()=>z-.015,.006);
     rivet([x+sign*width*.65,y,z+.012],parent,[0,0,1],true);
   }
   for(const side of ['R','L']){
     const sign=side==='R'?-1:1,upper='upperarm01.'+side,lower='lowerarm01.'+side,wrist='wrist.'+side,thigh='upperleg01.'+side,knee='lowerleg01.'+side,foot='foot.'+side;
-    const sh=bone(upper),el=bone(lower),kn=bone(knee),ank=bone(foot),uf=limbFrame(upper,lower),radius=female?.074:.084;
+    const sh=bone(upper),el=bone(lower),kn=bone(knee),ank=bone(foot),uf=limbFrame(upper,lower),radius=female?.087:.102;
     for(let row=0;row<(female?3:4);row++){
       const from=row===0?-.026:.012+row*.027,to=row===0?.055:.057+row*.027;
       const point=(u,v)=>{
@@ -149,7 +149,7 @@ export function buildReferencePlate(c){
     const hip=(female?
       [[.064,1.006],[.155,1.019],[.206,.970],[.211,.885],[.150,.829],[.110,.899]]:
       [[.068,1.012],[.166,1.025],[.209,.970],[.235,.797],[.166,.726],[.111,.840]]).map(([x,y])=>[sign*x,y]);
-    relief('pointed-hip-tasset-'+side,thigh,hip,hipFront,.012);
+    relief('pointed-hip-tasset-'+side,thigh,hip,hipFront,.023);
     const topHip=(female?[[.072,1.012],[.166,1.028],[.211,.983],[.172,.944],[.109,.974]]:[[.077,1.018],[.169,1.035],[.214,.979],[.183,.923],[.112,.975]]).map(([x,y])=>[sign*x,y]);
     relief('overlapping-hip-petal-'+side,thigh,topHip,(x,y)=>hipFront(x,y)+.010,.007);
     const rearHip=(female?[[.025,1.008],[.146,1.020],[.194,.974],[.163,.908],[.095,.883],[.035,.925]]:[[.023,1.012],[.151,1.028],[.204,.969],[.198,.867],[.111,.814],[.038,.899]]).map(([x,y])=>[sign*x,y]);

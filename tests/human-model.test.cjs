@@ -77,7 +77,8 @@ test('anatomical model and every database armor have valid surfaces and normaliz
           assert.ok(Math.abs(sum-1)<1e-5,'clipped seams retain normalized weights');
         }
       });
-      assert.equal(skeletons.size,1);assert.equal(anatomy,true);assert.ok(triangles>25000&&triangles<150000,'detailed fittings retain a bounded geometry budget');assert.ok(meshes<=20,'bounded draw calls despite detailed equipment');
+      assert.equal(skeletons.size,1);assert.equal(anatomy,true);assert.ok(triangles>25000&&triangles<285000,'physical mail links and layered armor retain a bounded geometry budget');assert.ok(meshes<=20,'bounded draw calls despite detailed equipment');
+      if(armor!=='none')assert.equal(figure.userData.armorQuality,'forged-volume','every database armor uses its Blender-finished mesh');
       const skeleton=[...skeletons][0];assert.equal(skeleton.bones.length,163);assert.ok(skeleton.bones.some(b=>b.name==='finger3-3.R'));
       skeleton.computeBoneTexture();let released=false;skeleton.boneTexture.addEventListener('dispose',()=>{released=true;});figure.userData.dispose();assert.equal(released,true);
     }finally{dispose(figure);}
@@ -187,7 +188,7 @@ test('reference armor silhouettes distinguish long mail, short shirts and male p
   const {createHuman}=await human;
   const hem=armor=>{
     const f=createHuman({...config,armor});let low=Infinity;
-    try{f.traverse(o=>{if(!o.isSkinnedMesh||!o.name.includes('split-skirt'))return;const a=o.geometry.attributes;for(let i=0;i<a.position.count;i++)if(o.skeleton.bones[a.skinIndex.getX(i)].name.startsWith('upperleg01'))low=Math.min(low,a.position.getY(i));});return low;}finally{dispose(f);}
+    try{f.traverse(o=>{if(!o.isSkinnedMesh||!o.name.includes('split-'+armor+'-tasset'))return;const a=o.geometry.attributes;for(let i=0;i<a.position.count;i++)if(o.skeleton.bones[a.skinIndex.getX(i)].name.startsWith('upperleg01'))low=Math.min(low,a.position.getY(i));});return low;}finally{dispose(f);}
   };
   assert.ok(hem('chain-mail')<.57,'the hauberk reaches below the knee');assert.ok(hem('chain-shirt')>.65,'the shirt has a shorter split hem');
   for(const model of ['human-male','human-female']){
@@ -250,17 +251,56 @@ test('armor has thick outer/inner surfaces and a separate open female cut with c
   for(const model of ['human-male','human-female'])for(const armor of database.armor.filter(a=>a.armor.type!=='shield').map(AvatarData.armorKind)){
     const f=createHuman({...config,model,armor});
     try{
-      f.updateMatrixWorld(true);const torso=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.name.includes(`armor-${armor}-${model.slice(6)}-torso`))torso.push(o);});assert.equal(torso.length,1);
+      const steel=['plate','half-plate','breastplate'].includes(armor),structural=steel?'steel':['hide','chain-shirt','chain-mail'].includes(armor)?'gambeson':'leather';
+      f.updateMatrixWorld(true);const torso=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.material.userData.plateMaterial===structural&&(o.name.includes(`armor-plate-${model.slice(6)}-torso`)||o.name.includes(`fitted-${armor}-bodice-panel`)))torso.push(o);});assert.ok(torso.length>0,'the fitted structural torso is rendered');
       const mesh=torso[0],side=mesh.material.side;mesh.material.side=T.DoubleSide;
       try{
         const ray=new T.Raycaster(new T.Vector3(.06,1.242,1),new T.Vector3(0,0,-1)),hits=ray.intersectObject(mesh).map(h=>h.point.z).filter(z=>z>.08);
-        assert.ok(hits.some((z,i)=>hits.some((q,j)=>j!==i&&Math.abs(q-z)>(armor==='plate'?.0025:.0075)&&Math.abs(q-z)<(armor==='plate'?.005:.018))),`${model}/${armor} has real shell thickness`);
+        assert.ok(hits.some((z,i)=>hits.some((q,j)=>j!==i&&Math.abs(q-z)>(steel?.0022:.0075)&&Math.abs(q-z)<(steel?.007:.018))),`${model}/${armor} has real shell thickness`);
         if(model==='human-female'){
           ray.set(new T.Vector3(.04,1.067,1),new T.Vector3(0,0,-1));assert.ok(!ray.intersectObject(mesh).some(h=>h.point.z>.1),'the waist opening stays visible instead of being filled by a male undercoat');
           ray.set(new T.Vector3(.10,.94,1),new T.Vector3(0,0,-1));const clothing=[];f.traverse(o=>{if(o.isSkinnedMesh&&o.name!=='anatomical-body')clothing.push(o);});assert.ok(ray.intersectObjects(clothing).some(h=>h.point.z>.12),'the split hip panels have opaque shorts beneath their openings');
         }
       }finally{mesh.material.side=side;}
     }finally{dispose(f);}
+  }
+});
+
+test('fitted torso measurements exclude hands and keep every suit outside the actual front, sides and back',async()=>{
+  const {createHuman}=await human,T=await three;
+  const {torsoFit}=await import(pathToFileURL(path.resolve(__dirname,'../scripts/armor-fit.mjs')).href);
+  let checked=0;
+  for(const model of ['human-male','human-female']){
+    const {default:asset}=await import(pathToFileURL(path.resolve(__dirname,`../assets/models/human/${model.slice(6)}.mjs`)).href),fit=torsoFit(asset);
+    for(const y of [1.04,1.08,1.24]){const side=fit.point(y,Math.PI/2);assert.ok(side.every(Number.isFinite));assert.ok(Math.abs(side[0])<.21&&Math.abs(side[2])<.09,'metacarpals cannot widen or displace the waist measurement');}
+    for(const armor of database.armor.filter(a=>a.armor.type!=='shield').map(AvatarData.armorKind)){
+      const figure=createHuman({...config,model,armor});
+      try{
+        figure.updateMatrixWorld(true);const body=figure.getObjectByName('anatomical-body'),clothing=[];
+        figure.traverse(o=>{if(o.isSkinnedMesh&&o!==body)clothing.push(o);});
+        const spine=hit=>/^spine/.test(hit.object.skeleton.bones[hit.object.geometry.attributes.skinIndex.getX(hit.face.a)].name);
+        for(const y of [1.18,1.24,1.27])for(const angle of [0,.65,-.65,Math.PI/2,-Math.PI/2,Math.PI,Math.PI-.65,Math.PI+.65]){
+          const normal=new T.Vector3(Math.sin(angle),0,Math.cos(angle)),ray=new T.Raycaster(new T.Vector3(0,y,.03).add(normal),normal.clone().negate()),skin=ray.intersectObject(body).find(spine);
+          if(!skin)continue;const outside=ray.intersectObjects(clothing).find(spine);assert.ok(outside,`${model}/${armor} covers its structural torso`);
+          const gap=skin.distance-outside.distance;assert.ok(gap>.002&&gap<.09,`${model}/${armor} follows the anatomical surface with clearance (${gap.toFixed(4)} m)`);checked++;
+        }
+      }finally{dispose(figure);}
+    }
+  }
+  assert.ok(checked>300,'front, side and back are sampled on all 22 suits');
+});
+
+test('female padded underlayers remain inside the fitted outer leather and scale garments',async()=>{
+  const {createHuman}=await human,T=await three;
+  for(const armor of ['leather','studded-leather','ring-mail','scale-mail','splint']){
+    const figure=createHuman({...config,model:'human-female',armor});
+    try{
+      figure.updateMatrixWorld(true);
+      for(const y of [1.18,1.22,1.26]){
+        const hits=new T.Raycaster(new T.Vector3(.06,y,1),new T.Vector3(0,0,-1)).intersectObject(figure,true),lining=hits.find(h=>h.object.material.userData.plateMaterial==='gambeson'),outer=hits.find(h=>h.object.material.userData.plateMaterial==='leather');
+        assert.ok(lining&&outer);assert.ok(outer.distance+.001<lining.distance,`${armor} must cover its undercoat instead of letting the old fitted lining cut through it`);
+      }
+    }finally{dispose(figure);}
   }
 });
 

@@ -1,4 +1,4 @@
-# D20 Studio 0.1.0
+# D20 Studio 0.2.0
 
 The desktop and game share the same human geometry, equipment fitting and
 `client/board-3d/studio-state.mjs` project format. The desktop does not connect
@@ -65,7 +65,7 @@ reopens its portable package.
 
 Only human male/female currently have ready geometry. Other sheet races are
 explicit catalog placeholders. All 11 game armor types can be previewed;
-individual piece fitting currently targets plate armor. The timeline edits
+individual piece fitting covers all 22 Blender-finished human suits. The timeline edits
 bone rotation offsets; topology, skin weighting and arbitrary mesh editing
 belong in Blender.
 

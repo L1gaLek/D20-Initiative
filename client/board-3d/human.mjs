@@ -1,11 +1,13 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
-import maleModel from '../../assets/models/human/male.mjs?v=20261118-studio-1';
-import femaleModel from '../../assets/models/human/female.mjs?v=20261118-studio-1';
-import { createHair, headMapping } from './human-hair.mjs?v=20261118-studio-1';
-import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261118-studio-1';
-import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261118-studio-1';
+import maleModel from '../../assets/models/human/male.mjs?v=20261118-forged-1';
+import femaleModel from '../../assets/models/human/female.mjs?v=20261118-forged-1';
+import { createHair, headMapping } from './human-hair.mjs?v=20261118-forged-1';
+import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261118-forged-1';
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261118-forged-1';
 import {normalizeProject} from './studio-state.mjs';
 import {installStudioRuntime} from './studio-runtime.mjs';
+import {getArmorAsset,ensureArmorAsset,armorAssetRevision} from './armor-assets.mjs';
+export {ensureArmorAsset,armorAssetRevision};
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
 function prepare(model){
@@ -104,7 +106,7 @@ export function createHuman(config,options={}){
     if(!selected.length){geometry.dispose();return null;}
     const used=[...new Set(selected)].sort((a,b)=>a-b),remap=new Map(used.map((v,i)=>[v,i])),pos=[],joints=[],weights=[];
     for(const id of used){
-      const data=points[id],normal=new THREE.Vector3(...data.n).normalize(),base=female&&material!==materials.skin&&material!==materials.hair?data.fitted:data.p,point=base.map((v,i)=>v+normal.getComponent(i)*offset);
+      const data=points[id],normal=new THREE.Vector3(...data.n).normalize(),base=female&&!getArmorAsset(config)&&material!==materials.skin&&material!==materials.hair?data.fitted:data.p,point=base.map((v,i)=>v+normal.getComponent(i)*offset);
       if(deform)deform(point,id);pos.push(...point);
       const w=[...data.w].sort((a,b)=>b[1]-a[1]).slice(0,4),sum=w.reduce((s,v)=>s+v[1],0);
       for(let i=0;i<4;i++){joints.push(w[i]?.[0]||0);weights.push((w[i]?.[1]||0)/sum);}
@@ -148,7 +150,7 @@ export function createHuman(config,options={}){
   const posePlan=planHumanPose(config,definitions);
   const studio=config.studio?normalizeProject(config.studio):options.editable?normalizeProject({appearance:config}):null;
   dressHuman({config,materials,definitions,byName,surface,attach,sphere,curve,texture,female,posePlan,editable:!!options.editable,studio});
-  if(!options.editable||config.armor!=='plate')batchRigid(body,skeleton);
+  if(!options.editable||!getArmorAsset(config))batchRigid(body,skeleton);
   const rest=new Map();
   applyHumanPose(byName,definitions,posePlan);
   bones.forEach(b=>rest.set(b.name,b.rotation.clone()));
@@ -166,5 +168,6 @@ export function createHuman(config,options={}){
   root.userData.pose=pose;root.userData.walkPoseAt=(seconds,moving=false)=>{phase=seconds*15;pose(0,moving);};
   root.userData.stance=posePlan.stance;
   root.userData.dispose=()=>skeleton.dispose();
+  root.userData.armorQuality=getArmorAsset(config)?.style||'legacy';
   root.userData.pose(0,false);root.updateMatrixWorld(true);installStudioRuntime(root,studio);return root;
 }

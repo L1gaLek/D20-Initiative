@@ -12,7 +12,7 @@ if(fs.existsSync(destination)&&!fs.existsSync(path.join(destination,'D20-Studio-
 fs.mkdirSync(destination,{recursive:true});
 const copy=(from,to)=>fs.cpSync(from,to,{recursive:true,force:true,dereference:false});
 const marker=path.join(destination,'D20-Studio-build.json');
-fs.writeFileSync(marker,JSON.stringify({product:'D20 Studio',version:'0.1.0',status:'building'},null,2));
+fs.writeFileSync(marker,JSON.stringify({product:'D20 Studio',version:'0.2.0',status:'building'},null,2));
 copy(electron,destination);
 fs.renameSync(path.join(destination,'electron.exe'),path.join(destination,'D20 Studio.exe'));
 if(fs.existsSync(path.join(destination,'electron_wer.dll')))fs.renameSync(path.join(destination,'electron_wer.dll'),path.join(destination,'D20 Studio_wer.dll'));
@@ -23,5 +23,5 @@ fs.writeFileSync(path.join(appRoot,'package.json'),JSON.stringify(manifest,null,
 copy(blender,path.join(destination,'Tools','Blender'));
 if(fs.existsSync(path.join(ROOT,'studio/README.ru.md')))copy(path.join(ROOT,'studio/README.ru.md'),path.join(destination,'НАЧНИТЕ ЗДЕСЬ.md'));
 const files={};function scan(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,entry.name);if(entry.isDirectory())scan(file);else{const name=path.relative(appRoot,file).replace(/\\/g,'/');files[name]=crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');}}}scan(appRoot);
-fs.writeFileSync(marker,JSON.stringify({product:'D20 Studio',version:'0.1.0',built:new Date().toISOString(),electron:fs.readFileSync(path.join(electron,'version'),'utf8').trim(),blender:path.basename(blender),files},null,2));
+fs.writeFileSync(marker,JSON.stringify({product:'D20 Studio',version:'0.2.0',built:new Date().toISOString(),electron:fs.readFileSync(path.join(electron,'version'),'utf8').trim(),blender:path.basename(blender),files},null,2));
 console.log(JSON.stringify({folder:destination,executable:path.join(destination,'D20 Studio.exe'),files:Object.keys(files).length}));

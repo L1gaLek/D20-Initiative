@@ -3,7 +3,7 @@ import {buildReferencePlate} from './plate-reference-parts.mjs';
 
 // Authored plate patterns in metres. This file is a build-time modelling source;
 // the browser receives baked, fitted meshes, not these construction operations.
-export function designPlate(body,female){
+export function createArmorContext(body,female){
   const parts=[],defs=new Map(body.bones.map(b=>[b.name,b])),tau=Math.PI*2,owners=new Map(),ownerCounts=new Map();
   const nextOwner=(name,parent)=>{const key=parent+'::'+name,count=(ownerCounts.get(key)||0)+1;ownerCounts.set(key,count);return name+'#'+count;};
   const bytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
@@ -44,6 +44,6 @@ export function designPlate(body,female){
     const rows=Array.from({length:15},(_,i)=>{const t=i/14,near=candidates.filter(p=>Math.abs(p.t-t)<.065);const pick=near.length>4?near:candidates.toSorted((a,b)=>Math.abs(a.t-t)-Math.abs(b.t-t)).slice(0,14);let n0=Infinity,n1=-Infinity,s0=Infinity,s1=-Infinity;for(const p of pick){n0=Math.min(n0,p.n);n1=Math.max(n1,p.n);s0=Math.min(s0,p.s);s1=Math.max(s1,p.s);}return {t,n:(n0+n1)/2,s:(s0+s1)/2,rn:Math.max(.009,(n1-n0)*.54+.010),rs:Math.max(.009,(s1-s0)*.54+.009)};});
     return (t,a,extra=0)=>{const at=T.MathUtils.clamp(t,0,.99999)*14,i=Math.floor(at),r=rows[i],q=rows[Math.min(14,i+1)],v=at-i,lerp=k=>T.MathUtils.lerp(r[k],q[k],v);return f.a.clone().addScaledVector(f.axis,t*f.length).addScaledVector(f.front,lerp('n')+Math.cos(a)*(lerp('rn')+extra)).addScaledVector(f.side,lerp('s')+Math.sin(a)*(lerp('rs')+extra)).toArray();};
   }
-  buildReferencePlate({T,defs,parts,points,V,bone,add,shell,seam,rim,rivet,strap,buckle,limbFrame,fitLimb,skinTop,female});
-  return parts;
+  return {T,defs,parts,points,V,bone,add,shell,seam,rim,rivet,strap,buckle,limbFrame,fitLimb,skinTop,female};
 }
+export function designPlate(body,female){const context=createArmorContext(body,female);buildReferencePlate(context);return context.parts;}

@@ -1,0 +1,10 @@
+{
+  "scripts/armor-patterns.mjs": "dafa97b7d44f8d49c5ee5c93f4aa22b1950b271227e6f4bcf0752a918fbccb4b",
+  "scripts/armor-fit.mjs": "358f3bc224552e339fd9636c5607f87f78fc87acc1775ea2706d6bc614829cc0",
+  "scripts/plate-design.mjs": "e5163f8e6ba6f25fbc1c74c077f71ce8162364bc0173345710cd88700d5b6e4c",
+  "scripts/plate-reference-parts.mjs": "22aa61e92aa8546b08868e60a9df062621b3ff65ce675e90f205c1842ee7e6a5",
+  "scripts/build-armor-library.mjs": "e7902182d0533a4a3a7641b38d5e60bb8fad68f9560f2d89564020dc36183497",
+  "scripts/finish-armor.py": "a542bdd7e5412a635c999e177b4297ed924086be67fa275c7368c44b300fcde3",
+  "assets/models/human/male.mjs": "453ec444ce573c86d8d3cee254b4b38560cac8b1aab8b3179e41e18574a4d373",
+  "assets/models/human/female.mjs": "330e90e15e35281925d8c2e5d7318ce38fd522d1389834fdc23fe9ae3ba2a290"
+}

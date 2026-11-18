@@ -33,7 +33,7 @@ app.whenReady().then(async()=>{
   session.defaultSession.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false));Menu.setApplicationMenu(null);
   win=new BrowserWindow({width:1550,height:1020,minWidth:1100,minHeight:760,title:'D20 Studio',icon:path.join(__dirname,'icon.ico'),backgroundColor:'#10151c',show:!TEST,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false,...TEST?{offscreen:true}:{}}});
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',(event,url)=>{if(url!=='d20studio://local/studio/index.html')event.preventDefault();});
-  attach('info',()=>({version:'0.1.0',blender:blenderPath,projects:projectsDir(),projectPath}));
+  attach('info',()=>({version:'0.2.0',blender:blenderPath,projects:projectsDir(),projectPath}));
   attach('new-project',()=>{projectPath=null;activeAsset=null;return true;});
   attach('open-project',async()=>{const r=await dialog.showOpenDialog(win,{title:'Открыть проект D20 Studio',properties:['openFile'],filters:[{name:'Проект D20 Studio',extensions:['json']}]});if(r.canceled)return null;const result=await readProject(r.filePaths[0]);projectPath=r.filePaths[0];return result;});
   attach('save-project',async(value,saveAs)=>{const p=await state(value);if(!projectPath||saveAs){const r=await dialog.showSaveDialog(win,{title:'Сохранить проект',defaultPath:path.join(projectsDir(),slug(p.name)+'.d20studio.json'),filters:[{name:'Проект D20 Studio',extensions:['json']}]});if(r.canceled)return null;projectPath=r.filePath;}saveAsset(p,projectPath);atomic(projectPath,JSON.stringify(p,null,2));return projectPath;});

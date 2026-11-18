@@ -1,7 +1,7 @@
 {
   "name":"d20-studio",
   "productName":"D20 Studio",
-  "version":"0.1.0",
+  "version":"0.2.0",
   "private":true,
   "main":"main.cjs",
   "description":"Local character, armor and animation workshop for D20 Initiative",

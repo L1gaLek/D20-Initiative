@@ -30,6 +30,8 @@ module.exports=async function({pages,fixture,applyFixture,h,screenshotDir}){
     const expected=require('../../client/avatar-data').armorKind(item);
     await gm.waitForFunction(kind=>Board3D.inspect().tokens.find(t=>t.id==='player-3').avatar.armor===kind,expected);
     assert.equal(await owner.evaluate(()=>Character3D.inspect().config.armor),expected);
+    await owner.waitForFunction(()=>Character3D.inspect()?.armorQuality==='forged-volume');
+    await gm.waitForFunction(()=>Board3D.inspect().tokens.find(t=>t.id==='player-3')?.armorQuality==='forged-volume');
     if(screenshotDir&&['armor_leather','armor_chain-mail','armor_plate'].includes(item.id))await owner.locator('[data-avatar-preview]').screenshot({path:path.join(screenshotDir,'human-'+item.id+'.png')});
   }
   await owner.locator('[data-appearance-slot="right"]').selectOption('weapon_longsword');

@@ -2,7 +2,7 @@ import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
 import { loadBoardImage } from './background.mjs';
 import { fogMaterial, magicMaterial } from './effects.mjs';
-import { createHuman } from './human.mjs?v=20261118-studio-1';
+import { createHuman,ensureArmorAsset,armorAssetRevision } from './human.mjs?v=20261118-forged-1';
 
 const WALL_HEIGHT = 1.35;
 const data = window.Board3DData;
@@ -334,11 +334,16 @@ export function createBoard3D(root, callbacks) {
       walking=true;
     }return walking;
   }
+  const armorLoads=new Set();
   function updatePawns(tokens,firstMap=false) {
     const present=new Set(tokens.map(t=>t.id));
     for (const [id,group] of pawns) if (!present.has(id)) { disposeTree(group); pawnGroup.remove(group); pawns.delete(id); }
     for (const token of tokens) {
-      const {x,y,...style}=token, key=JSON.stringify(style);
+      const {x,y,...style}=token, key=JSON.stringify(style)+'|'+armorAssetRevision(token.avatar);
+      if(token.avatar&&token.avatar.armor!=='none'&&!armorAssetRevision(token.avatar)){
+        const id=token.avatar.model+'-'+token.avatar.armor;
+        if(!armorLoads.has(id)){armorLoads.add(id);ensureArmorAsset(token.avatar).then(()=>{if(current&&canvas.isConnected)sync(current);}).catch(error=>{armorLoads.delete(id);console.warn('Armor model unavailable:',error.message);});}
+      }
       let group=pawns.get(token.id);
       let previous=null;
       if (group && group.userData.styleKey!==key) {
@@ -561,7 +566,7 @@ export function createBoard3D(root, callbacks) {
     setWallFade(value) { fadeWalls=!!value; if(current) sync(current); },
     inspect() {
       return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,
-        avatar:g.userData.figure?.userData.avatar||null,stance:g.userData.figure?.userData.stance||null,walking:!!g.userData.motion,studioAnimating:!!g.userData.figure?.userData.studioAnimating,limbAngle:g.userData.figure?.userData.walkAngle||0 })),
+        avatar:g.userData.figure?.userData.avatar||null,armorQuality:g.userData.figure?.userData.armorQuality,stance:g.userData.figure?.userData.stance||null,walking:!!g.userData.motion,studioAnimating:!!g.userData.figure?.userData.studioAnimating,limbAngle:g.userData.figure?.userData.walkAngle||0 })),
         combat:{mode:current?.combat?.mode||null,cells:combatGroup.children.filter(m=>m.userData.kind).map(m=>({kind:m.userData.kind,count:m.userData.cells}))},
         magicWalls:wallGroup.children.filter(m=>m.userData.wallType?.startsWith('magic')).reduce((sum,m)=>sum+m.count,0),
         fogLayers:fogGroup.children.filter(m=>m.userData.fogState).map(m=>({state:m.userData.fogState,height:m.userData.height,opacity:m.material.uniforms.opacity.value})),

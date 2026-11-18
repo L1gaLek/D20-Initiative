@@ -2,7 +2,8 @@
 
 Two separately fitted suits for the existing adult male and female human bodies.
 The in-game `plate` armor selection uses the baked meshes in `male.mjs` and
-`female.mjs`; the other armor families keep their existing models.
+`female.mjs`. The other ten families now use the matching Blender-finished
+library in `../armor`, with separate male and female patterns.
 
 Each suit has shaped breast leaves and lower breast plates, layered pauldrons,
 pointed front and rear hip defenses, keeled greaves, winged joint guards, leather
@@ -21,12 +22,13 @@ part of the portable files. Weapons and shields remain separate game equipment.
 ## Rebuild
 
 ```sh
-node scripts/build-plate-armor.mjs
+node scripts/build-armor-library.mjs --blender=C:/tools/Blender/blender.exe
 node scripts/export-plate-glb.mjs
 ```
 
 The modelling sources are `scripts/plate-design.mjs` (shells and anatomical fit)
-and `scripts/plate-reference-parts.mjs` (armor patterns). LF-normalized source
+and `scripts/plate-reference-parts.mjs` (armor patterns), followed by
+`scripts/finish-armor.py` in Blender for bevels and usable split normals. LF-normalized source
 hashes are recorded in `source-hashes.json`. Runtime meshes share the existing skeletal pose and walking
 system; they do not create one draw call per armor plate.
 
