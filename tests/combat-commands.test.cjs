@@ -97,3 +97,17 @@ test('browser merge protects a newer manual result and inactive-map turn history
   assert.equal(stale.turnHistory.length,1);
   assert.equal(stale.maps[0].turnHistory.length,1);
 });
+test('switching to a legacy map starts with its own empty history and returning restores the battle', async () => {
+  const h = serverHarness();
+  h.database().maps.push({id:'map-2',phase:'exploration',phaseEpoch:2,turnOrder:[],playerStates:{}});
+  await ready(h); await command(h,4,'endTurn');
+  const battle = clone(h.database());
+  await h.context.persistStatePatchForContext(h.clients[4].ctx,{fields:{currentMapId:'map-2'}});
+  assert.equal(h.database().combatRevision,0);
+  assert.equal(h.database().turnHistory.length,0);
+  assert.equal(h.database().maps[0].turnHistory.length,1);
+  await h.context.persistStatePatchForContext(h.clients[4].ctx,{fields:{currentMapId:'map-1'}});
+  assert.deepEqual(h.database().turnHistory,battle.turnHistory);
+  assert.deepEqual(h.database().turnOrder,battle.turnOrder);
+  assert.equal(h.database().currentTurnIndex,battle.currentTurnIndex);
+});

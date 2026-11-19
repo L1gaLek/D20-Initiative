@@ -3716,6 +3716,8 @@ function applyStatePatchToCurrentState(ctx, rawPatch) {
     if (fields.currentMapId && String(fields.currentMapId) !== String(state.currentMapId)) {
       const target = (state.maps || []).find(m => String(m.id) === String(fields.currentMapId));
       if (!target) throw new Error('Map not found');
+      state.combatRevision = Number(target.combatRevision) || 0;
+      state.turnHistory = cloneJson(target.turnHistory || []);
       for (const key of CombatState.fields) if (target[key] !== undefined) state[key] = cloneJson(target[key]);
       for (const p of getStatePlayers(state)) {
         const entry = target.playerStates?.[p.id];
