@@ -10,6 +10,8 @@ function getDefaultMapPhaseState() {
     currentTurnIndex: 0,
     round: 1,
     turnEpoch: 0,
+    combatRevision: 0,
+    turnHistory: [],
     playerStates: {}
   };
 }
@@ -24,6 +26,8 @@ function normalizeMapPhaseState(map) {
   map.currentTurnIndex = Math.max(0, Number(map.currentTurnIndex) || 0);
   map.round = Math.max(1, Number(map.round) || 1);
   map.turnEpoch = Math.max(0, Number(map.turnEpoch) || 0);
+  map.combatRevision = Number(map.combatRevision) || 0;
+  if (!Array.isArray(map.turnHistory)) map.turnHistory = [];
   if (!map.playerStates || typeof map.playerStates !== 'object') map.playerStates = {};
   return map;
 }
@@ -31,6 +35,8 @@ function normalizeMapPhaseState(map) {
 function getPlayerMapCombatState(player) {
   return {
     inCombat: !!player?.inCombat,
+    initiativeRevision: Number(player?.initiativeRevision) || 0,
+    initiativeRequestId: String(player?.initiativeRequestId || ''),
     initiative: (player?.initiative === null || typeof player?.initiative === 'undefined')
       ? null
       : Number(player.initiative),
@@ -43,6 +49,8 @@ function getPlayerMapCombatState(player) {
 function applyMapCombatStateToPlayer(player, entry) {
   const safe = (entry && typeof entry === 'object') ? entry : null;
   player.inCombat = !!safe?.inCombat;
+  player.initiativeRevision = Number(safe?.initiativeRevision) || 0;
+  player.initiativeRequestId = String(safe?.initiativeRequestId || '');
   player.initiative = (safe?.initiative === null || typeof safe?.initiative === 'undefined')
     ? 0
     : Number(safe.initiative) || 0;
@@ -171,6 +179,8 @@ function ensureStateHasMaps(state) {
     currentTurnIndex: Math.max(0, Number(state.currentTurnIndex) || 0),
     round: Math.max(1, Number(state.round) || 1),
     turnEpoch: Math.max(0, Number(state.turnEpoch) || 0),
+    combatRevision: Number(state.combatRevision) || 0,
+    turnHistory: deepClone(state.turnHistory || []),
     playerStates: {},
     fog: (state.fog && typeof state.fog === 'object') ? state.fog : {
       enabled: false,
@@ -269,6 +279,8 @@ function syncActiveToMap(state) {
   m.currentTurnIndex = Math.max(0, Number(st.currentTurnIndex) || 0);
   m.round = Math.max(1, Number(st.round) || 1);
   m.turnEpoch = Math.max(0, Number(st.turnEpoch) || 0);
+  m.combatRevision = Number(st.combatRevision) || 0;
+  m.turnHistory = deepClone(st.turnHistory || []);
   m.playerStates = {};
   (Array.isArray(st.players) ? st.players : []).forEach((p) => {
     if (!p?.id) return;
@@ -385,6 +397,8 @@ function loadMapToRoot(state, mapId) {
   st.currentTurnIndex = Math.max(0, Number(m.currentTurnIndex) || 0);
   st.round = Math.max(1, Number(m.round) || 1);
   st.turnEpoch = Math.max(0, Number(m.turnEpoch) || 0);
+  st.combatRevision = Number(m.combatRevision) || 0;
+  st.turnHistory = deepClone(m.turnHistory || []);
   st.fog = (m.fog && typeof m.fog === 'object') ? deepClone(m.fog) : {
     enabled: false,
     mode: 'manual',

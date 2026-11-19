@@ -34,8 +34,9 @@ module.exports=async function({owner,gm,open,screenshotDir}){
     await slot('armor').selectOption(item.id);const expected=AvatarData.armorKind(item);
     await gm.waitForFunction(kind=>Board3D.inspect().tokens.find(t=>t.id==='player-3').avatar.armor===kind,expected);
     assert.equal(await owner.evaluate(()=>Character3D.inspect().config.armor),expected);
-    await owner.waitForFunction(()=>Character3D.inspect()?.armorQuality==='forged-volume');
-    await gm.waitForFunction(()=>Board3D.inspect().tokens.find(t=>t.id==='player-3')?.armorQuality==='forged-volume');
+    const quality=expected==='breastplate'?'fitted-cuirass':'forged-volume';
+    await owner.waitForFunction(q=>Character3D.inspect()?.armorQuality===q,quality);
+    await gm.waitForFunction(q=>Board3D.inspect().tokens.find(t=>t.id==='player-3')?.armorQuality===q,quality);
     if(['armor_leather','armor_chain-mail','armor_plate'].includes(item.id))await saveScreenshot('human-female-'+item.id);
   }
   const memory=await owner.evaluate(()=>Character3D.inspect().render);

@@ -335,11 +335,51 @@ export function createBoard3D(root, callbacks) {
     }return walking;
   }
   const armorLoads=new Set();
+  function updatePawnHud(group, token) {
+    const key = JSON.stringify(token.hud || null);
+    if (group.userData.hudKey === key) return;
+    group.userData.hudKey = key;
+    const previous = group.userData.hud;
+    if (previous) { group.remove(previous); previous.material.map.dispose(); previous.material.dispose(); }
+    group.userData.hud = null;
+    if (!token.hud || token.ghost) return;
+    const health = token.hud.health;
+    const hasHp = health && health.hpMax != null && Number(health.hpMax) > 0;
+    const conditions = token.hud.conditions || [];
+    if (!hasHp && !conditions.length) return;
+    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+    ctx.font = '600 25px system-ui, sans-serif';
+    const lines = []; let line = '';
+    for (const condition of conditions) {
+      const next = line ? `${line} · ${condition}` : String(condition);
+      if (ctx.measureText(next).width > 470 && line) { lines.push(line); line = String(condition); }
+      else line = next;
+    }
+    if (line) lines.push(line);
+    canvas.width = 512; canvas.height = (hasHp ? 64 : 8) + lines.length * 34 + 12;
+    ctx.fillStyle = 'rgba(14,19,26,.92)'; ctx.beginPath(); ctx.roundRect(8,4,496,canvas.height-8,14); ctx.fill();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (hasHp) {
+      const max = Number(health.hpMax), cur = health.hpCur == null ? max : Number(health.hpCur), temp = Math.max(0,Number(health.hpTemp)||0);
+      const ratio = Math.max(0,Math.min(1,cur/max));
+      ctx.fillStyle = '#29353d'; ctx.fillRect(20,15,472,36);
+      ctx.fillStyle = ratio > .5 ? '#428d65' : ratio > .25 ? '#b88632' : '#a74348'; ctx.fillRect(20,15,472*ratio,36);
+      ctx.font = '700 26px system-ui, sans-serif'; ctx.fillStyle = '#fff5df';
+      ctx.fillText(`${cur} / ${max}${temp ? `  +${temp} врем.` : ''}`,256,34,456);
+    }
+    ctx.font = '600 25px system-ui, sans-serif'; ctx.fillStyle = '#f3d796';
+    lines.forEach((text,i) => ctx.fillText(text,256,(hasHp ? 78 : 25)+i*34,470));
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.SpriteMaterial({ map:texture,transparent:true,depthTest:false,depthWrite:false }); material.userData.ownedMap = true;
+    const hud = new THREE.Sprite(material), height = 2.35 * canvas.height / 512;
+    hud.scale.set(2.35,height,1); hud.position.y = (token.avatar ? 2.13 : 1.85) + height/2;
+    hud.renderOrder = 6; group.add(hud); group.userData.hud = hud;
+  }
   function updatePawns(tokens,firstMap=false) {
     const present=new Set(tokens.map(t=>t.id));
     for (const [id,group] of pawns) if (!present.has(id)) { disposeTree(group); pawnGroup.remove(group); pawns.delete(id); }
     for (const token of tokens) {
-      const {x,y,...style}=token, key=JSON.stringify(style)+'|'+armorAssetRevision(token.avatar);
+      const {x,y,hud,...style}=token, key=JSON.stringify(style)+'|'+armorAssetRevision(token.avatar);
       if(token.avatar&&token.avatar.armor!=='none'&&!armorAssetRevision(token.avatar)){
         const id=token.avatar.model+'-'+token.avatar.armor;
         if(!armorLoads.has(id)){armorLoads.add(id);ensureArmorAsset(token.avatar).then(()=>{if(current&&canvas.isConnected)sync(current);}).catch(error=>{armorLoads.delete(id);console.warn('Armor model unavailable:',error.message);});}
@@ -373,6 +413,7 @@ export function createBoard3D(root, callbacks) {
         if(previous&&!firstMap&&!token.ghost){group.position.copy(previous.position);Object.assign(group.userData,{target:previous.target,motion:previous.motion});if(figure)figure.rotation.y=previous.angle;}
         pawnGroup.add(group);pawns.set(token.id,group);
       }
+      updatePawnHud(group,token);
       const target=new THREE.Vector3(x+token.size/2,0,y+token.size/2),oldTarget=group.userData.target;
       if(!oldTarget||firstMap||token.ghost||!active){group.position.copy(target);group.userData.motion=null;}
       else if(!oldTarget.equals(target)){
@@ -554,9 +595,10 @@ export function createBoard3D(root, callbacks) {
     reloadBackground() { const url=textureUrl;textureUrl=null;loadTexture(url); },
     focusToken(id) {
       const group=pawns.get(String(id)); if (!group || group.userData.ghost) return false;
-      const target=group.position.clone();
+      // Frame the character and its health/conditions, rather than only its feet.
+      const target=group.position.clone(); target.y=.95*group.scale.y;
       const direction=camera.position.clone().sub(controls.target).normalize();
-      fly(target.clone().add(direction.multiplyScalar(Math.max(5,group.userData.size*5))), target); return true;
+      fly(target.clone().add(direction.multiplyScalar(Math.max(6,group.userData.size*5))), target); return true;
     },
     top() { const target=controls.target.clone(); fly(target.clone().add(new THREE.Vector3(0,Math.max(5,camera.position.distanceTo(target)),.01)),target); },
     zoom(factor) {
@@ -565,7 +607,7 @@ export function createBoard3D(root, callbacks) {
     },
     setWallFade(value) { fadeWalls=!!value; if(current) sync(current); },
     inspect() {
-      return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,
+      return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,hud:g.userData.hud ? JSON.parse(g.userData.hudKey) : null,
         avatar:g.userData.figure?.userData.avatar||null,armorQuality:g.userData.figure?.userData.armorQuality,stance:g.userData.figure?.userData.stance||null,walking:!!g.userData.motion,studioAnimating:!!g.userData.figure?.userData.studioAnimating,limbAngle:g.userData.figure?.userData.walkAngle||0 })),
         combat:{mode:current?.combat?.mode||null,cells:combatGroup.children.filter(m=>m.userData.kind).map(m=>({kind:m.userData.kind,count:m.userData.cells}))},
         magicWalls:wallGroup.children.filter(m=>m.userData.wallType?.startsWith('magic')).reduce((sum,m)=>sum+m.count,0),

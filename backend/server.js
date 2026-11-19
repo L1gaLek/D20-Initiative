@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const path = require('path');
 const DamageRolls = require('./shared/damage-rolls');
+const CombatState = require('./shared/combat-state');
 const crypto = require('crypto');
 const http = require('http');
 const express = require('express');
@@ -2463,6 +2464,17 @@ app.post('/api/rooms/:roomId/detached/replace', async (req, res) => {
   }
 });
 
+app.post('/api/rooms/:roomId/combat', async (req, res) => {
+  try {
+    const ctx = await loadRoomContext(req.params.roomId, requireRequestActor(req).userId);
+    const payload = await applyCombatCommand(ctx, req.body || {});
+    broadcastToRoom(ctx.roomId, payload);
+    return res.json({ ok: true, ...payload });
+  } catch (error) {
+    return res.status(400).json({ ok: false, error: error?.message || 'Combat command failed' });
+  }
+});
+
 app.post('/api/rooms/:roomId/initiative', async (req, res) => {
   try {
     const ctx = await loadRoomContext(req.params.roomId, requireRequestActor(req).userId);
@@ -3562,6 +3574,8 @@ function syncActiveMapCombatStateServer(state) {
   map.currentTurnIndex = currentTurnIndex;
   map.round = Math.max(1, Math.trunc(Number(state.round) || Number(map.round) || 1));
   map.turnEpoch = Math.max(0, Math.trunc(Number(state.turnEpoch) || Number(map.turnEpoch) || 0));
+  map.combatRevision = Number(state.combatRevision) || 0;
+  map.turnHistory = cloneJson(state.turnHistory || []);
   map.playerStates = {};
 
   const players = Array.isArray(state.players) ? state.players : [];
@@ -3573,6 +3587,8 @@ function syncActiveMapCombatStateServer(state) {
     map.playerStates[String(player.id)] = {
       inCombat: !!player.inCombat,
       initiative: Number.isFinite(initiative) ? initiative : null,
+      initiativeRevision: Number(player.initiativeRevision) || 0,
+      initiativeRequestId: String(player.initiativeRequestId || ''),
       hasRolledInitiative: !!player.hasRolledInitiative,
       pendingInitiativeChoice: !!player.pendingInitiativeChoice,
       willJoinNextRound: !!player.willJoinNextRound
@@ -3697,6 +3713,16 @@ function applyStatePatchToCurrentState(ctx, rawPatch) {
       throw new Error('GM role required for this state patch');
     }
 
+    if (fields.currentMapId && String(fields.currentMapId) !== String(state.currentMapId)) {
+      const target = (state.maps || []).find(m => String(m.id) === String(fields.currentMapId));
+      if (!target) throw new Error('Map not found');
+      for (const key of CombatState.fields) if (target[key] !== undefined) state[key] = cloneJson(target[key]);
+      for (const p of getStatePlayers(state)) {
+        const entry = target.playerStates?.[p.id];
+        if (entry) for (const key of CombatState.playerFields) if (entry[key] !== undefined) p[key] = cloneJson(entry[key]);
+      }
+    }
+
     if (typeof fields.phase !== 'undefined') state.phase = fields.phase;
     for (const key of ['phaseEpoch', 'combatSelectionEpoch', 'initiativeEpoch', 'turnEpoch', 'cellFeet']) {
       if (typeof fields[key] !== 'undefined') state[key] = fields[key];
@@ -3812,6 +3838,8 @@ function applyStatePatchToCurrentState(ctx, rawPatch) {
 }
 
 function preserveNewerPlayerData(nextState, currentState) {
+  nextState = CombatState.preserve(nextState, currentState);
+  nextState.combatCommandIds = currentState.combatCommandIds || nextState.combatCommandIds || [];
   const currentById = new Map(getStatePlayers(currentState).map((p) => [String(p.id), p]));
   const sameInitiative = String(nextState.currentMapId || '') === String(currentState.currentMapId || '')
     && Number(nextState.initiativeEpoch || 0) === Number(currentState.initiativeEpoch || 0);
@@ -5255,6 +5283,35 @@ async function handleInitiativeLiveRelay(ws, data) {
   broadcastToRoom(ctx.roomId, payload, ws);
 }
 
+async function applyCombatCommand(ctx, data) {
+  ensurePlayerOrGm(ctx);
+  const requestId = sanitizeText(data.requestId, '', 120);
+  if (!requestId) throw new Error('Combat requestId required');
+  await mutateRoomState(ctx, state => {
+    const receipts = Array.isArray(state.combatCommandIds) ? state.combatCommandIds : [];
+    const key = ctx.userId + ':' + requestId;
+    if (receipts.includes(key)) return state;
+    CombatState.command(state, data, ctx, canControlPlayer);
+    state.combatCommandIds = [...receipts.slice(-127), key];
+    return state;
+  });
+  return { type: 'combatSync', roomId: ctx.roomId, mapId: ctx.state.currentMapId,
+    requestId, ...CombatState.snapshot(ctx.state) };
+}
+
+async function handleCombatCommandRelay(ws, data) {
+  try {
+    const ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
+    const payload = await applyCombatCommand(ctx, data);
+    ws.roomContext = null;
+    send(ws, payload);
+    broadcastToRoom(ctx.roomId, payload, ws);
+  } catch (error) {
+    send(ws, { type: 'combatCommandError', roomId: ws.currentRoomId,
+      requestId: data.requestId, message: error.message });
+  }
+}
+
 async function applyInitiativeUpdates(ctx, data) {
   ensurePlayerOrGm(ctx);
   const updates = Array.isArray(data.updates) ? data.updates.slice(0, 200) : [];
@@ -5275,14 +5332,17 @@ async function applyInitiativeUpdates(ctx, data) {
         player.initiative = Math.max(-100, Math.min(200, total));
         player.hasRolledInitiative = true;
         player.pendingInitiativeChoice = false;
+        player.initiativeRevision = Number(state.combatRevision || 0) + 1;
       }
-      safeUpdates.push({ playerId, total: player.initiative });
+      safeUpdates.push({ playerId, total: player.initiative, initiativeRevision: player.initiativeRevision });
     }
     if (!safeUpdates.length) throw new Error('No authorized initiative updates');
-    return syncActiveMapCombatStateServer(state);
+    state.combatRevision = Number(state.combatRevision || 0) + 1;
+    return CombatState.syncMap(syncActiveMapCombatStateServer(state));
   });
   return { type: 'initiativeApplied', roomId: ctx.roomId, updates: safeUpdates,
-    epoch: Number(ctx.state.initiativeEpoch) || 0, mapId: ctx.state.currentMapId };
+    epoch: Number(ctx.state.initiativeEpoch) || 0, mapId: ctx.state.currentMapId,
+    ...CombatState.snapshot(ctx.state) };
 }
 
 async function setTokenAccessForContext(ctx, playerId, data) {
@@ -5517,6 +5577,10 @@ async function handleMessage(ws, rawMessage) {
 
       case 'playerPatch':
         await handlePlayerPatchRelay(ws, data);
+        break;
+
+      case 'combatCommand':
+        await handleCombatCommandRelay(ws, data);
         break;
 
       case 'initiativeReset':

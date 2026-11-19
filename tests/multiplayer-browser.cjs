@@ -32,6 +32,8 @@ const h = serverHarness(start);
 const sockets = new Set();
 let seq = 0;
 let diceId = 0;
+let rejectFirstRoll = true;
+let dropNextCombatAck = false;
 const requests = [];
 const diagnostics = [];
 function stamp(payload) { return { ...payload, __serverEvent: true, __eventSeq: ++seq }; }
@@ -39,7 +41,7 @@ function broadcast(payload, except) {
   const raw = JSON.stringify(stamp(payload));
   for (const ws of sockets) if (ws !== except && ws.readyState === 1) ws.send(raw);
 }
-h.context.send = (ws, payload) => ws.send(JSON.stringify(stamp(payload)));
+h.context.send = (ws,payload) => { if(dropNextCombatAck && payload.type==='combatSync' && ws.ctx.userId==='gm') { dropNextCombatAck=false; return; } ws.send(JSON.stringify(stamp(payload))); };
 h.context.broadcastToRoom = (roomId, payload, except) => broadcast(payload, except);
 const members = h.clients.map(c => ({ id: c.ctx.userId, user_id: c.ctx.userId, name: c.ctx.userId, role: c.ctx.role }));
 async function body(req) {
@@ -74,6 +76,12 @@ const server = http.createServer(async (req, res) => {
         }
         return json(res, { ok: true, state: h.database() });
       }
+      if (url.pathname.endsWith('/combat')) {
+        const ctx = h.clients.find(c => c.ctx.userId === userId).ctx;
+        const result = await h.context.applyCombatCommand(ctx, data);
+        broadcast(result);
+        return json(res, result);
+      }
       if (url.pathname.endsWith('/dice')) {
         const event = { ...data.event, id: `dice-${++diceId}`, fromId: userId };
         if (event.damageParts) Object.assign(event, DamageRolls.event(event.damageParts, event.damageTitle));
@@ -107,6 +115,11 @@ wss.on('connection', ws => {
       ws.send(JSON.stringify({ type: 'joinedWsRoom', roomId: 'test-room' }));
     } else if (msg.type === 'statePatch') await h.context.handleStatePatchRelay(ws, msg);
     else if (msg.type === 'playerPatch') await h.context.handlePlayerPatchRelay(ws, msg);
+    else if (msg.type === 'combatCommand') {
+      if (rejectFirstRoll && ws.ctx.userId === 'user-1' && msg.action === 'roll') {
+        rejectFirstRoll = false; ws.send(JSON.stringify({type:'combatCommandError',requestId:msg.requestId,message:'Test rejection'}));
+      } else await h.context.handleCombatCommandRelay(ws,msg);
+    }
     else if (msg.type === 'initiativeReset' || msg.type === 'initiativeApplied') await h.context.handleInitiativeLiveRelay(ws, msg);
     else if (msg.type === 'state') {
       await h.context.persistStateForContext(ws.ctx, msg.state);
@@ -190,17 +203,16 @@ async function main() {
     await gm.locator('#board-col').evaluate(el => { el.style.minHeight = ''; });
     await gm.locator('#content-row').evaluate(el => { el.style.flexWrap = ''; });
     console.log('PASS: initiative panel uses the remaining frame height and grows with the board');
-    await p1.route('**/api/rooms/test-room/initiative', route => route.fulfill({ status: 403, json: { ok: false, error: 'Test rejection' } }));
     await p1.locator('#initiative-players-list button').first().click();
     await p1.getByText(/Инициатива не сохранена/).waitFor();
     assert.equal(await p1.evaluate(() => lastState.players[0].hasRolledInitiative), false);
     assert.equal(requests.filter(r => r.path.endsWith('/dice')).length, 0);
-    await p1.unroute('**/api/rooms/test-room/initiative');
+
     console.log('PASS: rejected initiative does not create a local result or a misleading dice log');
     await Promise.all([
       p1.locator('#initiative-players-list button').first().click(),
       p2.locator('#roll-initiative-all').click(),
-      p3.evaluate(() => sendMessage({ type: 'rollInitiative' })),
+      p3.evaluate(async () => { wsClient.__joined=false; try { await sendMessage({type:'rollInitiative'}); } finally { wsClient.__joined=true; } }),
       p4.locator('#initiative-players-list button').first().click()
     ]);
     await waitFor(() => h.database().players.filter(p => p.inCombat).every(p => p.hasRolledInitiative), 'all rolls persisted');
@@ -213,6 +225,8 @@ async function main() {
     await gm.evaluate(() => setActiveGmQuickPanel('phase'));
     await gm.locator('#start-combat').click();
     await waitFor(() => h.database().phase === 'combat', 'GM starts combat');
+    await require('./helpers/combat-ui-scenarios.cjs')({pages,h,broadcast,clone,start,screenshotDir,dropNextCombatAck:()=>{dropNextCombatAck=true;}});
+    if (process.env.D20_COMBAT_ONLY) { assert.deepEqual(errors,[]); return; }
     await gm.evaluate(() => sendMessage({ type: 'startExploration' }));
     await waitFor(() => h.database().phase === 'exploration', 'return to exploration');
     await gm.evaluate(() => setActiveGmQuickPanel(''));

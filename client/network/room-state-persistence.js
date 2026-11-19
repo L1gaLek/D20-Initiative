@@ -415,6 +415,8 @@ async function upsertRoomState(roomId, nextState) {
       currentTurnIndex: Math.max(0, Number(m?.currentTurnIndex) || 0),
       round: Math.max(1, Number(m?.round) || 1),
       turnEpoch: Math.max(0, Number(m?.turnEpoch) || 0),
+      combatRevision: Number(m?.combatRevision) || 0,
+      turnHistory: deepClone(m?.turnHistory || []),
       playerStates: (m?.playerStates && typeof m.playerStates === 'object') ? deepClone(m.playerStates) : {},
       playersPos: {}
     }));

@@ -379,6 +379,8 @@ function syncCombatPlayerToActiveMap(stateLike, player) {
     if (!activeMap.playerStates || typeof activeMap.playerStates !== 'object') activeMap.playerStates = {};
     activeMap.playerStates[String(p.id)] = {
       inCombat: !!p.inCombat,
+      initiativeRevision: Number(p.initiativeRevision) || 0,
+      initiativeRequestId: String(p.initiativeRequestId || ''),
       initiative: (p.initiative === null || typeof p.initiative === 'undefined') ? null : Number(p.initiative),
       hasRolledInitiative: !!p.hasRolledInitiative,
       pendingInitiativeChoice: !!p.pendingInitiativeChoice,
@@ -634,6 +636,10 @@ function applyStatePatchMessage(msg) {
 }
 
 function handleMessage(msg) {
+  if (msg.type === 'combatSync' || msg.type === 'combatCommandError' || (msg.type === 'initiativeApplied' && msg.fields)) {
+    window.handleCombatSync?.(msg);
+    return;
+  }
 try {
   window.recordRealtimeDebugEvent?.('message:handle', {
     type: String(msg?.type || ''),
@@ -1087,6 +1093,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
       // нормализация состояния + поддержка нескольких карт кампании
       let normalized = loadMapToRoot(ensureStateHasMaps(deepClone(msg.state)), msg.state?.currentMapId);
+      normalized = window.CombatState?.preserve(normalized, lastState) || normalized;
       mergeNewestTokenAccess(normalized, lastState);
       try { normalized = window.applyDetachedPayloadToState?.(normalized) || normalized; } catch {}
       try { normalized = applyPendingCombatSelectionOverlay(normalized) || normalized; } catch {}
@@ -1369,6 +1376,8 @@ nextTurnBtn?.addEventListener("click", () => {
   // "Конец хода" — перейти к следующему по инициативе
   sendMessage({ type: "endTurn" });
 });
+document.getElementById('previous-turn')?.addEventListener('click', () => sendMessage({ type: 'previousTurn' }));
+document.getElementById('turn-order-start-combat')?.addEventListener('click', () => sendMessage({ type: 'startCombat' }));
 
 // ================== ROLE UI ==================
 function setupRoleUI(role) {
@@ -1460,6 +1469,11 @@ function renderLog(logs) {
 // ================== CURRENT PLAYER ==================
 function updateCurrentPlayer(state) {
   const inCombat = (state && state.phase === 'combat');
+  const previous = document.getElementById('previous-turn');
+  if (previous) {
+    previous.style.display = inCombat && myRole === 'GM' ? 'inline-block' : 'none';
+    previous.disabled = !state?.turnHistory?.length || combatActionBusy;
+  }
 
   // по умолчанию
   if (nextTurnBtn) {
@@ -1483,7 +1497,7 @@ function updateCurrentPlayer(state) {
   // кнопку "Следующий ход" может нажимать GM или владелец текущего персонажа
   if (nextTurnBtn) {
     const canNext = (myRole === 'GM') || (p && canControlToken(p));
-    nextTurnBtn.disabled = !canNext;
+    nextTurnBtn.disabled = !canNext || combatActionBusy;
     if (canNext) nextTurnBtn.classList.add('is-active');
   }
 }
@@ -1503,14 +1517,21 @@ function renderTurnOrderBox(state) {
   const stPlayers = Array.isArray(players) ? players : (Array.isArray(state?.players) ? state.players : []);
 
   const isGM = (String(myRole || '') === 'GM');
+  const eligible = (state.players || []).filter(p => isPlayerEligibleForCurrentMapCombat(p, state));
+  const readyCount = eligible.filter(p => p.hasRolledInitiative && p.initiative != null).length;
+  const progress = document.getElementById('initiative-progress');
+  if (progress) progress.textContent = phase === 'initiative'
+    ? `Инициатива: ${readyCount} / ${eligible.length}` : `Участников: ${eligible.length}`;
+  const startButton = document.getElementById('turn-order-start-combat');
+  if (startButton) {
+    startButton.hidden = !(isGM && phase === 'initiative' && eligible.length && readyCount === eligible.length);
+    startButton.disabled = combatActionBusy;
+  }
+  // Incoming rolls must not destroy a GM's unfinished number entry.
+  if (turnOrderList.contains(document.activeElement) && document.activeElement.matches('.initiative-value-input')) return;
 
   // Helper: stable sort by initiative (desc), then name
-  const sortByInit = (arr) => (arr || []).slice().sort((a, b) => {
-    const ai = Number(a?.initiative) || 0;
-    const bi = Number(b?.initiative) || 0;
-    if (bi !== ai) return bi - ai;
-    return String(a?.name || '').localeCompare(String(b?.name || ''));
-  });
+  const sortByInit = (arr) => (arr || []).slice().sort(CombatState.compareInitiative);
 
   const combatants = stPlayers.filter(p => p && p.inCombat);
   const nonCombatants = stPlayers.filter(p => p && !p.inCombat);
@@ -1570,7 +1591,10 @@ function renderTurnOrderBox(state) {
 
     const right = document.createElement('span');
     const iv = (p.initiative !== null && p.initiative !== undefined) ? p.initiative : null;
-    right.textContent = (p.hasRolledInitiative && Number.isFinite(Number(iv))) ? String(iv) : '—';
+    const pendingRoll = getPendingInitiativeRoll(p.id);
+    right.className = 'turn-order-value';
+    right.textContent = pendingRoll && !p.hasRolledInitiative ? `${pendingRoll.total} · …`
+      : (p.hasRolledInitiative && Number.isFinite(Number(iv))) ? String(iv) : '—';
     right.style.opacity = '0.9';
 
     // GM: quick roll buttons for selected combatants that haven't rolled yet
@@ -1585,6 +1609,7 @@ function renderTurnOrderBox(state) {
       btnRoll.className = 'mini-action-btn';
       btnRoll.textContent = '🎲';
       btnRoll.title = 'GM бросить инициативу за персонажа';
+      btnRoll.disabled = initiativeRequestsInFlight.has(String(p.id));
       btnRoll.addEventListener('click', (e) => {
         e.stopPropagation();
         sendMessage({ type: 'gmRollInitiativeFor', id: p.id, choice: 'roll' });
@@ -1607,6 +1632,24 @@ function renderTurnOrderBox(state) {
       right.appendChild(wrap);
     }
 
+    if (isGM && p.inCombat) {
+      if (!right.children.length) right.textContent = '';
+      const input = document.createElement('input');
+      input.type = 'number'; input.min = '-100'; input.max = '200'; input.step = '1';
+      input.className = 'initiative-value-input'; input.dataset.playerId = p.id;
+      input.value = p.hasRolledInitiative ? String(p.initiative) : pendingRoll ? String(pendingRoll.total) : '';
+      input.disabled = !!pendingRoll;
+      input.placeholder = '—'; input.setAttribute('aria-label', `Инициатива: ${p.name}`);
+      input.title = 'Инициатива — введите число и нажмите Enter';
+      input.addEventListener('change', () => { if (input.validity.valid) setManualInitiative(p.id, input.value); });
+      input.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') { input.value = p.hasRolledInitiative ? String(p.initiative) : ''; input.blur(); }
+      });
+      input.addEventListener('blur', () => setTimeout(() => renderTurnOrderBox(lastState), 0));
+      right.appendChild(input);
+    }
     li.appendChild(left);
     li.appendChild(right);
     return li;
@@ -1725,14 +1768,14 @@ function renderInitiativePlayersBox(state) {
       sendMessage({ type: 'setInitiativeMode', id: p.id, mode: advSelect.value });
     });
 
-    const canRoll = !p.hasRolledInitiative;
+    const canRoll = !p.hasRolledInitiative && !initiativeRequestsInFlight.has(String(p.id));
     if (canRoll) canRollAny = true;
     const rollBtn = document.createElement('button');
     rollBtn.type = 'button';
     rollBtn.className = 'mini-action-btn';
     rollBtn.textContent = '🎲';
     rollBtn.title = canRoll ? 'Бросить инициативу' : 'Инициатива уже назначена';
-    rollBtn.disabled = !canRoll && myRole !== 'GM';
+    rollBtn.disabled = !canRoll;
     rollBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       sendMessage({ type: 'rollInitiativeFor', id: p.id });

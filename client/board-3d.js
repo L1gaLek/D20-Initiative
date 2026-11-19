@@ -1,7 +1,7 @@
 // Adapter: 3D gestures enter the existing board handlers and permission checks.
 (function () {
   'use strict';
-  const moduleUrl = new URL('board-3d/scene.mjs?v=20261119-cuirass-1', document.currentScript.src);
+  const moduleUrl = new URL('board-3d/scene.mjs?v=20261119-combat-2', document.currentScript.src);
   let active = false, loading = null, engine = null, root = null, status = null;
   let syncFrame = 0, state = null, gesture = null, lastTap = null;
   let savedScroll = null;
@@ -124,6 +124,10 @@
       const el = playerElements.get(p.id);
       return { id: String(p.id), name: String(p.name || 'Токен'), color: p.color || '#c6a35e',
         avatar: el?.dataset.fogGhost === '1' ? null : window.AvatarData?.describe(p.sheet?.parsed,!!p.isMonster) || null,
+        hud: el?.dataset.fogGhost === '1' ? null : {
+          health: typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(p) ? null : getQuickSheetStats(p),
+          conditions: canShowTokenConditionIndicators(p) ? parseTokenConditionsList(p.sheet?.parsed || {}) : []
+        },
         // Read the rendered, last-known DOM position, not the hidden live position.
         x: el ? parseFloat(el.style.left) / 50 : NaN, y: el ? parseFloat(el.style.top) / 50 : NaN,
         size: Math.max(1, Number(p.size) || 1), ghost: el?.dataset.fogGhost === '1',

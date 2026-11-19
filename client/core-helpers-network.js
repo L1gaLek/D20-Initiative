@@ -2307,6 +2307,19 @@ async function subscribeRoomMembersDb(roomId) {
 
 async function sendMessage(msg) {
   try {
+    if (['setPlayerInCombat', 'setPlayersInCombatBulk', 'setInitiativeMode'].includes(msg?.type)) {
+      try {
+        return await requestCombatCommand(msg.type === 'setInitiativeMode' ? 'mode' : 'select', {
+          updates: (msg.items || [msg]).map(item => ({ playerId: item.id, inCombat: item.inCombat, mode: item.mode }))
+        });
+      } catch (error) { showAppToast(error.message, { tone: 'error' }); return; }
+    }
+    if (['startInitiative', 'startCombat', 'endTurn', 'previousTurn'].includes(msg?.type)) {
+      return await sendCombatAction(msg.type);
+    }
+    if (['rollInitiative', 'rollInitiativeFor', 'rollInitiativeAllOwned', 'gmRollInitiativeFor', 'combatInitChoice'].includes(msg?.type)) {
+      return await rollInitiativeAndSync(msg);
+    }
     await ensureSupabaseReady();
     if (!msg || typeof msg !== "object") return;
 

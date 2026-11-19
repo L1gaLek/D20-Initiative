@@ -102,6 +102,7 @@ function serverHarness(state = initialState()) {
   });
   const source = read(process.env.D20_SERVER_SOURCE || 'backend/server.js');
   context.DamageRolls = require('../../backend/shared/damage-rolls');
+  context.CombatState = require('../../backend/shared/combat-state');
   vm.runInContext(functions(source, [
     'withTransaction', 'getStatePlayers', 'findPlayerById', 'getActiveMapServer',
     'syncActiveMapCombatStateServer', 'normalizeInitiativeModeServer',
@@ -110,7 +111,8 @@ function serverHarness(state = initialState()) {
     'writeRoomState', 'persistPatchedState', 'applyPlayerStateUpdate',
     'persistStateForContext', 'persistStatePatchForContext', 'handleStatePatchRelay',
     'handlePlayerPatchRelay', 'handleInitiativeLiveRelay', 'applyInitiativeUpdates',
-    'canControlPlayer', 'setTokenAccessForContext', 'handleDiceEventRelay'
+    'canControlPlayer', 'setTokenAccessForContext', 'handleDiceEventRelay',
+    'applyCombatCommand', 'handleCombatCommandRelay'
   ]), context);
   return { context, clients, database: () => database, tick, tokenOwnerWrites };
 }

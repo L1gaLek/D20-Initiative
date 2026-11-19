@@ -1335,3 +1335,23 @@
       0 0 22px rgba(255,165,74,0.24);
   }
 }
+/* Combat roster: clear hierarchy, compact manual initiative and readiness. */
+#turn-order-box { padding: 14px; border: 1px solid rgba(206,169,98,.36); border-radius: 14px; background: linear-gradient(155deg,rgba(54,43,32,.97),rgba(24,24,28,.97)); box-shadow: 0 8px 26px #0003; }
+.turn-order-head { align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #d2b47c24; }
+.turn-order-title { color: #f1deba; font-size: 15px; letter-spacing: .02em; }
+.turn-order-round { white-space: nowrap; border-radius: 20px; background: #d9b57814; padding: 4px 9px; }
+.turn-order-item { min-height: 38px; padding: 6px 8px; gap: 8px; background: #ffffff04; }
+.turn-order-item > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.turn-order-item.is-pending { opacity: .85; }
+.turn-order-value { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; flex-shrink: 0; color: #f4d59b; font-variant-numeric: tabular-nums; font-weight: 700; }
+.initiative-value-input { box-sizing: border-box; width: 58px; height: 32px; margin: 0; padding: 4px 5px; border: 1px solid #d6b47455; border-radius: 7px; background: #15181db3; color: #f4dfb9; text-align: center; font: 700 15px system-ui; }
+.initiative-value-input:focus { outline: 2px solid #d6b474; outline-offset: 2px; }
+.turn-order-footer { display: flex; flex-direction: column; gap: 9px; margin-top: 12px; padding-top: 11px; border-top: 1px solid #d2b47c24; }
+#initiative-progress { font-size: 12px; color: #cabb9f; }
+#turn-order-start-combat { padding: 9px 12px; border: 1px solid #e1bd76; border-radius: 8px; background: linear-gradient(#b78b45,#89642e); color: #fff4dc; font-weight: 700; cursor: pointer; }
+#turn-order-start-combat[hidden] { display: none; }
+#turn-order-start-combat:disabled { opacity: .55; cursor: wait; }
+.previous-turn-btn { background: #322c26; border-color: #9c835a; }
+.turn-order-item > span:first-child { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.turn-order-item > span:first-child > input, .turn-order-item > span:first-child > span { flex-shrink: 0; }
+.turn-order-value { flex-shrink: 0; }
