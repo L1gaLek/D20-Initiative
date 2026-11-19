@@ -1,3 +1,36 @@
+let tokenAccessView = null;
+
+function getTokenAccessRoomUsers() {
+  const users=new Map();
+  for(const user of ctx?.getUsers?.()||[]){
+    const id=String(user?.id||user?.userId||user?.user_id||'');
+    const role=window.normalizeRoleForApp?.(user?.role)||user?.role;
+    if(!id||!['GM','Player'].includes(role))continue;
+    users.set(id,{id,role,name:String(user.name||'Игрок')});
+  }
+  return [...users.values()].sort((a,b)=>a.name.localeCompare(b.name,'ru')||a.id.localeCompare(b.id));
+}
+
+function refreshTokenAccessUsers() {
+  const view=tokenAccessView;
+  if(!view||!view.bar.isConnected||view.roomId!==String(ctx?.getRoomId?.()||''))return;
+  const users=getTokenAccessRoomUsers().filter(user=>user.id!==view.owner);
+  for(const control of view.controls){
+    const {select,button,action,current,emptyLabel,status}=control;
+    const choice=control.initialized?select.value:current;
+    select.replaceChildren(new Option(emptyLabel,''));
+    for(const user of users)select.appendChild(new Option(user.name,user.id));
+    if(action==='controller'&&current&&!users.some(user=>user.id===current)){
+      const missing=new Option((view.player.controllerName||'Управляющий')+' · вне комнаты',current);
+      missing.disabled=true;select.appendChild(missing);
+    }
+    select.value=[...select.options].some(option=>option.value===choice)?choice:'';
+    control.initialized=true;
+    button.disabled=(action==='owner'&&!select.value)||!!select.selectedOptions[0]?.disabled;
+    if(choice&&choice!==select.value)status.textContent='Участник вышел из комнаты. Выберите другого.';
+  }
+}
+
 function renderSheetSubtitle(player, typeLabel) {
   sheetSubtitle.replaceChildren();
   for (const [label, value] of [['Владелец', player.ownerName || '—'], ['Тип', typeLabel]]) {
@@ -21,10 +54,11 @@ function renderTokenAccessControls(player) {
     sheetSubtitle.after(bar);
   }
   bar.replaceChildren();
-  const role = ctx?.getMyRole?.();
+  const role = window.normalizeRoleForApp?.(ctx?.getMyRole?.()) || ctx?.getMyRole?.();
   const uid = String(ctx?.getMyId?.() || '');
   const owner = String(player.ownerId || '');
   const mayManage = role === 'GM' || (role === 'Player' && uid === owner);
+  tokenAccessView={bar,player,owner,roomId:String(ctx?.getRoomId?.()||''),controls:[]};
   const persist = async (action, value) => {
     flushSheetSaves(player.id);
     const result = await window.vpsApi(`/rooms/${encodeURIComponent(ctx.getRoomId())}/players/${encodeURIComponent(player.id)}/access`, {
@@ -68,7 +102,6 @@ function renderTokenAccessControls(player) {
     bar.appendChild(info);
   }
   if (!mayManage) return;
-  const users = (ctx?.getUsers?.() || []).filter(u => ['GM', 'Player'].includes(u.role));
   const addAction = (action, title, emptyLabel, current) => {
     const group = document.createElement('div');
     group.className = 'sheet-token-access__group';
@@ -77,19 +110,20 @@ function renderTokenAccessControls(player) {
     caption.textContent = title;
     const select = document.createElement('select');
     select.setAttribute('aria-label', title);
-    select.appendChild(new Option(emptyLabel, ''));
-    users.filter(u => String(u.id) !== owner).forEach(u => select.appendChild(new Option(u.name || 'Игрок', u.id)));
-    if (current && ![...select.options].some(o => o.value === current)) {
-      select.appendChild(new Option(player.controllerName || 'Игрок', current));
-    }
-    select.value = current || '';
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = action === 'owner' ? 'Передать токен' : 'Применить';
     const status = document.createElement('span');
     status.setAttribute('role', 'status');
+    tokenAccessView.controls.push({action,select,button,status,emptyLabel,current,initialized:false});
+    select.addEventListener('change',()=>{
+      status.textContent='';button.disabled=(action==='owner'&&!select.value)||!!select.selectedOptions[0]?.disabled;
+    });
     button.addEventListener('click', async () => {
       if (action === 'owner' && !select.value) return;
+      if(select.value&&!getTokenAccessRoomUsers().some(user=>user.id===select.value)){
+        status.textContent='Участник уже вышел из комнаты.';refreshTokenAccessUsers();return;
+      }
       button.disabled = true;
       status.textContent = 'Сохраняю…';
       try {
@@ -104,4 +138,5 @@ function renderTokenAccessControls(player) {
   };
   if (role === 'GM') addAction('owner', 'Передача токена', 'Выберите нового владельца', '');
   addAction('controller', 'Передача управления', 'Только владелец и ГМ', String(player.controllerId || ''));
+  refreshTokenAccessUsers();
 }

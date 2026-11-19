@@ -2062,6 +2062,7 @@ function renderShopTab(vm, canEdit) {
     init,
     open,
     refresh,
+    refreshTokenAccess: refreshTokenAccessUsers,
     getSheetForRolls(player) {
       const model = deepClone(player);
       if (model) restoreSheetDraft(model);

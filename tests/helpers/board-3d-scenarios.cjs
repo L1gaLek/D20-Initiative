@@ -44,10 +44,11 @@ module.exports = async function ({ pages, h, broadcast, screenshotDir, clone }) 
   assert.equal(await p3.evaluate(()=>Board3D.inspect().tokens.some(t=>t.id==='secret-3d')),false);
   console.log('PASS 3D: real WebGL scene loads vendored modules under the static app; volumetric walls/pawns respect private tokens');
   const box=await gm.locator('.board-3d-canvas').boundingBox();
+  assert.ok(box.width>=250,'3D viewport keeps its width when the combat header is hidden');
   const center={x:box.x+box.width*.5,y:box.y+box.height*.6};
   await gm.mouse.move(center.x,center.y); await gm.mouse.down({button:'right'}); await gm.mouse.move(center.x+110,center.y+45,{steps:14}); await gm.mouse.up({button:'right'}); await gm.waitForTimeout(300);
   const rotated=await gm.evaluate(()=>Board3D.inspect());
-  assert.ok(rotated.camera.some((v,i)=>Math.abs(v-initial.camera[i])>.5));
+  assert.ok(rotated.camera.some((v,i)=>Math.abs(v-initial.camera[i])>.5),JSON.stringify({before:initial.camera,after:rotated.camera,box,center,hit:await gm.evaluate(p=>document.elementFromPoint(p.x,p.y)?.outerHTML.slice(0,240),center)}));
   await gm.mouse.move(center.x,center.y); await gm.mouse.down({button:'middle'}); await gm.mouse.move(center.x+65,center.y-40,{steps:12}); await gm.mouse.up({button:'middle'}); await gm.waitForTimeout(300);
   const panned=await gm.evaluate(()=>Board3D.inspect()); assert.ok(panned.target.some((v,i)=>Math.abs(v-rotated.target[i])>.1),JSON.stringify({rotated,panned,center,target:await gm.evaluate(p=>document.elementFromPoint(p.x,p.y)?.outerHTML.slice(0,300),center)}));
   const distance=s=>Math.hypot(...s.camera.map((v,i)=>v-s.target[i]));

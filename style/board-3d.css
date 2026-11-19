@@ -121,8 +121,12 @@
   .board-3d-caption { font-size: 10px; left: 6px; }
 }
 
-.board-3d-death-roll { position:absolute; z-index:7; top:0; left:0; width:36px; height:26px; margin:0 0 0 -18px; padding:0; border:1px solid #d7b06b; border-radius:8px; background:linear-gradient(#695032,#35271c); color:#ffe5ac; box-shadow:0 2px 8px #0007; font:700 13px system-ui; cursor:var(--cursor-select); pointer-events:auto; }
-.board-3d-death-roll:hover { background:#866135; }
-.board-3d-death-roll:focus-visible { outline:2px solid #ffdf8c; outline-offset:3px; }
-.board-3d-death-roll:disabled { opacity:.6; cursor:wait; }
-.board-3d-death-roll[hidden] { display:none; }
+#board-wrapper .board-3d-death-roll { position:absolute; z-index:7; top:0; left:0; display:grid; place-items:center; width:24px; height:24px; min-height:0; margin:0; padding:0; border:0; border-radius:50%; background:transparent; color:#e3ba70; box-shadow:none; cursor:var(--cursor-select); pointer-events:auto; }
+#board-wrapper .board-3d-death-roll svg { width:20px; height:20px; display:block; }
+#board-wrapper .board-3d-death-roll:hover { background:#e3ba7026; color:#ffe2a0; }
+#board-wrapper .board-3d-death-roll:focus-visible { outline:2px solid #ffdf8c; outline-offset:3px; }
+#board-wrapper .board-3d-death-roll:disabled { opacity:.6; cursor:wait; }
+#board-wrapper .board-3d-death-roll[hidden] { display:none; }
+
+/* The hidden 2D board must not make a percentage-width 3D viewport collapse. */
+#board-col:has(> #board-wrapper.board-view--3d) { min-width:var(--board-viewport-width,500px); }

@@ -1351,7 +1351,7 @@
 #turn-order-start-combat { padding: 9px 12px; border: 1px solid #e1bd76; border-radius: 8px; background: linear-gradient(#b78b45,#89642e); color: #fff4dc; font-weight: 700; cursor: pointer; }
 #turn-order-start-combat[hidden] { display: none; }
 #turn-order-start-combat:disabled { opacity: .55; cursor: wait; }
-.previous-turn-btn { background: #322c26; border-color: #9c835a; }
+
 .turn-order-item > span:first-child { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .turn-order-item > span:first-child > input, .turn-order-item > span:first-child > span { flex-shrink: 0; }
 .turn-order-value { flex-shrink: 0; }
@@ -1360,3 +1360,14 @@
 #turn-order-start-combat>span { font-size:19px; line-height:1; }
 @keyframes combat-ready-outline { 0%,100%{border-color:#bd9858;box-shadow:0 0 0 0 #e9c98200} 50%{border-color:#ffe7a7;box-shadow:0 0 0 2px #e9c98255,0 0 15px #e9c98233} }
 @media(prefers-reduced-motion:reduce){#turn-order-start-combat{animation:none;border-color:#ffe7a7;box-shadow:0 0 0 2px #e9c98244}}
+
+/* The combat header appears only while a battle is active. */
+#current-turn[hidden] { display:none !important; }
+#current-turn { box-sizing:border-box; flex:0 1 auto; display:flex; align-items:center; justify-content:space-between; gap:18px; width:min(760px,var(--board-viewport-width,100%)); max-width:100%; padding:12px 14px; border:1px solid #b68b4a55; border-radius:14px; background:linear-gradient(135deg,#32271cf2,#1c1c21f2); box-shadow:0 6px 18px #0003; text-align:left; }
+#current-turn .current-turn-info { min-width:0; flex:1; }
+#current-turn .current-turn-caption { display:flex; align-items:center; gap:10px; margin-bottom:4px; color:#bbaa8e; font-size:11px; line-height:1.3; }
+#current-turn-round { padding:2px 7px; border-radius:10px; color:#ddc9a3; background:#c9a36514; white-space:nowrap; font-size:10px; }
+#current-player { display:block; font-size:17px; line-height:1.3; font-weight:700; color:#f4e5c8; overflow-wrap:anywhere; }
+#current-turn .current-turn-actions { display:flex; flex-wrap:wrap; flex:0 0 auto; gap:8px; }
+#current-turn .turn-control-btn { box-sizing:border-box; min-height:36px; margin:0; padding:8px 13px; border-radius:9px; font-family:inherit; font-size:12px; font-weight:700; line-height:1.25; white-space:nowrap; }
+@media(max-width:620px){#current-turn{flex-direction:column;align-items:stretch;gap:10px}#current-turn .current-turn-actions{display:flex}#current-turn .turn-control-btn{flex:1}}

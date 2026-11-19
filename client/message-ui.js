@@ -221,6 +221,7 @@ function refreshUsersUi() {
   updatePlayerList();
   try { window.refreshRoomDetailsInfo?.(); } catch {}
   try { window.RoomChat?.refreshUsers?.(); } catch {}
+  try { window.InfoModal?.refreshTokenAccess?.(); } catch {}
   try { window.TavernChat?.refreshUsers?.(); } catch {}
 }
 
@@ -1469,10 +1470,15 @@ function renderLog(logs) {
 // ================== CURRENT PLAYER ==================
 function updateCurrentPlayer(state) {
   const inCombat = (state && state.phase === 'combat');
+  const turnPanel=document.getElementById('current-turn');
+  if(turnPanel)turnPanel.hidden=!inCombat;
+  const roundLabel=document.getElementById('current-turn-round');
+  if(roundLabel)roundLabel.textContent='Круг '+Math.max(1,Number(state?.round)||1);
   const previous = document.getElementById('previous-turn');
   if (previous) {
     previous.style.display = inCombat && myRole === 'GM' ? 'inline-block' : 'none';
     previous.disabled = !state?.turnHistory?.length || combatActionBusy;
+    previous.classList.toggle('is-active',inCombat&&!previous.disabled);
   }
 
   // по умолчанию

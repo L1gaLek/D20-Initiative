@@ -2258,6 +2258,7 @@ async function refreshRoomMembers(roomId, opts = {}) {
   });
 
   updatePlayerList();
+  try { window.InfoModal?.refreshTokenAccess?.(); } catch {}
   try { window.RoomChat?.refreshUsers?.(); } catch {}
 
   const shouldBroadcast = !!opts?.broadcast && !!wsRoomId && !!wsClient && wsClient.readyState === WebSocket.OPEN;

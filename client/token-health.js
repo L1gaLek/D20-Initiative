@@ -36,5 +36,6 @@
     }
     return {roll:n,outcome:ds.lastOutcome};
   }
-  return {describe,applyRoll};
+  const d20Icon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 20.5 7v10L12 22 3.5 17V7L12 2Z" fill="currentColor"/><path d="M12 2v20M3.5 7l8.5 5 8.5-5M3.5 17l8.5-5 8.5 5" fill="none" stroke="rgba(255,255,255,.32)" stroke-width="1.2"/></svg>';
+  return {describe,applyRoll,d20Icon};
 });

@@ -67,6 +67,7 @@
       if (!boardWrapper) return;
       boardWrapper.style.overflow = window.__boardViewMode === '3d' ? 'hidden' : 'auto';
       boardWrapper.style.width = `${viewportCols * CELL}px`;
+      document.getElementById('board-col')?.style.setProperty('--board-viewport-width', `${viewportCols * CELL}px`);
       boardWrapper.style.height = `${viewportRows * CELL}px`;
     }
 

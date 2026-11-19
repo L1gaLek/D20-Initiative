@@ -88,6 +88,7 @@ const server = http.createServer(async (req, res) => {
         const text = `${event.fromName}: ${event.kindText}: ${event.rolls.join(',')}${event.bonus >= 0 ? '+' : ''}${event.bonus} = ${event.total}`;
         return json(res, { ok: true, event, row: event, logRow: { id: `damage-log-${diceId}`, text } });
       }
+      if (url.pathname.endsWith('/rows/room_members')) return json(res, {ok:true,rows:members});
       if (url.pathname.endsWith('/members')) return json(res, { ok: true, users: members, rows: members });
       if (url.pathname.endsWith('/tokens')) return json(res, { ok: true, rows: start.players.map(p => ({ token_id: p.id, map_id: 'map-1', x: p.x, y: p.y, size: 1, is_public: true })) });
       return json(res, { ok: true, rows: [], rooms: [], list: [], row: { id: `log-${diceId}`, text: data.text, created_at: new Date().toISOString() } });
@@ -226,6 +227,7 @@ async function main() {
     await gm.locator('#start-combat').click();
     await waitFor(() => h.database().phase === 'combat', 'GM starts combat');
     await require('./helpers/combat-ui-scenarios.cjs')({pages,h,broadcast,clone,start,screenshotDir,dropNextCombatAck:()=>{dropNextCombatAck=true;}});
+    if (process.env.D20_TURN_ACCESS_ONLY) { await require('./helpers/turn-access-scenarios.cjs')({pages,h,screenshotDir,members}); assert.deepEqual(errors,[]); return; }
     if (process.env.D20_HEALTH_TOOLS_ONLY) { await require('./helpers/health-tools-scenarios.cjs')({pages,h,broadcast,clone,start,screenshotDir,requests}); assert.deepEqual(errors,[]); return; }
     if (process.env.D20_COMBAT_ONLY) { assert.deepEqual(errors,[]); return; }
     await gm.evaluate(() => sendMessage({ type: 'startExploration' }));

@@ -13,7 +13,6 @@ function disposeTree(group) {
   group.traverse(object => {
     object.userData.dispose?.();
     object.userData.deathButton?.remove();
-    object.userData.deathButton?.remove();
     if (object.geometry && !object.isSprite && !object.geometry.userData.shared) geometries.add(object.geometry);
     for (const material of [].concat(object.material || [])) {
       materials.add(material);
@@ -348,7 +347,7 @@ export function createBoard3D(root, callbacks) {
     const hasHp=health&&Number(health.hpMax)>0;
     const conditions=token.hud?.conditions||[];
     if(!token.hud||token.ghost||(!hasHp&&!conditions.length)){group.userData.deathButton?.remove();group.userData.deathButton=null;return;}
-    const dying=hasHp&&life?.mode==='dying',cardHeight=hasHp?(dying?140:64):0;
+    const dying=hasHp&&life?.mode==='dying',cardHeight=hasHp?(dying?102:64):0;
     const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
     ctx.font='600 25px system-ui, sans-serif';
     const lines=[];let line='';
@@ -366,7 +365,10 @@ export function createBoard3D(root, callbacks) {
           ctx.strokeStyle=fail?'#b76b71':'#71aa89';ctx.lineWidth=1.5;ctx.stroke();}
         ctx.font='600 18px system-ui';ctx.fillStyle=life.lastRoll==null?'#aca292':life.lastRoll>=10?'#8de0ae':'#f08f91';
         ctx.fillText(life.result||'Успех: 10 и выше',256,79,228);
-        if(!token.hud.canRollDeathSave){ctx.font='16px system-ui';ctx.fillStyle='#a99d88';ctx.fillText('Ожидание броска',256,112,228);}
+        if(!token.hud.canRollDeathSave){
+          ctx.beginPath();ctx.moveTo(256,39);ctx.lineTo(266,45);ctx.lineTo(266,57);ctx.lineTo(256,63);ctx.lineTo(246,57);ctx.lineTo(246,45);ctx.closePath();
+          ctx.fillStyle='#76674d';ctx.fill();ctx.strokeStyle='#bba77c';ctx.stroke();
+        }
       }else{
         const max=Number(health.hpMax),cur=health.hpCur==null?max:Number(health.hpCur),temp=Math.max(0,Number(health.hpTemp)||0);
         const ratio=life?.ratio??Math.max(0,Math.min(1,cur/max));
@@ -387,12 +389,13 @@ export function createBoard3D(root, callbacks) {
       let button=group.userData.deathButton;
       if(!button){
         button=document.createElement('button');button.type='button';button.className='board-3d-death-roll';button.dataset.deathToken=token.id;
+        button.innerHTML=window.TokenHealth.d20Icon;
         button.setAttribute('aria-label','Спасбросок от смерти: '+token.name);button.title='Спасбросок от смерти · d20 · успех от 10';
         for(const event of ['pointerdown','pointerup','mousedown','mouseup','dblclick','keydown'])button.addEventListener(event,e=>e.stopPropagation());
         button.addEventListener('click',async e=>{e.stopPropagation();button.disabled=true;try{await callbacks.rollDeathSave(token.id);}finally{if(button.isConnected)button.disabled=false;}});
         root.append(button);group.userData.deathButton=button;
       }
-      button.textContent=token.hud.deathSavePending?'…':'d20';button.disabled=!!token.hud.deathSavePending;
+      button.disabled=!!token.hud.deathSavePending;button.setAttribute('aria-busy',String(!!token.hud.deathSavePending));
       group.userData.hudCanvasHeight=canvas.height;
     }else{group.userData.deathButton?.remove();group.userData.deathButton=null;}
   }
@@ -402,18 +405,31 @@ export function createBoard3D(root, callbacks) {
     for(const group of pawns.values()){
       const button=group.userData.deathButton,hud=group.userData.hud;if(!button||!hud)continue;
       const point=hud.getWorldPosition(new THREE.Vector3());
-      point.addScaledVector(cameraUp,(.5-112/group.userData.hudCanvasHeight)*hud.scale.y*group.scale.y);
+      point.addScaledVector(cameraUp,(.5-51/group.userData.hudCanvasHeight)*hud.scale.y*group.scale.y);
       const side=point.clone().addScaledVector(cameraRight,1.175*group.scale.x/2).project(camera),screen=point.project(camera);
       const width=Math.abs(side.x-screen.x)*rect.width;
       button.hidden=screen.z>1||screen.z< -1||Math.abs(screen.x)>1||Math.abs(screen.y)>1||width<44;
       if(!button.hidden)button.style.transform='translate(-50%,-50%) translate('+(rect.left-host.left+(screen.x+1)*rect.width/2)+'px,'+(rect.top-host.top+(1-screen.y)*rect.height/2)+'px)';
     }
   }
+  function updateTurnIndicator(group,token){
+    let marker=group.userData.turnIndicator;
+    if(token.currentTurn&&!token.ghost&&!marker){
+      marker=new THREE.Group();
+      const radius=token.size/group.scale.x;
+      const halo=new THREE.Mesh(new THREE.RingGeometry(.50,.64,48),new THREE.MeshBasicMaterial({color:'#ffcb62',transparent:true,opacity:.24,side:THREE.DoubleSide,depthWrite:false}));
+      halo.rotation.x=-Math.PI/2;halo.position.y=.065;halo.scale.setScalar(radius);marker.add(halo);
+      const rim=new THREE.Mesh(new THREE.TorusGeometry(.56,.035,6,48),new THREE.MeshBasicMaterial({color:'#ffde89'}));
+      rim.rotation.x=Math.PI/2;rim.position.y=.105;rim.scale.setScalar(radius);marker.add(rim);
+      group.add(marker);group.userData.turnIndicator=marker;
+    }
+    if(marker)marker.visible=!!token.currentTurn&&!token.ghost;
+  }
   function updatePawns(tokens,firstMap=false) {
     const present=new Set(tokens.map(t=>t.id));
     for (const [id,group] of pawns) if (!present.has(id)) { disposeTree(group); pawnGroup.remove(group); pawns.delete(id); }
     for (const token of tokens) {
-      const {x,y,hud,...style}=token, key=JSON.stringify(style)+'|'+armorAssetRevision(token.avatar);
+      const {x,y,hud,currentTurn,...style}=token, key=JSON.stringify(style)+'|'+armorAssetRevision(token.avatar);
       if(token.avatar&&token.avatar.armor!=='none'&&!armorAssetRevision(token.avatar)){
         const id=token.avatar.model+'-'+token.avatar.armor;
         if(!armorLoads.has(id)){armorLoads.add(id);ensureArmorAsset(token.avatar).then(()=>{if(current&&canvas.isConnected)sync(current);}).catch(error=>{armorLoads.delete(id);console.warn('Armor model unavailable:',error.message);});}
@@ -448,6 +464,7 @@ export function createBoard3D(root, callbacks) {
         pawnGroup.add(group);pawns.set(token.id,group);
       }
       updatePawnHud(group,token);
+      updateTurnIndicator(group,token);
       const target=new THREE.Vector3(x+token.size/2,0,y+token.size/2),oldTarget=group.userData.target;
       if(!oldTarget||firstMap||token.ghost||!active){group.position.copy(target);group.userData.motion=null;}
       else if(!oldTarget.equals(target)){
@@ -641,7 +658,7 @@ export function createBoard3D(root, callbacks) {
     },
     setWallFade(value) { fadeWalls=!!value; if(current) sync(current); },
     inspect() {
-      return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,hud:g.userData.hud ? JSON.parse(g.userData.hudKey) : null,
+      return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,currentTurn:!!g.userData.turnIndicator?.visible,hud:g.userData.hud ? JSON.parse(g.userData.hudKey) : null,
         avatar:g.userData.figure?.userData.avatar||null,armorQuality:g.userData.figure?.userData.armorQuality,stance:g.userData.figure?.userData.stance||null,walking:!!g.userData.motion,studioAnimating:!!g.userData.figure?.userData.studioAnimating,limbAngle:g.userData.figure?.userData.walkAngle||0 })),
         combat:{mode:current?.combat?.mode||null,cells:combatGroup.children.filter(m=>m.userData.kind).map(m=>({kind:m.userData.kind,count:m.userData.cells}))},
         magicWalls:wallGroup.children.filter(m=>m.userData.wallType?.startsWith('magic')).reduce((sum,m)=>sum+m.count,0),
