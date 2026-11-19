@@ -2069,6 +2069,8 @@ function renderShopTab(vm, canEdit) {
     },
     close: closeModal,
     flushSheetSaves,
+    rollDeathSave: rollCharacterDeathSave,
+    isDeathSavePending: id => deathSaveRollsInFlight.has(String(id)),
     acknowledgeSheetSave,
     onSavedBasesList,
     onSavedBaseSaved,

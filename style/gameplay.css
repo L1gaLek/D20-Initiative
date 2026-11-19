@@ -1355,3 +1355,8 @@
 .turn-order-item > span:first-child { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .turn-order-item > span:first-child > input, .turn-order-item > span:first-child > span { flex-shrink: 0; }
 .turn-order-value { flex-shrink: 0; }
+
+#turn-order-start-combat { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; margin:0 0 12px; animation:combat-ready-outline 1.8s ease-in-out infinite; }
+#turn-order-start-combat>span { font-size:19px; line-height:1; }
+@keyframes combat-ready-outline { 0%,100%{border-color:#bd9858;box-shadow:0 0 0 0 #e9c98200} 50%{border-color:#ffe7a7;box-shadow:0 0 0 2px #e9c98255,0 0 15px #e9c98233} }
+@media(prefers-reduced-motion:reduce){#turn-order-start-combat{animation:none;border-color:#ffe7a7;box-shadow:0 0 0 2px #e9c98244}}

@@ -12,6 +12,8 @@ function disposeTree(group) {
   const geometries = new Set(), materials = new Set(), textures = new Set();
   group.traverse(object => {
     object.userData.dispose?.();
+    object.userData.deathButton?.remove();
+    object.userData.deathButton?.remove();
     if (object.geometry && !object.isSprite && !object.geometry.userData.shared) geometries.add(object.geometry);
     for (const material of [].concat(object.material || [])) {
       materials.add(material);
@@ -161,7 +163,7 @@ export function createBoard3D(root, callbacks) {
     let actions=false;for(const pawn of pawns.values()){const figure=pawn.userData.figure;if(figure?.userData.studioAnimating){figure.userData.advanceStudio(seconds,!!pawn.userData.motion);actions=true;}}
     if (dirty || changed || walking || actions) {
       for(const group of [fogGroup,wallGroup])group.children.forEach(mesh=>{if(mesh.material.uniforms?.time)mesh.material.uniforms.time.value=time/1000;});
-      renderer.render(scene, camera); counters.frames++; dirty=false;
+      renderer.render(scene, camera); positionDeathButtons(); counters.frames++; dirty=false;
     }
     if (animation || changed || navigating || pan || walking || actions) { if (!raf) raf=requestAnimationFrame(frame); }
     else if ([fogGroup,wallGroup].some(group=>group.children.some(mesh=>mesh.material.uniforms?.time))) idleTimer=setTimeout(invalidate,100);
@@ -336,44 +338,76 @@ export function createBoard3D(root, callbacks) {
   }
   const armorLoads=new Set();
   function updatePawnHud(group, token) {
-    const key = JSON.stringify(token.hud || null);
-    if (group.userData.hudKey === key) return;
-    group.userData.hudKey = key;
-    const previous = group.userData.hud;
-    if (previous) { group.remove(previous); previous.material.map.dispose(); previous.material.dispose(); }
-    group.userData.hud = null;
-    if (!token.hud || token.ghost) return;
-    const health = token.hud.health;
-    const hasHp = health && health.hpMax != null && Number(health.hpMax) > 0;
-    const conditions = token.hud.conditions || [];
-    if (!hasHp && !conditions.length) return;
-    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
-    ctx.font = '600 25px system-ui, sans-serif';
-    const lines = []; let line = '';
-    for (const condition of conditions) {
-      const next = line ? `${line} · ${condition}` : String(condition);
-      if (ctx.measureText(next).width > 470 && line) { lines.push(line); line = String(condition); }
-      else line = next;
+    const key=JSON.stringify(token.hud||null);
+    if(group.userData.hudKey===key)return;
+    group.userData.hudKey=key;
+    const previous=group.userData.hud;
+    if(previous){group.remove(previous);previous.material.map.dispose();previous.material.dispose();}
+    group.userData.hud=null;
+    const health=token.hud?.health,life=token.hud?.life;
+    const hasHp=health&&Number(health.hpMax)>0;
+    const conditions=token.hud?.conditions||[];
+    if(!token.hud||token.ghost||(!hasHp&&!conditions.length)){group.userData.deathButton?.remove();group.userData.deathButton=null;return;}
+    const dying=hasHp&&life?.mode==='dying',cardHeight=hasHp?(dying?140:64):0;
+    const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+    ctx.font='600 25px system-ui, sans-serif';
+    const lines=[];let line='';
+    for(const condition of conditions){const next=line?line+' · '+condition:String(condition);
+      if(ctx.measureText(next).width>470&&line){lines.push(line);line=String(condition);}else line=next;}
+    if(line)lines.push(line);
+    canvas.width=512;canvas.height=cardHeight+lines.length*34+12;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    if(hasHp){
+      ctx.fillStyle='rgba(14,19,26,.94)';ctx.beginPath();ctx.roundRect(132,4,248,cardHeight-8,12);ctx.fill();
+      if(dying){
+        ctx.font='600 21px system-ui';ctx.fillStyle='#f4d6ad';ctx.fillText('Спасброски смерти',256,23,228);
+        for(let i=0;i<6;i++){const fail=i<3,filled=(fail?i:i-3)<(fail?life.fail:life.success),x=fail?162+i*34:282+(i-3)*34;
+          ctx.beginPath();ctx.arc(x,51,10,0,Math.PI*2);ctx.fillStyle=filled?(fail?'#cf555a':'#55bd83'):'#202a31';ctx.fill();
+          ctx.strokeStyle=fail?'#b76b71':'#71aa89';ctx.lineWidth=1.5;ctx.stroke();}
+        ctx.font='600 18px system-ui';ctx.fillStyle=life.lastRoll==null?'#aca292':life.lastRoll>=10?'#8de0ae':'#f08f91';
+        ctx.fillText(life.result||'Успех: 10 и выше',256,79,228);
+        if(!token.hud.canRollDeathSave){ctx.font='16px system-ui';ctx.fillStyle='#a99d88';ctx.fillText('Ожидание броска',256,112,228);}
+      }else{
+        const max=Number(health.hpMax),cur=health.hpCur==null?max:Number(health.hpCur),temp=Math.max(0,Number(health.hpTemp)||0);
+        const ratio=life?.ratio??Math.max(0,Math.min(1,cur/max));
+        ctx.fillStyle='#29353d';ctx.fillRect(138,15,236,36);
+        ctx.fillStyle=life?.color||(temp?'#004a6b':'#428d65');ctx.fillRect(138,15,236*ratio,36);
+        ctx.font='700 24px system-ui';ctx.fillStyle='#fff5df';
+        ctx.fillText(life?.text||(temp?temp+' ('+cur+'/'+max+')':cur+'/'+max),256,34,228);
+      }
     }
-    if (line) lines.push(line);
-    canvas.width = 512; canvas.height = (hasHp ? 64 : 8) + lines.length * 34 + 12;
-    ctx.fillStyle = 'rgba(14,19,26,.92)'; ctx.beginPath(); ctx.roundRect(8,4,496,canvas.height-8,14); ctx.fill();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (hasHp) {
-      const max = Number(health.hpMax), cur = health.hpCur == null ? max : Number(health.hpCur), temp = Math.max(0,Number(health.hpTemp)||0);
-      const ratio = Math.max(0,Math.min(1,cur/max));
-      ctx.fillStyle = '#29353d'; ctx.fillRect(20,15,472,36);
-      ctx.fillStyle = ratio > .5 ? '#428d65' : ratio > .25 ? '#b88632' : '#a74348'; ctx.fillRect(20,15,472*ratio,36);
-      ctx.font = '700 26px system-ui, sans-serif'; ctx.fillStyle = '#fff5df';
-      ctx.fillText(`${cur} / ${max}${temp ? `  +${temp} врем.` : ''}`,256,34,456);
+    if(lines.length){ctx.fillStyle='rgba(14,19,26,.9)';ctx.beginPath();ctx.roundRect(8,cardHeight+3,496,lines.length*34+5,10);ctx.fill();}
+    ctx.font='600 25px system-ui';ctx.fillStyle='#f3d796';
+    lines.forEach((text,i)=>ctx.fillText(text,256,cardHeight+22+i*34,470));
+    const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+    const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false});material.userData.ownedMap=true;
+    const hud=new THREE.Sprite(material),height=2.35*canvas.height/512;
+    hud.scale.set(2.35,height,1);hud.position.y=(token.avatar?2.13:1.85)+height/2;hud.renderOrder=6;group.add(hud);group.userData.hud=hud;
+    if(dying&&token.hud.canRollDeathSave&&callbacks.rollDeathSave){
+      let button=group.userData.deathButton;
+      if(!button){
+        button=document.createElement('button');button.type='button';button.className='board-3d-death-roll';button.dataset.deathToken=token.id;
+        button.setAttribute('aria-label','Спасбросок от смерти: '+token.name);button.title='Спасбросок от смерти · d20 · успех от 10';
+        for(const event of ['pointerdown','pointerup','mousedown','mouseup','dblclick','keydown'])button.addEventListener(event,e=>e.stopPropagation());
+        button.addEventListener('click',async e=>{e.stopPropagation();button.disabled=true;try{await callbacks.rollDeathSave(token.id);}finally{if(button.isConnected)button.disabled=false;}});
+        root.append(button);group.userData.deathButton=button;
+      }
+      button.textContent=token.hud.deathSavePending?'…':'d20';button.disabled=!!token.hud.deathSavePending;
+      group.userData.hudCanvasHeight=canvas.height;
+    }else{group.userData.deathButton?.remove();group.userData.deathButton=null;}
+  }
+  function positionDeathButtons(){
+    const rect=canvas.getBoundingClientRect(),host=root.getBoundingClientRect();
+    const cameraUp=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1),cameraRight=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);
+    for(const group of pawns.values()){
+      const button=group.userData.deathButton,hud=group.userData.hud;if(!button||!hud)continue;
+      const point=hud.getWorldPosition(new THREE.Vector3());
+      point.addScaledVector(cameraUp,(.5-112/group.userData.hudCanvasHeight)*hud.scale.y*group.scale.y);
+      const side=point.clone().addScaledVector(cameraRight,1.175*group.scale.x/2).project(camera),screen=point.project(camera);
+      const width=Math.abs(side.x-screen.x)*rect.width;
+      button.hidden=screen.z>1||screen.z< -1||Math.abs(screen.x)>1||Math.abs(screen.y)>1||width<44;
+      if(!button.hidden)button.style.transform='translate(-50%,-50%) translate('+(rect.left-host.left+(screen.x+1)*rect.width/2)+'px,'+(rect.top-host.top+(1-screen.y)*rect.height/2)+'px)';
     }
-    ctx.font = '600 25px system-ui, sans-serif'; ctx.fillStyle = '#f3d796';
-    lines.forEach((text,i) => ctx.fillText(text,256,(hasHp ? 78 : 25)+i*34,470));
-    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-    const material = new THREE.SpriteMaterial({ map:texture,transparent:true,depthTest:false,depthWrite:false }); material.userData.ownedMap = true;
-    const hud = new THREE.Sprite(material), height = 2.35 * canvas.height / 512;
-    hud.scale.set(2.35,height,1); hud.position.y = (token.avatar ? 2.13 : 1.85) + height/2;
-    hud.renderOrder = 6; group.add(hud); group.userData.hud = hud;
   }
   function updatePawns(tokens,firstMap=false) {
     const present=new Set(tokens.map(t=>t.id));

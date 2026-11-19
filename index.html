@@ -7,17 +7,17 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
 <link rel="shortcut icon" href="favicon.ico">
-<link rel="stylesheet" href="style/base.css?v=20261119-combat-2">
-<link rel="stylesheet" href="style/layout.css?v=20261119-combat-2">
-<link rel="stylesheet" href="style/lobby.css?v=20261119-combat-2">
+<link rel="stylesheet" href="style/base.css?v=20261119-health-tools-1">
+<link rel="stylesheet" href="style/layout.css?v=20261119-health-tools-1">
+<link rel="stylesheet" href="style/lobby.css?v=20261119-health-tools-1">
 <link rel="stylesheet" href="style/board.css">
-<link rel="stylesheet" href="style/map-editor.css?v=20261119-combat-2">
-<link rel="stylesheet" href="style/board-3d.css?v=20261119-combat-2">
-<link rel="stylesheet" href="style/character-3d.css?v=20261119-combat-2">
-<link rel="stylesheet" href="style/token-navigation.css?v=20261119-combat-2">
-<link rel="stylesheet" href="style/players.css?v=20261119-combat-2">
-<link rel="stylesheet" href="style/gameplay.css?v=20261119-combat-2">
-<link rel="stylesheet" href="style/cursors.css?v=20261119-combat-2">
+<link rel="stylesheet" href="style/map-editor.css?v=20261119-health-tools-1">
+<link rel="stylesheet" href="style/board-3d.css?v=20261119-health-tools-1">
+<link rel="stylesheet" href="style/character-3d.css?v=20261119-health-tools-1">
+<link rel="stylesheet" href="style/token-navigation.css?v=20261119-health-tools-1">
+<link rel="stylesheet" href="style/players.css?v=20261119-health-tools-1">
+<link rel="stylesheet" href="style/gameplay.css?v=20261119-health-tools-1">
+<link rel="stylesheet" href="style/cursors.css?v=20261119-health-tools-1">
 </head>
 <body class="lobby-active">
 
@@ -596,9 +596,9 @@
               <div class="turn-order-title">Очередность хода</div>
               <div class="turn-order-round">Круг - <span id="turn-order-round">1</span></div>
             </div>
+            <button id="turn-order-start-combat" type="button" hidden><span aria-hidden="true">⚔</span> Фаза боя</button>
             <ul id="turn-order-list" class="turn-order-list"></ul>
             <div class="turn-order-footer"><span id="initiative-progress" aria-live="polite"></span>
-              <button id="turn-order-start-combat" type="button" hidden>Фаза бой</button>
             </div>
           </div>
         </div>
@@ -614,131 +614,40 @@
             </div>
           </div>
 
-          <div id="gm-panel-tools" class="gm-flyout-panel">
-            <div class="side-box gm-side-box">
-              <h3>Инструменты карты</h3>
-              <details class="gm-submenu">
-                <summary>Редактирование стен</summary>
-                <button id="edit-environment">Редактирование окружения: ВЫКЛ</button>
-                <div class="env-wall-tools">
-              <div class="env-wall-row">
-                <button id="add-wall" disabled>Рисуем стены</button>
-                <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
-                  <button id="remove-wall" disabled>Ластик</button>
-                </div>
-              </div>
-
-              <div class="env-wall-row">
-                <label style="display:flex; align-items:center; gap:8px;">
-                  <span style="min-width:64px; font-size:12px; opacity:.9;">Инструм.</span>
-                  <select id="wall-tool">
-                    <option value="brush">Кисть</option>
-                    <option value="line">Линия</option>
-                    <option value="rect">Прямоугольник</option>
-                    <option value="point">Точечный</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="env-wall-row">
-                <label style="display:flex; align-items:center; gap:8px;">
-                  <span style="min-width:64px; font-size:12px; opacity:.9;">Тип</span>
-                  <select id="wall-type">
-                    <option value="stone">Камень</option>
-                    <option value="wood">Дерево</option>
-                    <option value="magic">Магия</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="env-wall-row">
-                <label style="display:flex; align-items:center; gap:8px;">
-                  <span style="min-width:64px; font-size:12px; opacity:.9;">Толщина</span>
-                  <select id="wall-thickness">
-                    <option value="2">2px</option>
-                    <option value="3">3px</option>
-                    <option value="4">4px</option>
-                    <option value="6">6px</option>
-                    <option value="8" selected>8px</option>
-                  </select>
-                </label>
-              </div>
-
-              <!-- Черновик стен (локально) + кнопки: Загрузить / Сбросить -->
-              <div class="env-wall-row" style="margin-top:6px; align-items:center;">
-                <label style="display:flex; align-items:center; gap:8px; flex:1;">
-                  <input type="checkbox" id="wall-draft" />
-                  <span style="font-size:12px; opacity:.95;">Черновик (локально)</span>
-                </label>
-                <button id="wall-draft-upload" type="button" disabled style="white-space:nowrap;">Загрузить</button>
-                <button id="wall-draft-reset" type="button" disabled style="white-space:nowrap;">Сбросить</button>
-                <span id="wall-draft-info" style="font-size:11px; opacity:.75; margin-left:auto;"></span>
-              </div>
-
-              <!-- Очистка поля (по просьбе: под кнопкой "Сбросить" из блока черновика) -->
-              <div class="env-wall-row" style="margin-top:6px;">
-                <button id="clear-board" type="button" style="width:100%;">Очистить поле</button>
-              </div>
-            </div>
-                <div class="env-range-row">
-                  <div class="env-range-title">
-                    <span>Прозрачность стен</span>
-                    <span id="wall-opacity-val">0%</span>
+          <div id="gm-panel-tools" class="gm-flyout-panel" aria-label="Инструменты карты">
+            <div class="side-box gm-side-box map-tools-shell">
+              <header class="map-tools-header"><span class="map-tools-header__icon" aria-hidden="true">⌘</span><div><h3>Инструменты карты</h3><p>Окружение, видимость и области</p></div><button type="button" class="map-tools-close" aria-label="Закрыть инструменты карты" onclick="setActiveGmQuickPanel('')">×</button></header>
+              <details id="map-tools-walls" class="map-tool-section" data-gm-map-tool>
+                <summary><span class="map-tool-icon" aria-hidden="true">▦</span><span><strong>Редактирование стен</strong><small>Материал, форма и толщина</small></span><span class="map-tool-access">ГМ</span></summary>
+                <div class="map-tool-body">
+                  <p class="map-tool-note">Включите режим и рисуйте на карте. Ластик удаляет стены.</p>
+                  <button id="edit-environment" class="map-tool-mode" type="button">Редактирование окружения: ВЫКЛ</button>
+                  <div class="env-wall-tools">
+                    <div class="map-tools-actions"><button id="add-wall" type="button" disabled>Рисовать стены</button><button id="remove-wall" type="button" disabled>Ластик</button></div>
+                    <div class="map-tools-grid">
+                      <label>Инструмент<select id="wall-tool"><option value="brush">Кисть</option><option value="line">Линия</option><option value="rect">Прямоугольник</option><option value="point">Точечный</option></select></label>
+                      <label>Материал<select id="wall-type"><option value="stone">Камень</option><option value="wood">Дерево</option><option value="magic">Магия</option></select></label>
+                      <label>Толщина<select id="wall-thickness"><option value="2">2 px</option><option value="3">3 px</option><option value="4">4 px</option><option value="6">6 px</option><option value="8" selected>8 px</option></select></label>
+                    </div>
+                    <div class="map-tool-draft"><label class="map-tool-check"><input type="checkbox" id="wall-draft"> Черновик · виден только вам</label><span id="wall-draft-info" role="status"></span><div class="map-tools-actions"><button id="wall-draft-upload" type="button" disabled>Применить</button><button id="wall-draft-reset" type="button" disabled>Сбросить</button></div></div>
+                    <button id="clear-board" class="map-tool-danger" type="button">Очистить стены</button>
                   </div>
-                  <input id="wall-opacity" type="range" min="0" max="100" value="0" />
+                  <div class="env-range-row"><div class="env-range-title"><label for="wall-opacity">Прозрачность стен</label><span id="wall-opacity-val">0%</span></div><input id="wall-opacity" type="range" min="0" max="100" value="0"></div>
                 </div>
               </details>
-
-              <details class="gm-submenu">
-                <summary>Туман войны</summary>
-                <div class="fog-controls" id="fog-controls">
-                  <label class="fog-row"><input type="checkbox" id="fog-enabled"> Включить</label>
-                  <label class="fog-row" style="margin-top:-2px;"><input type="checkbox" id="fog-open-for-gm"> Открыть для ГМ</label>
-                  <div class="fog-row">
-                    <label>Режим:
-                      <select id="fog-mode">
-                        <option value="manual">Ручной</option>
-                        <option value="dynamic">Динамический (LOS)</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div class="fog-row">
-                    <label>Просмотр ГМ:
-                      <select id="fog-gm-view">
-                        <option value="gm">Режим ГМ</option>
-                        <option value="player">Как у игрока</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div class="fog-row fog-row--manual">
-                    <label class="fog-inline"><input type="checkbox" id="fog-draw"> Рисовать</label>
-                    <select id="fog-brush-mode" title="Режим">
-                      <option value="reveal">Открывать</option>
-                      <option value="hide">Закрывать</option>
-                    </select>
-                    <label class="fog-inline" title="Размер квадрата NxN (1..10)">
-                      <span style="opacity:0.85;">Размер:</span>
-                      <input id="fog-square-size" type="number" min="1" max="10" value="1" style="width:64px;">
-                    </label>
-                  </div>
-                  <div class="fog-row fog-row--manual">
-                    <button id="fog-hide-all" type="button">Скрыть всё</button>
-                    <button id="fog-reveal-all" type="button">Открыть всё</button>
-                  </div>
-                  <div class="fog-row fog-row--dynamic">
-                    <label>Зрение (клеток):
-                      <input id="fog-vision" type="number" min="1" max="60" value="8" style="width:72px;">
-                    </label>
-                    <label class="fog-inline"><input type="checkbox" id="fog-use-walls" checked> Учитывать стены</label>
-                  </div>
-                  <div class="fog-row">
-                    <label class="fog-inline"><input type="checkbox" id="fog-move-only-open"> Движение по открытому</label>
-                  </div>
-                  <div class="fog-row fog-row--dynamic">
-                    <label class="fog-inline"><input type="checkbox" id="fog-explored" checked> Исследованное</label>
-                    <button id="fog-clear-explored" type="button">Очистить исслед.</button>
-                  </div>
+              <details id="map-tools-fog" class="map-tool-section" data-gm-map-tool>
+                <summary><span class="map-tool-icon" aria-hidden="true">◒</span><span><strong>Туман войны</strong><small>Скрытые и исследованные клетки</small></span><span class="map-tool-access">ГМ</span></summary>
+                <div class="map-tool-body fog-controls" id="fog-controls">
+                  <div class="map-tool-checks"><label class="fog-row map-tool-check"><input type="checkbox" id="fog-enabled"> Включить туман</label><label class="fog-row map-tool-check"><input type="checkbox" id="fog-open-for-gm"> Открыть для ГМ</label></div>
+                  <div class="map-tools-grid"><label class="fog-row">Режим<select id="fog-mode"><option value="manual">Ручной</option><option value="dynamic">Динамический · зрение</option></select></label><label class="fog-row">Просмотр<select id="fog-gm-view"><option value="gm">Режим ГМ</option><option value="player">Как у игрока</option></select></label></div>
+                  <section class="fog-row--manual map-tool-group"><label class="map-tool-check"><input type="checkbox" id="fog-draw"> Рисовать туман</label><div class="map-tools-grid"><label>Действие<select id="fog-brush-mode"><option value="reveal">Открывать</option><option value="hide">Скрывать</option></select></label><label>Кисть · клеток<input id="fog-square-size" type="number" min="1" max="10" value="1"></label></div><div class="map-tools-actions"><button id="fog-hide-all" type="button">Скрыть всё</button><button id="fog-reveal-all" type="button">Открыть всё</button></div></section>
+                  <section class="fog-row--dynamic map-tool-group"><label>Зрение · клеток<input id="fog-vision" type="number" min="1" max="60" value="8"></label><label class="map-tool-check"><input type="checkbox" id="fog-use-walls" checked> Учитывать стены</label><label class="map-tool-check"><input type="checkbox" id="fog-explored" checked> Сохранять исследованное</label><button id="fog-clear-explored" type="button">Очистить исследованное</button></section>
+                  <label class="fog-row map-tool-check"><input type="checkbox" id="fog-move-only-open"> Движение только по открытому</label>
                 </div>
+              </details>
+              <details id="map-tools-areas" class="map-tool-section" open>
+                <summary><span class="map-tool-icon" aria-hidden="true">◇</span><span><strong>Обозначение области</strong><small>Фигуры, подписи и метки на карте</small></span><span class="map-tool-access map-tool-access--all">Все</span></summary>
+                <div id="map-tools-areas-body" class="map-tool-body"></div>
               </details>
             </div>
           </div>
@@ -890,65 +799,67 @@
 </div>
 
 <!-- App config + Supabase client. -->
-<script src="client/app-config.js?v=20261119-combat-2"></script>
+<script src="client/app-config.js?v=20261119-health-tools-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <script src="controlbox.js?v=20261119-combat-2"></script>
+  <script src="controlbox.js?v=20261119-health-tools-1"></script>
   <script src="monsters-library.js"></script>
 
  <!-- Client scripts (split from former client.js) -->
-  <script src="client/dom-and-setup.js?v=20261119-combat-2"></script>
-  <script src="client/token-permissions.js?v=20261119-combat-2"></script>
-  <script src="client/avatar-data.js?v=20261119-combat-2"></script>
-  <script src="client/avatar-ui.js?v=20261119-combat-2"></script>
-  <script src="client/board-3d-data.js?v=20261119-combat-2"></script>
-  <script src="client/board-3d.js?v=20261119-combat-2"></script>
-  <script src="client/board-view.js?v=20261119-combat-2"></script>
-  <script src="client/app/lobby-shell.js?v=20261119-combat-2"></script>
-  <script src="client/rooms/lobby-room-ui.js?v=20261119-combat-2"></script>
-  <script src="client/chat-notifications.js?v=20261119-combat-2"></script>
-  <script src="client/chat-ui.js?v=20261119-combat-2"></script>
-  <script src="client/board-fog.js?v=20261119-combat-2"></script>
-  <script src="client/board-marks.js?v=20261119-combat-2"></script>
-  <script src="client/messages/lobby-room-messages.js?v=20261119-combat-2"></script>
-  <script src="client/messages/session-ui-messages.js?v=20261119-combat-2"></script>
-  <script src="backend/shared/combat-state.js?v=20261119-combat-2"></script>
-  <script src="client/message-ui.js?v=20261119-combat-2"></script>
-  <script src="client/board-players.js?v=20261119-combat-2"></script>
-  <script src="client/gameplay-ui.js?v=20261119-combat-2"></script>
-  <script src="client/board-navigation.js?v=20261119-combat-2"></script>
-  <script src="client/network/room-state-core.js?v=20261119-combat-2"></script>
-  <script src="client/network/room-state-maps.js?v=20261119-combat-2"></script>
-  <script src="client/network/detached-room-cache.js?v=20261119-combat-2"></script>
-  <script src="client/network/vps-api.js?v=20261119-combat-2"></script>
-  <script src="client/network/rooms-api.js?v=20261119-combat-2"></script>
-  <script src="client/network/characters-api.js?v=20261119-combat-2"></script>
-  <script src="client/network/room-rows-api.js?v=20261119-combat-2"></script>
-  <script src="client/network/room-state-persistence.js?v=20261119-combat-2"></script>
-  <script src="client/network/room-ownership.js?v=20261119-combat-2"></script>
-  <script src="client/network/realtime-channel-helpers.js?v=20261119-combat-2"></script>
-  <script src="client/network/room-detached-sync.js?v=20261119-combat-2"></script>
-  <script src="client/core-helpers-network.js?v=20261119-combat-2"></script>
-  <script src="client/initiative-sync.js?v=20261119-combat-2"></script>
-  <script src="client/bg-music.js?v=20261119-combat-2"></script>
-  <script src="client/rooms-controlbox.js?v=20261119-combat-2"></script>
+  <script src="client/dom-and-setup.js?v=20261119-health-tools-1"></script>
+  <script src="client/token-permissions.js?v=20261119-health-tools-1"></script>
+  <script src="client/token-health.js?v=20261119-health-tools-1"></script>
+  <script src="client/avatar-data.js?v=20261119-health-tools-1"></script>
+  <script src="client/avatar-ui.js?v=20261119-health-tools-1"></script>
+  <script src="client/board-3d-data.js?v=20261119-health-tools-1"></script>
+  <script src="client/board-3d.js?v=20261119-health-tools-1"></script>
+  <script src="client/board-view.js?v=20261119-health-tools-1"></script>
+  <script src="client/app/lobby-shell.js?v=20261119-health-tools-1"></script>
+  <script src="client/rooms/lobby-room-ui.js?v=20261119-health-tools-1"></script>
+  <script src="client/chat-notifications.js?v=20261119-health-tools-1"></script>
+  <script src="client/chat-ui.js?v=20261119-health-tools-1"></script>
+  <script src="client/board-fog.js?v=20261119-health-tools-1"></script>
+  <script src="client/board-marks.js?v=20261119-health-tools-1"></script>
+  <script src="client/map-tools-ui.js?v=20261119-health-tools-1"></script>
+  <script src="client/messages/lobby-room-messages.js?v=20261119-health-tools-1"></script>
+  <script src="client/messages/session-ui-messages.js?v=20261119-health-tools-1"></script>
+  <script src="backend/shared/combat-state.js?v=20261119-health-tools-1"></script>
+  <script src="client/message-ui.js?v=20261119-health-tools-1"></script>
+  <script src="client/board-players.js?v=20261119-health-tools-1"></script>
+  <script src="client/gameplay-ui.js?v=20261119-health-tools-1"></script>
+  <script src="client/board-navigation.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/room-state-core.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/room-state-maps.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/detached-room-cache.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/vps-api.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/rooms-api.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/characters-api.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/room-rows-api.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/room-state-persistence.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/room-ownership.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/realtime-channel-helpers.js?v=20261119-health-tools-1"></script>
+  <script src="client/network/room-detached-sync.js?v=20261119-health-tools-1"></script>
+  <script src="client/core-helpers-network.js?v=20261119-health-tools-1"></script>
+  <script src="client/initiative-sync.js?v=20261119-health-tools-1"></script>
+  <script src="client/bg-music.js?v=20261119-health-tools-1"></script>
+  <script src="client/rooms-controlbox.js?v=20261119-health-tools-1"></script>
   <!-- Character sheet (split from info-sheet-player.js) -->
-  <script src="char_sheet/sheet-utils.js?v=20261119-combat-2"></script>
-  <script src="char_sheet/sheet-saved-bases.js?v=20261119-combat-2"></script>
+  <script src="char_sheet/sheet-utils.js?v=20261119-health-tools-1"></script>
+  <script src="char_sheet/sheet-saved-bases.js?v=20261119-health-tools-1"></script>
   
-<script src="char_sheet/sheet-modal-core.js?v=20261119-combat-2"></script>
-<script src="char_sheet/sheet-modal-popups.js?v=20261119-combat-2"></script>
-<script src="char_sheet/sheet-modal-data.js?v=20261119-combat-2"></script>
-<script src="backend/shared/damage-rolls.js?v=20261119-combat-2"></script>
-<script src="char_sheet/weapon-damage.js?v=20261119-combat-2"></script>
-<script src="char_sheet/sheet-modal-combat-ui.js?v=20261119-combat-2"></script>
-<script src="char_sheet/sheet-modal-richtext.js?v=20261119-combat-2"></script>
-<script src="char_sheet/sheet-modal-spells.js?v=20261119-combat-2"></script>
-<script src="char_sheet/inventory-transfer.js?v=20261119-combat-2"></script>
-<script src="char_sheet/sheet-modal-bindings.js?v=20261119-combat-2"></script>
-<script src="char_sheet/monster-sheet-modal.js?v=20261119-combat-2"></script>
-<script src="char_sheet/sheet-token-access.js?v=20261119-combat-2"></script>
-<script src="char_sheet/sheet-modal-render.js?v=20261119-combat-2"></script>
+<script src="char_sheet/sheet-modal-core.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/sheet-modal-popups.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/sheet-modal-data.js?v=20261119-health-tools-1"></script>
+<script src="backend/shared/damage-rolls.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/weapon-damage.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/sheet-modal-combat-ui.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/sheet-modal-richtext.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/sheet-modal-spells.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/inventory-transfer.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/sheet-modal-bindings.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/monster-sheet-modal.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/sheet-token-access.js?v=20261119-health-tools-1"></script>
+<script src="char_sheet/sheet-modal-render.js?v=20261119-health-tools-1"></script>
 
 </body>
 </html>

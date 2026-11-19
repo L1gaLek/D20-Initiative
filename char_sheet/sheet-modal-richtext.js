@@ -931,25 +931,7 @@ function bindEditableInputs(root, player, canEdit) {
         e.preventDefault();
         e.stopPropagation();
         if (!canEdit) return;
-        const sheet = player.sheet?.parsed;
-        if (!sheet) return;
-        if (!isDeathSavesActiveSheet(sheet)) return;
-
-        let roll = null;
-        try {
-          if (window.DicePanel?.roll) {
-            const res = await window.DicePanel.roll({ sides: 20, count: 1, bonus: 0, kindText: 'Спасбросок от смерти: d20' });
-            roll = Number(res?.rolls?.[0]);
-          }
-        } catch {}
-        if (!Number.isFinite(roll)) roll = 1 + Math.floor(Math.random() * 20);
-
-        const result = applyDeathSaveRoll(sheet, roll);
-        if (result.outcome === 'inactive') return;
-        syncDeathSavesUi(root, sheet, canEdit);
-        updateHeroChips(root, sheet);
-        markModalInteracted(player.id);
-        scheduleSheetSave(player);
+        await rollCharacterDeathSave(player.id);
       });
     }
 

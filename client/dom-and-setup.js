@@ -547,7 +547,8 @@ function applyRoleToUI() {
 
   // ГМ-панель справа (Фазы мира + Редактирование окружения)
   const rightPanel = document.getElementById('right-panel');
-  if (rightPanel && !gm) rightPanel.style.display = 'none';
+  if (rightPanel && spectator) rightPanel.style.display = 'none';
+  document.querySelectorAll('[data-gm-map-tool]').forEach(el => { el.hidden = !gm; });
 
   // GM-настройки размера карты (реальный размер поля)
   const gmBoardSettings = document.getElementById('board-settings-gm');
@@ -568,11 +569,11 @@ function applyRoleToUI() {
   }
   if (gmQuickToolbar) gmQuickToolbar.style.display = spectator ? 'none' : 'flex';
   if (gmQuickPhaseBtn) gmQuickPhaseBtn.style.display = gm ? '' : 'none';
-  if (gmQuickToolsBtn) gmQuickToolsBtn.style.display = gm ? '' : 'none';
+  if (gmQuickToolsBtn) gmQuickToolsBtn.style.display = spectator ? 'none' : '';
   if (gmQuickMusicBtn) gmQuickMusicBtn.style.display = spectator ? 'none' : '';
   if (gmQuickSaveBtn) gmQuickSaveBtn.style.display = gm ? '' : 'none';
   if (gmQuickMapBtn) gmQuickMapBtn.style.display = spectator ? 'none' : '';
-  if (!gm) setActiveGmQuickPanel('');
+  if (spectator || (!gm && (gmPanelPhase?.classList.contains('is-open') || gmPanelSave?.classList.contains('is-open')))) setActiveGmQuickPanel('');
 
   // "Управление игроками" используется всеми, кроме зрителей
   const pm = document.getElementById('player-management');
@@ -667,6 +668,7 @@ function setActiveGmQuickPanel(panelKey) {
     rightPanel.style.display = hasOpen ? 'block' : 'none';
     rightPanel.classList.toggle('is-open', hasOpen);
     rightPanel.classList.toggle('has-map-panel', key === 'map');
+    rightPanel.classList.toggle('has-tools-panel', key === 'tools');
   }
   if (gmQuickToolbar) gmQuickToolbar.classList.toggle('is-panel-open', hasOpen);
 }
@@ -1410,44 +1412,3 @@ if (!sbClient) sbClient = window.supabase.createClient(window.SUPABASE_URL, wind
     if (joinBtn) joinBtn.disabled = false;
   }
 });
-
-
-
-// ===== MARKS (ОБОЗНАЧЕНИЯ) COLLAPSE/EXPAND =====
-(function initMarksLegendToggle(){
-  const LS_KEY = 'int_marks_legend_collapsed';
-
-  function applyCollapsed(root){
-    const toolbar = (root && root.closest) ? root.closest('.marks-toolbar') : document.querySelector('.marks-toolbar');
-    if (!toolbar) return;
-    const collapsed = localStorage.getItem(LS_KEY) === '1';
-    toolbar.classList.toggle('marks-toolbar--collapsed', collapsed);
-  }
-
-  // apply on DOM ready (and also shortly after to handle late-rendered UI)
-  function applySoon(){
-    applyCollapsed(document.querySelector('.marks-toolbar'));
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    applySoon();
-    setTimeout(applySoon, 50);
-    setTimeout(applySoon, 250);
-  });
-
-  // event delegation: UI can be rerendered
-  document.addEventListener('click', (e) => {
-    const t = e.target;
-    if (!t) return;
-
-    // Click on title or header area
-    const title = t.closest && (t.closest('.marks-toolbar__title') || t.closest('.marks-toolbar__head'));
-    if (!title) return;
-
-    const toolbar = title.closest('.marks-toolbar');
-    if (!toolbar) return;
-
-    const isCollapsed = toolbar.classList.toggle('marks-toolbar--collapsed');
-    localStorage.setItem(LS_KEY, isCollapsed ? '1' : '0');
-  });
-})();

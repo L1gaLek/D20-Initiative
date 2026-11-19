@@ -83,7 +83,6 @@
   let label = '';
 
   const LS_KEY = 'int_marks_toolbar';
-  const LS_COLLAPSE_KEY = 'int_marks_toolbar_collapsed';
   const PIN_COLOR = '#53d978';
   const PIN_TTL_MS = 7000;
   let markExpiryTimer = 0;
@@ -234,29 +233,22 @@
 
   function ensureToolbar() {
     if (toolbar) return toolbar;
-    const host = document.getElementById('board-topbar') || document.getElementById('board-col') || document.body;
+    const host = document.getElementById('map-tools-areas-body');
+    if (!host) return null;
 
     toolbar = document.createElement('div');
     toolbar.id = 'marks-toolbar';
     toolbar.className = 'marks-toolbar';
     toolbar.innerHTML = `
-      <div class="marks-toolbar__head">
-        <div class="marks-toolbar__title-row">
-          <button class="marks-toolbar__title" id="marks-toolbar-toggle" type="button" aria-expanded="true">Обозначение</button>
-          <button class="marks-pin-tool" type="button" id="marks-pin-tool" title="Метка" aria-label="Метка">
-            <span class="marks-pin-tool__icon" aria-hidden="true"></span>
-          </button>
-        </div>
-        <label class="marks-switch"><input type="checkbox" id="marks-enabled"> <span>Рисовать</span></label>
-        <button class="marks-btn" type="button" id="marks-clear" title="Удалить выбранную метку (или все ваши)">Очистить</button>
-      </div>
+      <div class="marks-toolbar__head"><label class="marks-switch"><input type="checkbox" id="marks-enabled"><span>Рисовать на карте</span></label></div>
       <div class="marks-toolbar__body">
         <div class="marks-toolbar__row">
           <div class="marks-seg" role="group" aria-label="Инструмент">
-            <button class="marks-seg__btn" type="button" data-tool="select">Выбор</button>
-            <button class="marks-seg__btn" type="button" data-tool="rect">Прямоуг.</button>
-            <button class="marks-seg__btn" type="button" data-tool="circle">Круг</button>
-            <button class="marks-seg__btn" type="button" data-tool="poly">Поли</button>
+            <button class="marks-seg__btn" type="button" data-tool="select" title="Выбрать и передвинуть область">↖ Выбор</button>
+            <button class="marks-seg__btn" type="button" data-tool="rect" title="Прямоугольник">▭ Прямоугольник</button>
+            <button class="marks-seg__btn" type="button" data-tool="circle">◯ Круг</button>
+            <button class="marks-seg__btn" type="button" data-tool="poly" title="Многоугольник из отрезков">⌁ Полилиния</button>
+            <button class="marks-seg__btn marks-pin-tool" type="button" id="marks-pin-tool" title="Метка на карте" aria-label="Метка на карте">⌖ Метка</button>
           </div>
           <label class="marks-field"><span>Цвет</span><input id="marks-color" type="color" value="#ffa500"></label>
           <label class="marks-field"><span>Заливка</span><input id="marks-fill" type="range" min="0" max="90" value="30"></label>
@@ -265,29 +257,14 @@
         </div>
         <div class="marks-toolbar__row marks-toolbar__row--sub">
           <input id="marks-label" class="marks-label" type="text" placeholder="Подпись (необязательно)">
-          <div class="marks-hint">Двойной клик — завершить многоугольник.</div>
+          <div class="marks-hint">Двойной клик завершает полилинию. В режиме «Выбор» область можно передвигать.</div>
+          <button class="marks-btn map-tool-danger" type="button" id="marks-clear" title="Удалить выбранную область, а без выбора — свои области (у ГМ — все)">Удалить обозначения</button>
         </div>
       </div>
     `;
 
     host.appendChild(toolbar);
-
-    // ===== Collapsible ("Обозначения") =====
-    try {
-      const toggleBtn = toolbar.querySelector('#marks-toolbar-toggle');
-      const applyCollapsed = (collapsed) => {
-        toolbar.classList.toggle('is-collapsed', !!collapsed);
-        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-        try { localStorage.setItem(LS_COLLAPSE_KEY, collapsed ? '1' : '0'); } catch {}
-      };
-      const savedCollapsed = String(localStorage.getItem(LS_COLLAPSE_KEY) || '') === '1';
-      applyCollapsed(savedCollapsed);
-      if (toggleBtn) {
-        toggleBtn.addEventListener('click', () => {
-          applyCollapsed(!toolbar.classList.contains('is-collapsed'));
-        });
-      }
-    } catch {}
+    window.MapToolsUI?.refresh?.();
 
     try {
       const raw = localStorage.getItem(LS_KEY);

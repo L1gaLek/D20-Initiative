@@ -226,6 +226,7 @@ async function main() {
     await gm.locator('#start-combat').click();
     await waitFor(() => h.database().phase === 'combat', 'GM starts combat');
     await require('./helpers/combat-ui-scenarios.cjs')({pages,h,broadcast,clone,start,screenshotDir,dropNextCombatAck:()=>{dropNextCombatAck=true;}});
+    if (process.env.D20_HEALTH_TOOLS_ONLY) { await require('./helpers/health-tools-scenarios.cjs')({pages,h,broadcast,clone,start,screenshotDir,requests}); assert.deepEqual(errors,[]); return; }
     if (process.env.D20_COMBAT_ONLY) { assert.deepEqual(errors,[]); return; }
     await gm.evaluate(() => sendMessage({ type: 'startExploration' }));
     await waitFor(() => h.database().phase === 'exploration', 'return to exploration');

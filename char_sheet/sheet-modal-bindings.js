@@ -75,53 +75,46 @@
   }
 
   function applyDeathSaveRoll(sheet, roll) {
-    const ds = ensureDeathSavesState(sheet);
-    const hp = safeInt(sheet?.vitality?.["hp-max"]?.value, 0);
-    const hpCur = safeInt(sheet?.vitality?.["hp-current"]?.value, 0);
-    if (!(hp > 0 && hpCur <= 0)) {
-      resetDeathSavesState(sheet);
-      return { roll: null, outcome: 'inactive' };
-    }
+    return window.TokenHealth.applyRoll(sheet, roll);
+  }
 
-    const n = Math.max(1, Math.min(20, safeInt(roll, 1)));
-    ds.lastRoll = n;
-    ds.lastOutcome = '';
-
-    if (n === 20) {
-      ds.success = 0;
-      ds.fail = 0;
-      ds.stabilized = false;
-      if (!sheet.vitality["hp-current"]) sheet.vitality["hp-current"] = { value: 0 };
-      sheet.vitality["hp-current"].value = 1;
-      ds.lastOutcome = 'crit-success';
-      return { roll: n, outcome: ds.lastOutcome };
-    }
-    if (n === 1) {
-      ds.fail = Math.max(0, Math.min(3, ds.fail + 2));
-      ds.lastOutcome = 'crit-fail';
-      if (ds.fail >= 3) ds.stabilized = false;
-      return { roll: n, outcome: ds.lastOutcome };
-    }
-    if (n >= 10) {
-      ds.success = Math.max(0, Math.min(3, ds.success + 1));
-      if (ds.success >= 3) {
-        ds.success = 3;
-        ds.stabilized = true;
-        ds.lastOutcome = 'stabilized';
-      } else {
-        ds.lastOutcome = 'success';
+  const deathSaveRollsInFlight = new Set();
+  async function rollCharacterDeathSave(playerId) {
+    const id=String(playerId||'');
+    if(!id||deathSaveRollsInFlight.has(id))return;
+    const editor=()=>{
+      const list=typeof ctx?.getPlayers==='function'?ctx.getPlayers():typeof players!=='undefined'?players:lastPlayersSnapshot;
+      const current=(list||[]).find(p=>String(p.id)===id);
+      if(!current||!canEditPlayer(current))return null;
+      if(openedSheetPlayer&&String(openedSheetPlayer.id)===id){
+        captureUiStateFromDom(openedSheetPlayer);
+        return openedSheetPlayer;
       }
-      return { roll: n, outcome: ds.lastOutcome };
+      const model=deepClone(current);restoreSheetDraft(model);return model;
+    };
+    if(window.TokenHealth.describe(editor()?.sheet?.parsed).mode!=='dying')return;
+    deathSaveRollsInFlight.add(id);window.Board3D?.requestSync?.();
+    try{
+      const model=editor();
+      const result=await window.DicePanel?.roll?.({sides:20,count:1,bonus:0,
+        kindText:'Спасбросок от смерти (успех от 10): d20',actorName:model.name});
+      const roll=Number(result?.rolls?.[0]);
+      if(!Number.isInteger(roll)||roll<1||roll>20)return;
+      // The sheet can change while the dice animate (healing, transfer, new notes).
+      const latest=editor();if(!latest)return;
+      const applied=applyDeathSaveRoll(latest.sheet.parsed,roll);
+      if(applied.outcome==='inactive')return;
+      if(String(openedSheetPlayerId)===id){
+        markModalInteracted(id);syncDeathSavesUi(sheetContent,latest.sheet.parsed,true);updateHeroChips(sheetContent,latest.sheet.parsed);
+      }
+      scheduleSheetSave(latest);flushSheetSaves(id);
+      const status=window.TokenHealth.describe(latest.sheet.parsed);
+      if(typeof showAppToast==='function')showAppToast(`${latest.name}: ${status.result}${status.mode==='stable'?' · стабилизирован':status.mode==='dead'?' · мёртв':''}`);
+    }catch(error){
+      if(typeof showAppToast==='function')showAppToast('Не удалось выполнить спасбросок: '+error.message,{tone:'error'});
+    }finally{
+      deathSaveRollsInFlight.delete(id);window.Board3D?.requestSync?.();
     }
-    ds.fail = Math.max(0, Math.min(3, ds.fail + 1));
-    if (ds.fail >= 3) {
-      ds.fail = 3;
-      ds.stabilized = false;
-      ds.lastOutcome = 'dead';
-    } else {
-      ds.lastOutcome = 'fail';
-    }
-    return { roll: n, outcome: ds.lastOutcome };
   }
 
   function updateHeroChips(root, sheet) {

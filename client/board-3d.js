@@ -1,7 +1,7 @@
 // Adapter: 3D gestures enter the existing board handlers and permission checks.
 (function () {
   'use strict';
-  const moduleUrl = new URL('board-3d/scene.mjs?v=20261119-combat-2', document.currentScript.src);
+  const moduleUrl = new URL('board-3d/scene.mjs?v=20261119-health-tools-1', document.currentScript.src);
   let active = false, loading = null, engine = null, root = null, status = null;
   let syncFrame = 0, state = null, gesture = null, lastTap = null;
   let savedScroll = null;
@@ -106,7 +106,8 @@
         loading = import(moduleUrl.href).then(module => {
           engine = module.createBoard3D(root, {
             cameraChanged() { window.dispatchEvent(new Event('board-3d-camera-changed')); if (typeof refreshOpenTokenMini === 'function') refreshOpenTokenMini(); },
-            status: notify, failed: fallback
+            status: notify, failed: fallback,
+            rollDeathSave: id => window.InfoModal?.rollDeathSave?.(id)
           });
           bindCanvas(engine.canvas); notify(''); return engine;
         }).catch(error => { loading = null; throw error; });
@@ -126,6 +127,9 @@
         avatar: el?.dataset.fogGhost === '1' ? null : window.AvatarData?.describe(p.sheet?.parsed,!!p.isMonster) || null,
         hud: el?.dataset.fogGhost === '1' ? null : {
           health: typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(p) ? null : getQuickSheetStats(p),
+          life: typeof canViewSensitiveInfo === 'function' && !canViewSensitiveInfo(p) ? null : window.TokenHealth.describe(p.sheet?.parsed),
+          canRollDeathSave: canControlToken(p),
+          deathSavePending: !!window.InfoModal?.isDeathSavePending?.(p.id),
           conditions: canShowTokenConditionIndicators(p) ? parseTokenConditionsList(p.sheet?.parsed || {}) : []
         },
         // Read the rendered, last-known DOM position, not the hidden live position.
