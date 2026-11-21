@@ -367,6 +367,7 @@ function unpackFogExplored(packed) {
 
 function loadMapToRoot(state, mapId) {
   const st = ensureStateHasMaps(state);
+  const previousMapId = String(st.currentMapId || '');
   const targetId = String(mapId || "");
   const maps = Array.isArray(st.maps) ? st.maps : [];
   const m = maps.find(mm => String(mm.id) === targetId) || maps[0];
@@ -428,6 +429,11 @@ function loadMapToRoot(state, mapId) {
   // Positions are authoritative in room_tokens and arrive via realtime.
   (Array.isArray(st.players) ? st.players : []).forEach((p) => {
     if (!p) return;
+    if (previousMapId !== String(m.id)) {
+      const cached = typeof getTokenSnapshotCached === 'function' ? getTokenSnapshotCached(p.id, m.id) : null;
+      p.x = cached?.x ?? null;
+      p.y = cached?.y ?? null;
+    }
     const entry = m.playerStates?.[String(p.id)] || null;
     applyMapCombatStateToPlayer(p, entry);
   });

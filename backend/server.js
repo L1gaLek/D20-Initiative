@@ -3228,8 +3228,11 @@ async function handleMoveToken(ws, data) {
     if (!mapId) throw new Error('mapId is required');
     previewMapId = mapId;
 
+    // Detached map metadata is authoritative; cached room_state may still carry
+    // another map's dimensions after a switch. Use the same bounds for both stages.
+    const bounds = await getMapBounds(roomId, mapId, state);
     const previewSize = sanitizeTokenSize(player.size || data.size || 1);
-    const previewPos = validateBoardPosition(data.x, data.y, previewSize, getStateMapBounds(state, mapId, { relaxed: true }));
+    const previewPos = validateBoardPosition(data.x, data.y, previewSize, bounds);
     const turnOrder = Array.isArray(state?.turnOrder) ? state.turnOrder : [];
     const currentId = String(turnOrder[Math.max(0, Number(state?.currentTurnIndex) || 0)] || '');
     const needsPrevBeforePreview = (
@@ -3270,7 +3273,6 @@ async function handleMoveToken(ws, data) {
     ensureCanMoveInCombat(ctx, state, player, prev);
 
     const size = sanitizeTokenSize(data.size || prev?.size || player.size || 1);
-    const bounds = await getMapBounds(roomId, mapId, state);
     const { x, y } = validateBoardPosition(data.x, data.y, size, bounds);
     const incomingColor = HEX_COLOR_RE.test(String(data.color || '')) ? String(data.color) : null;
     const color = incomingColor || prev?.color || (HEX_COLOR_RE.test(String(player.color || '')) ? String(player.color) : null);

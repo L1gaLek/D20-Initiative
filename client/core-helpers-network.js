@@ -1699,27 +1699,24 @@ async function upsertRoomFogState(roomId, mapId, fog, boardW, boardH) {
 }
 
 let __pendingFogTimer = null;
-let __pendingFogRow = null;
+const __pendingFogRows = new Map();
 function scheduleRoomFogUpsert(roomId, mapId, fog, boardW, boardH, delay = 180) {
-  __pendingFogRow = buildDetachedFogRow(roomId, mapId, fog, boardW, boardH);
+  const row = buildDetachedFogRow(roomId, mapId, fog, boardW, boardH);
+  __pendingFogRows.set(JSON.stringify([row.room_id,row.map_id]), row);
   if (__pendingFogTimer) return;
-  __pendingFogTimer = setTimeout(async () => {
-    const row = __pendingFogRow;
+  __pendingFogTimer = setTimeout(() => {
+    const rows = [...__pendingFogRows.values()];
     __pendingFogTimer = null;
-    __pendingFogRow = null;
-    try {
-      if (!row?.room_id || !row?.map_id) return;
-      _cacheUpsertFogRow(row);
-      try { sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
-      _refreshDetachedRoomView();
-      return;
-      const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
-      if (error) throw error;
-      _cacheUpsertFogRow(row);
-      try { sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
-      _refreshDetachedRoomView();
-    } catch (e) {
-      console.warn('coalesced fog upsert failed', e);
+    __pendingFogRows.clear();
+    for (const row of rows) {
+      try {
+        if (!row.room_id || !row.map_id) continue;
+        sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true });
+        if (String(currentRoomId || '') === row.room_id) {
+          _cacheUpsertFogRow(row);
+          _refreshDetachedRoomView();
+        }
+      } catch (e) { console.warn('coalesced fog upsert failed', e); }
     }
   }, Math.max(50, Number(delay) || 180));
 }
@@ -4225,9 +4222,11 @@ async function sendMessage(msg) {
 
         else if (type === "fogStampBatch") {
           if (!isGM) return;
-          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
-          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
-          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] });
+          const mapId = String(msg.mapId || next.currentMapId || '');
+          const targetMap = (next.maps || []).find(map => String(map.id) === mapId);
+          if (!targetMap) return;
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || targetMap;
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || targetMap.fog || { enabled: true, mode: 'manual', manualBase: 'hide', manualStamps: [], visionRadius: 8, useWalls: true, exploredEnabled: true, explored: [] });
           if (!Array.isArray(f.manualStamps)) f.manualStamps = [];
           const stamps = Array.isArray(msg.stamps) ? msg.stamps : [];
           for (const s of stamps) {
@@ -4327,9 +4326,11 @@ async function sendMessage(msg) {
 
         else if (type === "fogAddExplored") {
           if (!isGM) return;
-          const mapId = String(next.currentMapId || getActiveMap(next)?.id || '');
-          const meta = __roomDetachedCache.mapMetaById.get(mapId) || getActiveMap(next) || {};
-          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || next.fog || {});
+          const mapId = String(msg.mapId || next.currentMapId || '');
+          const targetMap = (next.maps || []).find(map => String(map.id) === mapId);
+          if (!targetMap) return;
+          const meta = __roomDetachedCache.mapMetaById.get(mapId) || targetMap;
+          const f = deepClone(__roomDetachedCache.fogByMap.get(mapId) || targetMap.fog || {});
           const set = new Set(Array.isArray(f.explored) ? f.explored : []);
           (Array.isArray(msg.cells) ? msg.cells : []).forEach(c => { if (c != null) set.add(String(c)); });
           f.explored = Array.from(set);

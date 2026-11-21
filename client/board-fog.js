@@ -85,6 +85,27 @@
     _dynNpcVisible: null, // Uint8Array (GM-created non-allies vision, GM-only overlay)
     _exploredSet: new Set(),
     _pendingExploredSync: null,
+    _mapScope: null,
+
+    _setMapState(state) {
+      const roomId = typeof currentRoomId !== 'undefined' ? String(currentRoomId || '') : '';
+      const mapId = String(state?.currentMapId || '');
+      if (this._mapScope?.roomId !== roomId || this._mapScope?.mapId !== mapId) {
+        // Finish the previous map's exploration before resetting its local caches.
+        this._flushExploredSync();
+        this._manualGrid = null;
+        this._manualKey = '';
+        this._dynKey = '';
+        this._dynVisible = null;
+        this._dynNpcVisible = null;
+        this._exploredSet = new Set();
+        this._exploredBits = null;
+        this._exploredDelta = new Set();
+        this._preview.active = false;
+        this._mapScope = { roomId, mapId };
+      }
+      this._lastState = state;
+    },
 
     // manual preview (GM only)
     _preview: { active: false, x: 0, y: 0, n: 1, mode: 'reveal' },
@@ -214,7 +235,7 @@
     },
 
     onBoardRendered(state) {
-      this._lastState = state;
+      this._setMapState(state);
 
       // Ensure canvas exists and matches board size
       const boardEl = (typeof board !== 'undefined') ? board : document.getElementById('game-board');
@@ -275,7 +296,7 @@
     // Avoid full board rerender; just recompute dynamic visibility and repaint.
     onTokenPositionsChanged(state) {
       try {
-        this._lastState = state;
+        this._setMapState(state);
         // IMPORTANT: token moves can change both dynamic visibility and "исследование" (explored) set.
         // We must sync explored from state here too, because token-only updates may not trigger a full board render.
         this._syncExploredFromState();
@@ -336,6 +357,10 @@
       // Prefer compact packed form. Support both legacy RLE and newer bitset-base64.
       if (fog && fog.exploredPacked) {
         const bytes = _packedExploredToBits(fog.exploredPacked, w, h);
+        for (const cell of this._exploredDelta || []) {
+          const [x,y] = cell.split(',').map(Number), idx = y*w+x;
+          if (x>=0 && y>=0 && x<w && y<h) bytes[idx>>3] |= 1 << (idx&7);
+        }
         this._exploredBits = bytes;
 
         // For GM we keep local delta-set more authoritative to avoid "rollback" before debounce sync.
@@ -585,18 +610,22 @@
 
     _scheduleExploredSync() {
       if (this._pendingExploredSync) return;
-      this._pendingExploredSync = setTimeout(() => {
-        this._pendingExploredSync = null;
-        try {
-          if (typeof sendMessage === 'function') {
-            const delta = Array.from(this._exploredDelta || []);
-            this._exploredDelta = new Set();
-            if (delta.length) {
-              sendMessage({ type: 'fogAddExplored', cells: delta });
-            }
-          }
-        } catch {}
-      }, 450);
+      this._pendingExploredSync = setTimeout(() => this._flushExploredSync(), 450);
+    },
+
+    _flushExploredSync() {
+      this._cancelExploredSync();
+      const delta = Array.from(this._exploredDelta || []);
+      this._exploredDelta = new Set();
+      const scope = this._mapScope;
+      if (!delta.length || !scope?.mapId || typeof sendMessage !== 'function') return;
+      if (typeof currentRoomId !== 'undefined' && scope.roomId !== String(currentRoomId || '')) return;
+      // Defer sending until the new map has finished rendering (avoids reentrant renders).
+      Promise.resolve().then(() => {
+        if (typeof currentRoomId === 'undefined' || scope.roomId === String(currentRoomId || '')) {
+          return sendMessage({ type: 'fogAddExplored', mapId: scope.mapId, cells: delta });
+        }
+      }).catch(error => console.warn('Fog exploration sync failed', error));
     },
 
     _cancelExploredSync() {
@@ -726,9 +755,15 @@
       const flushStamps = () => {
         try {
           if (!this._stampQueue || this._stampQueue.length === 0) return;
-          const stamps = this._stampQueue.slice(0, 200);
+          const batch = this._stampQueue.slice(0, 200);
           this._stampQueue = this._stampQueue.slice(200);
-          sendMessage?.({ type: 'fogStampBatch', stamps });
+          const groups = new Map();
+          for (const entry of batch) {
+            if (entry.roomId !== String(currentRoomId || '')) continue;
+            if (!groups.has(entry.mapId)) groups.set(entry.mapId, []);
+            groups.get(entry.mapId).push(entry.stamp);
+          }
+          for (const [mapId, stamps] of groups) sendMessage?.({ type: 'fogStampBatch', mapId, stamps });
         } catch {}
       };
       const scheduleFlush = () => {
@@ -772,7 +807,7 @@
         const n = clampInt(Number(document.getElementById('fog-square-size')?.value) || 1, 1, 20);
         const mode = String(document.getElementById('fog-brush-mode')?.value || 'reveal');
 
-        const key = `${x},${y},${n},${mode}`;
+        const key = `${this._mapScope?.roomId}:${st.currentMapId}:${x},${y},${n},${mode}`;
         if (key === lastStampKey) return;
         lastStampKey = key;
 
@@ -780,7 +815,7 @@
           if (typeof sendMessage === 'function') {
             // NOTE: server field name is "r" for legacy reasons; we store square size in it.
             // We batch stamps to reduce DB spam.
-            this._stampQueue.push({ x, y, r: n, mode });
+            this._stampQueue.push({ roomId: String(currentRoomId || ''), mapId: String(st.currentMapId || ''), stamp: { x, y, r: n, mode } });
             scheduleFlush();
           }
         } catch {}

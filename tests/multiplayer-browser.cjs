@@ -28,7 +28,12 @@ start.maps[0].playerStates = Object.fromEntries(start.players.map(p => [p.id, {
 start.players.push({ id: 'monster-1', name: 'Test Monster', ownerId: 'gm', ownerRole: 'GM', ownerName: 'gm',
   isBase: false, isMonster: true, isEnemy: true, isAlly: false, isPublic: true, inCombat: false,
   hasRolledInitiative: false, mapId: 'map-1', x: 25, y: 15, size: 1, sheet: { parsed: {} }, sheetUpdatedAt: 1 });
+if(process.env.D20_MAPS_ONLY){
+ start.phase='exploration';start.maps[0].phase='exploration';
+ start.maps.push({id:'map-2',name:'Large map',sectionId:'section-1',boardWidth:90,boardHeight:70,phase:'exploration',playerStates:{},fog:{enabled:false}});
+}
 const h = serverHarness(start);
+const mapHarness=process.env.D20_MAPS_ONLY?require('./helpers/map-harness.cjs')(h,start):null;
 const sockets = new Set();
 let seq = 0;
 let diceId = 0;
@@ -88,6 +93,12 @@ const server = http.createServer(async (req, res) => {
         const text = `${event.fromName}: ${event.kindText}: ${event.rolls.join(',')}${event.bonus >= 0 ? '+' : ''}${event.bonus} = ${event.total}`;
         return json(res, { ok: true, event, row: event, logRow: { id: `damage-log-${diceId}`, text } });
       }
+      if(mapHarness){
+       const mapId=url.searchParams.get('mapId');
+       if(url.pathname.endsWith('/rows/room_tokens')||url.pathname.endsWith('/tokens'))return json(res,{ok:true,rows:[...mapHarness.tokens.values()].filter(r=>!mapId||r.map_id===mapId)});
+       if(url.pathname.endsWith('/rows/room_map_meta'))return json(res,{ok:true,rows:[...mapHarness.meta].map(([map_id,m])=>({map_id,...m,name:map_id,section_id:'section-1'}))});
+       if(url.pathname.endsWith('/rows/room_fog'))return json(res,{ok:true,rows:[...mapHarness.fog.values()]});
+      }
       if (url.pathname.endsWith('/rows/room_members')) return json(res, {ok:true,rows:members});
       if (url.pathname.endsWith('/members')) return json(res, { ok: true, users: members, rows: members });
       if (url.pathname.endsWith('/tokens')) return json(res, { ok: true, rows: start.players.map(p => ({ token_id: p.id, map_id: 'map-1', x: p.x, y: p.y, size: 1, is_public: true })) });
@@ -127,7 +138,9 @@ wss.on('connection', ws => {
       broadcast({ type: 'state', roomId: 'test-room', state: h.database() });
     } else if (msg.type === 'diceEvent') await h.context.handleDiceEventRelay(ws, msg);
     else if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
+    else if (msg.type === 'fogRow' && mapHarness) await h.context.handleFogRow(ws,msg);
     else if (msg.type === 'moveToken') {
+      if(mapHarness)return h.context.handleMoveToken(ws,msg);
       const player = h.database().players.find(p => p.id === msg.tokenId);
       assert.equal(h.context.canControlPlayer(ws.ctx, player), true);
       broadcast(msg);
@@ -194,6 +207,7 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    if(process.env.D20_MAPS_ONLY){await require('./helpers/map-isolation-scenarios.cjs')({pages,h,mapHarness});assert.deepEqual(errors,[]);return;}
     if (!process.env.D20_3D_ONLY) {
     await gm.locator('#content-row').evaluate(el => { el.style.flexWrap = 'nowrap'; });
     const panelBefore = await gm.locator('#initiative-players-box').evaluate(el => el.getBoundingClientRect().height);

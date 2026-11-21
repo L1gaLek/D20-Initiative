@@ -928,6 +928,10 @@ try { handleSessionUiMessage?.(msg); } catch {}
     if (msg.type === 'tokenRowDeleted' && msg.row) {
       try { applyTokenDeleteToLocalState(msg.row); } catch {}
 
+      // Delayed deletes/rollbacks from another map must not hide this map's token.
+      const deletedMapId = String(msg.row.map_id || msg.mapId || '').trim();
+      if (deletedMapId && deletedMapId !== String(lastState?.currentMapId || '').trim()) return;
+
       try {
         const pid = String(msg.row.token_id || '');
         const p = (lastState?.players || []).find(pp => String(pp?.id) === pid);
@@ -1272,6 +1276,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
               ? window.__tokenPositionSnapshotCache.get(String(p.id))
               : null);
           const chosen = cached || snap;
+          if (mapChanged) { p.x = null; p.y = null; }
           if (!chosen) return;
           const chosenMapId = String(chosen?.mapId || '').trim();
           const activeMapId = String(lastState?.currentMapId || '').trim();
