@@ -6,6 +6,7 @@ const CombatState = require('./shared/combat-state');
 const RoomReadCache = require('./shared/room-read-cache');
 const SheetSync = require('./shared/sheet-sync');
 const { UserProfiles } = require('./shared/user-profiles');
+const Appearance = require('./shared/appearance');
 const userProfiles = new UserProfiles({file:path.join(__dirname,'data','user-profiles.json')});
 const profileTimer=setInterval(()=>{try{userProfiles.tick();userProfiles.flush();}catch(error){console.error('[profiles persist]',error.message);}},15000);profileTimer.unref();
 for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{try{userProfiles.tick();userProfiles.flush();}finally{process.exit(0);}});
@@ -2622,6 +2623,7 @@ app.post('/api/rooms/:roomId/dice', async (req, res) => {
       : '';
     const event = {
       fromId: ctx.userId,
+      diceStyle: Appearance.style(incoming.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
       fromName: ctx.name || sanitizeText(incoming.fromName, 'Player', 120),
       kindText: sanitizeText(incoming.kindText, `d${sides}`, 200),
       sides,
@@ -4977,6 +4979,7 @@ async function handleDiceEventRelay(ws, data) {
     __optimisticApplied: !!data.__optimisticApplied,
     event: {
       fromId: String(match.from_id || ctx.userId),
+      diceStyle: Appearance.style(event.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
       fromName: String(match.from_name || ctx.name || 'Игрок'),
       kindText: String(match.kind_text || ''),
       sides: match.sides,

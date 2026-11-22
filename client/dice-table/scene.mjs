@@ -3,14 +3,15 @@ import {polyhedron,faceLabels,seedNumber,random,PALETTE} from './model.mjs?v=202
 
 const vec=v=>new THREE.Vector3(...v);
 function polygonGeometry(polygons) {
-  const positions=[],normals=[];
+  const positions=[],normals=[],uvs=[];
   for(const points of polygons){
     const normal=new THREE.Vector3().crossVectors(points[1].clone().sub(points[0]),points[2].clone().sub(points[0])).normalize();
     const center=points.reduce((sum,p)=>sum.add(p),new THREE.Vector3()).divideScalar(points.length);
     if(normal.dot(center)<0){points.reverse();normal.negate();}
-    for(let i=1;i<points.length-1;i++)for(const p of [points[0],points[i],points[i+1]]){positions.push(...p);normals.push(...normal);}
+    const u=points[1].clone().sub(points[0]).normalize(),v=normal.clone().cross(u),extent=Math.max(...points.map(p=>Math.max(Math.abs(p.clone().sub(center).dot(u)),Math.abs(p.clone().sub(center).dot(v)))))*2||1;
+    for(let i=1;i<points.length-1;i++)for(const p of [points[0],points[i],points[i+1]]){positions.push(...p);normals.push(...normal);const d=p.clone().sub(center);uvs.push(.5+d.dot(u)/extent,.5+d.dot(v)/extent);}
   }
-  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));return geometry;
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));return geometry;
 }
 function beveledGeometry(shape,radius) {
   const inset=shape.faces.map(f=>f.indices.map(index=>vec(shape.vertices[index]).lerp(vec(f.center),.1).multiplyScalar(radius)));
@@ -29,12 +30,11 @@ function beveledGeometry(shape,radius) {
   });
   return [faceGeometry,polygonGeometry(polygons)];
 }
-function atlas() {
-  const canvas=document.createElement('canvas');canvas.width=1100;canvas.height=1000;
-  const ctx=canvas.getContext('2d');ctx.fillStyle='#fff4d9';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 72px Georgia, serif';
+function atlas(skin,critical) {
+  const canvas=document.createElement('canvas');canvas.width=704;canvas.height=640;
+  const ctx=canvas.getContext('2d');ctx.scale(2/3,2/3);
   for(let i=0;i<=100;i++){
-    const x=(i%11)*100+50,y=Math.floor(i/11)*100+51;ctx.fillText(i===100?'00':String(i),x,y);
-    if(i===6||i===9){ctx.fillRect(x-12,y+33,24,4);}
+    ctx.save();ctx.translate((i%11)*96,Math.floor(i/11)*96);window.DiceAppearance.face(ctx,skin,i===100?'00':String(i),critical);ctx.restore();
   }
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=4;return texture;
 }
@@ -82,14 +82,18 @@ export function createDiceScene(host) {
   scene.add(new THREE.HemisphereLight(0xfff4d8,0x244c45,2.7));
   const key=new THREE.DirectionalLight(0xffe3b0,3.6);key.position.set(-3,9,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.camera.left=-9;key.shadow.camera.right=9;key.shadow.camera.top=9;key.shadow.camera.bottom=-9;key.shadow.normalBias=.025;key.shadow.bias=-.0003;scene.add(key);
   const fill=new THREE.DirectionalLight(0x9dcfff,1.1);fill.position.set(3,4,-4);scene.add(fill);
-  const numbers=atlas(),felt=feltTexture(),labelMaterial=new THREE.MeshBasicMaterial({map:numbers,transparent:true,alphaTest:.1,depthWrite:false});
-  const palette=PALETTE;
-  const materials=palette.map(color=>new THREE.MeshPhysicalMaterial({color,roughness:.28,metalness:.24,clearcoat:.8,clearcoatRoughness:.25}));
-  const bevelMaterials=palette.map(color=>new THREE.MeshStandardMaterial({color:new THREE.Color(color).multiplyScalar(1.45),roughness:.35,metalness:.4}));
+  const felt=feltTexture(),skinCache=new Map();
+  function skinMaterials(id,critical){
+    const skin=window.D20Appearance.style(id);let entry=skinCache.get(skin.id);
+    if(!entry){const canvas=document.createElement('canvas');canvas.width=canvas.height=256;window.DiceAppearance.surface(canvas.getContext('2d'),skin);const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=4;
+      entry={map,face:new THREE.MeshPhysicalMaterial({map,bumpMap:skin.crystal?null:map,bumpScale:.016,color:'#ffffff',roughness:skin.rough,metalness:skin.metal,clearcoat:1,clearcoatRoughness:.16,iridescence:skin.crystal?.7:0,transparent:!!skin.crystal,opacity:skin.crystal?.82:1}),edge:new THREE.MeshStandardMaterial({color:skin.edge,metalness:.75,roughness:.26}),labels:new Map()};skinCache.set(skin.id,entry);}
+    if(!entry.labels.has(critical)){const map=atlas(skin,critical);entry.labels.set(critical,new THREE.MeshBasicMaterial({map,transparent:true,alphaTest:.1,depthWrite:false}));}
+    return {...entry,label:entry.labels.get(critical),skin};
+  }
   const floorMaterial=new THREE.MeshStandardMaterial({map:felt,roughness:1}),wood=new THREE.MeshStandardMaterial({color:'#302019',roughness:.7}),trim=new THREE.MeshStandardMaterial({color:'#b38b51',metalness:.7,roughness:.35});
   const geometryCache=new Map();let raf=0,resolveAnimation=null,plan=null,groups=[],disposed=false,framesRendered=0,lastFrame=0;
   const removeChildren=(group,geometriesOnly=false)=>{
-    for(const child of [...group.children]){group.remove(child);child.traverse(o=>{if(o.geometry&&(!geometriesOnly||o.userData.ownsGeometry))o.geometry.dispose();});}
+    for(const child of [...group.children]){group.remove(child);child.traverse(o=>{if(o.geometry&&(!geometriesOnly||o.userData.ownsGeometry))o.geometry.dispose();if(o.userData.ownsMaterial)o.material.dispose();});}
   };
   function resize(){
     if(disposed)return;const {width,height}=host.getBoundingClientRect();if(width<1||height<1)return;
@@ -149,10 +153,11 @@ export function createDiceScene(host) {
     dice.forEach((die,i)=>{
       const shape=polyhedron(die.sides),cacheKey=die.sides+'-'+plan.radius;
       if(!geometryCache.has(cacheKey))geometryCache.set(cacheKey,beveledGeometry(shape,plan.radius));
-      const [faceGeometry,edgeGeometry]=geometryCache.get(cacheKey),color=seedNumber(die.ownerKey||seed)%palette.length;
-      const group=new THREE.Group();group.add(new THREE.Mesh(faceGeometry,materials[color]),new THREE.Mesh(edgeGeometry,bevelMaterials[color]));group.children.forEach(mesh=>{mesh.castShadow=true;});
+      const [faceGeometry,edgeGeometry]=geometryCache.get(cacheKey),material=skinMaterials(die.diceStyle,die.sides===20);
+      const group=new THREE.Group();group.add(new THREE.Mesh(faceGeometry,material.face),new THREE.Mesh(edgeGeometry,material.edge));group.children.forEach(mesh=>{mesh.castShadow=true;});
+      if(material.skin.crystal){const core=new THREE.Mesh(new THREE.IcosahedronGeometry(plan.radius*.5,0),new THREE.MeshStandardMaterial({color:material.skin.accent,emissive:material.skin.base,emissiveIntensity:.4,roughness:.3,metalness:.35}));core.userData.ownsGeometry=true;core.userData.ownsMaterial=true;group.add(core);}
       const q=new THREE.Quaternion().fromArray(plan.frames,((plan.frameCount-1)*dice.length+i)*7+3);
-      const labels=faceLabels(shape,plan.upFaces[i],die.value,die.mode),label=new THREE.Mesh(numberGeometry(shape,labels,plan.radius,q,plan.upFaces[i]),labelMaterial);label.userData.ownsGeometry=true;group.add(label);
+      const labels=faceLabels(shape,plan.upFaces[i],die.value,die.mode),label=new THREE.Mesh(numberGeometry(shape,labels,plan.radius,q,plan.upFaces[i]),material.label);label.userData.ownsGeometry=true;group.add(label);
       group.userData={...die,labels,upFace:plan.upFaces[i]};diceGroup.add(group);groups.push(group);
     });resize();paint(skipMotion?plan.frameCount-1:0);
     if(skipMotion)return;
@@ -167,7 +172,7 @@ export function createDiceScene(host) {
   const onVisibility=()=>{if(document.hidden)finish();};document.addEventListener('visibilitychange',onVisibility);
   const onLoss=event=>{if(disposed)return;event.preventDefault();finish();host.dispatchEvent(new CustomEvent('dice-context-lost'));};renderer.domElement.addEventListener('webglcontextlost',onLoss);
   return {play,finish,resize,celebrate,inspect:()=>({framesRendered,animating:!!raf,celebrating:!!effectRaf,criticalEffects:effects.children.length,frame:lastFrame,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
-    dice:groups.map(g=>({sides:g.userData.sides,value:g.userData.value,critical:g.userData.critical,mode:g.userData.mode,upFace:g.userData.upFace,upLabel:g.userData.labels[g.userData.upFace],position:g.position.toArray(),quaternion:g.quaternion.toArray()}))}),
-    dispose(){if(disposed)return;finish();clearEffects();disposed=true;resizeObserver.disconnect();document.removeEventListener('visibilitychange',onVisibility);removeChildren(diceGroup,true);removeChildren(tray);for(const pair of geometryCache.values())pair.forEach(g=>g.dispose());[...materials,...bevelMaterials,labelMaterial,floorMaterial,wood,trim].forEach(m=>m.dispose());numbers.dispose();felt.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
+    dice:groups.map(g=>({sides:g.userData.sides,value:g.userData.value,diceStyle:g.userData.diceStyle||'astral',critical:g.userData.critical,mode:g.userData.mode,upFace:g.userData.upFace,upLabel:g.userData.labels[g.userData.upFace],position:g.position.toArray(),quaternion:g.quaternion.toArray()}))}),
+    dispose(){if(disposed)return;finish();clearEffects();disposed=true;resizeObserver.disconnect();document.removeEventListener('visibilitychange',onVisibility);removeChildren(diceGroup,true);removeChildren(tray);for(const pair of geometryCache.values())pair.forEach(g=>g.dispose());for(const skin of skinCache.values()){skin.face.dispose();skin.edge.dispose();skin.map.dispose();for(const label of skin.labels.values()){label.map.dispose();label.dispose();}}skinCache.clear();[floorMaterial,wood,trim].forEach(m=>m.dispose());felt.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
   };
 }

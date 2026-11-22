@@ -51,13 +51,14 @@ function labelTexture(name) {
 function gridMaterial() {
   return new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    uniforms:{lineColor:{value:new THREE.Color(window.PersonalPreferences?.get().boardGrid||'#666666')}},
     vertexShader: 'varying vec2 cell; void main(){cell=position.xz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-    fragmentShader: `varying vec2 cell;
+    fragmentShader: `varying vec2 cell; uniform vec3 lineColor;
       void main(){vec2 pixel=max(fwidth(cell),vec2(.0001));
       vec2 edge=abs(fract(cell-.5)-.5)/pixel; float distance=min(edge.x,edge.y);
       float line=1.-smoothstep(.45,1.25,distance); float halo=1.-smoothstep(1.2,2.25,distance);
       float fade=1.-smoothstep(.18,.55,max(pixel.x,pixel.y));
-      gl_FragColor=vec4(mix(vec3(.055,.075,.09),vec3(.93,.83,.61),line),max(line*.78,halo*.7)*fade);}`
+      gl_FragColor=vec4(mix(vec3(.055,.075,.09),lineColor,line),max(line*.78,halo*.7)*fade);}`
   });
 }
 
@@ -103,6 +104,8 @@ export function createBoard3D(root, callbacks) {
   scene.add(new THREE.HemisphereLight(0xdce8ff, 0x3b3030, 2.4));
   const sun = new THREE.DirectionalLight(0xffdfb2, 3.1); sun.position.set(-15, 25, 12); scene.add(sun);
   const terrain = new THREE.Group(), wallGroup = new THREE.Group(), fogGroup = new THREE.Group();
+  function applyAppearance(){const prefs=window.PersonalPreferences?.get()||{boardBackground:'#2a2a2a',boardGrid:'#666666'};renderer.setClearColor(prefs.boardBackground);for(const mesh of terrain.children){if(mesh.userData.grid)mesh.material.uniforms.lineColor.value.set(prefs.boardGrid);if(mesh.userData.floor)mesh.material.color.set(mapTexture?(mesh.userData.explored?'#343b4c':'#ffffff'):prefs.boardBackground).multiplyScalar(!mapTexture&&mesh.userData.explored?.4:1);}invalidate();}
+  window.addEventListener('d20-preferences-changed',applyAppearance);
   const pawnGroup = new THREE.Group(), markGroup = new THREE.Group(), combatGroup = new THREE.Group();
   scene.add(terrain, wallGroup, fogGroup, pawnGroup, markGroup,combatGroup);
   const hover = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
@@ -231,6 +234,7 @@ export function createBoard3D(root, callbacks) {
     textureAbort?.abort(); textureAbort=new AbortController();
     mapTexture?.dispose(); mapTexture = null;
     terrain.children.forEach(mesh => { if (mesh.userData.floor) { mesh.material.map=null; mesh.material.needsUpdate=true; } });
+    applyAppearance();
     textureState={status:url?'loading':'empty'};
     if (!url) { callbacks.status(''); return; }
     try {
@@ -241,6 +245,7 @@ export function createBoard3D(root, callbacks) {
       texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
       mapTexture = texture;
       terrain.children.forEach(mesh => { if (mesh.userData.floor) { mesh.material.map = texture; mesh.material.needsUpdate = true; } });
+      applyAppearance();
       textureState={status:'ready',width:image.width,height:image.height,sourceWidth:image.sourceWidth,sourceHeight:image.sourceHeight};
       callbacks.status(''); invalidate();
     } catch {
@@ -259,7 +264,7 @@ export function createBoard3D(root, callbacks) {
       const rectangles = data.rectangles(mask, view.width, view.height, value);
       if (!rectangles.length) continue;
       const floor = surface(rectangles, view.width, view.height, value === 2 ? '#ffffff' : '#343b4c');
-      floor.userData.floor = true; floor.material.map = mapTexture; terrain.add(floor);
+      floor.userData.floor = true; floor.userData.explored=value===1; floor.material.map = mapTexture; terrain.add(floor);
       // Grid is clipped to known terrain, so it cannot disclose hidden geometry.
       const grid = surface(rectangles,view.width,view.height,'#ffffff');
       grid.material.dispose(); grid.material=gridMaterial(); grid.position.y=.02; grid.userData.grid=true; grid.visible=showGrid;
@@ -268,6 +273,7 @@ export function createBoard3D(root, callbacks) {
     // A neutral base shows only board bounds, not the undiscovered map texture.
     const base = new THREE.Mesh(new THREE.BoxGeometry(view.width+.1, .22, view.height+.1), new THREE.MeshStandardMaterial({ color: '#252e3d', roughness: .9 }));
     base.position.set(view.width/2, -.14, view.height/2); terrain.add(base);
+    applyAppearance();
   }
   function rebuildWalls(walls, view, alpha) {
     disposeTree(wallGroup);
@@ -658,7 +664,7 @@ export function createBoard3D(root, callbacks) {
     },
     setWallFade(value) { fadeWalls=!!value; if(current) sync(current); },
     inspect() {
-      return { ready:!!current, mapKey, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,currentTurn:!!g.userData.turnIndicator?.visible,hud:g.userData.hud ? JSON.parse(g.userData.hudKey) : null,
+      return { ready:!!current, mapKey, appearance:{background:renderer.getClearColor(new THREE.Color()).getHexString(),grid:terrain.children.find(m=>m.userData.grid)?.material.uniforms.lineColor.value.getHexString()}, grid:showGrid, hover: hover.visible, background:{...textureState}, counters:{...counters}, tokens:[...pawns].map(([id,g])=>({ id,x:g.position.x-g.userData.size/2,y:g.position.z-g.userData.size/2,ghost:g.userData.ghost,currentTurn:!!g.userData.turnIndicator?.visible,hud:g.userData.hud ? JSON.parse(g.userData.hudKey) : null,
         avatar:g.userData.figure?.userData.avatar||null,armorQuality:g.userData.figure?.userData.armorQuality,stance:g.userData.figure?.userData.stance||null,walking:!!g.userData.motion,studioAnimating:!!g.userData.figure?.userData.studioAnimating,limbAngle:g.userData.figure?.userData.walkAngle||0 })),
         combat:{mode:current?.combat?.mode||null,cells:combatGroup.children.filter(m=>m.userData.kind).map(m=>({kind:m.userData.kind,count:m.userData.cells}))},
         magicWalls:wallGroup.children.filter(m=>m.userData.wallType?.startsWith('magic')).reduce((sum,m)=>sum+m.count,0),
@@ -667,6 +673,6 @@ export function createBoard3D(root, callbacks) {
         fogVolumes:fogGroup.children.reduce((sum,m)=>sum+(m.isInstancedMesh?m.count:0),0), wallFade:fadeWalls, camera:camera.position.toArray(), target:controls.target.toArray(),
         render: { calls:renderer.info.render.calls, triangles:renderer.info.render.triangles, geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures }, controlState:pan?2:controls.state, running:active&&drawable, framePending:!!raf };
     },
-    dispose() { setActive(false);textureGeneration++;textureAbort?.abort();window.removeEventListener('blur',blur);observer.disconnect();controls.dispose();[terrain,wallGroup,fogGroup,pawnGroup,markGroup,combatGroup].forEach(disposeTree);mapTexture?.dispose();bodyGeometry.dispose();baseGeometry.dispose();hover.geometry.dispose();hover.material.dispose();hoverBorder.geometry.dispose();hoverBorder.material.dispose();renderer.dispose();canvas.remove(); }
+    dispose() { window.removeEventListener("d20-preferences-changed",applyAppearance);setActive(false);textureGeneration++;textureAbort?.abort();window.removeEventListener('blur',blur);observer.disconnect();controls.dispose();[terrain,wallGroup,fogGroup,pawnGroup,markGroup,combatGroup].forEach(disposeTree);mapTexture?.dispose();bodyGeometry.dispose();baseGeometry.dispose();hover.geometry.dispose();hover.material.dispose();hoverBorder.geometry.dispose();hoverBorder.material.dispose();renderer.dispose();canvas.remove(); }
   };
 }

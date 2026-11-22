@@ -2,7 +2,7 @@
 // consumes the confirmed dice event; it never generates or saves game results.
 (function(){
   'use strict';
-  const base=new URL('dice-table/',document.currentScript.src),version='20261122-critical-1';
+  const base=new URL('dice-table/',document.currentScript.src),version='20261123-appearance-1';
   let root,stage,caption,summary,pendingLabel,dialog,home,engine,loading,worker,job=0,generation=0;
   let room='',queue=[],busy=false,timer=null,state='idle',accepted=0,completed=0,last=[],failed=false,visible=true;
   const seen=new Map(),fingerprints=new Map(),jobs=new Map();
@@ -109,7 +109,8 @@
     if(epoch!==generation||scope!==currentRoom())return false;
     const item=normalizeEvent(ev);if(!item){logTiming.settle(logTicket);return false;}item.logTicket=logTicket;accepted++;
     item.color=PALETTE[seedNumber(item.fromId||item.name)%PALETTE.length];
-    item.dice.forEach(die=>{die.ownerKey=item.fromId||item.name;die.eventKey=item.seed;});
+    item.diceStyle=D20Appearance.style(ev.diceStyle).id;item.color=D20Appearance.style(item.diceStyle).base;
+    item.dice.forEach(die=>{die.ownerKey=item.fromId||item.name;die.eventKey=item.seed;die.diceStyle=item.diceStyle;});
     if(queue.length>=12)logTiming.settle(queue.shift().logTicket);queue.push({...item,part:0});updatePending();
     if(!busy&&!timer)timer=setTimeout(()=>{timer=null;void run();},120);
     return true;

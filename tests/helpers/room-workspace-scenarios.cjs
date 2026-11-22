@@ -16,7 +16,7 @@ module.exports=async({pages,screenshotDir})=>{
       for(const value of ['exploration','initiative','combat','exploration']){
         await phase(page,value);
         await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
-        const layout=await page.evaluate(()=>{const r=id=>{const b=document.getElementById(id).getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,right:b.right,bottom:b.bottom};};return {main:r('main-container'),upper:r('content-row'),map:r('game-container'),wrapper:r('board-wrapper'),footer:r('action-bottom-row'),header:r('status-bar'),journal:r('action-log'),dice:r('dice-others'),sideHidden:document.getElementById('combat-side-column').hidden,scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight};});
+        const layout=await page.evaluate(()=>{const r=id=>{const b=document.getElementById(id).getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,right:b.right,bottom:b.bottom};};return {main:r('main-container'),upper:r('content-row'),map:r('game-container'),wrapper:r('board-wrapper'),footer:r('action-bottom-row'),header:r('status-bar'),left:r('action-log-container'),right:r('combat-side-column'),order:r('turn-order-box'),initiative:r('initiative-players-box'),journal:r('action-log'),dice:r('dice-others'),sideHidden:document.getElementById('combat-side-column').hidden,scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight};});
         const label=JSON.stringify({width,height,value,layout});
         const key=[width,height,value].join(':');
         if(page===gm)peerLayouts.set(key,layout);
@@ -27,8 +27,8 @@ module.exports=async({pages,screenshotDir})=>{
         const bounds=await page.evaluate(()=>['status-bar','action-log','dice-others','game-container','board-wrapper','player-management','player-list-container','turn-order-box','initiative-players-box'].map(id=>{const el=document.getElementById(id),r=el.getBoundingClientRect();return {id,visible:!!el.getClientRects().length,x:r.x,y:r.y,right:r.right,bottom:r.bottom};}));
         for(const b of bounds.filter(b=>b.visible))assert.ok(b.x>=-1&&b.y>=-1&&b.right<=width+1&&b.bottom<=height+1,JSON.stringify({width,height,value,b}));
         assert.ok(layout.scrollWidth<=width+1&&layout.scrollHeight<=height+1,label);
-        assert.ok(layout.footer.y>=layout.upper.bottom-1,label);
-        assert.ok(Math.abs(layout.journal.h-layout.dice.h)<1,label);
+        assert.ok(Math.abs(layout.footer.bottom-layout.upper.bottom)<1,label);
+        if(width>760){assert.ok(Math.abs(layout.journal.h/layout.dice.h-2/3)<.02,label);assert.ok(Math.abs(layout.footer.x-layout.map.x)<1&&Math.abs(layout.footer.right-layout.map.right)<1,label);assert.ok(Math.abs(layout.left.bottom-layout.upper.bottom)<1,label);if(value!=='exploration')assert.ok(Math.abs(layout.right.bottom-layout.upper.bottom)<1,label);if(value==='initiative')assert.ok(Math.abs(layout.order.h/layout.initiative.h-55/45)<.03,label);}
         assert.ok(Math.abs(layout.map.w-layout.wrapper.w)<1,label);
         assert.equal(layout.sideHidden,value==='exploration',label);
         if(value==='exploration'){
@@ -37,7 +37,7 @@ module.exports=async({pages,screenshotDir})=>{
           openWidth=layout.map.w;
         }else assert.ok(layout.map.w<openWidth-100,label);
         assert.ok(layout.map.h>10&&layout.journal.h>10,label);
-        assert.ok(Math.abs(layout.header.bottom-layout.upper.y)<1&&Math.abs(layout.upper.bottom-layout.footer.y)<1,'continuous header/workspace/footer: '+label);
+        assert.ok(Math.abs(layout.header.bottom-layout.upper.y)<1&&Math.abs(layout.upper.bottom-layout.footer.bottom)<1,'continuous header/workspace/footer: '+label);
         if(width>760){
           assert.ok(Math.abs(layout.journal.bottom-layout.dice.y)<1,'continuous left column: '+label);
           for(const id of ['action-log','dice-others','player-management','player-list-container','turn-order-box'])assert.equal(await page.locator('#'+id).evaluate(el=>getComputedStyle(el).borderRadius),'0px');
@@ -50,9 +50,9 @@ module.exports=async({pages,screenshotDir})=>{
   for(const page of [gm,owner]){
     await page.setViewportSize({width:1600,height:1080});
     const dimensions=await page.evaluate(()=>{const r=id=>{const b=document.getElementById(id).getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,bottom:b.bottom};};return {left:r('action-log-container'),map:r('game-container'),right:r('combat-side-column'),journal:r('action-log'),dice:r('dice-others'),bottom:r('action-bottom-row'),controls:r('player-management'),roster:r('player-list-container'),parents:['action-bottom-row','combat-side-column','initiative-players-box'].map(id=>document.getElementById(id).parentElement.id)};});
-    assert.deepEqual(dimensions.parents,['main-container','content-row','combat-side-column']);
-    assert.ok(Math.abs(dimensions.journal.h-dimensions.dice.h)<1,JSON.stringify(dimensions));
-    assert.ok(dimensions.bottom.y>=Math.max(dimensions.left.bottom,dimensions.map.bottom,dimensions.right.bottom)-1,JSON.stringify(dimensions));
+    assert.deepEqual(dimensions.parents,['content-row','content-row','combat-side-column']);
+    assert.ok(Math.abs(dimensions.journal.h/dimensions.dice.h-2/3)<.02,JSON.stringify(dimensions));
+    assert.ok(Math.abs(dimensions.bottom.y-dimensions.map.bottom)<1,JSON.stringify(dimensions));
     assert.ok(dimensions.roster.w>dimensions.controls.w*2);assert.ok(dimensions.controls.w<=300);
     assert.equal(await page.locator('#main-container').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);
   }
@@ -78,6 +78,6 @@ module.exports=async({pages,screenshotDir})=>{
   assert.equal(await gm.locator('#main-container').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);
   await gm.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   const j=await gm.locator('#action-log').boundingBox(),d=await gm.locator('#dice-others').boundingBox();assert.ok(Math.abs(j.height-d.height)<1,JSON.stringify({j,d}));
-  const flow=await gm.evaluate(()=>{const row=document.getElementById('content-row').getBoundingClientRect(),bottom=document.getElementById('action-bottom-row').getBoundingClientRect(),left=document.getElementById('action-log-container').getBoundingClientRect(),right=document.getElementById('combat-side-column').getBoundingClientRect();return {rowBottom:row.bottom,bottomY:bottom.y,leftBottom:left.bottom,rightBottom:right.bottom};});assert.ok(flow.bottomY>=Math.max(flow.rowBottom,flow.leftBottom,flow.rightBottom)-1,JSON.stringify(flow));
-  console.log('PASS workspace: actual room-entry handler, 14 viewport/zoom-equivalent sizes for GM/player in all phases, every frame inside the window, continuous seams, equal left panels, exploration width, 28+ cards/search/sheet');
+  const flow=await gm.evaluate(()=>{const row=document.getElementById('content-row').getBoundingClientRect(),bottom=document.getElementById('action-bottom-row').getBoundingClientRect(),left=document.getElementById('action-log-container').getBoundingClientRect(),right=document.getElementById('combat-side-column').getBoundingClientRect();return {rowBottom:row.bottom,bottomY:bottom.y,leftBottom:left.bottom,rightBottom:right.bottom};});assert.ok(flow.bottomY>=Math.max(flow.leftBottom,flow.rightBottom)-1,JSON.stringify(flow));
+  console.log('PASS workspace: actual room-entry handler, 14 viewport/zoom-equivalent sizes for GM/player in all phases, every frame inside the window, continuous seams, central footer, 40/60 left and 55/45 initiative ratios, exploration width, 28+ cards/search/sheet');
 };

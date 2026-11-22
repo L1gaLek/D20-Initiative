@@ -25,7 +25,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 }
 #main-container>#content-row{
   box-sizing:border-box;display:grid;grid-template-columns:var(--room-left) minmax(0,1fr);
-  grid-template-rows:minmax(0,1fr);gap:var(--room-gap);align-items:stretch;
+  grid-template-rows:minmax(0,7fr) minmax(0,3fr);gap:var(--room-gap);align-items:stretch;
   flex:1 1 0;width:100%;height:auto;min-height:0;padding:0;border:0;border-radius:0;
   background:var(--table-surface);box-shadow:none;overflow:hidden;
 }
@@ -33,7 +33,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   grid-template-columns:var(--room-left) minmax(0,1fr) var(--room-side);
 }
 #content-row>#action-log-container{
-  box-sizing:border-box;display:grid;grid-template-rows:repeat(2,minmax(0,1fr));
+  box-sizing:border-box;display:grid;grid-column:1;grid-row:1/-1;grid-template-rows:minmax(0,4fr) minmax(0,6fr);
   gap:0;width:100%;min-width:0;height:100%;min-height:0;align-self:stretch;padding:0;border-right:1px solid var(--table-divider);
 }
 #action-log-container>#action-log{height:auto;min-height:0;max-height:none;border:0;border-bottom:1px solid var(--table-divider);}
@@ -57,7 +57,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 /* The map viewport touches both edges; no decorative side strips. */
 #content-row>#game-container{
   box-sizing:border-box;min-width:0;width:100%;height:100%;min-height:0;margin:0;
-  padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:hidden;
+  padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:hidden;grid-column:2;grid-row:1;
 }
 #game-container>#board-row{
   width:100%;height:100%;min-height:0;min-width:0;display:flex;
@@ -86,18 +86,20 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 #board-col>#initiative-warning{flex:none;padding:3px 8px;font-size:11px;}
 #content-row>#combat-side-column{
   box-sizing:border-box;width:100%;min-width:0;height:100%;min-height:0;margin:0;border:0;border-left:1px solid var(--table-divider);
-  display:flex;flex-direction:column;gap:0;overflow:hidden;
+  display:flex;flex-direction:column;gap:0;overflow:hidden;grid-column:3;grid-row:1/-1;
 }
 #content-row>#combat-side-column[hidden]{display:none;}
+#main-container[data-room-phase=initiative] #combat-side-column>#turn-order-box{flex:55 1 0;}
+#main-container[data-room-phase=initiative] #combat-side-column>#initiative-players-box{flex:45 1 0;}
 #combat-side-column>#turn-order-box{box-sizing:border-box;min-height:0;max-height:none;flex:1 1 0;margin:0;overflow-y:auto;border:0;}
 #combat-side-column>#initiative-players-box{box-sizing:border-box;width:100%;min-width:0;min-height:0;flex:1 1 0;max-height:none;border:0;border-top:1px solid var(--table-divider);}
 /* The lower row is always on screen, regardless of roster length or role. */
-#main-container>#action-bottom-row{
-  box-sizing:border-box;display:grid;grid-template-columns:250px minmax(0,1fr);
-  gap:0;flex:0 0 30%;width:100%;min-width:0;min-height:0;
+#content-row>#action-bottom-row{
+  box-sizing:border-box;display:grid;grid-template-columns:minmax(145px,.35fr) minmax(0,1fr);grid-column:2;grid-row:2;
+  gap:0;height:100%;width:100%;min-width:0;min-height:0;
   align-items:stretch;overflow:hidden;border-top:1px solid var(--table-divider);
 }
-#main-container>#action-bottom-row::after{display:none;}
+#content-row>#action-bottom-row::after{display:none;}
 #action-bottom-row>#left-tools-stack,#action-bottom-row>#player-side-stack{width:100%;min-width:0;min-height:0;height:100%;border:0;overflow:hidden;}
 #action-bottom-row>#left-tools-stack{border-right:1px solid var(--table-divider);}
 #action-bottom-row #player-management{box-sizing:border-box;width:100%;height:100%;min-height:0;min-width:0;max-height:none;overflow:auto;border:0;}
@@ -128,7 +130,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 .legacy-viewport-controls[hidden]{display:none;}
 @media(max-width:1280px){
   #main-container{--room-left:300px;--room-side:250px;}
-  #main-container>#action-bottom-row{grid-template-columns:230px minmax(0,1fr);}
+  #content-row>#action-bottom-row{grid-template-columns:170px minmax(0,1fr);}
   #main-container .gm-quick-toolbar{right:5px;}
 }
 @media(max-width:1000px){
@@ -153,15 +155,15 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   #main-container::after{display:none;}
   #main-container>#status-bar{padding:5px 8px;}
   #main-container>#content-row,#main-container:is([data-room-phase=initiative],[data-room-phase=combat])>#content-row{
-    grid-template-columns:minmax(0,1fr) minmax(0,.7fr);grid-template-rows:minmax(0,1fr) minmax(0,.85fr);
+    grid-template-columns:minmax(0,1fr) minmax(0,.7fr);grid-template-rows:minmax(0,1fr) minmax(0,.85fr) minmax(0,.9fr);
   }
   #content-row>#game-container{grid-column:1/-1;grid-row:1;}
   #main-container:is([data-room-phase=initiative],[data-room-phase=combat]) #game-container{grid-column:1;}
   #content-row>#combat-side-column{grid-column:2;grid-row:1;}
-  #content-row>#action-log-container{grid-column:1/-1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr);}
+  #content-row>#action-log-container{grid-column:1/-1;grid-row:2;grid-template-columns:minmax(0,4fr) minmax(0,6fr);grid-template-rows:minmax(0,1fr);}
   #content-row>#action-log-container{border-right:0;border-top:1px solid var(--table-divider);}
   #action-log-container>#action-log{border-bottom:0;border-right:1px solid var(--table-divider);}
-  #main-container>#action-bottom-row{grid-template-columns:170px minmax(0,1fr);flex-basis:28%;}
+  #content-row>#action-bottom-row{grid-column:1/-1;grid-row:3;grid-template-columns:145px minmax(0,1fr);}
   #action-bottom-row #player-list-container{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);padding:8px;gap:4px;}
   #player-list-container>.player-list-tabs{grid-column:1;min-width:0;}
   #player-list-container>.roster-search{grid-column:1;grid-row:3;}
@@ -204,7 +206,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   #status-bar button{font-size:10px;min-height:27px;padding:5px 7px;}
   #status-bar .room-chat-notification{width:30px;height:30px;}
   #main-container #right-panel{top:116px;max-height:calc(100dvh - 126px);}
-  #main-container>#action-bottom-row{grid-template-columns:145px minmax(0,1fr);}
+  #content-row>#action-bottom-row{grid-template-columns:145px minmax(0,1fr);}
   #player-management{padding:7px;}
   #player-management h3{font-size:11px;margin-bottom:6px;}
   #player-management .pm-row--size{flex-wrap:wrap;gap:4px;}
@@ -213,3 +215,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   #player-management .pm-size-label{font-size:10px;}
   #dice-inline-controls #roll{flex-basis:100%;}
 }
+
+@media(min-width:761px) and (max-width:1500px){#action-bottom-row #player-list-container{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);gap:3px;padding:7px}#player-list-container>.player-list-tabs{grid-column:1;min-width:0}#player-list-container>.roster-search{grid-column:1;grid-row:3}#player-list-container>.roster-count{display:none}#player-list-container>#player-list{grid-row:4}#player-list-container .room-panel-heading{font-size:12px}#player-list-container .player-tab{padding:4px 2px;font-size:10px}}
+
+#player-management .pm-row--size{display:grid;grid-template-columns:30px minmax(0,1fr);gap:5px}#player-management .pm-size{min-width:0;justify-content:space-between;gap:4px}#player-management #player-size{width:60px;min-width:0}#player-management .pm-size-label{font-size:10px}

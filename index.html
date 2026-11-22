@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="style/base.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/layout.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/lobby.css?v=20261122-egress-1">
-<link rel="stylesheet" href="style/board.css">
+<link rel="stylesheet" href="style/board.css?v=20261123-appearance-1">
 <link rel="stylesheet" href="style/map-editor.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/board-3d.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/character-3d.css?v=20261122-egress-1">
@@ -20,9 +20,9 @@
 <link rel="stylesheet" href="style/gameplay.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/dice-table.css?v=20261122-critical-1">
 <link rel="stylesheet" href="style/cursors.css?v=20261122-egress-1">
-<link rel="stylesheet" href="style/personal-settings.css?v=20261122-cabinet-1">
+<link rel="stylesheet" href="style/personal-settings.css?v=20261123-appearance-1">
 <link rel="stylesheet" href="style/room-panels.css?v=20261122-table-layout-1">
-<link rel="stylesheet" href="style/room-workspace.css?v=20261123-table-3">
+<link rel="stylesheet" href="style/room-workspace.css?v=20261123-appearance-1">
 </head>
 <body class="lobby-active">
 
@@ -705,9 +705,7 @@
       </div>
 
         </div>
-</div>
-
-  <!-- Нижняя панель на всю ширину игровой зоны -->
+  <!-- Нижняя панель в пределах центральной карты -->
   <div id="action-bottom-row">
 
     <div id="left-tools-stack">
@@ -777,6 +775,7 @@
 
   </div>
 
+</div><!-- /#content-row -->
 </div><!-- /#main-container -->
 
 <!-- ================== MODAL: SHEET INFO ================== -->
@@ -811,7 +810,7 @@
   <script src="client/avatar-data.js?v=20261122-egress-1"></script>
   <script src="client/avatar-ui.js?v=20261122-egress-1"></script>
   <script src="client/board-3d-data.js?v=20261122-egress-1"></script>
-  <script src="client/board-3d.js?v=20261122-sync-1"></script>
+  <script src="client/board-3d.js?v=20261123-appearance-1"></script>
   <script src="client/board-view.js?v=20261122-egress-1"></script>
   <script src="client/app/lobby-shell.js?v=20261122-egress-1"></script>
   <script src="client/rooms/lobby-room-ui.js?v=20261122-egress-1"></script>
@@ -825,9 +824,11 @@
   <script src="backend/shared/sheet-sync.js?v=20261122-sync-1"></script>
   <script src="backend/shared/combat-state.js?v=20261122-egress-1"></script>
   <script src="client/dice-table/log-timing.js?v=20261122-dice-controls-1"></script>
-  <script src="client/personal-preferences.js?v=20261122-cabinet-1"></script>
+  <script src="backend/shared/appearance.js?v=20261123-appearance-1"></script>
+  <script src="client/dice-table/appearance.js?v=20261123-appearance-1"></script>
+  <script src="client/personal-preferences.js?v=20261123-appearance-1"></script>
   <script src="client/dice-table/critical-feedback.js?v=20261122-cabinet-1"></script>
-  <script src="client/dice-table.js?v=20261122-table-layout-1"></script>
+  <script src="client/dice-table.js?v=20261123-appearance-1"></script>
   <script src="client/message-ui.js?v=20261123-viewport-2"></script>
   <script src="client/board-players.js?v=20261122-cabinet-1"></script>
   <script src="client/gameplay-ui.js?v=20261122-table-layout-1"></script>
@@ -844,7 +845,7 @@
   <script src="client/network/realtime-channel-helpers.js?v=20261122-egress-1"></script>
   <script src="client/network/room-detached-sync.js?v=20261122-egress-1"></script>
   <script src="client/network/live-room-sync.js?v=20261122-sync-1"></script>
-  <script src="client/core-helpers-network.js?v=20261122-personal-1"></script>
+  <script src="client/core-helpers-network.js?v=20261123-appearance-1"></script>
   <script src="client/initiative-sync.js?v=20261122-sync-1"></script>
   <script src="client/bg-music.js?v=20261122-egress-1"></script>
   <script src="client/rooms-controlbox.js?v=20261123-workspace-1"></script>
@@ -865,7 +866,7 @@
 <script src="char_sheet/monster-sheet-modal.js?v=20261122-egress-1"></script>
 <script src="char_sheet/sheet-token-access.js?v=20261122-personal-1"></script>
 <script src="char_sheet/sheet-modal-render.js?v=20261122-personal-1"></script>
-<script src="client/personal-settings.js?v=20261122-cabinet-1"></script>
+<script src="client/personal-settings.js?v=20261123-appearance-1"></script>
 
 </body>
 </html>

@@ -2,6 +2,12 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {UserProfiles}=require('../backend/shared/user-profiles');
 const {serverHarness,initialState,clone}=require('./helpers/room-harness.cjs');
 const player=()=>({id:'hero',ownerId:'u',isBase:true,name:'Герой',sheet:{parsed:{info:{race:{value:'Человек'},charClass:{value:'Воин'}},vitality:{'hp-current':{value:12},'hp-max':{value:12},deathSaves:{fail:0}}}}});
+test('appearance settings validate catalog IDs and colors without changing another user',()=>{
+  const store=new UserProfiles();const before=store.get('other').settings;
+  store.settings('u',{diceStyle:'prism',boardBackground:'#123ABC',boardGrid:'#fedcba'});
+  assert.equal(store.get('u').settings.boardBackground,'#123abc');assert.equal(store.get('u').settings.diceStyle,'prism');assert.deepEqual(store.get('other').settings,before);
+  for(const invalid of [{diceStyle:'../../x'},{boardGrid:'url(javascript:x)'},{boardBackground:'#fff'}])assert.throws(()=>store.settings('u',invalid),/Invalid/);
+});
 test('room time counts the union of tabs, stops on disconnect, and records played race/class',()=>{
   let now=1000;const store=new UserProfiles({now:()=>now}),state={players:[player()]};
   store.connect('tab1','room','u',state);store.connect('tab2','room','u',state);

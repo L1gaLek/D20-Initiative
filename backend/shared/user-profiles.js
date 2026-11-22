@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path');
-const defaults={criticalSound:true,chatSound:true,criticalEffects:true,reduceDiceMotion:false,volume:70};
+const Appearance=require('./appearance');
+const defaults={criticalSound:true,chatSound:true,criticalEffects:true,reduceDiceMotion:false,volume:70,...Appearance.defaults};
 const copy=v=>JSON.parse(JSON.stringify(v)),number=v=>Number.isFinite(Number(v))?Number(v):0;
 const value=v=>typeof v==='object'?v?.value:v;
 const error=(message,status=400)=>Object.assign(new Error(message),{status});
@@ -81,6 +82,8 @@ class UserProfiles{
   }
   settings(id,input){const p=this.user(id),next={};for(const key of Object.keys(defaults))if(Object.hasOwn(input,key)){
     if(key==='volume'){if(!Number.isFinite(Number(input[key])))throw error('Invalid volume');next[key]=Math.max(0,Math.min(100,Number(input[key])));}
+    else if(key==='diceStyle'){if(!Appearance.styles.some(s=>s.id===input[key]))throw error('Invalid dice style');next[key]=input[key];}
+    else if(key==='boardBackground'||key==='boardGrid'){const color=Appearance.color(input[key],null);if(!color)throw error('Invalid board color');next[key]=color;}
     else{if(typeof input[key]!=='boolean')throw error('Invalid setting');next[key]=input[key];}
   }p.settings={...p.settings,...next};this.dirty=true;this.flush();return this.get(id);}
   flush(){if(!this.file||!this.dirty)return;const dir=path.dirname(this.file);fs.mkdirSync(dir,{recursive:true,mode:0o700});

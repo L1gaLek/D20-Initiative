@@ -2154,6 +2154,7 @@ function ensureDiceEventLocalNonce(ev) {
 async function insertDiceEvent(roomId, ev) {
   try {
     if (!roomId || !ev) return;
+    ev.diceStyle = D20Appearance.style(window.PersonalPreferences?.get().diceStyle).id;
     const localNonce = ensureDiceEventLocalNonce(ev);
     const line = buildDiceLogText(ev);
     const optimistic = {

@@ -227,3 +227,6 @@ outline-color: #666;
   border-radius: 16px;
   overflow: hidden;
 }
+#game-board{background-color:var(--personal-board-background,#2a2a2a)}
+#game-board .cell,#game-board.has-bg .cell{background-color:rgba(var(--personal-board-rgb,42,42,42),var(--grid-alpha,1));outline-color:var(--personal-grid-color,#666666)}
+#game-board.has-bg .cell{background-color:rgba(var(--personal-board-rgb,42,42,42),var(--grid-alpha,.35))}
