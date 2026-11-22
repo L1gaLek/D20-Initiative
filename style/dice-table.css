@@ -26,6 +26,18 @@
 .dice-table-dialog__header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .dice-table-dialog__header strong{font:700 20px Georgia,serif}
 .dice-table-dialog__header button{border:1px solid #ad8c50;border-radius:7px;background:#403122;color:#f5dfbb;padding:7px 12px}
+.dice-table-dialog__controls{display:flex;align-items:end;flex-wrap:wrap;gap:10px 14px;margin:0 0 12px;padding:12px;border:1px solid #9e7a463f;border-radius:10px;background:#17161280}
+.dice-table-dialog__field{display:grid;gap:5px;color:#cdbc99;font-size:12px;font-weight:600}
+.dice-table-dialog__field select,.dice-table-dialog__count{height:38px;border:1px solid #a3834b88;border-radius:7px;background:#30271c;color:#f8e7c6;box-sizing:border-box}
+.dice-table-dialog__field select{min-width:98px;padding:6px 11px;font:inherit;font-size:15px}
+.dice-table-dialog__count{display:flex;overflow:hidden}
+.dice-table-dialog__count input{width:51px;min-width:0;box-sizing:border-box;border:0;border-inline:1px solid #a3834b55;background:#1b1915;color:#f8e7c6;text-align:center;font:inherit;font-size:15px;appearance:textfield}
+.dice-table-dialog__count input::-webkit-inner-spin-button,.dice-table-dialog__count input::-webkit-outer-spin-button{appearance:none;margin:0}
+.dice-table-dialog__count button{width:34px;border:0;border-radius:0;background:transparent;color:#e7c98e;font-size:20px;cursor:var(--cursor-pointer,pointer)}
+.dice-table-dialog__count button:hover{background:#684b2966}
+.dice-table-dialog__roll{height:38px;min-width:118px;padding:7px 18px;border:1px solid #d4b177;border-radius:7px;background:linear-gradient(#9d783f,#705128);color:#fff1d3;font:700 14px Georgia,serif;cursor:var(--cursor-pointer,pointer);box-shadow:0 2px 5px #0005}
+.dice-table-dialog__controls button:disabled,.dice-table-dialog__controls input:disabled,.dice-table-dialog__controls select:disabled{opacity:.45;cursor:default}
+.dice-table-dialog__hint{align-self:center;color:#aa9c82;font-size:11px;margin-top:18px}
 .dice-table-dialog .dice-table__stage{aspect-ratio:16/10;max-height:66dvh;min-height:200px}
 .dice-table-dialog .dice-table__caption{font-size:13px;max-height:4em}
 .dice-table-dialog .dice-table__result{font-size:15px;padding:5px 10px}

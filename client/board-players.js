@@ -3381,6 +3381,7 @@ window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = nu
 
   const damage = damageParts ? DamageRolls.event(damageParts, kindText || "Урон", rollDie) : null;
   diceAnimBusy = true;
+  window.DiceTable?.refreshControls?.();
   try {
   const S = damage ? damage.sides : clampInt(sides, 2, 100, 20);
   const C = damage ? damage.count : clampInt(count, 1, 20, 1);
@@ -3463,5 +3464,5 @@ if (critType) {
   }
 
   return { ...(damage || {}), sides: S, count: C, bonus: B, rolls: finals, sum, total };
-  } finally { diceAnimBusy = false; }
+  } finally { diceAnimBusy = false; window.DiceTable?.refreshControls?.(); }
 };

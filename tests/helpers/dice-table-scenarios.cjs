@@ -7,13 +7,25 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   for(const page of pages){
     assert.equal(await page.locator('.dice-table__canvas').count(),0,'no eager WebGL context');
     await page.locator('#dice-others').scrollIntoViewIfNeeded();
+    await page.evaluate(()=>{
+      window.__diceLogReveal=[];const original=renderLog;const seen=new Set();
+      renderLog=lines=>{for(const line of lines||[])if(!seen.has(line)){seen.add(line);window.__diceLogReveal.push({line,state:DiceTable.inspect().state,animating:DiceTable.inspect().animating});}original(lines);};
+    });
   }
   await gm.getByRole('button',{name:'Развернуть стол бросков'}).click();
   await send({localNonce:'dice-table-d20',sides:20,count:1,rolls:[17],total:17,kindText:'Проверка: d20'});
   await owner.waitForFunction(()=>DiceTable.inspect().animating);
   const inFlight=await owner.evaluate(()=>DiceTable.inspect());assert.equal(inFlight.dice[0].sides,20);assert.ok(inFlight.frame<130);
+  assert.equal(await owner.evaluate(()=>lastState.log.some(line=>line.includes('Проверка: d20'))),false,'journal must not reveal the result during its animation');
+  broadcast({type:'logRow',roomId:'test-room',row:{text:'Обычное событие во время броска',localNonce:'ordinary-during-roll'}});
+  await owner.waitForFunction(()=>lastState.log.includes('Обычное событие во время броска'));
   await picture(owner,'dice-rolling');
   await Promise.all(pages.map(page=>settled(page,17)));
+  for(const page of pages){
+    await page.waitForFunction(()=>lastState.log.some(line=>line.includes('Проверка: d20')));
+    const reveal=await page.evaluate(()=>__diceLogReveal.find(row=>row.line.includes('Проверка: d20')));
+    assert.equal(reveal.state,'settled');assert.equal(reveal.animating,false);
+  }
   assert.equal(await gm.locator('.dice-table-dialog').isVisible(),true,'first roll keeps an already expanded tray open');
   await gm.keyboard.press('Escape');await gm.locator('#dice-others .dice-table__canvas').waitFor({state:'attached'});
   const views=await Promise.all(pages.map(page=>page.evaluate(()=>DiceTable.inspect().dice)));
@@ -24,6 +36,15 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   broadcast({type:'diceEvent',roomId:'test-room',event:{localNonce:'dice-table-d20',fromId:'user-1',fromName:'Альрик',sides:20,count:1,rolls:[17],total:17}});
   await other.waitForTimeout(100);assert.equal(await other.evaluate(()=>DiceTable.inspect().accepted),accepted);
   console.log('PASS dice: real dice relay reaches all five clients including the roller, d20 lands on 17, motion stops, and duplicate echoes do not replay');
+
+  const delayed={fromId:'user-2',fromName:'Сари',localNonce:'log-before-dice',sides:20,count:1,rolls:[18],total:18,kindText:'Запоздавший бросок'};
+  const delayedText='Сари: Запоздавший бросок: 18 = 18';
+  broadcast({type:'logRow',roomId:'test-room',row:{text:delayedText,localNonce:'dice-log:log-before-dice'}});
+  await other.waitForTimeout(100);assert.equal(await other.evaluate(line=>lastState.log.includes(line),delayedText),false);
+  broadcast({type:'diceEvent',roomId:'test-room',event:delayed});await settled(other,18);
+  await other.waitForFunction(line=>lastState.log.includes(line),delayedText);
+  const delayedReveal=await other.evaluate(line=>__diceLogReveal.find(row=>row.line===line),delayedText);
+  assert.equal(delayedReveal.state,'settled');
 
   for(const [sides,value] of [[2,2],[4,4],[6,6],[8,8],[10,10],[12,12],[20,20],[100,100]]){
     await send({localNonce:'shape-'+sides,sides,count:1,rolls:[value],total:value,kindText:'Кубик d'+sides});
@@ -58,18 +79,43 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   assert.ok(await owner.evaluate(()=>DiceTable.inspect().geometries)<100,'old throw geometry is released');
   await owner.emulateMedia({reducedMotion:'no-preference'});
   const oldAccepted=await gm.evaluate(()=>DiceTable.inspect().accepted);
-  for(const localNonce of ['identical-a','identical-b'])broadcast({type:'diceEvent',roomId:'test-room',event:{fromId:'user-2',fromName:'Сари',localNonce,sides:20,count:1,rolls:[15],total:15}});
+  for(const localNonce of ['identical-a','identical-b']){
+    broadcast({type:'diceEvent',roomId:'test-room',event:{fromId:'user-2',fromName:'Сари',localNonce,sides:20,count:1,rolls:[15],total:15,kindText:'Одинаковый бросок'}});
+    broadcast({type:'logRow',roomId:'test-room',row:{text:'Сари: Одинаковый бросок: 15 = 15',localNonce:'dice-log:'+localNonce}});
+  }
   await gm.waitForFunction(n=>DiceTable.inspect().accepted===n+2,oldAccepted);await settled(gm,15);
   assert.equal(await gm.evaluate(()=>DiceTable.inspect().results.length),2);
+  assert.equal(await gm.evaluate(()=>lastState.log.filter(line=>line==='Сари: Одинаковый бросок: 15 = 15').length),2,'distinct identical rolls remain separate journal entries');
   console.log('PASS dice: real 20-die button, forty percentile meshes, reduced motion and bounded GPU resources; identical rolls with distinct IDs both play');
 
   await gm.getByRole('button',{name:'Развернуть стол бросков'}).click();
   await gm.locator('.dice-table-dialog').waitFor({state:'visible'});
   const rect=await gm.locator('.dice-table-dialog .dice-table__canvas').boundingBox();assert.ok(rect.width>600);
+  const rollsBefore=requests.filter(r=>r.path.endsWith('/dice')).length;
+  await gm.locator('#dice-table-sides').selectOption('8');await gm.locator('#dice-table-count').fill('3');
+  await gm.locator('.dice-table-dialog__controls [type="submit"]').click();
+  await gm.waitForFunction(()=>DiceTable.inspect().state==='settled'&&DiceTable.inspect().results.some(r=>r.rolls.length===3));
+  const actual=requests.filter(r=>r.path.endsWith('/dice')).slice(rollsBefore);
+  assert.equal(actual.length,1);assert.equal(actual[0].data.event.sides,8);assert.equal(actual[0].data.event.rolls.length,3);
+  await Promise.all(pages.map(page=>page.waitForFunction(total=>DiceTable.inspect().state==='settled'&&DiceTable.inspect().results.some(r=>r.total===total&&r.rolls.length===3),actual[0].data.event.total)));
+  assert.equal(await gm.locator('.dice-table-dialog').isVisible(),true,'throwing from the dialog keeps it open');
+  assert.deepEqual(await gm.evaluate(()=>[dice.value,diceCountInput.value]),['8','3']);
+  const beforeSpectator=requests.filter(r=>r.path.endsWith('/dice')).length;
+  await gm.evaluate(()=>{myRole='Spectator';applyRoleToUI();});
+  assert.equal(await gm.locator('.dice-table-dialog__controls [type="submit"]').isDisabled(),true);
+  await gm.evaluate(()=>document.querySelector('.dice-table-dialog__controls').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  assert.equal(requests.filter(r=>r.path.endsWith('/dice')).length,beforeSpectator);
+  await gm.evaluate(()=>{myRole='GM';applyRoleToUI();});
+  console.log('PASS dice controls: journal reveals each result after settling; unrelated events stay immediate; expanded dialog rolls the selected count/type through the real relay');
   if(screenshotDir)await gm.locator('.dice-table-dialog').screenshot({path:path.join(screenshotDir,'dice-expanded.png')});
   await gm.keyboard.press('Escape');await gm.locator('#dice-others .dice-table__canvas').waitFor({state:'attached'});assert.equal(await gm.locator('#dice-others .dice-table__canvas').count(),1);
   await owner.setViewportSize({width:420,height:900});await owner.locator('#dice-others').scrollIntoViewIfNeeded();assert.equal(await owner.locator('#dice-others').isVisible(),true);assert.equal(await owner.locator('#dice-others').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);await picture(owner,'dice-mobile');await owner.setViewportSize({width:1440,height:1000});
 
+  await owner.setViewportSize({width:420,height:900});await owner.getByRole('button',{name:'Развернуть стол бросков'}).click();
+  assert.equal(await owner.locator('.dice-table-dialog__controls').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);
+  await owner.locator('#dice-table-count').fill('20');await owner.locator('.dice-table-dialog__controls [data-dice-step="1"]').click();assert.equal(await owner.locator('#dice-table-count').inputValue(),'20');
+  if(screenshotDir)await owner.locator('.dice-table-dialog').screenshot({path:path.join(screenshotDir,'dice-controls-mobile.png')});
+  await owner.keyboard.press('Escape');await owner.setViewportSize({width:1440,height:1000});
   const context=await gm.context().browser().newContext({viewport:{width:1200,height:1000},reducedMotion:'reduce'});
   await context.route('https://cdn.jsdelivr.net/npm/@supabase/**',route=>route.fulfill({contentType:'text/javascript',body:'window.supabase={createClient:()=>({auth:{getSession:async()=>({data:{session:null}})}})};'}));
   await context.addInitScript(()=>{

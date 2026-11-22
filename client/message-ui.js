@@ -41,7 +41,7 @@ function shouldSkipDuplicateOtherDice(ev, explicitId) {
   }
 }
 
-function shouldSkipRecentLogRow(text, explicitId) {
+function shouldSkipRecentLogRow(text, explicitId, identifiedDice = false) {
   try {
     const line = String(text || '').trim();
     if (!line) return false;
@@ -58,7 +58,7 @@ function shouldSkipRecentLogRow(text, explicitId) {
     const idKey = id ? `id:${id}` : '';
     const textKey = `text:${line}`;
     if (idKey && recent.has(idKey)) return true;
-    if (recent.has(textKey)) return true;
+    if (!identifiedDice && recent.has(textKey)) return true;
     if (idKey) recent.set(idKey, now);
     recent.set(textKey, now);
     return false;
@@ -869,7 +869,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
     if (msg.type === 'logInit' && Array.isArray(msg.rows)) {
       if (!lastState) lastState = createInitialGameState();
       try { window.RoomChat?.hydrateFromRows?.(msg.rows); } catch {}
-      lastState.log = msg.rows
+      const visibleRows = msg.rows.filter(row => !window.DiceTable?.deferLog?.({type:'logRow',row},{knownOnly:true}));
+      lastState.log = visibleRows
         .map(r => String(r?.text || ''))
         .filter((text) => text && !window.RoomChat?.isChatLogText?.(text));
       if (lastState.log.length > 200) lastState.log = lastState.log.slice(-200);
@@ -887,10 +888,11 @@ try { handleSessionUiMessage?.(msg); } catch {}
           } catch {}
           return;
         }
+        if (!msg.__diceLogReady && window.DiceTable?.deferLog?.(msg)) return;
         // Анти-дубль: иногда один и тот же лог приходит дважды подряд (optimistic + realtime или повторный bind).
         // Скрываем повтор, если он совпадает с предыдущей строкой и пришёл почти сразу.
         const rowKey = String(msg.row.id || msg.row.localNonce || msg.row.nonce || '').trim();
-        if (shouldSkipRecentLogRow(text, rowKey)) return;
+        if (shouldSkipRecentLogRow(text, rowKey, !!window.DiceLogTiming?.nonce?.(msg.row))) return;
         lastState.log.push(text);
         if (lastState.log.length > 200) lastState.log.splice(0, lastState.log.length - 200);
         renderLog(lastState.log);

@@ -8,19 +8,24 @@ function escapeGameplayHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-rollBtn?.addEventListener('click', async () => {
+async function rollStandardDice({sides:chosenSides,count:chosenCount} = {}) {
   if (typeof isSpectator === 'function' && isSpectator()) return;
+  if (!currentRoomId) return;
   if (diceAnimBusy) return;
   diceAnimBusy = true;
   rollBtn.disabled = true;
+  window.DiceTable?.refreshControls?.();
+  try {
 
   // Used to prevent double animation when the server echoes back our own diceEvent.
   // (We already animate locally in this handler.)
   const localNonce = `n_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   try { window._lastSentDiceNonce = localNonce; } catch {}
 
-  const sides = clampInt(dice?.value, 2, 100, 20);
-  const count = clampInt(diceCountInput?.value, 1, 20, 1);
+  const sides = clampInt(chosenSides ?? dice?.value, 2, 100, 20);
+  const count = clampInt(chosenCount ?? diceCountInput?.value, 1, 20, 1);
+  if (dice) dice.value = String(sides);
+  if (diceCountInput) diceCountInput.value = String(count);
 
   clearCritUI();
 
@@ -83,9 +88,15 @@ try { window.rememberLocalDiceAnimation?.(event); } catch {}
   event
 });
 
-  diceAnimBusy = false;
-  rollBtn.disabled = false;
-});
+  return event;
+  } finally {
+    diceAnimBusy = false;
+    rollBtn.disabled = false;
+    window.DiceTable?.refreshControls?.();
+  }
+}
+window.rollStandardDice = rollStandardDice;
+rollBtn?.addEventListener('click', () => { void rollStandardDice(); });
 
 // ================== END TURN ==================
 endTurnBtn?.addEventListener('click', () => sendMessage({ type: 'endTurn' }));

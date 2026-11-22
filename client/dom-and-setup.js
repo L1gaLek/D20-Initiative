@@ -584,6 +584,7 @@ function applyRoleToUI() {
   const showDice = !!currentRoomId && !spectator;
   if (diceStackEl) diceStackEl.style.display = showDice ? '' : 'none';
   if (diceViz) diceViz.style.display = showDice ? 'block' : 'none';
+  window.DiceTable?.refreshControls?.();
 
   // Галочка "Союзник" видна только для ГМ
   try {

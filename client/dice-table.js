@@ -6,7 +6,9 @@
   let root,stage,caption,summary,pendingLabel,dialog,home,engine,loading,worker,job=0,generation=0;
   let room='',queue=[],busy=false,timer=null,state='idle',accepted=0,completed=0,last=[],failed=false,visible=true;
   const seen=new Map(),fingerprints=new Map(),jobs=new Map();
-  const api=window.DiceTable={show,remember,reset,inspect:()=>({state,room,accepted,completed,queued:queue.length,
+  const logTiming=new DiceLogTiming.Coordinator();
+  let rollForm,rollSides,rollCount,rollSubmit;
+  const api=window.DiceTable={show,remember,reset,deferLog,refreshControls,inspect:()=>({state,room,accepted,completed,queued:queue.length,
     results:last.map(item=>({name:item.name,total:item.total,rolls:item.rolls})),...(engine?.inspect()||{})})};
   function mount(){
     if(root)return;
@@ -25,9 +27,42 @@
     if(!dialog){dialog=document.createElement('dialog');dialog.className='dice-table-dialog';dialog.setAttribute('aria-label','Общий стол бросков');
       const header=document.createElement('div');header.className='dice-table-dialog__header';const title=document.createElement('strong');title.textContent='Общий стол бросков';
       const close=document.createElement('button');close.type='button';close.textContent='Закрыть';close.addEventListener('click',()=>dialog.close());header.append(title,close);dialog.append(header);document.body.append(dialog);
+      createRollControls();
       dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});dialog.addEventListener('close',()=>{root.insertBefore(home,root.querySelector('.dice-others__list'));engine?.resize();});
     }
-    dialog.append(home);dialog.showModal();engine?.resize();
+    refreshControls(true);dialog.append(home);dialog.showModal();engine?.resize();
+  }
+  function createRollControls(){
+    rollForm=document.createElement('form');rollForm.className='dice-table-dialog__controls';
+    rollForm.innerHTML='<label class="dice-table-dialog__field">Кубик<select id="dice-table-sides" aria-label="Кубик"></select></label>'+
+      '<label class="dice-table-dialog__field">Количество<span class="dice-table-dialog__count"><button type="button" data-dice-step="-1" aria-label="Уменьшить количество кубиков">−</button><input id="dice-table-count" aria-label="Количество кубиков" type="number" min="1" max="20" step="1" value="1" required><button type="button" data-dice-step="1" aria-label="Увеличить количество кубиков">+</button></span></label>'+
+      '<button class="dice-table-dialog__roll" type="submit">Бросить</button><span class="dice-table-dialog__hint">До 20 кубиков за бросок</span>';
+    rollSides=rollForm.querySelector('select');rollCount=rollForm.querySelector('input');rollSubmit=rollForm.querySelector('[type="submit"]');
+    const source=document.getElementById('dice');
+    for(const option of source.options)rollSides.append(new Option(option.textContent,option.value));
+    rollForm.addEventListener('click',event=>{const button=event.target.closest('[data-dice-step]');if(!button)return;rollCount.value=String(Math.min(20,Math.max(1,(Number(rollCount.value)||1)+Number(button.dataset.diceStep))));});
+    rollForm.addEventListener('submit',async event=>{
+      event.preventDefault();refreshControls();if(rollSubmit.disabled)return;
+      await window.rollStandardDice?.({sides:Number(rollSides.value),count:Number(rollCount.value)});refreshControls();
+    });
+    dialog.append(rollForm);
+  }
+  function refreshControls(syncValues=false){
+    if(!rollForm)return;
+    const spectator=typeof isSpectator==='function'&&isSpectator();
+    const rolling=typeof diceAnimBusy!=='undefined'&&diceAnimBusy;
+    const disabled=!currentRoom()||spectator;
+    rollSides.disabled=rollCount.disabled=disabled;
+    rollForm.querySelectorAll('[data-dice-step]').forEach(button=>button.disabled=disabled);
+    rollSubmit.disabled=disabled||rolling;rollSubmit.textContent=rolling?'Бросок…':'Бросить';
+    if(syncValues){rollSides.value=document.getElementById('dice')?.value||'20';rollCount.value=document.getElementById('dice-count')?.value||'1';}
+  }
+  function deferLog(msg,{knownOnly=false}={}){
+    const scope=currentRoom();if(scope!==room)reset(scope);
+    if(!scope||msg.__diceLogReady)return false;
+    return logTiming.hold(msg.row,()=>{
+      if(scope===currentRoom())handleMessage({...msg,__diceLogReady:true});
+    },{knownOnly});
   }
   function currentRoom(){return String(typeof currentRoomId!=='undefined'?currentRoomId:'');}
   function prune(map,max){while(map.size>max)map.delete(map.keys().next().value);}
@@ -46,6 +81,7 @@
     if(dialog?.open)dialog.close();
     generation++;room=String(nextRoom);queue=[];clearTimeout(timer);timer=null;busy=false;state='idle';last=[];failed=false;
     seen.clear();fingerprints.clear();engine?.dispose();engine=null;loading=null;worker?.terminate();worker=null;
+    logTiming.reset();
     for(const pending of jobs.values()){clearTimeout(pending.timer);pending.reject(new Error('Dice room changed'));}jobs.clear();
     stage?.classList.remove('has-dice','dice-table__stage--fallback');stage?.querySelector('.dice-table__fallback')?.remove();
     if(summary)summary.replaceChildren();if(caption)caption.textContent='Кубики появятся при следующем броске';if(pendingLabel)pendingLabel.textContent='';
@@ -54,8 +90,10 @@
     mount();if(!stage)return false;
     const scope=currentRoom();if(scope!==room)reset(scope);
     if(!scope||scope.startsWith('__'))return false;
-    if(historical){remember(ev);return false;}
+    const line=window.buildDiceLogText?.(ev)||'';
+    if(historical){logTiming.settle(logTiming.begin(ev,line));remember(ev);return false;}
     if(duplicate(ev))return false;
+    const logTicket=logTiming.begin(ev,line);
     const epoch=generation;
     let model;
     try{model=await import(new URL('model.mjs?v='+version,base));}
@@ -63,14 +101,14 @@
       if(epoch!==generation)return false;
       const rolls=Array.isArray(ev.rolls)?ev.rolls.map(Number):[];
       last=[{name:String(ev.fromName||'Игрок'),total:Number(ev.total),rolls,dice:rolls.slice(0,40).map(value=>({sides:Number(ev.sides),value,mode:'normal'}))}];
-      fallback(last);state='settled';caption.textContent=String(ev.kindText||'Бросок');showSummary(last,true);return false;
+      fallback(last);state='settled';caption.textContent=String(ev.kindText||'Бросок');showSummary(last,true);logTiming.settle(logTicket);return false;
     }
     const {normalizeEvent,seedNumber,PALETTE}=model;
     if(epoch!==generation||scope!==currentRoom())return false;
-    const item=normalizeEvent(ev);if(!item)return false;accepted++;
+    const item=normalizeEvent(ev);if(!item){logTiming.settle(logTicket);return false;}item.logTicket=logTicket;accepted++;
     item.color=PALETTE[seedNumber(item.fromId||item.name)%PALETTE.length];
     item.dice.forEach(die=>{die.ownerKey=item.fromId||item.name;die.eventKey=item.seed;});
-    if(queue.length>=12)queue.shift();queue.push({...item,part:0});updatePending();
+    if(queue.length>=12)logTiming.settle(queue.shift().logTicket);queue.push({...item,part:0});updatePending();
     if(!busy&&!timer)timer=setTimeout(()=>{timer=null;void run();},120);
     return true;
   }
@@ -123,6 +161,7 @@
       await scene.play(plan,batch,seed,!visible||document.hidden||matchMedia('(prefers-reduced-motion: reduce)').matches);
     }catch(error){if(epoch!==generation)return;fallback(last);}
     if(epoch!==generation)return;state='settled';completed+=items.length;showSummary(items,!continuation);
+    for(const item of items)if(item!==continuation)logTiming.settle(item.logTicket);
     if(items.some(item=>item.omitted))caption.textContent+=' · остальные кубики — в журнале';
     busy=false;updatePending();
     if(queue.length)timer=setTimeout(()=>{timer=null;void run();},document.hidden?0:650);

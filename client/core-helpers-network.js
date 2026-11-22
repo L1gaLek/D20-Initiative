@@ -2161,7 +2161,7 @@ async function insertDiceEvent(roomId, ev) {
       logRow: line ? {
         text: line,
         created_at: new Date().toISOString(),
-        localNonce
+        localNonce: 'dice-log:' + localNonce
       } : null
     };
     if (typeof window !== 'undefined' && typeof window.RoomRowsApi?.insertDiceEvent === 'function') {
@@ -2192,12 +2192,12 @@ async function broadcastDiceEventOnly(event) {
 
     const insertResult = await insertDiceEvent(currentRoomId, ev);
     const line = buildDiceLogText(ev);
-    const logRow = insertResult?.logRow || (line ? { text: line, created_at: new Date().toISOString() } : null);
+    const logRow = insertResult?.logRow || (line ? { text: line, created_at: new Date().toISOString(), localNonce: 'dice-log:' + ensureDiceEventLocalNonce(ev) } : null);
 
+    try { handleMessage({ type: 'diceEvent', event: ev }); } catch {}
     if (logRow) {
       try { handleMessage({ type: 'logRow', row: logRow }); } catch {}
     }
-    try { handleMessage({ type: 'diceEvent', event: ev }); } catch {}
 
     if (!USE_SUPABASE_REALTIME) {
       try { sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true }); } catch {}
@@ -2654,18 +2654,18 @@ async function sendMessage(msg) {
         const ev = msg.event || {};
         const insertResult = await insertDiceEvent(currentRoomId, ev);
         const diceLogText = buildDiceLogText(ev);
-        const logRow = insertResult?.logRow || (diceLogText ? { text: diceLogText, created_at: new Date().toISOString() } : null);
+        const logRow = insertResult?.logRow || (diceLogText ? { text: diceLogText, created_at: new Date().toISOString(), localNonce: 'dice-log:' + ensureDiceEventLocalNonce(ev) } : null);
         try {
           sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true });
         } catch {}
+        // Register the visual throw before its log can arrive locally.
+        if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         if (logRow) {
           try { handleMessage({ type: 'logRow', row: logRow }); } catch {}
           if (!USE_SUPABASE_REALTIME) {
             try { sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: true }); } catch {}
           }
         }
-        // apply to self instantly (others will receive via realtime INSERT / WS)
-        if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         break;
       }
 
