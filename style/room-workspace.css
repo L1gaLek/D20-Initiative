@@ -95,7 +95,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 #combat-side-column>#initiative-players-box{box-sizing:border-box;width:100%;min-width:0;min-height:0;flex:1 1 0;max-height:none;border:0;border-top:1px solid var(--table-divider);}
 /* The lower row is always on screen, regardless of roster length or role. */
 #content-row>#action-bottom-row{
-  box-sizing:border-box;display:grid;grid-template-columns:minmax(145px,.35fr) minmax(0,1fr);grid-column:2;grid-row:2;
+  box-sizing:border-box;display:grid;grid-template-columns:220px minmax(0,1fr);grid-column:2;grid-row:2;
   gap:0;height:100%;width:100%;min-width:0;min-height:0;
   align-items:stretch;overflow:hidden;border-top:1px solid var(--table-divider);
 }
@@ -130,7 +130,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 .legacy-viewport-controls[hidden]{display:none;}
 @media(max-width:1280px){
   #main-container{--room-left:300px;--room-side:250px;}
-  #content-row>#action-bottom-row{grid-template-columns:170px minmax(0,1fr);}
+  #content-row>#action-bottom-row{grid-template-columns:190px minmax(0,1fr);}
   #main-container .gm-quick-toolbar{right:5px;}
 }
 @media(max-width:1000px){
@@ -218,4 +218,6 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 
 @media(min-width:761px) and (max-width:1500px){#action-bottom-row #player-list-container{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);gap:3px;padding:7px}#player-list-container>.player-list-tabs{grid-column:1;min-width:0}#player-list-container>.roster-search{grid-column:1;grid-row:3}#player-list-container>.roster-count{display:none}#player-list-container>#player-list{grid-row:4}#player-list-container .room-panel-heading{font-size:12px}#player-list-container .player-tab{padding:4px 2px;font-size:10px}}
 
-#player-management .pm-row--size{display:grid;grid-template-columns:30px minmax(0,1fr);gap:5px}#player-management .pm-size{min-width:0;justify-content:space-between;gap:4px}#player-management #player-size{width:60px;min-width:0}#player-management .pm-size-label{font-size:10px}
+#player-management .pm-row--size{display:grid;grid-template-columns:30px minmax(0,1fr);gap:5px}#player-management .pm-size{min-width:0;justify-content:flex-end;gap:4px}#player-management #player-size{width:80px;min-width:0}#player-management .pm-size-label{font-size:10px}
+
+@media(max-width:760px){#player-management .pm-row--size{grid-template-columns:minmax(0,1fr)}#player-management .pm-size{justify-content:flex-end}#player-management #player-color{justify-self:start}}

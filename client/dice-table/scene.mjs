@@ -83,11 +83,13 @@ export function createDiceScene(host) {
   const key=new THREE.DirectionalLight(0xffe3b0,3.6);key.position.set(-3,9,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.camera.left=-9;key.shadow.camera.right=9;key.shadow.camera.top=9;key.shadow.camera.bottom=-9;key.shadow.normalBias=.025;key.shadow.bias=-.0003;scene.add(key);
   const fill=new THREE.DirectionalLight(0x9dcfff,1.1);fill.position.set(3,4,-4);scene.add(fill);
   const felt=feltTexture(),skinCache=new Map();
+  function disposeSkin(entry){entry.face.dispose();entry.edge.dispose();entry.map.dispose();for(const label of entry.labels.values()){label.map.dispose();label.dispose();}}
   function skinMaterials(id,critical){
     const skin=window.D20Appearance.style(id);let entry=skinCache.get(skin.id);
     if(!entry){const canvas=document.createElement('canvas');canvas.width=canvas.height=256;window.DiceAppearance.surface(canvas.getContext('2d'),skin);const map=new THREE.CanvasTexture(canvas);map.colorSpace=THREE.SRGBColorSpace;map.anisotropy=4;
       entry={map,face:new THREE.MeshPhysicalMaterial({map,bumpMap:skin.crystal?null:map,bumpScale:.016,color:'#ffffff',roughness:skin.rough,metalness:skin.metal,clearcoat:1,clearcoatRoughness:.16,iridescence:skin.crystal?.7:0,transparent:!!skin.crystal,opacity:skin.crystal?.82:1}),edge:new THREE.MeshStandardMaterial({color:skin.edge,metalness:.75,roughness:.26}),labels:new Map()};skinCache.set(skin.id,entry);}
     if(!entry.labels.has(critical)){const map=atlas(skin,critical);entry.labels.set(critical,new THREE.MeshBasicMaterial({map,transparent:true,alphaTest:.1,depthWrite:false}));}
+    skinCache.delete(skin.id);skinCache.set(skin.id,entry);
     return {...entry,label:entry.labels.get(critical),skin};
   }
   const floorMaterial=new THREE.MeshStandardMaterial({map:felt,roughness:1}),wood=new THREE.MeshStandardMaterial({color:'#302019',roughness:.7}),trim=new THREE.MeshStandardMaterial({color:'#b38b51',metalness:.7,roughness:.35});
@@ -150,6 +152,9 @@ export function createDiceScene(host) {
   function finish(){cancelAnimationFrame(effectRaf);effectRaf=0;cancelAnimationFrame(raf);raf=0;if(plan)paint(plan.frameCount-1);const done=resolveAnimation;resolveAnimation=null;done?.();}
   async function play(result,dice,seed,skipMotion=false){
     finish();clearEffects();removeChildren(diceGroup,true);groups=[];plan=result;buildTray(plan.width,plan.depth);
+    const wanted=new Set(dice.map(d=>window.D20Appearance.style(d.diceStyle).id));
+    const missing=[...wanted].filter(id=>!skinCache.has(id)).length;
+    for(const [id,entry] of skinCache){if(skinCache.size+missing<=8)break;if(!wanted.has(id)){disposeSkin(entry);skinCache.delete(id);}}
     dice.forEach((die,i)=>{
       const shape=polyhedron(die.sides),cacheKey=die.sides+'-'+plan.radius;
       if(!geometryCache.has(cacheKey))geometryCache.set(cacheKey,beveledGeometry(shape,plan.radius));
@@ -171,8 +176,8 @@ export function createDiceScene(host) {
   const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(host);
   const onVisibility=()=>{if(document.hidden)finish();};document.addEventListener('visibilitychange',onVisibility);
   const onLoss=event=>{if(disposed)return;event.preventDefault();finish();host.dispatchEvent(new CustomEvent('dice-context-lost'));};renderer.domElement.addEventListener('webglcontextlost',onLoss);
-  return {play,finish,resize,celebrate,inspect:()=>({framesRendered,animating:!!raf,celebrating:!!effectRaf,criticalEffects:effects.children.length,frame:lastFrame,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
+  return {play,finish,resize,celebrate,inspect:()=>({framesRendered,animating:!!raf,celebrating:!!effectRaf,criticalEffects:effects.children.length,frame:lastFrame,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,cachedStyles:skinCache.size,
     dice:groups.map(g=>({sides:g.userData.sides,value:g.userData.value,diceStyle:g.userData.diceStyle||'astral',critical:g.userData.critical,mode:g.userData.mode,upFace:g.userData.upFace,upLabel:g.userData.labels[g.userData.upFace],position:g.position.toArray(),quaternion:g.quaternion.toArray()}))}),
-    dispose(){if(disposed)return;finish();clearEffects();disposed=true;resizeObserver.disconnect();document.removeEventListener('visibilitychange',onVisibility);removeChildren(diceGroup,true);removeChildren(tray);for(const pair of geometryCache.values())pair.forEach(g=>g.dispose());for(const skin of skinCache.values()){skin.face.dispose();skin.edge.dispose();skin.map.dispose();for(const label of skin.labels.values()){label.map.dispose();label.dispose();}}skinCache.clear();[floorMaterial,wood,trim].forEach(m=>m.dispose());felt.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
+    dispose(){if(disposed)return;finish();clearEffects();disposed=true;resizeObserver.disconnect();document.removeEventListener('visibilitychange',onVisibility);removeChildren(diceGroup,true);removeChildren(tray);for(const pair of geometryCache.values())pair.forEach(g=>g.dispose());for(const skin of skinCache.values())disposeSkin(skin);skinCache.clear();[floorMaterial,wood,trim].forEach(m=>m.dispose());felt.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
   };
 }

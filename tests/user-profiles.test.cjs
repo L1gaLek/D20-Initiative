@@ -6,6 +6,8 @@ test('appearance settings validate catalog IDs and colors without changing anoth
   const store=new UserProfiles();const before=store.get('other').settings;
   store.settings('u',{diceStyle:'prism',boardBackground:'#123ABC',boardGrid:'#fedcba'});
   assert.equal(store.get('u').settings.boardBackground,'#123abc');assert.equal(store.get('u').settings.diceStyle,'prism');assert.deepEqual(store.get('other').settings,before);
+  const {styles}=require('../backend/shared/appearance');assert.equal(styles.length,20);assert.equal(new Set(styles.map(s=>s.id)).size,20);
+  for(const style of styles){store.settings('u',{diceStyle:style.id});assert.equal(store.get('u').settings.diceStyle,style.id);}
   for(const invalid of [{diceStyle:'../../x'},{boardGrid:'url(javascript:x)'},{boardBackground:'#fff'}])assert.throws(()=>store.settings('u',invalid),/Invalid/);
 });
 test('room time counts the union of tabs, stops on disconnect, and records played race/class',()=>{

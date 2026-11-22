@@ -12,12 +12,16 @@ module.exports=async({pages,screenshotDir})=>{
       await page.setViewportSize({width,height});
       assert.equal(await page.locator('#main-container').evaluate(el=>getComputedStyle(el).display),'flex','production joinedRoom handler uses the room flex layout');
       await page.evaluate(isGm=>{ControlBox?.setViewport?.(isGm?80:5,isGm?5:80);},page===gm);
-      let openWidth=0;
+      let openWidth=0,managementWidth=null;
       for(const value of ['exploration','initiative','combat','exploration']){
         await phase(page,value);
         await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
         const layout=await page.evaluate(()=>{const r=id=>{const b=document.getElementById(id).getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,right:b.right,bottom:b.bottom};};return {main:r('main-container'),upper:r('content-row'),map:r('game-container'),wrapper:r('board-wrapper'),footer:r('action-bottom-row'),header:r('status-bar'),left:r('action-log-container'),right:r('combat-side-column'),order:r('turn-order-box'),initiative:r('initiative-players-box'),journal:r('action-log'),dice:r('dice-others'),sideHidden:document.getElementById('combat-side-column').hidden,scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight};});
         const label=JSON.stringify({width,height,value,layout});
+        const management=await page.locator('#player-management').boundingBox();
+        if(managementWidth===null)managementWidth=management.width;else assert.ok(Math.abs(managementWidth-management.width)<1,'management width stays fixed across all phases: '+label);
+        const sizeRow=await page.evaluate(()=>{const a=document.querySelector('.pm-size-label').getBoundingClientRect(),b=document.getElementById('player-size').getBoundingClientRect();return {gap:b.x-a.right,width:b.width,dy:Math.abs((a.y+a.height/2)-(b.y+b.height/2))};});
+        assert.ok(sizeRow.gap>=0&&sizeRow.gap<=5&&sizeRow.width===80&&sizeRow.dy<1,JSON.stringify(sizeRow));
         const key=[width,height,value].join(':');
         if(page===gm)peerLayouts.set(key,layout);
         else for(const id of ['main','upper','map','wrapper','footer','header','journal','dice']){

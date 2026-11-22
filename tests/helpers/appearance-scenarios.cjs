@@ -3,9 +3,16 @@ module.exports=async({pages,screenshotDir})=>{
   const [gm,owner,other]=pages;
   const picture=async(page,selector,name)=>{if(screenshotDir){fs.mkdirSync(screenshotDir,{recursive:true});await page.locator(selector).screenshot({path:path.join(screenshotDir,name+'.png')});}};
   await owner.locator('#room-personal-settings').click();await owner.locator('[data-personal-tab=settings]').click();
-  await owner.locator('[data-dice-style=prism]').waitFor();assert.equal(await owner.locator('[data-dice-style]').count(),10);
-  const previews=await owner.locator('.personal-dice-gallery canvas').evaluateAll(canvases=>canvases.map(c=>c.toDataURL()));assert.equal(new Set(previews).size,10);
+  await owner.locator('.personal-dice-picker').waitFor();assert.equal(await owner.locator('.personal-dice-picker').getAttribute('open'),null);
+  assert.equal(await owner.locator('[data-dice-style]').count(),0,'closed picker does not build the catalog');
+  await owner.locator('[data-dice-picker-toggle]').focus();await owner.keyboard.press('Enter');
+  await owner.locator('[data-dice-style=prism]').waitFor();assert.equal(await owner.locator('[data-dice-style]').count(),20);
+  const previews=await owner.locator('.personal-dice-gallery canvas').evaluateAll(canvases=>canvases.map(c=>c.toDataURL()));assert.equal(new Set(previews).size,20);
   await owner.locator('[data-dice-style=prism]').click();
+  assert.match(await owner.locator('[data-dice-picker-toggle]').textContent(),/Переливчатый кристалл/);
+  await owner.locator('[data-dice-picker-toggle]').focus();await owner.keyboard.press('Space');assert.equal(await owner.locator('.personal-dice-gallery').isVisible(),false);
+  await owner.keyboard.press('Enter');assert.equal(await owner.locator('[data-dice-style]').count(),20,'reopening does not duplicate the catalog');
+  assert.equal(await owner.evaluate(()=>D20Appearance.styles.slice(10).every(skin=>['20','1'].every(value=>{const normal=document.createElement('canvas'),critical=document.createElement('canvas');normal.width=critical.width=normal.height=critical.height=96;DiceAppearance.face(normal.getContext('2d'),skin,value,false);DiceAppearance.face(critical.getContext('2d'),skin,value,true);return normal.toDataURL()!==critical.toDataURL();}))),true);
   await owner.locator('[data-preference=boardBackground]').evaluate(el=>{el.value='#294458';el.dispatchEvent(new Event('input',{bubbles:true}));});
   await owner.locator('[data-preference=boardGrid]').evaluate(el=>{el.value='#d7bd73';el.dispatchEvent(new Event('input',{bubbles:true}));});
   await owner.waitForFunction(()=>document.querySelector('.personal-settings__status').textContent==='Настройки сохранены');
@@ -25,9 +32,9 @@ module.exports=async({pages,screenshotDir})=>{
     await owner.evaluate(async skin=>{PersonalPreferences.set({diceStyle:skin,reduceDiceMotion:true});await sendMessage({type:'diceEvent',event:{localNonce:'skin-'+skin,fromId:myId,fromName:'Альрик',sides:20,count:3,rolls:[20,1,13],total:34,kindText:'Набор '+skin}});},skin);
     await Promise.all(pages.map(page=>page.waitForFunction(skin=>DiceTable.inspect().state==='settled'&&DiceTable.inspect().dice?.length===3&&DiceTable.inspect().dice.every(d=>d.diceStyle===skin),skin)));
     for(const page of [owner,other])assert.deepEqual(await page.evaluate(()=>DiceTable.inspect().dice.map(d=>d.upLabel)),['20','1','13']);
-    if(['prism','runes','dragon','royal'].includes(skin))await picture(owner,'#dice-others','dice-'+skin);
+    if(['honey','porcelain','cathedral','oracle'].includes(skin))await picture(owner,'#dice-others','dice-'+skin);
   }
-  assert.ok(await owner.evaluate(()=>DiceTable.inspect().textures)<35,'the ten-style material cache is bounded');
+  assert.ok(await owner.evaluate(()=>DiceTable.inspect().textures<27&&DiceTable.inspect().cachedStyles<=8),'old style textures are evicted from the bounded cache');
   await owner.evaluate(()=>PersonalPreferences.set({diceStyle:'prism',reduceDiceMotion:false}));
-  console.log('PASS appearance: ten distinct previews/material sets, critical d20 labels preserved, same thrower skin reaches five clients, personal 2D/3D colors persist/isolate and do not rebuild terrain');
+  console.log('PASS appearance: collapsed/lazy keyboard picker, twenty distinct sets and critical faces, all skins relay to five clients, profile/color isolation, eight-set GPU cache with texture disposal');
 };

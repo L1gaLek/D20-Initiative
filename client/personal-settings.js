@@ -4,7 +4,7 @@
 (function () {
   'use strict';
   const button = document.getElementById('tavern-personal-settings'),roomButton=document.getElementById('room-personal-settings');
-  let activeTab='characters',openedFrom=button,profile=null;
+  let activeTab='characters',openedFrom=button,profile=null,dicePickerOpen=false;
   let overlay, list, status, selectedKey = '', rows = [], session = null, loading = false, epoch = 0;
   const copy = value => JSON.parse(JSON.stringify(value));
   const userId = () => String(typeof myId !== 'undefined' ? myId || '' : '');
@@ -40,6 +40,7 @@
   }
   function close() { epoch++; overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden','true'); openedFrom?.focus(); }
   async function open(from=button) {
+    dicePickerOpen=false;
     openedFrom=from;
     mount(); if(session?.owner!==userId())session=null; overlay.classList.remove('hidden'); overlay.setAttribute('aria-hidden','false');
     overlay.querySelector('[data-personal-close]').focus();switchTab('characters');await Promise.all([reload(),loadProfile()]);
@@ -172,9 +173,13 @@
     const heading=document.createElement('h3');heading.textContent='Моё игровое поле';panel.append(heading);
     const colors=document.createElement('div');colors.className='personal-appearance-colors';
     for(const [key,label] of [['boardBackground','Фон поля'],['boardGrid','Линии клеток']]){const row=document.createElement('label');row.textContent=label;const input=document.createElement('input');input.type='color';input.value=prefs[key];input.dataset.preference=key;input.setAttribute('aria-label',label);input.oninput=()=>{PersonalPreferences.set({[key]:input.value});status.textContent='Сохраняю настройки…';};row.append(input);colors.append(row);}panel.append(colors);
-    const diceHeading=document.createElement('h3');diceHeading.textContent='Мои кубики';const note=document.createElement('p');note.textContent='Набор виден всем при ваших бросках. На d20 корона отмечает 20, череп — 1; число всегда остаётся видимым.';panel.append(diceHeading,note);
-    const gallery=document.createElement('div');gallery.className='personal-dice-gallery';gallery.setAttribute('aria-label','Наборы кубиков');
-    for(const skin of D20Appearance.styles){const card=document.createElement('button');card.type='button';card.dataset.diceStyle=skin.id;card.setAttribute('aria-pressed',String(skin.id===prefs.diceStyle));card.title=skin.description;const canvas=document.createElement('canvas');canvas.setAttribute('aria-hidden','true');const name=document.createElement('strong');name.textContent=skin.name;const hint=document.createElement('small');hint.textContent=skin.description;card.append(canvas,name,hint);DiceAppearance.preview(canvas,skin.id);card.onclick=()=>{PersonalPreferences.set({diceStyle:skin.id});gallery.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===card)));status.textContent='Сохраняю настройки…';};gallery.append(card);}panel.append(gallery);
+    const picker=document.createElement('details');picker.className='personal-dice-picker';picker.open=dicePickerOpen;
+    const toggle=document.createElement('summary');toggle.dataset.dicePickerToggle='';const selectedPreview=document.createElement('canvas');selectedPreview.setAttribute('aria-hidden','true');
+    const selectedText=document.createElement('span'),diceHeading=document.createElement('strong'),selectedName=document.createElement('span'),count=document.createElement('small');diceHeading.textContent='Мои кубики';selectedName.textContent=D20Appearance.style(prefs.diceStyle).name;count.textContent=D20Appearance.styles.length+' наборов · нажмите, чтобы выбрать';selectedText.append(diceHeading,selectedName,count);toggle.append(selectedPreview,selectedText);picker.append(toggle);DiceAppearance.preview(selectedPreview,prefs.diceStyle);
+    const note=document.createElement('p');note.textContent='Набор виден всем при ваших бросках. На d20 корона отмечает 20, череп — 1; число всегда остаётся видимым.';
+    const gallery=document.createElement('div');gallery.className='personal-dice-gallery';gallery.setAttribute('aria-label','Наборы кубиков');picker.append(note,gallery);panel.append(picker);
+    function renderDiceGallery(){if(gallery.children.length)return;for(const skin of D20Appearance.styles){const card=document.createElement('button');card.type='button';card.dataset.diceStyle=skin.id;card.setAttribute('aria-pressed',String(skin.id===PersonalPreferences.get().diceStyle));card.title=skin.description;const canvas=document.createElement('canvas');canvas.setAttribute('aria-hidden','true');const name=document.createElement('strong');name.textContent=skin.name;const hint=document.createElement('small');hint.textContent=skin.description;card.append(canvas,name,hint);DiceAppearance.preview(canvas,skin.id);card.onclick=()=>{PersonalPreferences.set({diceStyle:skin.id});selectedName.textContent=skin.name;DiceAppearance.preview(selectedPreview,skin.id);gallery.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===card)));status.textContent='Сохраняю настройки…';};gallery.append(card);}}
+    picker.addEventListener('toggle',()=>{if(!picker.isConnected)return;dicePickerOpen=picker.open;if(picker.open)renderDiceGallery();});if(picker.open)renderDiceGallery();
     const reset=document.createElement('button');reset.type='button';reset.textContent='Сбросить оформление';reset.onclick=()=>{PersonalPreferences.set(D20Appearance.defaults);renderSettings();};panel.append(reset);
     const sounds=document.createElement('h3');sounds.textContent='Эффекты и оповещения';panel.append(sounds);
     for(const [key,label,hint] of [['criticalSound','Звуки критических бросков','Разные сигналы для натуральных 20 и 1 на D20.'],['chatSound','Звук новых сообщений','Короткое оповещение о непрочитанных сообщениях.'],['criticalEffects','Эффекты критических бросков','Золотое или красное свечение у кубика.'],['reduceDiceMotion','Сокращённая анимация кубиков','Сразу показывать результат на столе бросков.']]){
