@@ -21,6 +21,7 @@
     stage.addEventListener('dice-context-lost',()=>{engine?.dispose();engine=null;loading=null;stage.classList.add('dice-table__stage--fallback');fallback(last);});
   }
   function expandTable(){
+    const scope=currentRoom();if(scope!==room)reset(scope);
     if(!dialog){dialog=document.createElement('dialog');dialog.className='dice-table-dialog';dialog.setAttribute('aria-label','Общий стол бросков');
       const header=document.createElement('div');header.className='dice-table-dialog__header';const title=document.createElement('strong');title.textContent='Общий стол бросков';
       const close=document.createElement('button');close.type='button';close.textContent='Закрыть';close.addEventListener('click',()=>dialog.close());header.append(title,close);dialog.append(header);document.body.append(dialog);

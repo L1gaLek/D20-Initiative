@@ -8,11 +8,14 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
     assert.equal(await page.locator('.dice-table__canvas').count(),0,'no eager WebGL context');
     await page.locator('#dice-others').scrollIntoViewIfNeeded();
   }
+  await gm.getByRole('button',{name:'Развернуть стол бросков'}).click();
   await send({localNonce:'dice-table-d20',sides:20,count:1,rolls:[17],total:17,kindText:'Проверка: d20'});
   await owner.waitForFunction(()=>DiceTable.inspect().animating);
   const inFlight=await owner.evaluate(()=>DiceTable.inspect());assert.equal(inFlight.dice[0].sides,20);assert.ok(inFlight.frame<130);
   await picture(owner,'dice-rolling');
   await Promise.all(pages.map(page=>settled(page,17)));
+  assert.equal(await gm.locator('.dice-table-dialog').isVisible(),true,'first roll keeps an already expanded tray open');
+  await gm.keyboard.press('Escape');await gm.locator('#dice-others .dice-table__canvas').waitFor({state:'attached'});
   const views=await Promise.all(pages.map(page=>page.evaluate(()=>DiceTable.inspect().dice)));
   for(const dice of views){assert.equal(dice.length,1);assert.equal(dice[0].upLabel,'17');assert.equal(dice[0].value,17);assert.deepEqual(dice[0].position,views[0][0].position);}
   await picture(owner,'dice-d20-settled');

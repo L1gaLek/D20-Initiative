@@ -32,4 +32,6 @@ forty percentile meshes, concurrent actors, duplicate echoes, sleeping rendering
 resource bounds, expanded/mobile layouts and WebGL fallback. The complete existing
 multiplayer/3D/Studio regression suite also passed. Tests used isolated room data.
 
-Cache tag: `20261122-dice-1`.
+The tray can be expanded before the first throw without that throw closing it.
+Bootstrap cache tag: `20261122-dice-2`; simulation/renderer assets use
+`20261122-dice-1`.
