@@ -663,6 +663,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
     }
 
     if (msg.type === "diceEvent" && msg.event) {
+      void window.DiceTable?.show?.(msg.event, { historical: !!msg.__serverTs && Date.now() - Number(msg.__serverTs) > 15000 });
       try { window.Board3D?.playDiceAction?.(msg.event); } catch {}
       const fromId = String(msg?.event?.fromId || '');
       if (fromId && String(fromId) !== String(myId || '')) {
@@ -964,6 +965,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
 
     // ================== v4: DICE (append-only) ==================
     if (msg.type === 'diceInit' && Array.isArray(msg.rows)) {
+      msg.rows.forEach(row => window.DiceTable?.remember?.({ id: row.id }));
       window._seenDiceIds = window._seenDiceIds || new Set();
       // we show them in "Броски других" as history (newest last)
       try {
@@ -1012,6 +1014,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
           total: r.total || null,
           crit: r.crit || ''
         };
+        void window.DiceTable?.show?.(ev);
         if (shouldSkipDuplicateOtherDice(ev, rid)) return;
         pushOtherDiceEvent?.(ev);
       } catch {}

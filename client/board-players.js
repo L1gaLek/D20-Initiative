@@ -3176,6 +3176,8 @@ function pushOtherDiceEvent(ev) {
 
   const list = othersDiceWrap.querySelector('.dice-others__list') || othersDiceWrap;
   list.appendChild(item);
+  while (list.children.length > 10) list.firstElementChild.remove();
+  list.scrollTop = list.scrollHeight;
 
   // через 5с — плавное исчезновение
   setTimeout(() => item.classList.add("fade"), 4200);
@@ -3402,7 +3404,7 @@ window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = nu
 
   for (let i = 0; i < C; i++) {
     renderRollChips(shown, i, S);
-    if (i < 20) await animateSingleRoll(rollSides[i], finals[i]);
+    if (i < 20 && (!window.DiceTable || i === 0)) await animateSingleRoll(rollSides[i], finals[i]);
     shown[i] = finals[i];
     renderRollChips(shown, Math.min(i + 1, C - 1), S);
   }

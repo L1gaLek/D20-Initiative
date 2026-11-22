@@ -33,10 +33,11 @@ rollBtn?.addEventListener('click', async () => {
   if (diceVizKind) diceVizKind.textContent = `d${sides} × ${count}`;
   if (diceVizValue) diceVizValue.textContent = "…";
 
-  // Анимация: по одному кубику (видно процесс)
+  // The shared 3D tray animates the whole throw together. Keep one short local
+  // preview instead of delaying a twenty-die event by twenty sequential waits.
   for (let i = 0; i < count; i++) {
     renderRollChips(shown, i, sides);
-    await animateSingleRoll(sides, finals[i]);
+    if (!window.DiceTable || i === 0) await animateSingleRoll(sides, finals[i]);
     shown[i] = finals[i];
     renderRollChips(shown, Math.min(i + 1, count - 1), sides);
   }

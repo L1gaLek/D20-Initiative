@@ -420,6 +420,7 @@ function disconnectRoomWs() {
 }
 
 window.__leaveCurrentRoomCleanup = async function __leaveCurrentRoomCleanup() {
+  try { window.DiceTable?.reset?.(''); } catch {}
   try { disconnectRoomWs(); } catch {}
   try { await stopSupabaseRealtimeChannels(); } catch {}
 };

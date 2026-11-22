@@ -1,0 +1,35 @@
+.dice-others.dice-others--inline.dice-others--table{max-height:none;overflow:visible;display:block;padding:10px 8px 8px;border-top:1px solid #a8804670}
+.dice-others--table .dice-others__title{display:flex;align-items:center;justify-content:space-between;gap:8px;letter-spacing:.035em}
+.dice-table__expand{width:27px;height:25px;display:grid;place-items:center;padding:0;border:1px solid #b18b505c;border-radius:6px;background:#291f16;color:#ebd2a1;font-size:20px;line-height:1;cursor:var(--cursor-pointer,pointer)}
+.dice-table__expand:hover{background:#4b3520;border-color:#d8b578}
+.dice-table{min-width:0;width:100%}
+.dice-table__stage{position:relative;isolation:isolate;width:100%;aspect-ratio:4/3;min-height:150px;overflow:hidden;border-radius:10px;border:1px solid #a3804a66;background:radial-gradient(ellipse at 48% 35%,#23453c,#102521 75%);box-shadow:inset 0 0 20px #0009,0 3px 9px #0005}
+.dice-table__canvas{display:block;position:absolute;width:100%;height:100%;inset:0}
+.dice-table__empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;pointer-events:none;color:#d7bc87a6}
+.dice-table__empty>span{width:49px;height:55px;display:grid;place-items:center;clip-path:polygon(50% 0,96% 25%,96% 75%,50% 100%,4% 75%,4% 25%);background:#b9954b18;border:1px solid #b49d70;font:700 23px Georgia,serif}
+.dice-table__empty small{font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+.dice-table__stage.has-dice .dice-table__empty{display:none}
+.dice-table__caption{overflow-wrap:anywhere;margin-top:7px;color:#d5c5a8;font-size:11px;line-height:1.4;max-height:3em;overflow:auto;scrollbar-width:thin}
+.dice-table__summary{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;min-height:24px;align-items:center}
+.dice-table__result{max-width:100%;overflow-wrap:anywhere;border:1px solid #a0804566;border-radius:5px;background:#2b241b;color:#f6ddb0;padding:3px 7px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.dice-table__result::before{content:"";display:inline-block;width:7px;height:7px;margin-right:5px;border:1px solid #cbb38988;border-radius:2px;background:var(--dice-ink,#bda06b)}
+.dice-table__result[data-crit="crit-success"]{border-color:#e5ba60;color:#ffdb8a;box-shadow:0 0 7px #bb8a292b}
+.dice-table__result[data-crit="crit-fail"]{border-color:#b95b52;color:#f0aca4}
+.dice-table__pending{min-height:14px;margin-top:3px;color:#a99c85;font-size:10px;text-align:right}
+.dice-table__pending:empty,.dice-table__summary:empty,.dice-others--table .dice-others__list:empty{display:none}
+.dice-others--table .dice-others__list{height:86px;max-height:86px;overflow:auto;justify-content:flex-start;gap:4px;margin-top:5px;scrollbar-width:thin;scrollbar-color:#846840 #201c17}
+.dice-others--table .dice-others__item{padding:6px 7px;flex-shrink:0;border-radius:6px;background:#18171388}
+.dice-others--table .dice-others__head{font-size:10px;margin-bottom:2px;font-weight:600;color:#cdbf9e;overflow-wrap:anywhere}
+.dice-others--table .dice-others__body{font-size:11px;color:#f4dfb8;overflow-wrap:anywhere}
+.dice-table-dialog{width:min(860px,94vw);max-width:94vw;max-height:94dvh;box-sizing:border-box;padding:16px;border:1px solid #b49358;border-radius:16px;background:#211d17;color:#f0dbb5;box-shadow:0 20px 100px #000b;overflow:auto}
+.dice-table-dialog::backdrop{background:#090b0bcb;backdrop-filter:blur(4px)}
+.dice-table-dialog__header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.dice-table-dialog__header strong{font:700 20px Georgia,serif}
+.dice-table-dialog__header button{border:1px solid #ad8c50;border-radius:7px;background:#403122;color:#f5dfbb;padding:7px 12px}
+.dice-table-dialog .dice-table__stage{aspect-ratio:16/10;max-height:66dvh;min-height:200px}
+.dice-table-dialog .dice-table__caption{font-size:13px;max-height:4em}
+.dice-table-dialog .dice-table__result{font-size:15px;padding:5px 10px}
+.dice-table__fallback{position:absolute;inset:0;display:flex;flex-wrap:wrap;align-content:center;align-items:center;justify-content:center;gap:6px;padding:12px}
+.dice-table__fallback span{display:grid;place-items:center;min-width:28px;height:32px;padding:0 4px;border:1px solid #d4b477;border-radius:7px;background:linear-gradient(130deg,#264c57,#182f3a);color:#fff0d0;font:bold 15px Georgia,serif}
+.dice-table__stage--fallback .dice-table__canvas{display:none}
+@media(max-width:700px){.dice-others.dice-others--inline.dice-others--table{display:block}.dice-table-dialog{padding:10px}.dice-table-dialog__header strong{font-size:17px}}
