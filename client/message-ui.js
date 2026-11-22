@@ -2177,13 +2177,19 @@ function updatePlayerList() {
       const text = document.createElement('span');
       text.classList.add('player-name-text');
       const initVal = (p.initiative !== null && p.initiative !== undefined) ? p.initiative : 0;
-      text.textContent = `${p.name} (${initVal})`;
+      text.textContent = String(p.name || 'Персонаж');
       text.title = p.name;
 
       const nameWrap = document.createElement('div');
       nameWrap.classList.add('player-name-wrap');
       nameWrap.appendChild(indicator);
       nameWrap.appendChild(text);
+      const initiativeBadge = document.createElement('span');
+      initiativeBadge.className = 'player-initiative-badge';
+      initiativeBadge.textContent = p.hasRolledInitiative ? String(initVal) : '—';
+      initiativeBadge.title = p.hasRolledInitiative ? 'Инициатива: ' + initVal : 'Инициатива ещё не назначена';
+      initiativeBadge.setAttribute('aria-label', initiativeBadge.title);
+      nameWrap.appendChild(initiativeBadge);
 
       if (p.isBase) {
         const baseBadge = document.createElement('span');

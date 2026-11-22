@@ -96,7 +96,9 @@ try { window.rememberLocalDiceAnimation?.(event); } catch {}
   }
 }
 window.rollStandardDice = rollStandardDice;
-rollBtn?.addEventListener('click', () => { void rollStandardDice(); });
+const inlineDiceForm=document.getElementById('dice-inline-controls');
+if(inlineDiceForm)inlineDiceForm.addEventListener('submit',event=>{event.preventDefault();void rollStandardDice();});
+else rollBtn?.addEventListener('click', () => { void rollStandardDice(); });
 
 // ================== END TURN ==================
 endTurnBtn?.addEventListener('click', () => sendMessage({ type: 'endTurn' }));

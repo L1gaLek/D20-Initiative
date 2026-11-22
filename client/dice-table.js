@@ -48,10 +48,12 @@
     dialog.append(rollForm);
   }
   function refreshControls(syncValues=false){
-    if(!rollForm)return;
     const spectator=typeof isSpectator==='function'&&isSpectator();
     const rolling=typeof diceAnimBusy!=='undefined'&&diceAnimBusy;
     const disabled=!currentRoom()||spectator;
+    const inline=document.getElementById('dice-inline-controls');
+    if(inline){inline.querySelectorAll('input,select,[data-step-target]').forEach(node=>node.disabled=disabled);const submit=inline.querySelector('[type="submit"]');if(submit){submit.disabled=disabled||rolling;submit.textContent=rolling?'Бросок…':'Бросить';}}
+    if(!rollForm)return;
     rollSides.disabled=rollCount.disabled=disabled;
     rollForm.querySelectorAll('[data-dice-step]').forEach(button=>button.disabled=disabled);
     rollSubmit.disabled=disabled||rolling;rollSubmit.textContent=rolling?'Бросок…':'Бросить';
