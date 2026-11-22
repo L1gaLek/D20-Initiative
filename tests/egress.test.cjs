@@ -78,6 +78,14 @@ test('fog persistence returns only its timestamp while peers receive the complet
   assert.equal(payload.row.manual_stamps.length,1);
 });
 
+test('continuous painting cannot amplify one room read into unlimited database egress', async () => {
+  const cache=new RoomReadCache();let loads=0;
+  const loader=()=>{loads++;cache.invalidate('room');return {rows:[loads]};};
+  assert.deepEqual(await cache.load('room',['walls'],loader),{rows:[2]});
+  assert.equal(loads,2);
+  assert.equal(cache.entries.size,0);
+});
+
 test('room state refresh retains membership checks but immediately applies ownership changes', async () => {
   const roomId='room';let checks=0;
   const socket={currentRoomId:roomId,userId:'old-owner',roomContext:{roomId,userId:'old-owner',role:'Player',cachedAt:Date.now(),stateStale:true,state:{players:[{id:'token',ownerId:'old-owner'}]}}};

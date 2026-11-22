@@ -9,8 +9,9 @@ schema migration, new database service or delayed persistence is involved.
 
 Shared read caching coalesces identical map/fog/wall/mark/music reads across
 players. Entries expire after 30 seconds and app writes/campaign restoration
-invalidate them immediately. In-flight reads invalidated by a write retry against
-the new generation. Caches are bounded (room JSON: 64 MiB/64 entries; shared rows:
+invalidate them immediately. In-flight reads invalidated by a write retry once;
+continuous painting returns an uncached snapshot instead of repeating SELECTs
+indefinitely. Caches are bounded (room JSON: 64 MiB/64 entries; shared rows:
 16 MiB/128 entries). Admin changes to detached tables outside this server can
 take up to the 30-second read-cache TTL to appear.
 
@@ -28,7 +29,7 @@ Studio integration and on-disk assets are unchanged.
 
 Validation:
 
-- 83 automated tests, plus multiplayer browser, map isolation and full 3D suites.
+- 84 automated tests, plus multiplayer browser, map isolation and full 3D suites.
 - A 40-save isolated fixture with approximately 1 MiB of room JSON returned
   42,037,200 bytes before versus 1,050,930 bytes after (97.5% less room JSON).
   This measures that scenario, not total billed egress or all protocol bytes.

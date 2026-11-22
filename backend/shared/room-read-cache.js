@@ -20,7 +20,7 @@ class RoomReadCache {
     for (const [key, entry] of this.entries) if (entry.roomId === roomId) this.delete(key);
     for (const [key, entry] of this.pending) if (entry.roomId === roomId) this.pending.delete(key);
   }
-  async load(roomId, parts, loader) {
+  async load(roomId, parts, loader, retries = 1) {
     const key = JSON.stringify([roomId, ...parts]);
     const cached = this.entries.get(key);
     if (cached && cached.expires > this.now()) { this.hits++; return cached.value; }
@@ -29,7 +29,11 @@ class RoomReadCache {
     const entry = { roomId };
     this.loads++;
     entry.promise = Promise.resolve().then(loader).then(value => {
-      if (this.pending.get(key) !== entry) return this.load(roomId, parts, loader);
+      if (this.pending.get(key) !== entry) {
+        // Continuous wall/fog painting must not cause an unbounded SELECT loop.
+        // Return the last query's snapshot without caching it after one retry.
+        return retries > 0 ? this.load(roomId, parts, loader, retries - 1) : value;
+      }
       const bytes = Buffer.byteLength(JSON.stringify(value ?? null));
       if (bytes <= this.maxBytes) {
         while (this.entries.size && (this.entries.size >= this.maxEntries || this.bytes + bytes > this.maxBytes)) this.delete(this.entries.keys().next().value);
