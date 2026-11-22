@@ -18,6 +18,6 @@ module.exports=function installMapHarness(h,state){
  };
  h.context.pool={query,connect:async()=>{const client=await original.connect();return {query:(sql,v)=>query(sql,v,client),release:()=>client.release()};}};
  Object.assign(h.context,{ROOM_ID_RE:/./,HEX_COLOR_RE:/^#[a-f0-9]{6}$/i,clampNumber:(v,min,max,def)=>Number.isFinite(Number(v))?Math.max(min,Math.min(max,Number(v))):def,boolFrom:(v,d)=>typeof v==='boolean'?v:d});
- vm.runInContext(functions(read('backend/server.js'),['getActiveMapId','findMapById','getStateMapBounds','getMapBounds','ensureCanControlPlayer','ensureCanMoveInCombat','sanitizeTokenSize','validateBoardPosition','overlaps','ensureTokenAreaFree','upsertTokenRowUsing','getTokenRow','resolveTokenPublicForWrite','broadcastTokenMoveRollback','handleMoveToken','cleanFogRow','fogJsonParam','handleFogRow']),h.context);
+ vm.runInContext(functions(read('backend/server.js'),['getActiveMapId','findMapById','getStateMapBounds','getMapBounds','ensureCanControlPlayer','ensureCanMoveInCombat','sanitizeTokenSize','validateBoardPosition','overlaps','ensureTokenAreaFree','upsertTokenRowUsing','getTokenRow','resolveTokenPublicForWrite','broadcastTokenMoveRollback','handleMoveToken','cleanFogRow','fogJsonParam','handleFogRow','handleFogPreview']),h.context);
  return {tokens,fog,meta};
 };

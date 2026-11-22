@@ -610,7 +610,7 @@
 
     _scheduleExploredSync() {
       if (this._pendingExploredSync) return;
-      this._pendingExploredSync = setTimeout(() => this._flushExploredSync(), 450);
+      this._pendingExploredSync = setTimeout(() => this._flushExploredSync(), 60);
     },
 
     _flushExploredSync() {

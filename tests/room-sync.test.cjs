@@ -157,9 +157,12 @@ function sheetHarness(storage = new Map()) {
   let rendered;
   const content = { innerHTML: '', dataset: {}, querySelector: () => null };
   const context = vm.createContext({
-    console, Map, Date, Promise, Number, String, deepClone: clone,
-    ctx: { getMyId: () => 'user-1', getRoomId: () => 'test-room', sendMessage: message => sent.push(clone(message)) },
-    sheetSaveTimers: new Map(), sheetSaveDrafts: new Map(),
+    console, Map, Date, Promise, Number, String, deepClone: clone, crypto:require('node:crypto'), SheetSync:require('../backend/shared/sheet-sync'),
+    ctx: { getMyId: () => 'user-1', getRoomId: () => 'test-room', sendMessage: message => {
+      const value=clone(message); if(value.ops)value.sheet=require('../backend/shared/sheet-sync').apply(initialState().players[0].sheet,value.ops);
+      sent.push(value);
+    } },
+    sheetSaveTimers: new Map(), sheetSaveDrafts: new Map(), sheetSyncBases: new Map(), sheetModelSnapshots:new WeakMap(),
     uiStateByPlayerId: new Map(),
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     setTimeout: callback => { const id = ++counter; timers.set(id, callback); return id; },
@@ -174,7 +177,7 @@ function sheetHarness(storage = new Map()) {
     document: { getElementById: () => null }
   });
   vm.runInContext(functions(read(process.env.D20_SHEET_DATA_SOURCE || 'char_sheet/sheet-modal-data.js'), [
-    'sheetDraftKey', 'acknowledgeSheetSave', 'restoreSheetDraft', 'flushSheetSaves', 'scheduleSheetSave',
+    'sheetDraftKey', 'acknowledgeSheetSave', 'acknowledgeSheetPatch', 'restoreSheetDraft', 'flushSheetSaves', 'scheduleSheetSave',
     'getUiState', 'captureUiStateFromDom', 'restoreUiStateToDom'
   ]), context);
   vm.runInContext(functions(read('char_sheet/sheet-modal-render.js'), ['open', 'refresh']), context);
@@ -252,10 +255,27 @@ test('unacknowledged text survives reload and an older acknowledgment cannot dis
   assert.equal(model.sheet.parsed.notes.entries[0].text, 'recover me');
   model.sheet.parsed.notes.entries[0].text = 'newest input';
   recovered.context.scheduleSheetSave(model);
-  recovered.context.acknowledgeSheetSave(model.id, firstTimestamp);
+  recovered.context.acknowledgeSheetPatch(model.id, 'older-request');
   assert.equal(h.storage.size, 1);
-  recovered.context.acknowledgeSheetSave(model.id, model.sheetUpdatedAt);
+  recovered.context.flushSheetSaves();
+  const firstRequest=recovered.sent.at(-1).requestId;
+  recovered.context.acknowledgeSheetPatch(model.id,firstRequest);
+  recovered.fire();
+  recovered.context.acknowledgeSheetPatch(model.id,recovered.sent.at(-1).requestId);
   assert.equal(h.storage.size, 0);
+});
+
+test('patch acknowledgments match the request ID and a reverted hot edit survives an in-flight save', () => {
+  const h=sheetHarness();h.context.open(initialState().players[0]);const model=h.rendered();
+  model.sheet.parsed.vitality={'hp-current':{value:20}};h.context.scheduleSheetSave(model);
+  h.context.acknowledgeSheetPatch(model.id,h.sent.at(-1).requestId);
+  model.sheet.parsed.vitality['hp-current'].value=2;h.context.scheduleSheetSave(model);
+  const first=h.sent.at(-1);
+  model.sheet.parsed.vitality['hp-current'].value=20;h.context.scheduleSheetSave(model);
+  h.context.acknowledgeSheetPatch(model.id,first.requestId);assert.equal(h.storage.size,1);
+  const latest=h.sent.at(-1);
+  assert.equal(latest.sheet.parsed.vitality['hp-current'].value,20);
+  h.context.acknowledgeSheetPatch(model.id,latest.requestId,123);assert.equal(h.storage.size,0);assert.equal(model.sheetUpdatedAt,123);
 });
 
 test('a stale unrolled snapshot from the same phase cannot clear the initiative overlay', () => {
@@ -275,7 +295,7 @@ test('a stale unrolled snapshot from the same phase cannot clear the initiative 
   assert.equal(state.maps[0].playerStates['player-1'].initiative, 18);
 });
 
-test('a rejected sheet version retains local text and retries above the server version', () => {
+test('an unrelated legacy acknowledgment cannot discard a pending patch draft', () => {
   const h = sheetHarness();
   h.context.open(initialState().players[0]);
   const model = h.rendered();
@@ -286,7 +306,7 @@ test('a rejected sheet version retains local text and retries above the server v
   assert.equal(h.storage.size, 1);
   h.fire();
   assert.equal(h.sent.at(-1).sheet.parsed.notes.entries[0].text, 'unsaved text');
-  assert.ok(h.sent.at(-1).sheetUpdatedAt > newerServerVersion);
+  assert.equal(h.sent.at(-1).type,'patchPlayerSheet');
 });
 
 test('the real individual/all-owned roll patch is accepted and reaches the GM', async () => {

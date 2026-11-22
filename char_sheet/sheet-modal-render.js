@@ -1597,7 +1597,7 @@ function renderShopTab(vm, canEdit) {
     lastCanEdit = !!canEdit;
 
     if (window.MonsterSheetModal?.shouldUseForPlayer?.(player)) {
-      window.MonsterSheetModal.render(player, { canEdit, force }).catch((err) => {
+      window.MonsterSheetModal.render(player, { canEdit, force }).then(() => rememberSheetSyncBase(player)).catch((err) => {
         console.error('MonsterSheetModal render failed', err);
       });
       return;
@@ -1980,6 +1980,7 @@ function renderShopTab(vm, canEdit) {
     });
 
     // (скролл/взаимодействия уже повешены выше)
+    rememberSheetSyncBase(player);
   }
 
   // ================== PUBLIC API ==================
@@ -2070,9 +2071,11 @@ function renderShopTab(vm, canEdit) {
     },
     close: closeModal,
     flushSheetSaves,
+    queueSheetPatch,
     rollDeathSave: rollCharacterDeathSave,
     isDeathSavePending: id => deathSaveRollsInFlight.has(String(id)),
     acknowledgeSheetSave,
+    acknowledgeSheetPatch,
     onSavedBasesList,
     onSavedBaseSaved,
     onSavedBaseApplied,

@@ -443,6 +443,10 @@ function upsertSheetNumber(player, path, value) {
   if (!parent[key] || typeof parent[key] !== 'object') parent[key] = {};
   parent[key].value = value;
   try { syncDeathSavesForCurrentHp(nextSheet.parsed); } catch {}
+  if (window.InfoModal?.queueSheetPatch && window.SheetSync) {
+    window.InfoModal.queueSheetPatch(pid, SheetSync.diff(current.sheet, nextSheet));
+    return;
+  }
   // оптимистично обновляем локально
   current.sheet = nextSheet;
 
@@ -470,6 +474,7 @@ function upsertSheetNumber(player, path, value) {
 
 // ================== HP BAR (always on top) ==================
 function updateHpBar(player, tokenEl) {
+  player = window.getLivePlayerView?.(player) || player;
   const pid = String(player?.id || '');
   if (!pid) return;
 

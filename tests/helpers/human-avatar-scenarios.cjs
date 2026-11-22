@@ -56,11 +56,15 @@ module.exports=async function({pages,fixture,applyFixture,h,screenshotDir}){
   await require('./studio-game-scenarios.cjs')({owner,gm});
   await owner.evaluate(()=>InfoModal.close());
   await open(p1);assert.equal(await p1.locator('[data-sheet-path="appearance.model3d.hairStyle"]').isDisabled(),true);assert.equal(await p1.locator('[data-appearance-slot="armor"]').isDisabled(),true);await p1.evaluate(()=>InfoModal.close());
+  // A route outside the updated LOS deliberately snaps for privacy. Test the
+  // walking animation on a clear board; fog privacy is covered separately.
+  await gm.evaluate(()=>sendMessage({type:'setFogSettings',enabled:false}));
+  await Promise.all([owner,gm].map(page=>page.waitForFunction(()=>!FogWar.isEnabled())));
   await owner.locator('#board-wrapper').scrollIntoViewIfNeeded();
   const start=await owner.evaluate(()=>Board3D.projectToken('player-3'));await owner.mouse.click(start.x,start.y);await owner.waitForFunction(()=>selectedPlayer?.id==='player-3');
+  const moving=Promise.all([owner,gm].map(page=>page.waitForFunction(()=>Board3D.inspect().tokens.find(t=>t.id==='player-3')?.walking).then(()=>page.evaluate(()=>Board3D.inspect().tokens.find(t=>t.id==='player-3')))));
   const dest=await owner.evaluate(()=>Board3D.projectCell(5.5,9.5));await owner.mouse.click(dest.x,dest.y);
-  await Promise.all([owner,gm].map(page=>page.waitForFunction(()=>Board3D.inspect().tokens.find(t=>t.id==='player-3')?.walking)));
-  const mid=await owner.evaluate(()=>Board3D.inspect().tokens.find(t=>t.id==='player-3'));
+  const [mid]=await moving;
   assert.ok(mid.x!==5||mid.y!==9,'mesh interpolates instead of jumping to the destination');
   await owner.waitForFunction(()=>{const t=Board3D.inspect().tokens.find(t=>t.id==='player-3');return t.x===5&&t.y===9&&!t.walking;});
   assert.equal(await gm.evaluate(()=>players.find(p=>p.id==='player-3').y),9);

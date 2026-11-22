@@ -12,6 +12,7 @@ const backendRequire = createRequire(path.resolve(__dirname, '../backend/package
 const { WebSocketServer } = backendRequire('ws');
 const { chromium } = require(process.env.D20_PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname, '..');
+const syncMode = !!process.env.D20_SYNC_ONLY;
 const screenshotDir = process.env.D20_SCREENSHOT_DIR;
 const start = initialState();
 Object.assign(start, { boardWidth: 60, boardHeight: 45, cellFeet: 5,
@@ -28,12 +29,12 @@ start.maps[0].playerStates = Object.fromEntries(start.players.map(p => [p.id, {
 start.players.push({ id: 'monster-1', name: 'Test Monster', ownerId: 'gm', ownerRole: 'GM', ownerName: 'gm',
   isBase: false, isMonster: true, isEnemy: true, isAlly: false, isPublic: true, inCombat: false,
   hasRolledInitiative: false, mapId: 'map-1', x: 25, y: 15, size: 1, sheet: { parsed: {} }, sheetUpdatedAt: 1 });
-if(process.env.D20_MAPS_ONLY){
+if(process.env.D20_MAPS_ONLY || syncMode){
  start.phase='exploration';start.maps[0].phase='exploration';
  start.maps.push({id:'map-2',name:'Large map',sectionId:'section-1',boardWidth:90,boardHeight:70,phase:'exploration',playerStates:{},fog:{enabled:false}});
 }
 const h = serverHarness(start);
-const mapHarness=process.env.D20_MAPS_ONLY?require('./helpers/map-harness.cjs')(h,start):null;
+const mapHarness=(process.env.D20_MAPS_ONLY || syncMode)?require('./helpers/map-harness.cjs')(h,start):null;
 const sockets = new Set();
 let seq = 0;
 let diceId = 0;
@@ -43,12 +44,37 @@ const requests = [];
 const diagnostics = [];
 function stamp(payload) { return { ...payload, __serverEvent: true, __eventSeq: ++seq }; }
 function broadcast(payload, except) {
+  if(syncMode)return h.context.broadcastToRoom('test-room',payload,except);
   const raw = JSON.stringify(stamp(payload));
   for (const ws of sockets) if (ws !== except && ws.readyState === 1) ws.send(raw);
 }
 h.context.send = (ws,payload) => { if(dropNextCombatAck && payload.type==='combatSync' && ws.ctx.userId==='gm') { dropNextCombatAck=false; return; } ws.send(JSON.stringify(stamp(payload))); };
 h.context.broadcastToRoom = (roomId, payload, except) => broadcast(payload, except);
 const members = h.clients.map(c => ({ id: c.ctx.userId, user_id: c.ctx.userId, name: c.ctx.userId, role: c.ctx.role }));
+const syncControls = { rowReads:0, holdWrite:null };
+if(syncMode){
+  const vm=require('node:vm'),{functions,read}=require('./helpers/room-harness.cjs');
+  Object.assign(h.context,{WebSocket:{OPEN:1},rooms:new Map([['test-room',sockets]]),roomEventSeq:new Map(),
+    inboundMeta:new (require('node:async_hooks').AsyncLocalStorage)(),roomJournal:new (require('../backend/shared/room-event-journal'))(),
+    WS_CONTROL_EVENT_TYPES:new Set(['error','ping','pong','wsReady','joinedWsRoom','roomCursor','roomResume']),
+    ROOM_ROW_READS:Object.fromEntries(['room_map_meta','room_walls','room_marks','room_fog','room_music_state','room_tokens','room_log','room_dice_events'].map(t=>[t,{maxLimit:10000}])),
+    verifyAuthToken:token=>({userId:token}),touchRoomMember:async()=>{},broadcastUsersSnapshot:async()=>{},
+    attachClientToRoom:(ws,id)=>{ws.currentRoomId=id;},
+    loadRoomContext:async(roomId,id)=>({...h.clients.find(c=>c.ctx.userId===id).ctx,state:clone(h.database())}),
+    fetchWhitelistedRoomRows:async(ctx,table)=>{
+      syncControls.rowReads++;
+      const rows=table==='room_tokens'?[...mapHarness.tokens.values()]:table==='room_fog'?[...mapHarness.fog.values()]:table==='room_map_meta'?start.maps.map(m=>({map_id:m.id,board_width:m.boardWidth,board_height:m.boardHeight,name:m.id,section_id:'section-1'})):[];
+      return {rows:clone(rows)};
+    }
+  });
+  h.context.loadWsRoomContext=async ws=>({...h.clients.find(c=>c.ctx.userId===ws.userId).ctx,state:clone(h.database())});
+  const query=h.context.pool.query;
+  h.context.pool.query=async(sql,v)=>{
+    if(sql.includes('update public.room_state set phase') && syncControls.holdWrite)await syncControls.holdWrite;
+    return query(sql,v);
+  };
+  vm.runInContext(functions(read('backend/server.js'),['getRoom','nextRoomEventSeq','stampRoomEvent','send','invalidateRoomContexts','broadcastToRoom','resumeRoomClient','handleJoinRoom','handleMessage']),h.context);
+}
 async function body(req) {
   let text = '';
   for await (const part of req) text += part;
@@ -119,6 +145,11 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', ws => {
   sockets.add(ws);
   ws.on('close', () => sockets.delete(ws));
+  if(syncMode){
+    const scheduler=new (require('../backend/shared/ws-scheduler'))((data,receivedAt)=>h.context.inboundMeta.run({wsNonce:data.__wsNonce,serverReceivedAt:receivedAt,inboundType:data.type},()=>h.context.handleMessage(ws,data)),error=>ws.send(JSON.stringify({type:'error',message:error.message})));
+    ws.on('message',raw=>scheduler.push(JSON.parse(raw),Date.now()));
+    return;
+  }
   let tail = Promise.resolve();
   ws.on('message', raw => { tail = tail.then(async () => {
     const msg = JSON.parse(raw);
@@ -127,6 +158,7 @@ wss.on('connection', ws => {
       ws.send(JSON.stringify({ type: 'joinedWsRoom', roomId: 'test-room' }));
     } else if (msg.type === 'statePatch') await h.context.handleStatePatchRelay(ws, msg);
     else if (msg.type === 'playerPatch') await h.context.handlePlayerPatchRelay(ws, msg);
+    else if (msg.type === 'sheetPatch') await h.context.handleSheetPatchRelay(ws, msg);
     else if (msg.type === 'combatCommand') {
       if (rejectFirstRoll && ws.ctx.userId === 'user-1' && msg.action === 'roll') {
         rejectFirstRoll = false; ws.send(JSON.stringify({type:'combatCommandError',requestId:msg.requestId,message:'Test rejection'}));
@@ -139,6 +171,7 @@ wss.on('connection', ws => {
     } else if (msg.type === 'diceEvent') await h.context.handleDiceEventRelay(ws, msg);
     else if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
     else if (msg.type === 'fogRow' && mapHarness) await h.context.handleFogRow(ws,msg);
+    else if (msg.type === 'fogPreview' && mapHarness) await h.context.handleFogPreview(ws,msg);
     else if (msg.type === 'moveToken') {
       if(mapHarness)return h.context.handleMoveToken(ws,msg);
       const player = h.database().players.find(p => p.id === msg.tokenId);
@@ -207,6 +240,7 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    if(syncMode){await require('./helpers/live-sync-scenarios.cjs')({pages,h,mapHarness,syncControls,waitFor});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_EGRESS_ONLY){await require('./helpers/egress-scenarios.cjs')({pages,h});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_MAPS_ONLY){await require('./helpers/map-isolation-scenarios.cjs')({pages,h,mapHarness});assert.deepEqual(errors,[]);return;}
     if (!process.env.D20_3D_ONLY) {

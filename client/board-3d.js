@@ -121,7 +121,8 @@
     const st = getState(); if (!st || !window.FogWar) return null;
     const view = window.FogWar.getViewSnapshot();
     const combat=editingWalls() || toolTarget() ? null : window.getCombatMoveOverlaySnapshot?.() || null;
-    const tokens = (typeof players !== 'undefined' ? players : []).map(p => {
+    const tokens = (typeof players !== 'undefined' ? players : []).map(player => {
+      const p = window.getLivePlayerView?.(player) || player;
       const el = playerElements.get(p.id);
       return { id: String(p.id), name: String(p.name || 'Токен'), color: p.color || '#c6a35e',
         avatar: el?.dataset.fogGhost === '1' ? null : window.AvatarData?.describe(p.sheet?.parsed,!!p.isMonster) || null,

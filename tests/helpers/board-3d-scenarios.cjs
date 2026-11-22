@@ -110,6 +110,7 @@ module.exports = async function ({ pages, h, broadcast, screenshotDir, clone }) 
   await gm.mouse.click(reveal.x,reveal.y);
   await p3.waitForFunction(()=>FogWar.isCellVisible(13,5));
   await p3.waitForFunction(()=>Board3D.inspect().tokens.some(t=>t.id==='enemy-3d'));
+  await p3.waitForFunction(()=>fogLiveOverlays.size===0);
   await gm.evaluate(()=>{document.getElementById('fog-draw').checked=false;});
   console.log('PASS 3D: hidden walls and enemies stay absent while orbiting; GM paints manual fog in 3D and peers reveal the right cells');
   fixture.fog.mode='dynamic'; fixture.fog.manualStamps=[]; fixture.fog.visionRadius=3; fixture.fog.exploredEnabled=true;

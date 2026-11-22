@@ -465,7 +465,9 @@ function connectRoomWs(roomId) {
         userId: String(session?.userId || getAppStorageItem?.('int_user_id') || myId || ''),
         name: String(getAppStorageItem?.('int_user_name') || myNameSpan?.textContent || ''),
         clientId: WS_CLIENT_ID,
-        transport: 'ws'
+        transport: 'ws',
+        resume: wsRoomCursors.get(rid) || null,
+        syncProtocol: 1
       }));
     } catch (e) {
       console.warn('[WS] auth join failed', e);
@@ -474,18 +476,42 @@ function connectRoomWs(roomId) {
   };
 
   sock.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
+    try { dispatchRoomWsEvent(JSON.parse(event.data), false, sock); }
+    catch (e) { console.warn('[WS] bad message', e); }
+  };
+
+  sock.onclose = () => {
+    if (wsClient === sock) wsClient = null;
+    if (wsHeartbeatTimer) stopWsHeartbeat();
+    wsLastPongAt = 0;
+    if (!wsWantConnected || !wsRoomId) return;
+    try { clearTimeout(wsReconnectTimer); } catch {}
+    wsReconnectTimer = setTimeout(() => {
+      if (wsWantConnected && wsRoomId) connectRoomWs(wsRoomId);
+    }, WS_RECONNECT_DELAY_MS);
+  };
+
+  sock.onerror = (e) => {
+    console.warn('[WS] error', e);
+  };
+}
+
+
+function dispatchRoomWsEvent(msg, replay = false, sock = wsClient) {
       if (!msg || typeof msg !== 'object') return;
+      if (msg.__streamSeq) rememberRoomCursor({ roomId: msg.roomId, epoch: msg.__streamEpoch, seq: msg.__streamSeq });
       const nonce = String(msg.__wsNonce || '').trim();
       if (nonce && wsWasSeen(nonce)) return;
       if (nonce) wsRememberNonce(nonce);
 
       const msgRoomId = String(msg.roomId || '').trim();
       if (msgRoomId && wsRoomId && msgRoomId !== wsRoomId) return;
-      if (!shouldAcceptWsServerEvent(msg)) return;
+      if (!replay && !shouldAcceptWsServerEvent(msg)) return;
+      if (msg.type === 'roomCursor') { rememberRoomCursor(msg); return; }
+      if (msg.type === 'roomResume') { applyRoomResume(msg); return; }
 
       recordRealtimeDebugEvent('ws:recv', {
+        replay: !!replay,
         type: String(msg.type || ''),
         roomId: String(msg.roomId || wsRoomId || ''),
         seq: Math.max(0, Number(msg.__eventSeq) || 0),
@@ -495,6 +521,8 @@ function connectRoomWs(roomId) {
         serverQueueMs: (msg.__serverTs && msg.__serverReceivedAt) ? Math.max(0, Number(msg.__serverTs) - Number(msg.__serverReceivedAt)) : null,
         afterServerMs: msg.__serverTs ? Math.max(0, Date.now() - Number(msg.__serverTs)) : null
       });
+
+      if (handleSheetRealtime(msg) || handleCombatPreview(msg) || handleFogRealtime(msg)) return;
 
       const from = String(msg.__fromWsClient || '').trim();
       if (from === WS_CLIENT_ID && msg.type === 'playerPatch' && msg.patch?.sheet) {
@@ -524,30 +552,12 @@ function connectRoomWs(roomId) {
         markWsAlive();
         try { sock.__joined = true; } catch {}
         flushWsPendingEnvelopes(sock);
-        window.InfoModal?.flushSheetSaves?.();
+        window.InfoModal?.flushSheetSaves?.(null, true);
         return;
       }
       if (handleDetachedWsMessage(msg)) return;
       handleMessage(msg);
-    } catch (e) {
-      console.warn('[WS] bad message', e);
-    }
-  };
 
-  sock.onclose = () => {
-    if (wsClient === sock) wsClient = null;
-    if (wsHeartbeatTimer) stopWsHeartbeat();
-    wsLastPongAt = 0;
-    if (!wsWantConnected || !wsRoomId) return;
-    try { clearTimeout(wsReconnectTimer); } catch {}
-    wsReconnectTimer = setTimeout(() => {
-      if (wsWantConnected && wsRoomId) connectRoomWs(wsRoomId);
-    }, WS_RECONNECT_DELAY_MS);
-  };
-
-  sock.onerror = (e) => {
-    console.warn('[WS] error', e);
-  };
 }
 
 
@@ -1681,7 +1691,7 @@ async function upsertRoomFogState(roomId, mapId, fog, boardW, boardH) {
   const row = buildDetachedFogRow(roomId, mapId, fog, boardW, boardH);
   if (!row.room_id || !row.map_id) return;
   _cacheUpsertFogRow(row);
-  try { sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true }); } catch {}
+  try { const previewId = publishFogPreview(row); sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row, previewId }, { optimisticApplied: true }); } catch {}
   return;
   const { error } = await sbClient.from('room_fog').upsert(row, { onConflict: 'room_id,map_id' });
   if (error) throw error;
@@ -1691,8 +1701,9 @@ async function upsertRoomFogState(roomId, mapId, fog, boardW, boardH) {
 
 let __pendingFogTimer = null;
 const __pendingFogRows = new Map();
-function scheduleRoomFogUpsert(roomId, mapId, fog, boardW, boardH, delay = 180) {
+function scheduleRoomFogUpsert(roomId, mapId, fog, boardW, boardH, delay = 180, cells = null) {
   const row = buildDetachedFogRow(roomId, mapId, fog, boardW, boardH);
+  row.previewId = publishFogPreview(row, cells);
   __pendingFogRows.set(JSON.stringify([row.room_id,row.map_id]), row);
   if (__pendingFogTimer) return;
   __pendingFogTimer = setTimeout(() => {
@@ -1702,7 +1713,7 @@ function scheduleRoomFogUpsert(roomId, mapId, fog, boardW, boardH, delay = 180) 
     for (const row of rows) {
       try {
         if (!row.room_id || !row.map_id) continue;
-        sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row }, { optimisticApplied: true });
+        sendWsEnvelope({ type: 'fogRow', roomId: row.room_id, row, previewId: row.previewId }, { optimisticApplied: true });
         if (String(currentRoomId || '') === row.room_id) {
           _cacheUpsertFogRow(row);
           _refreshDetachedRoomView();
@@ -2296,6 +2307,15 @@ async function subscribeRoomMembersDb(roomId) {
 
 async function sendMessage(msg) {
   try {
+    if (msg?.type === 'patchPlayerSheet') {
+      const player = lastState?.players?.find(p => String(p.id) === String(msg.id));
+      if (!player || !canControlToken(player)) return;
+      const payload = { type: 'sheetPatch', roomId: currentRoomId, playerId: String(msg.id),
+        requestId: msg.requestId, ops: msg.ops, sheetUpdatedAt: msg.sheetUpdatedAt };
+      // Local visuals update without replacing the room or the sheet editor.
+      if (msg.ops.some(SheetSync.isHot)) handleSheetRealtime({ ...payload, type: 'sheetPreview', ops: msg.ops.filter(SheetSync.isHot) });
+      return sendWsEnvelope(payload);
+    }
     if (['setPlayerInCombat', 'setPlayersInCombatBulk', 'setInitiativeMode'].includes(msg?.type)) {
       try {
         return await requestCombatCommand(msg.type === 'setInitiativeMode' ? 'mode' : 'select', {
@@ -2560,9 +2580,10 @@ async function sendMessage(msg) {
 
         const room = payload.room || { id: roomId };
         const state = payload.state || createInitialGameState();
+        const wsBootstrap = payload.syncProtocol === 1;
 
         currentRoomId = roomId;
-        connectRoomWs(roomId);
+        if (!wsBootstrap) connectRoomWs(roomId);
         handleMessage({ type: "joinedRoom", room });
 
         startHeartbeat();
@@ -2579,7 +2600,7 @@ async function sendMessage(msg) {
           try { await stopSupabaseRealtimeChannels(); } catch (e) { console.warn('disable supabase realtime failed', e); }
         }
 
-        try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
+        if (!wsBootstrap) try { await hydrateDetachedRoomData(roomId); } catch (e) { console.warn('detached init failed', e); }
         if (Array.isArray(payload.members)) {
           try {
             usersById.clear();
@@ -2604,6 +2625,8 @@ async function sendMessage(msg) {
         const __initialStateApplied = applyDetachedPayloadToState(state);
         try { rememberRoomStateShadow(roomId, __initialStateApplied); } catch {}
         handleMessage({ type: "state", state: stripRoomSecretsFromState(__initialStateApplied), stateUpdatedAt: payload.stateUpdatedAt || payload.updatedAt || null });
+
+        if (wsBootstrap) { connectRoomWs(roomId); break; }
 
         try {
           const logRows = await loadRoomLog(roomId, 200);
@@ -4332,7 +4355,7 @@ async function sendMessage(msg) {
           f.exploredPacked = packFogExplored(f.explored, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight) || '';
           _cacheUpsertFogRow(buildDetachedFogRow(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight));
           _refreshDetachedRoomView();
-          scheduleRoomFogUpsert(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight, 320);
+          scheduleRoomFogUpsert(currentRoomId, mapId, f, meta.boardWidth || next.boardWidth, meta.boardHeight || next.boardHeight, 650, msg.cells);
           return;
         }
 

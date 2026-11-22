@@ -3,6 +3,28 @@ const initiativeRequestsInFlight = new Set();
 const combatRequests = new Map();
 const initiativeRollDrafts = new Map();
 let combatActionBusy = false;
+const remoteInitiativePreviews = new Map();
+function handleCombatPreview(msg) {
+  if (msg.type === 'combatSync' || msg.type === 'combatCommandError' || msg.type === 'roomResume') {
+    for (const [id, entry] of remoteInitiativePreviews) {
+      if (msg.type === 'roomResume' || id === msg.requestId || msg.players?.some(p => entry.updates?.some(u => String(u.playerId) === String(p.id)) && p.hasRolledInitiative)) {
+        clearTimeout(entry.timer); remoteInitiativePreviews.delete(id);
+      }
+    }
+    return false;
+  }
+  if (msg.type !== 'combatPreview') return false;
+  if (String(msg.roomId) !== String(currentRoomId)) return true;
+  const old = remoteInitiativePreviews.get(msg.requestId);
+  clearTimeout(old?.timer); remoteInitiativePreviews.delete(msg.requestId);
+  if (msg.pending && String(msg.mapId) === String(lastState?.currentMapId) && Number(msg.epoch) === Number(lastState?.initiativeEpoch)) {
+    remoteInitiativePreviews.set(msg.requestId, { ...msg, timer: setTimeout(() => {
+      remoteInitiativePreviews.delete(msg.requestId); refreshInitiativeRealtimeUi(lastState);
+    }, 8000) });
+  }
+  refreshInitiativeRealtimeUi(lastState);
+  return true;
+}
 function handleCombatSync(msg) {
   const pending = combatRequests.get(msg.requestId);
   if (msg.type === 'combatCommandError') { pending?.reject(new Error(msg.message)); return; }
@@ -117,6 +139,13 @@ async function rollInitiativeAndSync(message) {
   }
 }
 function getPendingInitiativeRoll(playerId) {
-  if (!initiativeRequestsInFlight.has(String(playerId))) return null;
+  if (!initiativeRequestsInFlight.has(String(playerId))) {
+    for (const entry of remoteInitiativePreviews.values()) {
+      if (entry.roomId !== String(currentRoomId) || entry.mapId !== String(lastState?.currentMapId) || Number(entry.epoch) !== Number(lastState?.initiativeEpoch)) continue;
+      const update = entry.updates?.find(item => String(item.playerId) === String(playerId));
+      if (update) return { total: update.total };
+    }
+    return null;
+  }
   return initiativeRollDrafts.get(`${currentRoomId}:${Number(lastState?.initiativeEpoch) || 0}:${playerId}`) || null;
 }

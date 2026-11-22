@@ -34,7 +34,7 @@ test('same-size maps with equal stamp counts keep distinct manual and explored f
 });
 test('coalesced fog writes retain the latest row for every map and room',()=>{
  const writes=[],timers=[];
- const c=vm.createContext({Map,JSON,Number,String,currentRoomId:'room',console,setTimeout:fn=>{timers.push(fn);return 1;},buildDetachedFogRow:(room_id,map_id,fog)=>({room_id,map_id,...fog}),sendWsEnvelope:msg=>writes.push(clone(msg)),_cacheUpsertFogRow(){},_refreshDetachedRoomView(){}});
+ const c=vm.createContext({Map,JSON,Number,String,currentRoomId:'room',console,publishFogPreview:()=> 'preview',setTimeout:fn=>{timers.push(fn);return 1;},buildDetachedFogRow:(room_id,map_id,fog)=>({room_id,map_id,...fog}),sendWsEnvelope:msg=>writes.push(clone(msg)),_cacheUpsertFogRow(){},_refreshDetachedRoomView(){}});
  vm.runInContext('let __pendingFogTimer=null;const __pendingFogRows=new Map();'+functions(read('client/core-helpers-network.js'),['scheduleRoomFogUpsert']),c);
  c.scheduleRoomFogUpsert('room','a',{n:1});c.scheduleRoomFogUpsert('room','b',{n:2});c.scheduleRoomFogUpsert('room','a',{n:3});timers.shift()();
  assert.deepEqual(writes.map(w=>[w.row.map_id,w.row.n]),[['a',3],['b',2]]);

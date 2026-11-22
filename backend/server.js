@@ -4,6 +4,12 @@ const path = require('path');
 const DamageRolls = require('./shared/damage-rolls');
 const CombatState = require('./shared/combat-state');
 const RoomReadCache = require('./shared/room-read-cache');
+const SheetSync = require('./shared/sheet-sync');
+const RoomEventJournal = require('./shared/room-event-journal');
+const WsScheduler = require('./shared/ws-scheduler');
+const { AsyncLocalStorage } = require('async_hooks');
+const inboundMeta = new AsyncLocalStorage();
+const roomJournal = new RoomEventJournal();
 const roomReadCache = new RoomReadCache();
 const crypto = require('crypto');
 const http = require('http');
@@ -905,6 +911,7 @@ const ROOM_ROW_READS = Object.freeze({
   room_log: {
     select: 'id, room_id, text, created_at',
     orderBy: 'created_at',
+    orderDir: 'desc',
     defaultLimit: 200,
     maxLimit: 500
   },
@@ -985,7 +992,7 @@ async function fetchWhitelistedRoomRows(ctx, tableNameRaw, query = {}) {
     ? await roomReadCache.load(ctx.roomId, ['rows', tableName, mapId, values.at(-1)], () => pool.query(sql, values))
     : await pool.query(sql, values);
   return {
-    rows,
+    rows: tableName === 'room_log' ? [...rows].reverse() : rows,
     row: config.maybeSingle ? (rows[0] || null) : undefined
   };
 }
@@ -2413,7 +2420,8 @@ app.post('/api/rooms/:roomId/join', async (req, res) => {
       stateUpdatedAt: normalizeIsoDate(room?.updated_at),
       updatedAt: normalizeIsoDate(room?.updated_at),
       members,
-      role
+      role,
+      syncProtocol: 1
     });
   } catch (error) {
     console.error('[rooms join] failed:', error);
@@ -2918,7 +2926,7 @@ const WS_CONTROL_EVENT_TYPES = new Set([
   'ping',
   'pong',
   'wsReady',
-  'joinedWsRoom'
+  'joinedWsRoom', 'roomCursor', 'roomResume'
 ]);
 
 function getRoom(roomId) {
@@ -2954,7 +2962,7 @@ function stampRoomEvent(payload, fallbackRoomId = '') {
 function send(ws, payload) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   try {
-    const meta = ws.currentInboundMeta || null;
+    const meta = inboundMeta.getStore() || null;
     if (meta && payload && typeof payload === 'object') {
       if (meta.wsNonce && !payload.__replyToWsNonce) payload.__replyToWsNonce = meta.wsNonce;
       if (meta.clientSentAt && !payload.__clientSentAt) payload.__clientSentAt = meta.clientSentAt;
@@ -2982,17 +2990,42 @@ function invalidateRoomContexts(roomId, stateOnly = false) {
 function broadcastToRoom(roomId, payload, exceptWs = null) {
   if (['mapMetaRow','mapMetaDelete','wallRow','wallDelete','markRow','markDelete','marksReplace','fogRow','fogDelete','musicRow','musicDelete','roomDeleted'].includes(payload?.type)) roomReadCache.invalidate(String(roomId));
   const room = rooms.get(String(roomId || ''));
-  if (!room) return;
   stampRoomEvent(payload, roomId);
+  const transient = payload?.livePreview || ['sheetPreview', 'sheetPatchError', 'combatPreview', 'fogPreview', 'fogPreviewCancel', 'users', 'usersSnapshot'].includes(payload?.type);
+  const cursor = transient ? null : roomJournal.append(String(roomId), payload);
   if (payload?.type === 'state') invalidateRoomContexts(roomId);
   const raw = JSON.stringify(payload);
 
-  for (const client of room) {
+  for (const client of room || []) {
     if (client === exceptWs) continue;
-    if (client.readyState === WebSocket.OPEN) {
+    if (!client.resuming && client.readyState === WebSocket.OPEN) {
       client.send(raw);
     }
   }
+  if (cursor && exceptWs && !exceptWs.resuming) send(exceptWs, { type: 'roomCursor', roomId, ...cursor });
+}
+
+async function resumeRoomClient(ws, ctx, cursor) {
+  let replay = roomJournal.read(ctx.roomId, cursor);
+  if (replay) {
+    send(ws, { type: 'roomResume', roomId: ctx.roomId, mode: 'replay', ...replay });
+    return;
+  }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const start = roomJournal.cursor(ctx.roomId);
+    const [stateRow, ...tables] = await Promise.all([
+      fetchRoomStateRow(ctx.roomId),
+      ...['room_map_meta', 'room_walls', 'room_marks', 'room_fog', 'room_music_state', 'room_tokens', 'room_log', 'room_dice_events'].map(table =>
+        fetchWhitelistedRoomRows(ctx, table, { limit: table === 'room_log' ? 200 : table === 'room_dice_events' ? 50 : ROOM_ROW_READS[table].maxLimit }))
+    ]);
+    replay = roomJournal.read(ctx.roomId, start);
+    if (!replay) continue;
+    const snapshot = { state: stripRoomSecretsFromState(stateRow.state), updatedAt: stateRow.updated_at };
+    ['room_map_meta', 'room_walls', 'room_marks', 'room_fog', 'room_music_state', 'room_tokens', 'room_log', 'room_dice_events'].forEach((table, i) => { snapshot[table] = tables[i].rows; });
+    send(ws, { type: 'roomResume', roomId: ctx.roomId, mode: 'snapshot', snapshot, ...replay });
+    return;
+  }
+  throw new Error('Room changed too quickly to resume; reconnect');
 }
 
 function broadcastTokenMoveRollback(roomId, mapId, tokenId, prevRow, exceptWs = null) {
@@ -3188,7 +3221,10 @@ async function handleJoinRoom(ws, data) {
     ws.userName = ctx.name;
     ws.role = ctx.role;
     ws.roomContext = { ...ctx, cachedAt: Date.now() };
+    ws.resuming = true;
     attachClientToRoom(ws, roomId);
+    if (data.syncProtocol === 1) await resumeRoomClient(ws, ctx, data.resume);
+    ws.resuming = false;
     send(ws, {
       type: 'joinedWsRoom',
       roomId,
@@ -3200,7 +3236,9 @@ async function handleJoinRoom(ws, data) {
       console.error('[users snapshot] failed:', error);
     });
   } catch (error) {
+    ws.resuming = false;
     send(ws, { type: 'error', message: error?.message || 'joinRoom failed' });
+    try { ws.close(1013, 'Room sync failed'); } catch {}
   }
 }
 
@@ -3898,6 +3936,8 @@ function preserveNewerPlayerData(nextState, currentState) {
       player.sheetUpdatedAt = current.sheetUpdatedAt;
       player.name = current.name;
     }
+    player.sheetRevision = current.sheetRevision || 0;
+    player.sheetPatchReceipts = current.sheetPatchReceipts || [];
     if (sameInitiative && player.inCombat && current.hasRolledInitiative && !player.hasRolledInitiative) {
       player.initiative = current.initiative;
       player.hasRolledInitiative = true;
@@ -3948,6 +3988,45 @@ async function mutateRoomState(ctx, mutate) {
 
 async function persistPatchedState(ctx, nextState) {
   return mutateRoomState(ctx, (current) => preserveNewerPlayerData(cloneJson(nextState), current));
+}
+
+const fastRoomWrites = new Map();
+// Pure state commands need one autocommitted UPDATE on a warm cache. xmin is a
+// short-lived compare-and-swap token, verified by Postgres even after lock waits.
+// Transactional writers keep their row locks; conflicting external writes retry.
+async function mutateRoomStateFast(ctx, mutate) {
+  ensurePlayerOrGm(ctx);
+  const previous = fastRoomWrites.get(ctx.roomId) || Promise.resolve();
+  const run = previous.catch(() => {}).then(async () => {
+    let cached = getCachedRoomStateRow(ctx.roomId);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (!cached?.state_version) {
+        const { rows } = await pool.query('select state, xmin::text as state_version from public.room_state where room_id = $1', [ctx.roomId]);
+        if (!rows[0]) break;
+        cached = rows[0];
+        roomStateReadMetrics.fullReads++;
+        roomStateReadMetrics.fullBytes += Buffer.byteLength(JSON.stringify(cached.state || {}));
+      }
+      ctx.state = cloneJson(cached.state) || {};
+      const stored = sanitizeRoomStateForStorage(await mutate(cloneJson(ctx.state)));
+      const { rows } = await pool.query(`
+        update public.room_state set phase = $2, current_actor_id = $3, state = $4, updated_at = now()
+        where room_id = $1 and xmin::text = $5 returning updated_at, xmin::text as state_version
+      `, [ctx.roomId, String(stored.phase || 'lobby'),
+        stored.turnOrder?.[Math.max(0, Number(stored.currentTurnIndex) || 0)] || null, stored, cached.state_version]);
+      if (!rows[0]) { cached = null; continue; }
+      roomStateReadMetrics.cacheHits++;
+      ctx.state = stored;
+      rememberRoomStateValue(ctx.roomId, stored, rows[0].updated_at, { ...ctx.room, state_version: rows[0].state_version });
+      invalidateRoomContexts(ctx.roomId, true);
+      return stripRoomSecretsFromState(stored);
+    }
+    // Bounded contention fallback, using the existing authoritative row lock.
+    return mutateRoomState(ctx, mutate);
+  });
+  fastRoomWrites.set(ctx.roomId, run);
+  try { return await run; }
+  finally { if (fastRoomWrites.get(ctx.roomId) === run) fastRoomWrites.delete(ctx.roomId); }
 }
 
 async function writeRoomState(ctx, nextState, db) {
@@ -4607,6 +4686,7 @@ async function handleFogRow(ws, data) {
   const ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
   ensureGm(ctx);
   const row = cleanFogRow(ctx, data.row || data);
+  try {
   const { rows } = await pool.query(
     `
       insert into public.room_fog(room_id, map_id, settings, manual_stamps, explored_packed, updated_at)
@@ -4618,9 +4698,43 @@ async function handleFogRow(ws, data) {
     `,
     [row.room_id, row.map_id, fogJsonParam(row.settings, {}), fogJsonParam(row.manual_stamps, []), row.explored_packed]
   );
-  const payload = { type: 'fogRow', roomId: ctx.roomId, row: {...row,...rows[0]} };
+  const payload = { type: 'fogRow', roomId: ctx.roomId, previewId: data.previewId, row: {...row,...rows[0]} };
   send(ws, payload);
   broadcastToRoom(ctx.roomId, payload, ws);
+  } catch (error) {
+    const cancel = { type: 'fogPreviewCancel', roomId: ctx.roomId, mapId: row.map_id, previewId: data.previewId };
+    send(ws, cancel); broadcastToRoom(ctx.roomId, cancel, ws);
+    // A failed save must restore the author's optimistic state as well.
+    roomReadCache.invalidate(ctx.roomId);
+    const previous = await fetchWhitelistedRoomRows(ctx, 'room_fog', { mapId: row.map_id });
+    const rollback = previous.rows[0] ? { type: 'fogRow', roomId: ctx.roomId, row: previous.rows[0], rollback: true }
+      : { type: 'fogDelete', roomId: ctx.roomId, row: { map_id: row.map_id }, rollback: true };
+    send(ws, rollback); broadcastToRoom(ctx.roomId, rollback, ws);
+    throw error;
+  }
+}
+
+async function handleFogPreview(ws, data) {
+  const ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
+  ensureGm(ctx);
+  const mapId = normalizeSafeId(data.mapId, ENTITY_ID_RE);
+  if (!mapId || !Array.isArray(ctx.state.maps) || !ctx.state.maps.some(map => String(map.id) === mapId)) throw new Error('Unknown fog map');
+  if (Buffer.byteLength(JSON.stringify(data.delta || {})) > 512 * 1024) throw new Error('Fog preview too large');
+  const incoming = data.delta || {}, delta = {};
+  if (incoming.row) delta.row = cleanFogRow(ctx, { ...incoming.row, map_id: mapId });
+  if (incoming.settings) delta.settings = cleanFogRow(ctx, { map_id: mapId, settings: incoming.settings }).settings;
+  if (Array.isArray(incoming.stamps)) delta.stamps = cloneJson(incoming.stamps).slice(-5000);
+  if (Array.isArray(incoming.stampsAppend)) delta.stampsAppend = cloneJson(incoming.stampsAppend).slice(-1000);
+  if (typeof incoming.exploredPacked === 'string') delta.exploredPacked = incoming.exploredPacked.slice(0, 250000);
+  if (Array.isArray(incoming.cells)) {
+    const bounds = await getMapBounds(ctx.roomId, mapId, ctx.state);
+    delta.cells = [...new Set(incoming.cells.filter(cell => {
+      if (typeof cell !== 'string' || !/^\d{1,3},\d{1,3}$/.test(cell)) return false;
+      const [x,y] = cell.split(',').map(Number); return x < bounds.width && y < bounds.height;
+    }))].slice(0, 22500);
+  }
+  broadcastToRoom(ctx.roomId, { type: 'fogPreview', roomId: ctx.roomId, mapId,
+    previewId: sanitizeText(data.previewId, '', 120), delta }, ws);
 }
 
 async function handleFogDelete(ws, data) {
@@ -5259,9 +5373,11 @@ async function handlePlayerPatchRelay(ws, data) {
       if (incomingTs >= Number(player.sheetUpdatedAt || 0)) {
         player.sheet = cloneJson(incoming.sheet) || { parsed: {} };
         player.sheetUpdatedAt = incomingTs;
+        player.sheetRevision = Number(player.sheetRevision || 0) + 1;
       }
       patch.sheet = cloneJson(player.sheet) || { parsed: {} };
       patch.sheetUpdatedAt = player.sheetUpdatedAt;
+      patch.sheetRevision = player.sheetRevision;
       try {
         const parsed = patch.sheet?.parsed || {};
         const nextName = parsed?.name?.value ?? parsed?.name;
@@ -5296,6 +5412,54 @@ async function handlePlayerPatchRelay(ws, data) {
   broadcastToRoom(ctx.roomId, payload, ws);
 
   if (ws.roomContext) ws.roomContext.stateStale = true;
+}
+
+async function handleSheetPatchRelay(ws, data) {
+  const ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
+  ensurePlayerOrGm(ctx);
+  const playerId = normalizeSafeId(data.playerId || data.id, ENTITY_ID_RE);
+  const requestId = sanitizeText(data.requestId, '', 120);
+  const ops = SheetSync.clean(data.ops);
+  if (!playerId || !requestId || Buffer.byteLength(JSON.stringify(ops)) > 2 * 1024 * 1024) throw new Error('Invalid sheet patch');
+  let revision;
+  try {
+    const previewPlayer = findPlayerById(ctx.state, playerId);
+    const hotOps = ops.filter(SheetSync.isHot);
+    if (hotOps.length && previewPlayer && canControlPlayer(ctx, previewPlayer)
+      && !previewPlayer.sheetPatchReceipts?.includes(ctx.userId + ':' + requestId)) broadcastToRoom(ctx.roomId, { type: 'sheetPreview', roomId: ctx.roomId,
+      playerId, requestId, ops: hotOps }, ws);
+    await mutateRoomStateFast(ctx, state => {
+      const player = findPlayerById(state, playerId);
+      if (!player || !canControlPlayer(ctx, player)) throw new Error('You cannot edit this sheet');
+      const receipts = Array.isArray(player.sheetPatchReceipts) ? player.sheetPatchReceipts : [];
+      const key = ctx.userId + ':' + requestId;
+      if (!receipts.includes(key)) {
+        player.sheet = SheetSync.apply(player.sheet, ops);
+        player.sheetUpdatedAt = Math.max(Date.now(), Number(player.sheetUpdatedAt || 0) + 1);
+        player.sheetRevision = Number(player.sheetRevision || 0) + 1;
+        player.sheetPatchReceipts = [...receipts.slice(-63), key];
+        const name = player.sheet?.parsed?.name?.value ?? player.sheet?.parsed?.name;
+        if (typeof name === 'string' && name.trim()) player.name = sanitizeText(name, player.name || 'Player', 160);
+      }
+      revision = player.sheetRevision;
+      return state;
+    });
+    const player = findPlayerById(ctx.state, playerId);
+    // Return canonical values for just the requested paths, including on retries.
+    const canonical = ops.map(op => {
+      const value = op.path.reduce((node, key) => node?.[key], player.sheet);
+      return value === undefined ? { path: op.path, remove: true } : { path: op.path, value };
+    });
+    const payload = { type: 'sheetPatch', roomId: ctx.roomId, playerId, requestId, ops: canonical,
+      sheetUpdatedAt: player.sheetUpdatedAt, sheetRevision: revision, name: player.name,
+      __fromWsClient: data.__fromWsClient };
+    send(ws, payload);
+    broadcastToRoom(ctx.roomId, payload, ws);
+  } catch (error) {
+    const payload = { type: 'sheetPatchError', roomId: ctx.roomId, playerId, requestId, message: error.message, __fromWsClient: data.__fromWsClient };
+    send(ws, payload);
+    broadcastToRoom(ctx.roomId, { ...payload, message: undefined }, ws);
+  }
 }
 
 async function handleInitiativeLiveRelay(ws, data) {
@@ -5346,7 +5510,7 @@ async function applyCombatCommand(ctx, data) {
   ensurePlayerOrGm(ctx);
   const requestId = sanitizeText(data.requestId, '', 120);
   if (!requestId) throw new Error('Combat requestId required');
-  await mutateRoomState(ctx, state => {
+  await mutateRoomStateFast(ctx, state => {
     const receipts = Array.isArray(state.combatCommandIds) ? state.combatCommandIds : [];
     const key = ctx.userId + ':' + requestId;
     if (receipts.includes(key)) return state;
@@ -5359,13 +5523,27 @@ async function applyCombatCommand(ctx, data) {
 }
 
 async function handleCombatCommandRelay(ws, data) {
+  let ctx;
   try {
-    const ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
+    ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
+    if (['roll', 'manual'].includes(data.action)) {
+      try {
+        const preview = cloneJson(ctx.state);
+        CombatState.command(preview, data, ctx, canControlPlayer);
+        broadcastToRoom(ctx.roomId, { type: 'combatPreview', roomId: ctx.roomId, requestId: data.requestId,
+          mapId: preview.currentMapId, epoch: preview.initiativeEpoch,
+          updates: (Array.isArray(data.updates) ? data.updates : []).slice(0,200).map(update => {
+            const player = findPlayerById(preview, update.playerId);
+            return { playerId: player?.id, total: player?.initiative };
+          }).filter(update => update.playerId && Number.isFinite(update.total)), pending: true }, ws);
+      } catch {} // Only an authoritative command may report success or rejection.
+    }
     const payload = await applyCombatCommand(ctx, data);
     if (ws.roomContext) ws.roomContext.stateStale = true;
     send(ws, payload);
     broadcastToRoom(ctx.roomId, payload, ws);
   } catch (error) {
+    if (ctx) broadcastToRoom(ctx.roomId, { type: 'combatPreview', roomId: ctx.roomId, requestId: data.requestId, pending: false }, ws);
     send(ws, { type: 'combatCommandError', roomId: ws.currentRoomId,
       requestId: data.requestId, message: error.message });
   }
@@ -5467,22 +5645,8 @@ async function handleTokensInitRelay(ws, data) {
   broadcastToRoom(ctx.roomId, payload, ws);
 }
 
-async function handleMessage(ws, rawMessage) {
-  let data;
-  try {
-    data = JSON.parse(rawMessage.toString());
-  } catch {
-    send(ws, { type: 'error', message: 'Invalid JSON' });
-    return;
-  }
-
+async function handleMessage(ws, data) {
   const type = String(data?.type || '').trim();
-  ws.currentInboundMeta = {
-    wsNonce: String(data?.__wsNonce || '').trim(),
-    clientSentAt: Math.max(0, Number(data?.__clientSentAt) || 0),
-    serverReceivedAt: Date.now(),
-    inboundType: type
-  };
 
   try {
     switch (type) {
@@ -5582,6 +5746,10 @@ async function handleMessage(ws, rawMessage) {
         await handleFogRow(ws, data);
         break;
 
+      case 'fogPreview':
+        await handleFogPreview(ws, data);
+        break;
+
       case 'fogDelete':
         await handleFogDelete(ws, data);
         break;
@@ -5638,6 +5806,10 @@ async function handleMessage(ws, rawMessage) {
         await handlePlayerPatchRelay(ws, data);
         break;
 
+      case 'sheetPatch':
+        await handleSheetPatchRelay(ws, data);
+        break;
+
       case 'combatCommand':
         await handleCombatCommandRelay(ws, data);
         break;
@@ -5658,8 +5830,6 @@ async function handleMessage(ws, rawMessage) {
     }
   } catch (err) {
     send(ws, { type: 'error', message: err?.message || 'Server error' });
-  } finally {
-    ws.currentInboundMeta = null;
   }
 }
 
@@ -5669,13 +5839,13 @@ wss.on('connection', (ws) => {
   ws.userName = '';
   ws.role = '';
   ws.roomContext = null;
-  ws.currentInboundMeta = null;
-
-  let inboundQueue = Promise.resolve();
+  const scheduler = new WsScheduler((data, receivedAt) => inboundMeta.run({
+    wsNonce: String(data?.__wsNonce || '').trim(), clientSentAt: Math.max(0, Number(data?.__clientSentAt) || 0),
+    serverReceivedAt: receivedAt, inboundType: String(data?.type || '')
+  }, () => handleMessage(ws, data)), error => send(ws, { type: 'error', message: error?.message || 'Server error' }));
   ws.on('message', (rawMessage) => {
-    inboundQueue = inboundQueue.then(() => handleMessage(ws, rawMessage)).catch(error => {
-      send(ws, { type: 'error', message: error?.message || 'Server error' });
-    });
+    try { scheduler.push(JSON.parse(rawMessage.toString()), Date.now()); }
+    catch { send(ws, { type: 'error', message: 'Invalid JSON' }); }
   });
 
   ws.on('close', () => {

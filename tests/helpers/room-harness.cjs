@@ -38,6 +38,7 @@ function serverHarness(state = initialState()) {
   const tokenOwnerWrites = [];
   const cachedStates = new Map();
   const stateReadMetrics = {cacheHits:0,fullReads:0,fullBytes:0};
+  const queries = [];
   const versionOf = value => require('node:crypto').createHash('sha256').update(JSON.stringify(value)).digest('hex');
   let tail = Promise.resolve();
   const clients = [1, 2, 3, 4, 'gm'].map(n => ({
@@ -48,6 +49,7 @@ function serverHarness(state = initialState()) {
   const query = async (sql, values, transaction) => {
     await tick();
     const normalized = sql.trim().toLowerCase();
+    queries.push({ sql: normalized, values: clone(values || []) });
     if (normalized === 'begin') return { rows: [] };
     if (normalized.includes('pg_advisory_xact_lock')) {
       const previous = tail;
@@ -66,6 +68,13 @@ function serverHarness(state = initialState()) {
       return {rows:[{state_version:version,state}]};
     }
     if (normalized.includes('select state from public.room_state')) return { rows: [{ state: clone(database) }] };
+    if (normalized.startsWith('select state, xmin::text')) return { rows: [{ state: clone(database), state_version: versionOf(database) }] };
+    if (normalized.startsWith('update public.room_state set phase')) {
+      await tail;
+      if (values[4] !== versionOf(database)) return {rows:[]};
+      database = clone(values[3]);
+      return {rows:[{updated_at:new Date().toISOString(),state_version:versionOf(database)}]};
+    }
     if (normalized.includes('insert into public.room_state')) {
       if (transaction) transaction.pending = clone(values[3]);
       else database = clone(values[3]);
@@ -85,7 +94,7 @@ function serverHarness(state = initialState()) {
     }
   };
   const context = vm.createContext({
-    console, Date, Map, Set, Math, Buffer, pool, roomStateReadMetrics:stateReadMetrics,
+    console, Date, Map, Set, Math, Buffer, pool, roomStateReadMetrics:stateReadMetrics, fastRoomWrites:new Map(),
     cloneJson: clone,
     sanitizeRoomStateForStorage: clone,
     stripRoomSecretsFromState: clone,
@@ -112,18 +121,19 @@ function serverHarness(state = initialState()) {
   const source = read(process.env.D20_SERVER_SOURCE || 'backend/server.js');
   context.DamageRolls = require('../../backend/shared/damage-rolls');
   context.CombatState = require('../../backend/shared/combat-state');
+  context.SheetSync = require('../../backend/shared/sheet-sync');
   vm.runInContext(functions(source, [
     'withTransaction', 'getStatePlayers', 'findPlayerById', 'getActiveMapServer',
     'syncActiveMapCombatStateServer', 'normalizeInitiativeModeServer',
     'sanitizeStatePatchFields', 'isCurrentTurnOwner', 'canPatchTurnFields',
-    'applyStatePatchToCurrentState', 'preserveNewerPlayerData', 'readRoomStateForUpdate', 'mutateRoomState',
+    'applyStatePatchToCurrentState', 'preserveNewerPlayerData', 'readRoomStateForUpdate', 'mutateRoomState', 'mutateRoomStateFast',
     'writeRoomState', 'persistPatchedState', 'applyPlayerStateUpdate',
     'persistStateForContext', 'persistStatePatchForContext', 'handleStatePatchRelay',
-    'handlePlayerPatchRelay', 'handleInitiativeLiveRelay', 'applyInitiativeUpdates',
+    'handlePlayerPatchRelay', 'handleSheetPatchRelay', 'handleInitiativeLiveRelay', 'applyInitiativeUpdates',
     'canControlPlayer', 'setTokenAccessForContext', 'handleDiceEventRelay',
     'applyCombatCommand', 'handleCombatCommandRelay'
   ]), context);
-  return { context, clients, database: () => database, tick, tokenOwnerWrites, stateReadMetrics, cachedStates };
+  return { context, clients, database: () => database, tick, tokenOwnerWrites, stateReadMetrics, cachedStates, queries };
 }
 
 
