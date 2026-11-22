@@ -1,0 +1,61 @@
+/* Layout and outer room shell only. Existing panel, token and sheet themes
+   remain scoped to their own stylesheets. */
+#main-container{box-sizing:border-box;padding:10px 68px 20px 12px;gap:12px;background:radial-gradient(ellipse at 40% 0,#9e7b3410,transparent 65%)}
+#main-container>#status-bar{margin:0;border:1px solid #a58a535e;border-radius:12px;background:linear-gradient(120deg,#293027ed,#18231ff2);box-shadow:inset 0 1px #f4e1ac10,0 5px 18px #0003}
+#main-container>#content-row{--workspace-height:clamp(560px,calc(100dvh - 420px),960px);display:grid;grid-template-columns:522px minmax(0,1fr) 282px;gap:12px;align-items:stretch;height:auto;min-height:var(--workspace-height);grid-auto-rows:minmax(var(--workspace-height),auto);padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible;width:100%;box-sizing:border-box}
+#content-row>#action-log-container{box-sizing:border-box;display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:12px;width:100%;min-width:0;height:100%;min-height:0;align-self:stretch;padding:0;contain:size}
+#action-log-container>#action-log{height:auto;min-height:0;max-height:none}
+#action-log-container>#dice-stack{height:100%;min-height:0;margin:0;display:flex}
+#dice-stack>#dice-others{height:100%;min-height:0;display:flex;flex-direction:column}
+#dice-others>.dice-others__title,#dice-inline-controls{flex:none}
+#dice-stack .dice-table{display:flex;flex-direction:column;flex:1;min-height:0}
+#dice-stack .dice-table__stage{height:auto;min-height:70px;flex:1;max-height:none}
+#dice-stack .dice-table__caption,#dice-stack .dice-table__summary,#dice-stack .dice-table__pending{flex:none}
+#dice-stack .dice-others__list{flex:none;max-height:40px}
+#content-row>#game-container{box-sizing:border-box;min-width:0;width:100%;height:auto;min-height:0;margin:0;padding:0;border:1px solid #ad945657;border-radius:12px;background:linear-gradient(155deg,#222a23d9,#111a16f0);box-shadow:inset 0 1px #e8cf9620,0 5px 18px #0003;overflow:hidden}
+#game-container>#board-row{width:100%;height:100%;min-height:var(--workspace-height);min-width:0;display:flex;align-items:stretch;gap:0;flex-wrap:nowrap}
+#board-row>#board-col{box-sizing:border-box;width:100%;max-width:100%;height:auto;min-height:var(--workspace-height);min-width:0;gap:0;align-items:stretch}
+#board-col>#board-topbar{box-sizing:border-box;width:100%;max-width:100%;flex:none;padding:8px;border-bottom:1px solid #ac935030;background:transparent}
+#board-topbar:has(#current-turn[hidden]):has(#board-settings[style*="display:none"]){padding:0;border:0}
+#board-col>#board-wrapper{box-sizing:border-box;min-width:0;max-width:100%;max-height:100%;align-self:center;flex:1 1 auto;border:0;border-radius:0 0 11px 11px}
+#board-col>#initiative-warning{flex:none;padding:5px 9px;font-size:12px}
+#content-row>#combat-side-column{box-sizing:border-box;width:100%;min-width:0;height:100%;min-height:0;margin:0;border:0;display:flex;flex-direction:column;contain:size;gap:10px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#8e784c #17221c}
+#combat-side-column>#turn-order-box{box-sizing:border-box;min-height:0;max-height:none;flex:1 1 auto;margin:0;overflow-y:auto}
+#combat-side-column>#initiative-players-box{box-sizing:border-box;width:100%;min-width:0;min-height:150px;flex:1 1 auto;max-height:none}
+/* A small creation card and a much wider roster span the complete room. */
+#main-container>#action-bottom-row{box-sizing:border-box;display:grid;grid-template-columns:280px minmax(0,1fr);gap:12px;flex:none;width:100%;min-width:0;min-height:0;align-items:start}
+#main-container>#action-bottom-row::after{display:none}
+#action-bottom-row>#left-tools-stack,#action-bottom-row>#player-side-stack{width:100%;min-width:0;min-height:0;border:0}
+#action-bottom-row #player-management{box-sizing:border-box;width:100%;min-width:0;max-height:none}
+#player-management #player-controls{margin-bottom:0}
+#player-management .pm-row--bottom{flex-direction:column;align-items:stretch;gap:8px}
+#player-management .pm-types{flex-direction:row;flex-wrap:wrap;gap:7px 12px}
+#player-management #add-player{box-sizing:border-box;width:100%;max-width:none;min-height:31px}
+#action-bottom-row #player-list-container{box-sizing:border-box;position:relative;width:100%;min-width:0;height:340px;max-height:none;display:grid;grid-template-columns:auto minmax(160px,1fr) auto;grid-template-rows:auto auto minmax(0,1fr);gap:8px 12px;padding:12px;overflow:hidden}
+#player-list-container>.room-panel-heading{grid-column:1/-1;margin:0;padding-bottom:8px}
+#player-list-container>.player-list-tabs{grid-column:1;grid-row:2;margin:0;min-width:280px}
+#player-list-container>.roster-search{grid-column:2;grid-row:2;display:flex;align-items:center;gap:8px;min-width:0;color:#b7ae94;font-size:11px}
+.roster-search input{box-sizing:border-box;width:100%;min-width:0;height:32px;padding:6px 9px;border:1px solid #a88e584f;border-radius:6px;background:#101b16;color:#e9dcc0;font-size:12px}
+#player-list-container>.roster-count{grid-column:3;grid-row:2;align-self:center;white-space:nowrap;color:#b2a88c;font-size:11px}
+#player-list-container>#player-list{grid-column:1/-1;grid-row:3;display:flex;gap:10px;min-height:0;min-width:0;overflow:auto;padding:0 0 5px;align-items:stretch;scrollbar-width:thin;scrollbar-color:#a0844f #17201a}
+#player-list>.owner-group{flex:0 0 auto;width:max-content;max-width:none;min-width:220px;margin:0;display:flex;flex-direction:column;padding:7px}
+#player-list .owner-header{flex:none;align-items:center}
+#player-list .owner-players{display:grid;grid-auto-flow:column;grid-auto-columns:220px;gap:8px;align-items:start;flex:1}
+#player-list .player-list-item{height:auto;margin:0}
+#player-list .roster-empty{align-self:center;flex:1;min-width:200px;padding:18px;color:#ada58c;font-size:12px;text-align:center;list-style:none}
+/* The floating tool rail receives the same quieter outer-shell treatment. */
+#main-container .gm-quick-toolbar{border-color:#ad94565c;background:linear-gradient(170deg,#293027f5,#17211df5);box-shadow:inset 0 1px #f3dfa215,0 6px 22px #0005}
+#main-container .gm-quick-toolbar__btn{border-color:#ab90503d;background:#d6bd7d08;color:#e8d7b1;border-radius:7px}
+#main-container .gm-quick-toolbar__btn:hover{border-color:#c1a367aa;background:#ab8c3e22}
+@media(max-width:1250px) and (min-width:1001px){#main-container>#content-row{grid-template-columns:320px minmax(0,1fr) 282px;gap:10px}#dice-inline-controls{gap:6px;padding:7px}#dice-inline-controls .dice-inline-hint{display:none}#dice-inline-controls #roll{min-width:90px;padding:6px 10px}}
+@media(max-width:1100px) and (min-width:861px){#main-container>#content-row{grid-template-columns:280px minmax(0,1fr) 282px}#dice-inline-controls #roll{flex:1 0 100%;width:100%}}
+@media(max-width:1000px){#main-container{padding:8px;gap:10px}#main-container>#content-row{height:auto;min-height:0;grid-auto-rows:auto;grid-template-columns:minmax(0,1fr);gap:10px}#content-row>#action-log-container{grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:340px;height:auto}#content-row>#game-container{grid-row:1;height:560px}#content-row>#combat-side-column{grid-row:3;max-height:400px;height:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#main-container>#action-bottom-row{grid-template-columns:230px minmax(0,1fr);gap:10px}#player-list-container>.player-list-tabs{min-width:0;grid-column:1/-1}#action-bottom-row #player-list-container{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto auto minmax(0,1fr);height:360px}#player-list-container>.roster-search{grid-row:3;grid-column:1}#player-list-container>.roster-count{grid-row:3;grid-column:2}#player-list-container>#player-list{grid-row:4}#dice-inline-controls .dice-inline-hint{display:none}#dice-inline-controls #roll{flex:1 0 100%;width:100%}}
+@media(max-width:560px){#content-row>#action-log-container{grid-template-columns:minmax(0,1fr);grid-template-rows:repeat(2,320px)}#content-row>#game-container{height:500px}#content-row>#combat-side-column{grid-template-columns:minmax(0,1fr)}#main-container>#action-bottom-row{grid-template-columns:minmax(0,1fr)}#player-management #player-controls{display:grid;grid-template-columns:1fr 1fr;align-items:center}#player-management .pm-row--bottom{grid-column:1/-1;flex-direction:row;align-items:center;gap:8px}#player-management .pm-types{flex:1}#player-management #add-player{width:auto;min-width:100px}#player-list-container>.roster-search span{display:none}#dice-inline-controls #roll{flex:0 0 auto;width:auto}}
+
+@media(max-width:1000px){#main-container .gm-quick-toolbar{position:fixed;top:auto;bottom:10px;flex-direction:row;width:auto;padding:6px;gap:5px}#main-container .gm-quick-toolbar__btn{width:34px;min-width:34px;height:34px}#main-container .gm-quick-toolbar.is-panel-open{transform:none}#main-container #right-panel{top:auto;bottom:62px;right:8px;max-height:calc(100dvh - 85px);overflow-y:auto}}
+
+#player-list .owner-header{position:sticky;left:0;align-self:flex-start;width:100%;max-width:220px;z-index:1}
+
+@media(max-width:1000px){#game-container>#board-row,#board-row>#board-col{min-height:0;height:100%}}
+
+@media(max-width:1000px){#content-row>#action-log-container,#content-row>#combat-side-column{contain:none}}

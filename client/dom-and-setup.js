@@ -115,6 +115,7 @@ const boardWrapper = document.getElementById('board-wrapper');
 const playerList = document.getElementById('player-list');
 const playerTabMineBtn = document.getElementById('player-tab-mine');
 const playerTabOthersBtn = document.getElementById('player-tab-others');
+const playerTabAllBtn = document.getElementById('player-tab-all');
 const logList = document.getElementById('log-list');
 const currentPlayerSpan = document.getElementById('current-player');
 const nextTurnBtn = document.getElementById('next-turn');
@@ -335,7 +336,7 @@ const createCampaignMapBtn = document.getElementById('create-campaign-map');
 // ===== Tabs for "Пользователи и персонажи" =====
 // dom-and-setup.js загружается ДО message-ui.js, поэтому здесь делаем безопасную прокладку.
 function setPlayerListViewSafe(view) {
-  const v = (view === 'others') ? 'others' : 'mine';
+  const v = ['mine','others','all'].includes(view) ? view : 'mine';
   window.PLAYER_LIST_VIEW = v;
 
   // Если message-ui уже подгружен — используем его хелпер (обновит список и классы)
@@ -346,6 +347,7 @@ function setPlayerListViewSafe(view) {
 
   // Иначе — просто подсветим вкладки (список обновится позже при первом updatePlayerList)
   try {
+    if(playerTabAllBtn){playerTabAllBtn.classList.toggle('active',v==='all');playerTabAllBtn.setAttribute('aria-selected',String(v==='all'));}
     if (playerTabMineBtn) {
       playerTabMineBtn.classList.toggle('active', v === 'mine');
       playerTabMineBtn.setAttribute('aria-selected', v === 'mine' ? 'true' : 'false');
@@ -358,12 +360,16 @@ function setPlayerListViewSafe(view) {
 }
 
 // default view
-if (!window.PLAYER_LIST_VIEW) window.PLAYER_LIST_VIEW = 'mine';
+if (!window.PLAYER_LIST_VIEW) window.PLAYER_LIST_VIEW = 'all';
 setPlayerListViewSafe(window.PLAYER_LIST_VIEW);
 
 if (playerTabMineBtn) {
   playerTabMineBtn.addEventListener('click', () => setPlayerListViewSafe('mine'));
 }
+playerTabAllBtn?.addEventListener('click',()=>setPlayerListViewSafe('all'));
+const rosterSearch=document.getElementById('player-search');
+let rosterSearchTimer;
+rosterSearch?.addEventListener('input',()=>{clearTimeout(rosterSearchTimer);rosterSearchTimer=setTimeout(()=>window.updatePlayerList?.(),90);});
 if (playerTabOthersBtn) {
   playerTabOthersBtn.addEventListener('click', () => setPlayerListViewSafe('others'));
 }

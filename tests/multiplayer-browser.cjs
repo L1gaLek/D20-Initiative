@@ -258,6 +258,7 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    if(process.env.D20_WORKSPACE_ONLY){await require('./helpers/room-workspace-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_PANELS_ONLY){await require('./helpers/room-panels-scenarios.cjs')({pages,requests,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_PERSONAL_ONLY){await require('./helpers/personal-settings-scenarios.cjs')({pages,requests,characterHarness,screenshotDir,h,broadcast});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_DICE_ONLY){await require('./helpers/dice-table-scenarios.cjs')({pages,h,broadcast,requests,base,screenshotDir});assert.deepEqual(errors,[]);return;}

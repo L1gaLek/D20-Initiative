@@ -1847,13 +1847,15 @@ function roleToClass(role) {
 }
 
 // ===== Tabs state for "Пользователи и персонажи" =====
-let playerListView = (window.PLAYER_LIST_VIEW === 'others') ? 'others' : 'mine';
+let playerListView = (['mine','others','all'].includes(window.PLAYER_LIST_VIEW)) ? window.PLAYER_LIST_VIEW : 'all';
 window.PLAYER_LIST_VIEW = playerListView;
 
 function applyPlayerListTabUI() {
   try {
     const mineBtn = document.getElementById('player-tab-mine');
     const othersBtn = document.getElementById('player-tab-others');
+    const allBtn = document.getElementById('player-tab-all');
+    if(allBtn){allBtn.classList.toggle('active',playerListView==='all');allBtn.setAttribute('aria-selected',String(playerListView==='all'));}
     if (mineBtn) {
       mineBtn.classList.toggle('active', playerListView === 'mine');
       mineBtn.setAttribute('aria-selected', playerListView === 'mine' ? 'true' : 'false');
@@ -1866,7 +1868,7 @@ function applyPlayerListTabUI() {
 }
 
 window.setPlayerListView = (view) => {
-  playerListView = (view === 'others') ? 'others' : 'mine';
+  playerListView = ['mine','others','all'].includes(view) ? view : 'mine';
   window.PLAYER_LIST_VIEW = playerListView;
   applyPlayerListTabUI();
   updatePlayerList();
@@ -2024,7 +2026,7 @@ function openBanUserModal(userId, userName) {
 function updatePlayerList() {
   if (!playerList) return;
   // sync from global (in case dom-and-setup changed it before this file loaded)
-  playerListView = (window.PLAYER_LIST_VIEW === 'others') ? 'others' : 'mine';
+  playerListView = (['mine','others','all'].includes(window.PLAYER_LIST_VIEW)) ? window.PLAYER_LIST_VIEW : 'all';
   applyPlayerListTabUI();
   playerList.innerHTML = '';
 
@@ -2057,7 +2059,7 @@ function updatePlayerList() {
   const myIdStr = (typeof myId !== 'undefined' && myId !== null) ? String(myId) : '';
   if (playerListView === 'mine') {
     orderedOwnerIds = myIdStr ? [myIdStr] : [];
-  } else {
+  } else if(playerListView==='others') {
     orderedOwnerIds = orderedOwnerIds.filter((oid) => String(oid) !== myIdStr);
   }
 
@@ -2078,7 +2080,7 @@ function updatePlayerList() {
     // if view is filtered, skip non-matching players
     if (playerListView === 'mine') {
       if (!canControlToken(p, myIdStr, 'Player')) return;
-    } else {
+    } else if(playerListView==='others') {
       if (canControlToken(p, myIdStr, 'Player')) return;
     }
     const oid = String(p.ownerId || '');
@@ -2089,7 +2091,13 @@ function updatePlayerList() {
     grouped.get(oid).players.push(p);
   });
 
+  const query=String(document.getElementById('player-search')?.value||'').trim().toLocaleLowerCase('ru');
+  const total=[...grouped.values()].reduce((sum,group)=>sum+group.players.length,0);let shown=0;
   Array.from(grouped.entries()).forEach(([ownerId, group]) => {
+    const ownerMatches=String(usersById.get(ownerId)?.name||group.ownerName||'').toLocaleLowerCase('ru').includes(query);
+    if(query&&!ownerMatches)group.players=group.players.filter(p=>String(p.name||'').toLocaleLowerCase('ru').includes(query));
+    if(query&&!ownerMatches&&!group.players.length)return;
+    shown+=group.players.length;
     const userInfo = ownerId ? usersById.get(ownerId) : null;
 
     const ownerLi = document.createElement('li');
@@ -2378,6 +2386,8 @@ function updatePlayerList() {
     playerList.appendChild(ownerLi);
   });
 
+  const count=document.getElementById('player-list-count');const form=total%10===1&&total%100!==11?'персонаж':total%10>=2&&total%10<=4&&(total%100<12||total%100>14)?'персонажа':'персонажей';if(count)count.textContent=(query?shown+' из ':'')+total+' '+form;
+  if(!playerList.children.length){const empty=document.createElement('li');empty.className='roster-empty';empty.textContent=query?'Персонажи не найдены':'В этой группе пока нет персонажей';playerList.append(empty);}
   try { syncSelectedPlayerUi(); } catch {}
   try { renderInitiativePlayersBox(lastState || null); } catch {}
 }

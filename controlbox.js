@@ -10,6 +10,7 @@
 
   function readIntLs(key, fallback) {
     const raw = (typeof getAppStorageItem === "function" ? getAppStorageItem(key) : localStorage.getItem(key));
+    if(raw===null||raw===undefined||String(raw).trim()==='')return fallback;
     const n = Number(raw);
     return Number.isFinite(n) ? n : fallback;
   }

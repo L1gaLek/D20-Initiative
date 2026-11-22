@@ -9,7 +9,7 @@ module.exports=async({pages,requests,screenshotDir})=>{
       return {before,after:{journal:rect('action-log'),people:rect('player-list-container'),tray:rect('dice-others')}};
     });
     assert.equal(sizes.after.journal.w,sizes.before.journal.w);assert.equal(sizes.after.people.w,sizes.before.people.w);
-    assert.equal(sizes.after.tray.w,sizes.after.journal.w);assert.ok(sizes.after.tray.h>sizes.before.tray.h,JSON.stringify(sizes));
+    assert.equal(sizes.after.tray.w,sizes.after.journal.w);if(await page.locator('[href*="room-workspace.css"]').count())assert.ok(Math.abs(sizes.after.tray.h-sizes.after.journal.h)<1);else assert.ok(sizes.after.tray.h>sizes.before.tray.h,JSON.stringify(sizes));
     assert.equal(await page.locator('#dice-viz').count(),0);assert.equal(await page.locator('#dice-canvas').count(),0);
     assert.equal(await page.locator('#dice-table-title').textContent(),'Стол для бросков');
     assert.equal(await page.locator('#dice-inline-controls').isVisible(),true);
