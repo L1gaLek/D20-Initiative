@@ -1131,6 +1131,7 @@ const weapons = weaponsRaw
   }
 
   const sheetSaveDrafts = new Map();
+  const sheetDraftContexts = new Map();
   const sheetSyncBases = new Map();
   const sheetModelSnapshots = new WeakMap();
   function rememberSheetSyncBase(player) {
@@ -1151,8 +1152,8 @@ const weapons = weaponsRaw
     scheduleSheetSave(model);
   }
 
-  function acknowledgeSheetPatch(playerId, requestId, updatedAt) {
-    const key = sheetDraftKey(playerId), draft = sheetSaveDrafts.get(key);
+  function acknowledgeSheetPatch(playerId, requestId, updatedAt, context = ctx) {
+    const key = sheetDraftKey(playerId, context), draft = sheetSaveDrafts.get(key);
     if (!draft || draft.inFlight?.requestId !== requestId) return;
     const confirmed = draft.inFlight.ops;
     draft.ops = draft.ops.filter(op => !confirmed.some(saved => JSON.stringify(saved) === JSON.stringify(op)));
@@ -1160,7 +1161,7 @@ const weapons = weaponsRaw
     if (draft.ops.length) {
       // Only unsent changes remain. Never resend an acknowledged HP/equipment
       // value with later notes and overwrite a concurrent controller's edit.
-      const live = ctx?.getPlayers?.()?.find(player => String(player.id) === String(playerId));
+      const live = context?.getPlayers?.()?.find(player => String(player.id) === String(playerId));
       if (live?.sheet) { draft.baseSheet = deepClone(live.sheet); draft.sheet = SheetSync.apply(live.sheet, draft.ops); }
       try { localStorage.setItem(key, JSON.stringify(draft)); } catch {}
       if (draft.ops.some(SheetSync.isHot)) flushSheetSaves(playerId);
@@ -1170,14 +1171,15 @@ const weapons = weaponsRaw
     if (openedSheetPlayer && String(openedSheetPlayer.id) === String(playerId) && Number.isFinite(Number(updatedAt))) openedSheetPlayer.sheetUpdatedAt = Number(updatedAt);
     sheetSyncBases.set(key, deepClone(draft.sheet));
     sheetSaveDrafts.delete(key);
+    sheetDraftContexts.delete(key);
     clearTimeout(sheetSaveTimers.get(String(playerId)));
     sheetSaveTimers.delete(String(playerId));
     try { localStorage.removeItem(key); } catch {}
   }
 
-  function sheetDraftKey(playerId) {
-    const owner = String(ctx?.getMyId?.() || '');
-    const room = String(ctx?.getRoomId?.() || '');
+  function sheetDraftKey(playerId, context = ctx) {
+    const owner = String(context?.getMyId?.() || '');
+    const room = String(context?.getRoomId?.() || '');
     return owner && room && playerId ? `d20_sheet_draft_v1:${owner}:${room}:${playerId}` : '';
   }
 
@@ -1209,6 +1211,7 @@ const weapons = weaponsRaw
     if (!key || !canEditPlayer(player)) return;
     sheetSyncBases.set(key, deepClone(player.sheet));
     sheetModelSnapshots.set(player, deepClone(player.sheet));
+    sheetDraftContexts.set(key, ctx);
     let draft = sheetSaveDrafts.get(key);
     if (!draft) {
       try { draft = JSON.parse(localStorage.getItem(key) || 'null'); } catch {}
@@ -1244,9 +1247,10 @@ const weapons = weaponsRaw
     if (!ctx?.sendMessage) return;
     for (const [key, draft] of sheetSaveDrafts) {
       if (playerId && String(draft.id) !== String(playerId)) continue;
-      if (key !== sheetDraftKey(draft.id)) continue;
-        const live = ctx?.getPlayers?.()?.find(player => String(player.id) === String(draft.id));
-        if (live && !canEditPlayer(live)) continue;
+      const transport = sheetDraftContexts.get(key) || ctx;
+      if (key !== sheetDraftKey(draft.id, transport)) continue;
+      const live = transport?.getPlayers?.()?.find(player => String(player.id) === String(draft.id));
+      if (live && !transport?.personal && transport?.getMyRole?.() !== 'GM' && !window.canControlToken?.(live, transport?.getMyId?.(), transport?.getMyRole?.())) continue;
       clearTimeout(sheetSaveTimers.get(String(draft.id)));
       sheetSaveTimers.delete(String(draft.id));
       try {
@@ -1257,7 +1261,7 @@ const weapons = weaponsRaw
           try { localStorage.setItem(key, JSON.stringify(draft)); } catch {}
         }
         const batch = draft.inFlight || draft;
-        Promise.resolve(ctx.sendMessage({
+        Promise.resolve(transport.sendMessage({
           type: draft.ops?.length ? 'patchPlayerSheet' : 'setPlayerSheet', id: draft.id,
           ...(draft.ops?.length ? { ops: deepClone(batch.ops), requestId: batch.requestId } : { sheet: deepClone(draft.sheet) }),
           sheetUpdatedAt: batch.sheetUpdatedAt
@@ -1289,6 +1293,7 @@ const weapons = weaponsRaw
     const draft = { id, sheet: deepClone(player.sheet), baseSheet: deepClone(baseSheet), ops,
       requestId: crypto.randomUUID(), inFlight: previous?.inFlight || null, sheetUpdatedAt: updatedAt };
     sheetSaveDrafts.set(key, draft);
+    sheetDraftContexts.set(key, ctx);
     try { localStorage.setItem(key, JSON.stringify(draft)); } catch {}
     if (delta.some(SheetSync.isHot)) flushSheetSaves(id);
     else sheetSaveTimers.set(id, setTimeout(() => flushSheetSaves(id), 450));

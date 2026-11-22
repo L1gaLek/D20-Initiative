@@ -35,6 +35,21 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   const accepted=await other.evaluate(()=>DiceTable.inspect().accepted);
   broadcast({type:'diceEvent',roomId:'test-room',event:{localNonce:'dice-table-d20',fromId:'user-1',fromName:'Альрик',sides:20,count:1,rolls:[17],total:17}});
   await other.waitForTimeout(100);assert.equal(await other.evaluate(()=>DiceTable.inspect().accepted),accepted);
+  await owner.keyboard.press('Shift');
+  const sounds=await owner.evaluate(()=>DiceCriticalFeedback.inspect().played);
+  await send({localNonce:'critical-pair',sides:20,count:3,rolls:[20,1,13],total:34,kindText:'Инициатива'});
+  await settled(owner,34);
+  const critical=await owner.evaluate(()=>DiceTable.inspect());
+  assert.deepEqual(critical.dice.map(d=>d.critical),['success','failure','']);assert.equal(critical.criticalEffects,2);
+  assert.equal(await owner.evaluate(()=>DiceCriticalFeedback.inspect().played),sounds+2);
+  await picture(owner,'dice-critical-pair');
+  await owner.waitForFunction(()=>!DiceTable.inspect().celebrating);
+  const criticalFrames=await owner.evaluate(()=>DiceTable.inspect().framesRendered);await owner.waitForTimeout(150);assert.equal(await owner.evaluate(()=>DiceTable.inspect().framesRendered),criticalFrames);
+  const count=await owner.evaluate(()=>DiceCriticalFeedback.inspect().played);
+  broadcast({type:'diceEvent',roomId:'test-room',event:{localNonce:'critical-pair',fromId:'user-1',fromName:'Альрик',sides:20,count:3,rolls:[20,1,13],total:34}});
+  await owner.waitForTimeout(120);assert.equal(await owner.evaluate(()=>DiceCriticalFeedback.inspect().played),count);
+  await picture(owner,'dice-critical-d20');
+  console.log('PASS critical: natural 20/1 each have their own halo and sound, initiative included, duplicates stay silent, effect loop stops');
   console.log('PASS dice: real dice relay reaches all five clients including the roller, d20 lands on 17, motion stops, and duplicate echoes do not replay');
 
   const delayed={fromId:'user-2',fromName:'Сари',localNonce:'log-before-dice',sides:20,count:1,rolls:[18],total:18,kindText:'Запоздавший бросок'};

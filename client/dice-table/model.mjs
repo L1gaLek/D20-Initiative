@@ -70,6 +70,7 @@ export function faceLabels(shape, upFace, value, mode='normal') {
 }
 export function seedNumber(text) { let h=2166136261;for(const c of String(text)){h^=c.charCodeAt(0);h=Math.imul(h,16777619);}return h>>>0; }
 export function random(seed){let state=seed>>>0;return()=>{state+=0x6D2B79F5;let x=state;x=Math.imul(x^x>>>15,x|1);x^=x+Math.imul(x^x>>>7,x|61);return((x^x>>>14)>>>0)/4294967296;};}
+export function criticalKind(die) { return Number(die.sides)===20 ? (Number(die.value)===20?'success':Number(die.value)===1?'failure':'') : ''; }
 export function normalizeEvent(event) {
   const rolls=Array.isArray(event?.rolls)?event.rolls.map(Number):[];
   if(!rolls.length||rolls.some(v=>!Number.isInteger(v)))return null;
@@ -84,6 +85,7 @@ export function normalizeEvent(event) {
     {sides:10,value:Math.floor((die.value%100)/10)||10,mode:'tens',rollIndex:index},
     {sides:10,value:die.value%10||10,mode:'ones',rollIndex:index}
   ]:[{...die,mode:'normal',rollIndex:index}]);
+  physical.forEach(die=>{die.critical=criticalKind(die);});
   const nonce=String(event.localNonce||event.id||''),name=String(event.fromName||'Игрок').slice(0,120);
   const seed=[event.fromId,nonce,event.sides,rolls.join(','),event.total].join('|');
   return {dice:physical.slice(0,200),omitted:Math.max(0,physical.length-200),rolls,name,

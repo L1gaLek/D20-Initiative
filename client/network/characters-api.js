@@ -51,6 +51,7 @@
     listSavedBases,
     saveSavedBase,
     getSavedBase,
-    deleteSavedBase
+    deleteSavedBase,
+    patchSavedBase: (id, body) => getVpsApiClient()('/characters/'+encodeURIComponent(normalizeSavedId(id)), { method: 'PATCH', body })
   });
 })();

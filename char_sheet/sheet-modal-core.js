@@ -73,4 +73,5 @@
     document.getElementById('sheet-affiliation')?.remove();
     if (sheetActions) sheetActions.innerHTML = "";
     if (sheetContent) sheetContent.innerHTML = "";
+    if (ctx?.personal) { const personal = ctx; ctx = personal.roomContext; window.__sheetCtx = ctx; personal.onClose?.(); }
   }

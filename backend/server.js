@@ -5,6 +5,7 @@ const DamageRolls = require('./shared/damage-rolls');
 const CombatState = require('./shared/combat-state');
 const RoomReadCache = require('./shared/room-read-cache');
 const SheetSync = require('./shared/sheet-sync');
+const { CharacterStore, metadata: characterMetadata } = require('./shared/character-store');
 const RoomEventJournal = require('./shared/room-event-journal');
 const WsScheduler = require('./shared/ws-scheduler');
 const { AsyncLocalStorage } = require('async_hooks');
@@ -91,6 +92,8 @@ const pool = new Pool({
   idleTimeoutMillis: 60_000,
   connectionTimeoutMillis: 10_000
 });
+
+const characterStore = new CharacterStore(pool);
 
 const s3 = new S3Client({
   region: S3_REGION,
@@ -2793,7 +2796,8 @@ app.get('/api/characters', async (req, res) => {
     const userId = requireRequestActor(req).userId;
     const { rows } = await pool.query(
       `
-        select id, name, updated_at
+        select id, name, updated_at, state->>'characterKey' as character_key,
+          state->>'saveLabel' as save_label, state->>'savedAt' as saved_at
         from public.characters
         where user_id = $1
         order by updated_at desc
@@ -2802,11 +2806,7 @@ app.get('/api/characters', async (req, res) => {
     );
     return res.json({
       ok: true,
-      list: rows.map((row) => ({
-        id: String(row.id || ''),
-        name: String(row.name || ''),
-        updatedAt: row.updated_at
-      }))
+      list: rows.map(characterMetadata)
     });
   } catch (error) {
     console.error('[characters list] failed:', error);
@@ -2871,29 +2871,23 @@ app.get('/api/characters/:characterId', async (req, res) => {
     const userId = requireRequestActor(req).userId;
     const characterId = normalizeSafeId(req.params.characterId, ENTITY_ID_RE);
     if (!characterId) return httpError(res, 400, 'characterId is required');
-    const { rows } = await pool.query(
-      `
-        select id, name, state, updated_at
-        from public.characters
-        where id = $1 and user_id = $2
-        limit 1
-      `,
-      [characterId, userId]
-    );
-    if (!rows.length) return httpError(res, 404, 'Character not found');
-    const row = rows[0];
-    return res.json({
-      ok: true,
-      character: {
-        id: String(row.id || ''),
-        name: String(row.name || ''),
-        state: row.state || null,
-        updatedAt: row.updated_at
-      }
-    });
+    const character = await characterStore.get(userId, characterId);
+    return res.json({ ok: true, character });
   } catch (error) {
     console.error('[characters get] failed:', error);
     return res.status(statusFromError(error, /required|invalid|not found/i)).json({ ok: false, error: error?.message || 'Character load failed' });
+  }
+});
+
+app.patch('/api/characters/:characterId', async (req, res) => {
+  try {
+    const userId = requireRequestActor(req).userId;
+    const characterId = normalizeSafeId(req.params.characterId, ENTITY_ID_RE);
+    if (!characterId) return httpError(res, 400, 'characterId is required');
+    const result = await characterStore.patch(userId, characterId, req.body || {});
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    return res.status(statusFromError(error, /required|invalid|missing/i, 500)).json({ ok: false, error: error.message || 'Character update failed' });
   }
 });
 
@@ -2906,6 +2900,7 @@ app.delete('/api/characters/:characterId', async (req, res) => {
       'delete from public.characters where id = $1 and user_id = $2',
       [characterId, userId]
     );
+    characterStore.forget(userId, characterId);
     return res.json({ ok: true });
   } catch (error) {
     console.error('[characters delete] failed:', error);

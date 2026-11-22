@@ -162,7 +162,7 @@ function sheetHarness(storage = new Map()) {
       const value=clone(message); if(value.ops)value.sheet=require('../backend/shared/sheet-sync').apply(initialState().players[0].sheet,value.ops);
       sent.push(value);
     } },
-    sheetSaveTimers: new Map(), sheetSaveDrafts: new Map(), sheetSyncBases: new Map(), sheetModelSnapshots:new WeakMap(),
+    sheetSaveTimers: new Map(), sheetSaveDrafts: new Map(), sheetDraftContexts: new Map(), sheetSyncBases: new Map(), sheetModelSnapshots:new WeakMap(),
     uiStateByPlayerId: new Map(),
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     setTimeout: callback => { const id = ++counter; timers.set(id, callback); return id; },

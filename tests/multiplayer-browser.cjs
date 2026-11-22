@@ -41,6 +41,7 @@ let diceId = 0;
 let rejectFirstRoll = true;
 let dropNextCombatAck = false;
 const requests = [];
+const characterHarness = require('./helpers/character-harness.cjs')();
 const diagnostics = [];
 function stamp(payload) { return { ...payload, __serverEvent: true, __eventSeq: ++seq }; }
 function broadcast(payload, except) {
@@ -87,8 +88,17 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) {
       const userId = String(req.headers.authorization || '').replace('Bearer ', '');
       const ctx = h.clients.find(c => c.ctx.userId === userId)?.ctx;
-      const data = req.method === 'POST' ? await body(req) : {};
+      const data = ['POST','PATCH'].includes(req.method) ? await body(req) : {};
       requests.push({ path: url.pathname, userId, data });
+      if (url.pathname === '/api/characters') {
+        if(req.method==='POST')return json(res,{ok:true,character:characterHarness.add(userId,data.name,data.state)});
+        return json(res,{ok:true,list:characterHarness.list(userId)});
+      }
+      if (url.pathname.startsWith('/api/characters/')) {
+        const id=url.pathname.split('/').at(-1);
+        if(req.method==='PATCH')return json(res,{ok:true,...await characterHarness.store.patch(userId,id,data)});
+        return json(res,{ok:true,character:await characterHarness.store.get(userId,id)});
+      }
       if (url.pathname.endsWith('/initiative')) {
         const payload = await h.context.applyInitiativeUpdates(ctx, data);
         broadcast(payload);
@@ -240,6 +250,7 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    if(process.env.D20_PERSONAL_ONLY){await require('./helpers/personal-settings-scenarios.cjs')({pages,requests,characterHarness,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_DICE_ONLY){await require('./helpers/dice-table-scenarios.cjs')({pages,h,broadcast,requests,base,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(syncMode){await require('./helpers/live-sync-scenarios.cjs')({pages,h,mapHarness,syncControls,waitFor});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_EGRESS_ONLY){await require('./helpers/egress-scenarios.cjs')({pages,h});assert.deepEqual(errors,[]);return;}

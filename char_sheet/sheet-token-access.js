@@ -54,6 +54,8 @@ function renderTokenAccessControls(player) {
     sheetSubtitle.after(bar);
   }
   bar.replaceChildren();
+  bar.hidden = !!ctx?.personal;
+  if (ctx?.personal) { tokenAccessView = null; document.getElementById('sheet-affiliation')?.remove(); return; }
   const role = window.normalizeRoleForApp?.(ctx?.getMyRole?.()) || ctx?.getMyRole?.();
   const uid = String(ctx?.getMyId?.() || '');
   const owner = String(player.ownerId || '');

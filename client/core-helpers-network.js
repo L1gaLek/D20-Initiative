@@ -2693,7 +2693,8 @@ async function sendMessage(msg) {
         const name = String(sheet?.parsed?.name?.value ?? sheet?.parsed?.name ?? sheet?.parsed?.profile?.name ?? "Персонаж").trim() || "Персонаж";
         const payload = await window.CharactersApi.saveSavedBase({
           name,
-          state: { schemaVersion: 1, savedAt: new Date().toISOString(), data: sheet }
+          state: { schemaVersion: 1, savedAt: new Date().toISOString(),
+            characterKey: sheet?.characterKey || String(msg.playerId || crypto.randomUUID()), data: sheet }
         });
         handleMessage({ type: "savedBaseSaved", id: payload?.character?.id, name: payload?.character?.name || name });
         break;
@@ -2721,6 +2722,7 @@ async function sendMessage(msg) {
           return;
         }
         p.sheet = deepClone(savedSheet);
+        p.sheet.characterKey = payload.character.state.characterKey || ('legacy:' + String(payload.character.name || 'Персонаж').trim().toLocaleLowerCase('ru'));
         try { p.sheetUpdatedAt = Date.now(); } catch {}
         try {
           const parsed = p.sheet?.parsed;

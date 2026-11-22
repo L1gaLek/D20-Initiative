@@ -1,5 +1,5 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
-import {polyhedron,faceLabels,seedNumber,random,PALETTE} from './model.mjs?v=20261122-dice-1';
+import {polyhedron,faceLabels,seedNumber,random,PALETTE} from './model.mjs?v=20261122-critical-1';
 
 const vec=v=>new THREE.Vector3(...v);
 function polygonGeometry(polygons) {
@@ -78,7 +78,7 @@ export function createDiceScene(host) {
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
   renderer.setClearColor(0x000000,0);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;
   renderer.domElement.className='dice-table__canvas';renderer.domElement.setAttribute('aria-hidden','true');host.prepend(renderer.domElement);
-  const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(),diceGroup=new THREE.Group(),tray=new THREE.Group();scene.add(tray,diceGroup);
+  const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(),diceGroup=new THREE.Group(),tray=new THREE.Group(),effects=new THREE.Group();scene.add(tray,diceGroup,effects);
   scene.add(new THREE.HemisphereLight(0xfff4d8,0x244c45,2.7));
   const key=new THREE.DirectionalLight(0xffe3b0,3.6);key.position.set(-3,9,5);key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.camera.left=-9;key.shadow.camera.right=9;key.shadow.camera.top=9;key.shadow.camera.bottom=-9;key.shadow.normalBias=.025;key.shadow.bias=-.0003;scene.add(key);
   const fill=new THREE.DirectionalLight(0x9dcfff,1.1);fill.position.set(3,4,-4);scene.add(fill);
@@ -118,9 +118,34 @@ export function createDiceScene(host) {
       group.quaternion.fromArray(plan.frames,ai+3).slerp(new THREE.Quaternion().fromArray(plan.frames,bi+3),t);
     });render();
   }
-  function finish(){cancelAnimationFrame(raf);raf=0;if(plan)paint(plan.frameCount-1);const done=resolveAnimation;resolveAnimation=null;done?.();}
+  let effectRaf=0;
+  function clearEffects(){cancelAnimationFrame(effectRaf);effectRaf=0;for(const group of [...effects.children]){group.traverse(node=>{node.geometry?.dispose();node.material?.dispose();});effects.remove(group);}}
+  function celebrate(reduced=false){
+    clearEffects();
+    for(const die of groups){
+      if(!die.userData.critical)continue;
+      const success=die.userData.critical==='success',color=success?0xffd466:0xff526b;
+      const aura=new THREE.Group();aura.position.copy(die.position);aura.position.y=.014;
+      for(let i=0;i<2;i++){
+        const ring=new THREE.Mesh(new THREE.RingGeometry(plan.radius*(1.2+i*.35),plan.radius*(1.27+i*.35),48),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.8-i*.2,depthWrite:false,side:THREE.DoubleSide}));
+        ring.rotation.x=-Math.PI/2;ring.position.y=i*.003;aura.add(ring);
+      }
+      for(let i=0;i<10;i++){
+        const a=i*Math.PI/5,spark=new THREE.Mesh(new THREE.OctahedronGeometry(plan.radius*.065,0),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.9}));
+        spark.position.set(Math.cos(a)*plan.radius*1.45,plan.radius*(.5+(i%3)*.4),Math.sin(a)*plan.radius*1.45);aura.add(spark);
+      }
+      effects.add(aura);
+    }
+    render();if(reduced||!effects.children.length)return;
+    const start=performance.now();
+    const animate=now=>{const p=Math.min(1,(now-start)/1500);
+      for(const aura of effects.children){aura.scale.setScalar(1+Math.sin(p*Math.PI*3)*.07);aura.children.forEach((node,i)=>{if(i>1){node.rotation.y=p*4;node.position.y+=.002;node.material.opacity=.9*(1-p*.7);}});}
+      render();if(p<1)effectRaf=requestAnimationFrame(animate);else effectRaf=0;
+    };effectRaf=requestAnimationFrame(animate);
+  }
+  function finish(){cancelAnimationFrame(effectRaf);effectRaf=0;cancelAnimationFrame(raf);raf=0;if(plan)paint(plan.frameCount-1);const done=resolveAnimation;resolveAnimation=null;done?.();}
   async function play(result,dice,seed,skipMotion=false){
-    finish();removeChildren(diceGroup,true);groups=[];plan=result;buildTray(plan.width,plan.depth);
+    finish();clearEffects();removeChildren(diceGroup,true);groups=[];plan=result;buildTray(plan.width,plan.depth);
     dice.forEach((die,i)=>{
       const shape=polyhedron(die.sides),cacheKey=die.sides+'-'+plan.radius;
       if(!geometryCache.has(cacheKey))geometryCache.set(cacheKey,beveledGeometry(shape,plan.radius));
@@ -141,8 +166,8 @@ export function createDiceScene(host) {
   const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(host);
   const onVisibility=()=>{if(document.hidden)finish();};document.addEventListener('visibilitychange',onVisibility);
   const onLoss=event=>{if(disposed)return;event.preventDefault();finish();host.dispatchEvent(new CustomEvent('dice-context-lost'));};renderer.domElement.addEventListener('webglcontextlost',onLoss);
-  return {play,finish,resize,inspect:()=>({framesRendered,animating:!!raf,frame:lastFrame,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
-    dice:groups.map(g=>({sides:g.userData.sides,value:g.userData.value,mode:g.userData.mode,upFace:g.userData.upFace,upLabel:g.userData.labels[g.userData.upFace],position:g.position.toArray(),quaternion:g.quaternion.toArray()}))}),
-    dispose(){if(disposed)return;finish();disposed=true;resizeObserver.disconnect();document.removeEventListener('visibilitychange',onVisibility);removeChildren(diceGroup,true);removeChildren(tray);for(const pair of geometryCache.values())pair.forEach(g=>g.dispose());[...materials,...bevelMaterials,labelMaterial,floorMaterial,wood,trim].forEach(m=>m.dispose());numbers.dispose();felt.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
+  return {play,finish,resize,celebrate,inspect:()=>({framesRendered,animating:!!raf,celebrating:!!effectRaf,criticalEffects:effects.children.length,frame:lastFrame,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,
+    dice:groups.map(g=>({sides:g.userData.sides,value:g.userData.value,critical:g.userData.critical,mode:g.userData.mode,upFace:g.userData.upFace,upLabel:g.userData.labels[g.userData.upFace],position:g.position.toArray(),quaternion:g.quaternion.toArray()}))}),
+    dispose(){if(disposed)return;finish();clearEffects();disposed=true;resizeObserver.disconnect();document.removeEventListener('visibilitychange',onVisibility);removeChildren(diceGroup,true);removeChildren(tray);for(const pair of geometryCache.values())pair.forEach(g=>g.dispose());[...materials,...bevelMaterials,labelMaterial,floorMaterial,wood,trim].forEach(m=>m.dispose());numbers.dispose();felt.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
   };
 }

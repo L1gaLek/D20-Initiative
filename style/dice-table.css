@@ -45,3 +45,5 @@
 .dice-table__fallback span{display:grid;place-items:center;min-width:28px;height:32px;padding:0 4px;border:1px solid #d4b477;border-radius:7px;background:linear-gradient(130deg,#264c57,#182f3a);color:#fff0d0;font:bold 15px Georgia,serif}
 .dice-table__stage--fallback .dice-table__canvas{display:none}
 @media(max-width:700px){.dice-others.dice-others--inline.dice-others--table{display:block}.dice-table-dialog{padding:10px}.dice-table-dialog__header strong{font-size:17px}}
+
+.dice-table__fallback [data-critical=success]{border-color:#ffe29b;box-shadow:0 0 0 2px #d0a34e,0 0 22px #f3bf4b88;color:#ffe6aa;animation:dice-critical-pulse 1.2s ease-in-out 2}.dice-table__fallback [data-critical=failure]{border-color:#ff7587;box-shadow:0 0 0 2px #b23d56,0 0 22px #e4477088;color:#ffacb8;animation:dice-critical-pulse 1.2s ease-in-out 2}@keyframes dice-critical-pulse{50%{filter:brightness(1.4);transform:scale(1.07)}}@media(prefers-reduced-motion:reduce){.dice-table__fallback [data-critical]{animation:none}}

@@ -787,7 +787,7 @@ const statSel = subEl.querySelector('[data-cpw-sub-stat]');
           const nm = String(sub.name || def.name || 'Способность');
           try {
             const fromName = String(player?.name || '');
-            if (typeof sendMessage === 'function') {
+            if (!ctx?.personal && typeof sendMessage === 'function') {
               sendMessage({ type: 'log', text: `${fromName} применил «${nm}»` });
             }
           } catch {}
@@ -2266,7 +2266,7 @@ function bindSlotEditors(root, player, canEdit) {
         const spellAction = getSpellActionConfig(sheet, href);
 
         try {
-          if (typeof sendMessage === 'function') {
+          if (!ctx?.personal && typeof sendMessage === 'function') {
             sendMessage({ type: 'log', text: `${who} применил ${kind}: ${nm}` });
           }
         } catch {}
@@ -2317,7 +2317,7 @@ function bindSlotEditors(root, player, canEdit) {
         }
 
         try {
-          if (typeof sendMessage === 'function' && rollRes) {
+          if (!ctx?.personal && typeof sendMessage === 'function' && rollRes) {
             const r = rollRes.rolls?.[0];
             const b = Number(rollRes.bonus) || 0;
             const bonusTxt = b ? ` ${b >= 0 ? '+' : '-'} ${Math.abs(b)}` : '';

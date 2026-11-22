@@ -1968,6 +1968,7 @@ function renderShopTab(vm, canEdit) {
           bindAppearanceUi(sheetContent, player, canEdit);
           bindLanguagesUi(sheetContent, player, canEdit);
           bindWildShapeTab(sheetContent, player, canEdit);
+          ctx?.decorateSheet?.(sheetActions, player);
           try { updateHeroChips(sheetContent, player.sheet?.parsed); } catch {}
           updateCoinsTotal(sheetContent, player.sheet?.parsed);
     // Авто-открытие магазина поверх листа при выборе вкладки
@@ -1981,6 +1982,7 @@ function renderShopTab(vm, canEdit) {
 
     // (скролл/взаимодействия уже повешены выше)
     rememberSheetSyncBase(player);
+    ctx?.decorateSheet?.(sheetActions, player);
   }
 
   // ================== PUBLIC API ==================
@@ -2005,6 +2007,7 @@ function renderShopTab(vm, canEdit) {
   }
 
   function refresh(players) {
+    if (ctx?.personal) return;
     if (!openedSheetPlayerId) return;
     if (!Array.isArray(players)) return;
     rememberPlayersSnapshot(players);
@@ -2064,6 +2067,14 @@ function renderShopTab(vm, canEdit) {
     open,
     refresh,
     refreshTokenAccess: refreshTokenAccessUsers,
+    openPersonal(player, context) {
+      closeModal();
+      ctx = { ...context, personal: true, roomContext: ctx };
+      window.__sheetCtx = ctx;
+      open(player);
+    },
+    getEditorPlayer: () => deepClone(openedSheetPlayer),
+    hasPendingSheetSaves: (id, context = ctx) => sheetSaveDrafts.has(sheetDraftKey(id, context)),
     getSheetForRolls(player) {
       const model = deepClone(player);
       if (model) restoreSheetDraft(model);

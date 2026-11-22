@@ -2,7 +2,7 @@
 // consumes the confirmed dice event; it never generates or saves game results.
 (function(){
   'use strict';
-  const base=new URL('dice-table/',document.currentScript.src),version='20261122-dice-1';
+  const base=new URL('dice-table/',document.currentScript.src),version='20261122-critical-1';
   let root,stage,caption,summary,pendingLabel,dialog,home,engine,loading,worker,job=0,generation=0;
   let room='',queue=[],busy=false,timer=null,state='idle',accepted=0,completed=0,last=[],failed=false,visible=true;
   const seen=new Map(),fingerprints=new Map(),jobs=new Map();
@@ -101,7 +101,7 @@
       if(epoch!==generation)return false;
       const rolls=Array.isArray(ev.rolls)?ev.rolls.map(Number):[];
       last=[{name:String(ev.fromName||'Игрок'),total:Number(ev.total),rolls,dice:rolls.slice(0,40).map(value=>({sides:Number(ev.sides),value,mode:'normal'}))}];
-      fallback(last);state='settled';caption.textContent=String(ev.kindText||'Бросок');showSummary(last,true);logTiming.settle(logTicket);return false;
+      fallback(last);window.DiceCriticalFeedback?.play(last.flatMap(item=>item.dice));state='settled';caption.textContent=String(ev.kindText||'Бросок');showSummary(last,true);logTiming.settle(logTicket);return false;
     }
     const {normalizeEvent,seedNumber,PALETTE}=model;
     if(epoch!==generation||scope!==currentRoom())return false;
@@ -134,7 +134,7 @@
   function fallback(items){
     stage.classList.add('has-dice','dice-table__stage--fallback');
     stage.querySelector('.dice-table__fallback')?.remove();const wrap=document.createElement('div');wrap.className='dice-table__fallback';
-    for(const item of items)for(const die of item.dice.slice(0,40)){const el=document.createElement('span');el.textContent=die.mode==='tens'?String((die.value%10)*10).padStart(2,'0'):die.mode==='ones'?String(die.value%10):String(die.value);el.title='d'+die.sides;wrap.append(el);}
+    for(const item of items)for(const die of item.dice.slice(0,40)){const el=document.createElement('span');el.textContent=die.mode==='tens'?String((die.value%10)*10).padStart(2,'0'):die.mode==='ones'?String(die.value%10):String(die.value);el.title='d'+die.sides;const critical=Number(die.sides)===20?(Number(die.value)===20?'success':Number(die.value)===1?'failure':''):'';if(critical){el.dataset.critical=critical;el.title+=' · '+(critical==='success'?'Критическая удача':'Критический провал');}wrap.append(el);}
     stage.append(wrap);
   }
   function showSummary(items,settled){
@@ -153,14 +153,18 @@
     if(continuation)queue.unshift(continuation);last=items.map(item=>({...item,dice:batch.filter(d=>d.eventKey===item.seed)}));state='preparing';updatePending();
     caption.textContent=items.length>1?'Бросают: '+items.map(item=>item.name).join(', '):items[0].name+' · '+(items[0].part>1?'часть '+items[0].part:items[0].kind);
     showSummary(items,false);stage.classList.add('has-dice');
+    let animationFinished=false;
     try{
       const seed=items.map(item=>item.seed+':'+item.part).join('|');
       const [scene,plan]=await Promise.all([getEngine(),simulate(batch,seed)]);
       if(epoch!==generation)return;state='rolling';
       stage.classList.remove('dice-table__stage--fallback');stage.querySelector('.dice-table__fallback')?.remove();
-      await scene.play(plan,batch,seed,!visible||document.hidden||matchMedia('(prefers-reduced-motion: reduce)').matches);
+      await scene.play(plan,batch,seed,!visible||document.hidden||matchMedia('(prefers-reduced-motion: reduce)').matches);animationFinished=true;
     }catch(error){if(epoch!==generation)return;fallback(last);}
-    if(epoch!==generation)return;state='settled';completed+=items.length;showSummary(items,!continuation);
+    if(epoch!==generation)return;
+    if(animationFinished)engine?.celebrate(!visible||document.hidden||matchMedia('(prefers-reduced-motion: reduce)').matches);
+    window.DiceCriticalFeedback?.play(batch);
+    state='settled';completed+=items.length;showSummary(items,!continuation);
     for(const item of items)if(item!==continuation)logTiming.settle(item.logTicket);
     if(items.some(item=>item.omitted))caption.textContent+=' · остальные кубики — в журнале';
     busy=false;updatePending();

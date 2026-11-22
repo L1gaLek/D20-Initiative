@@ -17,8 +17,9 @@
 <link rel="stylesheet" href="style/token-navigation.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/players.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/gameplay.css?v=20261122-egress-1">
-<link rel="stylesheet" href="style/dice-table.css?v=20261122-dice-controls-1">
+<link rel="stylesheet" href="style/dice-table.css?v=20261122-critical-1">
 <link rel="stylesheet" href="style/cursors.css?v=20261122-egress-1">
+<link rel="stylesheet" href="style/personal-settings.css?v=20261122-personal-1">
 </head>
 <body class="lobby-active">
 
@@ -104,6 +105,7 @@
         <span class="tavern-toolbar__btn-label">Доска объявлений</span>
         <span id="tavern-hotspot-board-badge" class="tavern-toolbar__badge tavern-toolbar__badge--global hidden">0</span>
       </button>
+<button id="tavern-personal-settings" class="tavern-toolbar__btn tavern-toolbar__btn--personal" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2M3 3h3M18 3h3"/></svg>Мои настройки</button>
       <button id="tavern-hotspot-adventures" class="tavern-toolbar__btn tavern-toolbar__btn--wide" type="button" aria-label="Приключения">Приключения</button>
     </div>
   </div>
@@ -827,7 +829,8 @@
   <script src="backend/shared/sheet-sync.js?v=20261122-sync-1"></script>
   <script src="backend/shared/combat-state.js?v=20261122-egress-1"></script>
   <script src="client/dice-table/log-timing.js?v=20261122-dice-controls-1"></script>
-  <script src="client/dice-table.js?v=20261122-dice-controls-1"></script>
+  <script src="client/dice-table/critical-feedback.js?v=20261122-critical-1"></script>
+  <script src="client/dice-table.js?v=20261122-critical-1"></script>
   <script src="client/message-ui.js?v=20261122-dice-controls-1"></script>
   <script src="client/board-players.js?v=20261122-dice-controls-1"></script>
   <script src="client/gameplay-ui.js?v=20261122-dice-controls-1"></script>
@@ -837,14 +840,14 @@
   <script src="client/network/detached-room-cache.js?v=20261122-egress-1"></script>
   <script src="client/network/vps-api.js?v=20261122-egress-1"></script>
   <script src="client/network/rooms-api.js?v=20261122-egress-1"></script>
-  <script src="client/network/characters-api.js?v=20261122-egress-1"></script>
+  <script src="client/network/characters-api.js?v=20261122-personal-1"></script>
   <script src="client/network/room-rows-api.js?v=20261122-egress-1"></script>
   <script src="client/network/room-state-persistence.js?v=20261122-egress-1"></script>
   <script src="client/network/room-ownership.js?v=20261122-egress-1"></script>
   <script src="client/network/realtime-channel-helpers.js?v=20261122-egress-1"></script>
   <script src="client/network/room-detached-sync.js?v=20261122-egress-1"></script>
   <script src="client/network/live-room-sync.js?v=20261122-sync-1"></script>
-  <script src="client/core-helpers-network.js?v=20261122-dice-controls-1"></script>
+  <script src="client/core-helpers-network.js?v=20261122-personal-1"></script>
   <script src="client/initiative-sync.js?v=20261122-sync-1"></script>
   <script src="client/bg-music.js?v=20261122-egress-1"></script>
   <script src="client/rooms-controlbox.js?v=20261122-egress-1"></script>
@@ -852,19 +855,20 @@
   <script src="char_sheet/sheet-utils.js?v=20261122-egress-1"></script>
   <script src="char_sheet/sheet-saved-bases.js?v=20261122-egress-1"></script>
   
-<script src="char_sheet/sheet-modal-core.js?v=20261122-egress-1"></script>
+<script src="char_sheet/sheet-modal-core.js?v=20261122-personal-1"></script>
 <script src="char_sheet/sheet-modal-popups.js?v=20261122-egress-1"></script>
-<script src="char_sheet/sheet-modal-data.js?v=20261122-sync-1"></script>
+<script src="char_sheet/sheet-modal-data.js?v=20261122-personal-1"></script>
 <script src="backend/shared/damage-rolls.js?v=20261122-egress-1"></script>
 <script src="char_sheet/weapon-damage.js?v=20261122-egress-1"></script>
 <script src="char_sheet/sheet-modal-combat-ui.js?v=20261122-egress-1"></script>
 <script src="char_sheet/sheet-modal-richtext.js?v=20261122-egress-1"></script>
 <script src="char_sheet/sheet-modal-spells.js?v=20261122-egress-1"></script>
 <script src="char_sheet/inventory-transfer.js?v=20261122-egress-1"></script>
-<script src="char_sheet/sheet-modal-bindings.js?v=20261122-egress-1"></script>
+<script src="char_sheet/sheet-modal-bindings.js?v=20261122-personal-1"></script>
 <script src="char_sheet/monster-sheet-modal.js?v=20261122-egress-1"></script>
-<script src="char_sheet/sheet-token-access.js?v=20261122-egress-1"></script>
-<script src="char_sheet/sheet-modal-render.js?v=20261122-sync-1"></script>
+<script src="char_sheet/sheet-token-access.js?v=20261122-personal-1"></script>
+<script src="char_sheet/sheet-modal-render.js?v=20261122-personal-1"></script>
+<script src="client/personal-settings.js?v=20261122-personal-1"></script>
 
 </body>
 </html>
