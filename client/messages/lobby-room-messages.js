@@ -82,7 +82,7 @@ function handleJoinedRoomMessage(msg) {
   roomsDiv.style.display = 'none';
   try { window.closeTavern?.(); } catch {}
   try { window.stopTavernChannel?.(); } catch {}
-  gameUI.style.display = 'block';
+  gameUI.style.display = 'flex';
 
   currentRoomId = msg.room.id || null;
   try { window.__currentRoomJoinedAtMs = Date.now(); } catch {}

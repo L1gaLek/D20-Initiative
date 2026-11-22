@@ -5,9 +5,12 @@ module.exports=async({pages,screenshotDir})=>{
   const phase=async(page,value)=>page.evaluate(value=>{lastState.phase=value;renderTurnOrderBox(lastState);renderInitiativePlayersBox(lastState);updatePhaseUI(lastState);},value);
   // The viewport is shared geometry, not a per-user cell-size preference.
   const peerLayouts=new Map();
-  for(const [width,height] of [[1920,1080],[1536,864],[1366,768],[1280,720],[1024,768],[390,844]]){
+  // CSS viewport equivalents of desktop browser zoom (50/75/125/150/200%),
+  // plus short windows: check real panel bounds, not only hidden page overflow.
+  for(const [width,height] of [[1920,1080],[1536,864],[1366,768],[1280,720],[1024,768],[390,844],[1280,480],[800,360],[320,568],[2732,1536],[1821,1024],[1093,614],[911,512],[683,384]]){
     for(const page of [gm,owner]){
       await page.setViewportSize({width,height});
+      assert.equal(await page.locator('#main-container').evaluate(el=>getComputedStyle(el).display),'flex','production joinedRoom handler uses the room flex layout');
       await page.evaluate(isGm=>{ControlBox?.setViewport?.(isGm?80:5,isGm?5:80);},page===gm);
       let openWidth=0;
       for(const value of ['exploration','initiative','combat','exploration']){
@@ -21,6 +24,8 @@ module.exports=async({pages,screenshotDir})=>{
           assert.ok(Math.abs(layout[id].w-peerLayouts.get(key)[id].w)<1&&Math.abs(layout[id].h-peerLayouts.get(key)[id].h)<1,'GM/player geometry: '+label);
         }
         assert.ok(layout.main.bottom<=height+1&&layout.footer.bottom<=height+1,label);
+        const bounds=await page.evaluate(()=>['status-bar','action-log','dice-others','game-container','board-wrapper','player-management','player-list-container','turn-order-box','initiative-players-box'].map(id=>{const el=document.getElementById(id),r=el.getBoundingClientRect();return {id,visible:!!el.getClientRects().length,x:r.x,y:r.y,right:r.right,bottom:r.bottom};}));
+        for(const b of bounds.filter(b=>b.visible))assert.ok(b.x>=-1&&b.y>=-1&&b.right<=width+1&&b.bottom<=height+1,JSON.stringify({width,height,value,b}));
         assert.ok(layout.scrollWidth<=width+1&&layout.scrollHeight<=height+1,label);
         assert.ok(layout.footer.y>=layout.upper.bottom-1,label);
         assert.ok(Math.abs(layout.journal.h-layout.dice.h)<1,label);
@@ -31,7 +36,12 @@ module.exports=async({pages,screenshotDir})=>{
           if(openWidth)assert.ok(Math.abs(openWidth-layout.map.w)<1,label);
           openWidth=layout.map.w;
         }else assert.ok(layout.map.w<openWidth-100,label);
-        assert.ok(layout.map.h>100&&layout.journal.h>100,label);
+        assert.ok(layout.map.h>10&&layout.journal.h>10,label);
+        assert.ok(Math.abs(layout.header.bottom-layout.upper.y)<1&&Math.abs(layout.upper.bottom-layout.footer.y)<1,'continuous header/workspace/footer: '+label);
+        if(width>760){
+          assert.ok(Math.abs(layout.journal.bottom-layout.dice.y)<1,'continuous left column: '+label);
+          for(const id of ['action-log','dice-others','player-management','player-list-container','turn-order-box'])assert.equal(await page.locator('#'+id).evaluate(el=>getComputedStyle(el).borderRadius),'0px');
+        }
         if(page===gm&&width===1366)await picture(page,'fit-'+value);
       }
     }
@@ -69,5 +79,5 @@ module.exports=async({pages,screenshotDir})=>{
   await gm.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   const j=await gm.locator('#action-log').boundingBox(),d=await gm.locator('#dice-others').boundingBox();assert.ok(Math.abs(j.height-d.height)<1,JSON.stringify({j,d}));
   const flow=await gm.evaluate(()=>{const row=document.getElementById('content-row').getBoundingClientRect(),bottom=document.getElementById('action-bottom-row').getBoundingClientRect(),left=document.getElementById('action-log-container').getBoundingClientRect(),right=document.getElementById('combat-side-column').getBoundingClientRect();return {rowBottom:row.bottom,bottomY:bottom.y,leftBottom:left.bottom,rightBottom:right.bottom};});assert.ok(flow.bottomY>=Math.max(flow.rowBottom,flow.leftBottom,flow.rightBottom)-1,JSON.stringify(flow));
-  console.log('PASS workspace: viewport fit at six resolutions for GM and player across all phases, reclaimed exploration width, full-width map viewport despite legacy preferences, equal left panels, 28+ cards/search/sheet');
+  console.log('PASS workspace: actual room-entry handler, 14 viewport/zoom-equivalent sizes for GM/player in all phases, every frame inside the window, continuous seams, equal left panels, exploration width, 28+ cards/search/sheet');
 };

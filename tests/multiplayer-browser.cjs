@@ -244,7 +244,9 @@ async function main() {
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('rooms-container').style.display = 'none';
         document.getElementById('tavern-container').style.display = 'none';
-        document.getElementById('main-container').style.display = 'flex';
+        // Enter through the production handler; forcing display:flex here hid
+        // a real room-entry regression in the viewport layout.
+        handleMessage({type:'joinedRoom',room:{id:'test-room',name:'Test room'}});
         document.getElementById('game-container').style.display = 'block';
         window.InfoModal.init({ sendMessage, getMyId: () => myId, getMyRole: () => myRole,
           getRoomId: () => currentRoomId, getPlayers: () => players,

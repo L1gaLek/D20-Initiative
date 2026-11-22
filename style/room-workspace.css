@@ -1,11 +1,15 @@
-/* The room is a viewport-sized table. Scroll long content inside its panels. */
+/* One continuous table, sized by the layout viewport (including browser zoom).
+   Only panel contents scroll; no panel's minimum size may enlarge the room. */
 body:not(.lobby-active){margin:0;overflow:hidden;}
 #main-container{
-  --room-gap:8px;
+  --room-gap:0px;
+  --room-header:clamp(44px,6dvh,64px);
+  --table-divider:#a78a5066;
+  --table-surface:linear-gradient(135deg,#263026f5,#18231df5);
   --room-left:clamp(280px,26vw,480px);
   --room-side:clamp(260px,20vw,300px);
-  box-sizing:border-box;width:100%;height:100dvh;min-height:0;max-width:none;
-  margin:0;padding:8px 58px 8px 8px;gap:var(--room-gap);overflow:hidden;
+  position:relative;box-sizing:border-box;width:100%;height:100dvh;min-height:0;max-width:none;
+  margin:0;padding:0 46px 0 0;gap:0;overflow:hidden;border:5px solid #49341f;
   background:
     radial-gradient(ellipse at 48% 20%,#bd8c4220,transparent 75%),
     repeating-linear-gradient(2deg,#eac08905 0 1px,transparent 1px 6px),
@@ -13,28 +17,29 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
     linear-gradient(110deg,#261c14,#39291b 40%,#251c15);
   box-shadow:inset 0 0 0 1px #ba915c40,inset 0 0 40px #05040270;
 }
+#main-container::after{content:'';position:absolute;right:0;top:0;bottom:0;width:46px;border-left:1px solid var(--table-divider);background:var(--table-surface);pointer-events:none;}
 #main-container>#status-bar{
-  box-sizing:border-box;flex:none;margin:0;min-height:44px;padding:6px 12px;gap:8px;
-  border:1px solid #a58a535e;border-radius:10px;
-  background:linear-gradient(120deg,#293027ed,#18231ff2);
-  box-shadow:inset 0 1px #f4e1ac10,0 3px 10px #0003;
+  box-sizing:border-box;flex:0 0 var(--room-header);max-height:18%;margin:0;min-height:0;padding:6px 12px;gap:8px;overflow:auto;
+  border:0;border-bottom:1px solid var(--table-divider);border-radius:0;
+  background:var(--table-surface);box-shadow:none;
 }
 #main-container>#content-row{
   box-sizing:border-box;display:grid;grid-template-columns:var(--room-left) minmax(0,1fr);
   grid-template-rows:minmax(0,1fr);gap:var(--room-gap);align-items:stretch;
   flex:1 1 0;width:100%;height:auto;min-height:0;padding:0;border:0;border-radius:0;
-  background:transparent;box-shadow:none;overflow:hidden;
+  background:var(--table-surface);box-shadow:none;overflow:hidden;
 }
 #main-container:is([data-room-phase=initiative],[data-room-phase=combat])>#content-row{
   grid-template-columns:var(--room-left) minmax(0,1fr) var(--room-side);
 }
 #content-row>#action-log-container{
   box-sizing:border-box;display:grid;grid-template-rows:repeat(2,minmax(0,1fr));
-  gap:var(--room-gap);width:100%;min-width:0;height:100%;min-height:0;align-self:stretch;padding:0;
+  gap:0;width:100%;min-width:0;height:100%;min-height:0;align-self:stretch;padding:0;border-right:1px solid var(--table-divider);
 }
-#action-log-container>#action-log{height:auto;min-height:0;max-height:none;}
+#action-log-container>#action-log{height:auto;min-height:0;max-height:none;border:0;border-bottom:1px solid var(--table-divider);}
 #action-log-container>#dice-stack{height:100%;min-height:0;margin:0;display:flex;}
-#dice-stack>#dice-others{height:100%;min-height:0;display:flex;flex-direction:column;padding:10px;overflow:auto;}
+#dice-stack>#dice-others{height:100%;min-height:0;display:flex;flex-direction:column;padding:10px;overflow:auto;border:0;}
+#action-log-container>#action-log,#dice-stack>#dice-others,#action-bottom-row #player-management,#action-bottom-row #player-list-container,#combat-side-column>#turn-order-box,#combat-side-column>#initiative-players-box{border-radius:0;box-shadow:none;background:var(--table-surface);backdrop-filter:none;}
 #dice-others>.dice-others__title,#dice-inline-controls{flex:none;}
 #dice-stack .dice-table{display:flex;flex-direction:column;flex:1;min-height:65px;}
 #dice-stack .dice-table__stage{height:auto;min-height:45px;flex:1;max-height:none;}
@@ -52,7 +57,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 /* The map viewport touches both edges; no decorative side strips. */
 #content-row>#game-container{
   box-sizing:border-box;min-width:0;width:100%;height:100%;min-height:0;margin:0;
-  padding:0;border:0;border-radius:8px;background:transparent;box-shadow:none;overflow:hidden;
+  padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:hidden;
 }
 #game-container>#board-row{
   width:100%;height:100%;min-height:0;min-width:0;display:flex;
@@ -80,21 +85,22 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 #board-col>#board-wrapper:fullscreen{height:100dvh!important;}
 #board-col>#initiative-warning{flex:none;padding:3px 8px;font-size:11px;}
 #content-row>#combat-side-column{
-  box-sizing:border-box;width:100%;min-width:0;height:100%;min-height:0;margin:0;border:0;
-  display:flex;flex-direction:column;gap:8px;overflow:hidden;
+  box-sizing:border-box;width:100%;min-width:0;height:100%;min-height:0;margin:0;border:0;border-left:1px solid var(--table-divider);
+  display:flex;flex-direction:column;gap:0;overflow:hidden;
 }
 #content-row>#combat-side-column[hidden]{display:none;}
-#combat-side-column>#turn-order-box{box-sizing:border-box;min-height:0;max-height:none;flex:1 1 0;margin:0;overflow-y:auto;}
-#combat-side-column>#initiative-players-box{box-sizing:border-box;width:100%;min-width:0;min-height:0;flex:1 1 0;max-height:none;}
+#combat-side-column>#turn-order-box{box-sizing:border-box;min-height:0;max-height:none;flex:1 1 0;margin:0;overflow-y:auto;border:0;}
+#combat-side-column>#initiative-players-box{box-sizing:border-box;width:100%;min-width:0;min-height:0;flex:1 1 0;max-height:none;border:0;border-top:1px solid var(--table-divider);}
 /* The lower row is always on screen, regardless of roster length or role. */
 #main-container>#action-bottom-row{
   box-sizing:border-box;display:grid;grid-template-columns:250px minmax(0,1fr);
-  gap:var(--room-gap);flex:0 0 clamp(250px,30dvh,320px);width:100%;min-width:0;min-height:0;
-  align-items:stretch;overflow:hidden;
+  gap:0;flex:0 0 30%;width:100%;min-width:0;min-height:0;
+  align-items:stretch;overflow:hidden;border-top:1px solid var(--table-divider);
 }
 #main-container>#action-bottom-row::after{display:none;}
 #action-bottom-row>#left-tools-stack,#action-bottom-row>#player-side-stack{width:100%;min-width:0;min-height:0;height:100%;border:0;overflow:hidden;}
-#action-bottom-row #player-management{box-sizing:border-box;width:100%;height:100%;min-height:0;min-width:0;max-height:none;overflow:auto;}
+#action-bottom-row>#left-tools-stack{border-right:1px solid var(--table-divider);}
+#action-bottom-row #player-management{box-sizing:border-box;width:100%;height:100%;min-height:0;min-width:0;max-height:none;overflow:auto;border:0;}
 #player-management #player-controls{margin-bottom:0;gap:6px;}
 #player-management .pm-row--bottom{flex-direction:column;align-items:stretch;gap:6px;}
 #player-management .pm-types{flex-direction:row;flex-wrap:wrap;gap:6px 10px;}
@@ -102,7 +108,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 #action-bottom-row #player-list-container{
   box-sizing:border-box;position:relative;width:100%;min-width:0;height:100%;max-height:none;
   display:grid;grid-template-columns:auto minmax(100px,1fr) auto;
-  grid-template-rows:auto auto minmax(0,1fr);gap:6px 10px;padding:10px;overflow:hidden;
+  grid-template-rows:auto auto minmax(0,1fr);gap:6px 10px;padding:10px;overflow:hidden;border:0;
 }
 #player-list-container>.room-panel-heading{grid-column:1/-1;margin:0;padding-bottom:6px;}
 #player-list-container>.player-list-tabs{grid-column:1;grid-row:2;margin:0;min-width:250px;}
@@ -115,13 +121,13 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 #player-list .owner-players{display:grid;grid-auto-flow:column;grid-auto-columns:210px;gap:8px;align-items:start;flex:1;}
 #player-list .player-list-item{height:auto;margin:0;}
 #player-list .roster-empty{align-self:center;flex:1;min-width:150px;padding:12px;color:#ada58c;font-size:12px;text-align:center;list-style:none;}
-#main-container .gm-quick-toolbar{top:64px;right:7px;border-color:#ad94565c;background:linear-gradient(170deg,#293027f5,#17211df5);box-shadow:inset 0 1px #f3dfa215,0 6px 22px #0005;}
+#main-container .gm-quick-toolbar{top:calc(var(--room-header) + 5px);right:5px;width:46px;border:0;border-radius:0;background:transparent;box-shadow:none;}
 #main-container .gm-quick-toolbar__btn{border-color:#ab90503d;background:#d6bd7d08;color:#e8d7b1;border-radius:7px;}
 #main-container .gm-quick-toolbar__btn:hover{border-color:#c1a367aa;background:#ab8c3e22;}
 #main-container #right-panel{max-height:calc(100dvh - 80px);overflow-y:auto;}
 .legacy-viewport-controls[hidden]{display:none;}
 @media(max-width:1280px){
-  #main-container{--room-left:300px;--room-side:250px;--room-gap:6px;padding:6px 52px 6px 6px;}
+  #main-container{--room-left:300px;--room-side:250px;}
   #main-container>#action-bottom-row{grid-template-columns:230px minmax(0,1fr);}
   #main-container .gm-quick-toolbar{right:5px;}
 }
@@ -134,7 +140,6 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   #action-bottom-row #player-list-container{grid-template-columns:auto minmax(70px,1fr);}
 }
 @media(max-height:760px) and (min-width:761px){
-  #main-container>#action-bottom-row{flex-basis:205px;}
   #action-log{padding:8px;}
   #action-log .room-panel-heading,#dice-stack .dice-others__title{font-size:13px;padding-bottom:5px;margin-bottom:5px;}
   #dice-stack>#dice-others{padding:8px;}
@@ -144,7 +149,8 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 }
 @media(max-width:760px){
   #main-container>#content-row{padding-top:38px;}
-  #main-container{padding:5px;--room-gap:5px;}
+  #main-container{padding:0;border-width:3px;}
+  #main-container::after{display:none;}
   #main-container>#status-bar{padding:5px 8px;}
   #main-container>#content-row,#main-container:is([data-room-phase=initiative],[data-room-phase=combat])>#content-row{
     grid-template-columns:minmax(0,1fr) minmax(0,.7fr);grid-template-rows:minmax(0,1fr) minmax(0,.85fr);
@@ -153,14 +159,16 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   #main-container:is([data-room-phase=initiative],[data-room-phase=combat]) #game-container{grid-column:1;}
   #content-row>#combat-side-column{grid-column:2;grid-row:1;}
   #content-row>#action-log-container{grid-column:1/-1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:minmax(0,1fr);}
-  #main-container>#action-bottom-row{grid-template-columns:170px minmax(0,1fr);flex-basis:clamp(210px,28dvh,250px);}
+  #content-row>#action-log-container{border-right:0;border-top:1px solid var(--table-divider);}
+  #action-log-container>#action-log{border-bottom:0;border-right:1px solid var(--table-divider);}
+  #main-container>#action-bottom-row{grid-template-columns:170px minmax(0,1fr);flex-basis:28%;}
   #action-bottom-row #player-list-container{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);padding:8px;gap:4px;}
   #player-list-container>.player-list-tabs{grid-column:1;min-width:0;}
   #player-list-container>.roster-search{grid-column:1;grid-row:3;}
   #player-list-container>#player-list{grid-column:1;grid-row:4;}
   #player-list-container .player-tab{padding:5px 2px;font-size:10px;}
   #player-list-container .room-panel-heading{font-size:12px;padding-bottom:4px;}
-  #main-container .gm-quick-toolbar{top:64px;right:9px;width:auto;flex-direction:row;gap:3px;padding:4px;transform:none;}
+  #main-container .gm-quick-toolbar{top:calc(min(var(--room-header),18dvh) + 3px);right:6px;width:auto;flex-direction:row;gap:3px;padding:4px;transform:none;}
   #main-container .gm-quick-toolbar__btn{width:28px;min-width:28px;height:28px;font-size:14px;}
   #main-container .gm-quick-toolbar.is-panel-open{transform:none;}
   #main-container #right-panel{top:104px;right:5px;max-width:calc(100vw - 10px);max-height:calc(100dvh - 114px);}
@@ -190,11 +198,11 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   #dice-inline-controls #dice-count,#dice-inline-controls .board-stepper__btn{height:24px;}
 }
 @media(max-width:480px){
+  #main-container{--room-header:72px;}
   #main-container>#status-bar{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:4px;}
   #status-bar .status-bar__meta,#status-bar .room-top-actions{flex-direction:column;align-items:stretch;gap:4px;}
   #status-bar button{font-size:10px;min-height:27px;padding:5px 7px;}
   #status-bar .room-chat-notification{width:30px;height:30px;}
-  #main-container .gm-quick-toolbar{top:80px;}
   #main-container #right-panel{top:116px;max-height:calc(100dvh - 126px);}
   #main-container>#action-bottom-row{grid-template-columns:145px minmax(0,1fr);}
   #player-management{padding:7px;}
