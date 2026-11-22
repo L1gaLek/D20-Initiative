@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-module.exports=async function({pages,requests,characterHarness:h,screenshotDir}){
+module.exports=async function({pages,requests,characterHarness:charHarness,screenshotDir,h,broadcast}){
   const [gm,owner,other]=pages;
   const picture=async(page,selector,name)=>{if(screenshotDir){fs.mkdirSync(screenshotDir,{recursive:true});await page.locator(selector).screenshot({path:path.join(screenshotDir,name+'.png')});}};
   for(const page of [gm,owner]){
@@ -23,11 +23,11 @@ module.exports=async function({pages,requests,characterHarness:h,screenshotDir})
   const note=owner.locator('.note-body [data-rte-editor]').last();await note.fill('Личные правки без комнаты');
   await owner.waitForFunction(()=>document.querySelector('[data-personal-save-status]')?.textContent==='Все изменения сохранены');
   const selected=await owner.evaluate(()=>PersonalSettings.inspect().selected);
-  assert.ok(h.records.get(selected).state.data.parsed.notes.entries.some(n=>n.text==='Личные правки без комнаты'));
+  assert.ok(charHarness.records.get(selected).state.data.parsed.notes.entries.some(n=>n.text==='Личные правки без комнаты'));
   await owner.getByRole('button',{name:'+ Новое сохранение',exact:true}).click();
   await owner.waitForFunction(old=>PersonalSettings.inspect().selected!==old,selected);
   const created=await owner.evaluate(()=>PersonalSettings.inspect().selected);
-  assert.equal(h.list('user-1').length,4);assert.equal(h.records.get(created).state.characterKey,'legacy:альрик');
+  assert.equal(charHarness.list('user-1').length,4);assert.equal(charHarness.records.get(created).state.characterKey,'legacy:альрик');
   await owner.locator('[aria-label="Сохранение персонажа"]').selectOption('saved-1');
   await owner.waitForFunction(()=>PersonalSettings.inspect().selected==='saved-1');
   await owner.locator('.sheet-tab[data-tab="notes"]').click();
@@ -42,7 +42,7 @@ module.exports=async function({pages,requests,characterHarness:h,screenshotDir})
   await owner.locator('.sheet-tab[data-tab="notes"]').click();
   assert.equal(await owner.locator('.note-body [data-rte-editor]').innerText(),'Правка перед закрытием');
   // Retry after a transient database failure without discarding the editor.
-  h.failNext();await owner.locator('.note-body [data-rte-editor]').fill('Восстановлено после ошибки');
+  charHarness.failNext();await owner.locator('.note-body [data-rte-editor]').fill('Восстановлено после ошибки');
   await owner.waitForFunction(()=>document.querySelector('[data-personal-save-status]')?.textContent.includes('Не сохранено'));
   await owner.waitForFunction(()=>document.querySelector('[data-personal-save-status]')?.textContent==='Все изменения сохранены',null,{timeout:12000});
   await picture(owner,'#sheet-modal .modal','personal-sheet');
@@ -56,6 +56,37 @@ module.exports=async function({pages,requests,characterHarness:h,screenshotDir})
   await owner.locator('#sheet-modal').waitFor({state:'visible'});await owner.keyboard.press('Escape');
   await owner.locator('#sheet-modal').waitFor({state:'hidden'});assert.equal(await owner.locator('.personal-settings').isVisible(),true);
   await owner.keyboard.press('Escape');await owner.locator('.personal-settings').waitFor({state:'hidden'});
+  await owner.setViewportSize({width:1440,height:1000});await owner.locator('#tavern-personal-settings').click();
+  await owner.locator('[data-personal-tab="statistics"]').click();await owner.locator('.personal-settings__stats').waitFor();
+  assert.equal(await owner.locator('.personal-settings__stats>div').count(),16);await picture(owner,'.personal-settings__panel','cabinet-statistics');
+  await owner.locator('[data-personal-tab="settings"]').click();
+  await owner.locator('[data-preference="chatSound"]').uncheck();await owner.locator('[data-preference="reduceDiceMotion"]').check();
+  await owner.locator('[aria-label="Громкость оповещений"]').fill('35');
+  await owner.waitForFunction(()=>document.querySelector('.personal-settings__status')?.textContent==='Настройки сохранены');
+  assert.equal(h.context.userProfiles.get('user-1').settings.volume,35);assert.equal(h.context.userProfiles.get('user-1').settings.chatSound,false);
+  await picture(owner,'.personal-settings__panel','cabinet-settings');
+  await owner.locator('[data-personal-tab="characters"]').click();await owner.locator('.personal-settings__create').click();
+  await owner.waitForFunction(()=>InfoModal.getEditorPlayer()?.name==='Новый персонаж');
+  const fresh=await owner.evaluate(()=>PersonalSettings.inspect().selected);
+  const imported={name:{value:'Подготовленный герой'},info:{race:{value:'Эльф'},charClass:{value:'Волшебник'}},notes:{entries:[{title:'План',text:'Готов к игре',collapsed:false}]}};
+  await owner.locator('#sheet-actions input[type=file]').setInputFiles({name:'hero.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(imported))});
+  await owner.waitForFunction(()=>document.querySelector('[data-personal-save-status]')?.textContent==='Все изменения сохранены');
+  assert.equal(charHarness.records.get(fresh).state.data.parsed.info.race.value,'Эльф');
+  await owner.getByRole('button',{name:'Сохранить персонажа',exact:true}).click();
+  await owner.locator('#sheet-close').click();await owner.locator('[data-personal-close]').click();
+  // Open the same cabinet from the room; existing base disables import.
+  await owner.evaluate(()=>{currentRoomId='test-room';closeTavern();document.getElementById('main-container').style.display='flex';document.getElementById('game-container').style.display='block';});
+  await owner.locator('#room-personal-settings').click();await owner.locator('.personal-settings__character').filter({hasText:'Подготовленный герой'}).click();
+  assert.equal(await owner.getByRole('button',{name:'Добавить в игру',exact:true}).isDisabled(),true);
+  await owner.locator('#sheet-close').click();await owner.locator('[data-personal-close]').click();
+  await h.context.mutateRoomState(h.clients[0].ctx,state=>{state.players=state.players.filter(p=>p.ownerId!=='user-1');return state;});
+  broadcast({type:'state',roomId:'test-room',state:h.database()});await owner.waitForFunction(()=>!players.some(p=>p.isBase&&p.ownerId===myId));
+  await owner.locator('#room-personal-settings').click();await owner.locator('.personal-settings__character').filter({hasText:'Подготовленный герой'}).click();
+  await owner.getByRole('button',{name:'Добавить в игру',exact:true}).click();await owner.waitForFunction(()=>players.some(p=>p.isBase&&p.ownerId===myId&&p.name==='Подготовленный герой'));
+  await gm.waitForFunction(()=>players.some(p=>p.isBase&&p.ownerId==='user-1'&&p.name==='Подготовленный герой'));
+  const added=h.database().players.filter(p=>p.isBase&&p.ownerId==='user-1');assert.equal(added.length,1);assert.equal(added[0].sheet.parsed.info.race.value,'Эльф');assert.equal(added[0].x,null);
+  await owner.locator('#sheet-close').click();await owner.locator('[data-personal-close]').click();
+  console.log('PASS cabinet: three tabs, private server settings, statistics, creation, JSON import, saved draft and authenticated one-base room import visible to peers');
   await other.evaluate(()=>{currentRoomId=null;document.getElementById('tavern-container').style.display='';window.openTavern();});await other.locator('#tavern-personal-settings').click();
   await other.waitForFunction(()=>PersonalSettings.inspect().saves===1);
   assert.equal(await other.locator('.personal-settings__character').innerText().then(t=>t.includes('Чужой')),true);

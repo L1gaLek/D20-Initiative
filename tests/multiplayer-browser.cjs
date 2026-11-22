@@ -90,6 +90,13 @@ const server = http.createServer(async (req, res) => {
       const ctx = h.clients.find(c => c.ctx.userId === userId)?.ctx;
       const data = ['POST','PATCH'].includes(req.method) ? await body(req) : {};
       requests.push({ path: url.pathname, userId, data });
+      if(url.pathname==='/api/me/profile')return json(res,{ok:true,...(req.method==='PATCH'?h.context.userProfiles.settings(userId,data.settings||{}):h.context.userProfiles.get(userId))});
+      if(/\/characters\/[^/]+\/add$/.test(url.pathname)){
+        const saved=await characterHarness.store.get(userId,url.pathname.split('/').at(-2));
+        const context={...ctx,state:h.database()};
+        const player=await h.context.addSavedCharacterForContext(context,saved,data.requestId);
+        const payload={type:'playerCreated',roomId:'test-room',player};broadcast(payload);return json(res,{ok:true,...payload});
+      }
       if (url.pathname === '/api/characters') {
         if(req.method==='POST')return json(res,{ok:true,character:characterHarness.add(userId,data.name,data.state)});
         return json(res,{ok:true,list:characterHarness.list(userId)});
@@ -154,7 +161,7 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ server });
 wss.on('connection', ws => {
   sockets.add(ws);
-  ws.on('close', () => sockets.delete(ws));
+  ws.on('close', () => {h.context.userProfiles.disconnect(ws);sockets.delete(ws);});
   if(syncMode){
     const scheduler=new (require('../backend/shared/ws-scheduler'))((data,receivedAt)=>h.context.inboundMeta.run({wsNonce:data.__wsNonce,serverReceivedAt:receivedAt,inboundType:data.type},()=>h.context.handleMessage(ws,data)),error=>ws.send(JSON.stringify({type:'error',message:error.message})));
     ws.on('message',raw=>scheduler.push(JSON.parse(raw),Date.now()));
@@ -165,6 +172,7 @@ wss.on('connection', ws => {
     const msg = JSON.parse(raw);
     if (msg.type === 'joinRoom') {
       ws.ctx = h.clients.find(c => c.ctx.userId === msg.userId).ctx;
+      h.context.userProfiles.connect(ws,'test-room',ws.ctx.userId,h.database(),ws.ctx.role);
       ws.send(JSON.stringify({ type: 'joinedWsRoom', roomId: 'test-room' }));
     } else if (msg.type === 'statePatch') await h.context.handleStatePatchRelay(ws, msg);
     else if (msg.type === 'playerPatch') await h.context.handlePlayerPatchRelay(ws, msg);
@@ -250,7 +258,7 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
-    if(process.env.D20_PERSONAL_ONLY){await require('./helpers/personal-settings-scenarios.cjs')({pages,requests,characterHarness,screenshotDir});assert.deepEqual(errors,[]);return;}
+    if(process.env.D20_PERSONAL_ONLY){await require('./helpers/personal-settings-scenarios.cjs')({pages,requests,characterHarness,screenshotDir,h,broadcast});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_DICE_ONLY){await require('./helpers/dice-table-scenarios.cjs')({pages,h,broadcast,requests,base,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(syncMode){await require('./helpers/live-sync-scenarios.cjs')({pages,h,mapHarness,syncControls,waitFor});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_EGRESS_ONLY){await require('./helpers/egress-scenarios.cjs')({pages,h});assert.deepEqual(errors,[]);return;}

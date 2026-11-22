@@ -19,7 +19,7 @@
 <link rel="stylesheet" href="style/gameplay.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/dice-table.css?v=20261122-critical-1">
 <link rel="stylesheet" href="style/cursors.css?v=20261122-egress-1">
-<link rel="stylesheet" href="style/personal-settings.css?v=20261122-personal-1">
+<link rel="stylesheet" href="style/personal-settings.css?v=20261122-cabinet-1">
 </head>
 <body class="lobby-active">
 
@@ -370,6 +370,7 @@
   <div id="status-bar">
     <div class="status-bar__meta">
       <button id="room-details-open" class="room-details-btn" type="button">Подробно о комнате</button>
+      <button id="room-personal-settings" class="room-details-btn room-personal-settings-btn" type="button">Мои настройки</button>
     </div>
 
     <button id="room-chat-notification" class="room-chat-notification" type="button" aria-label="Открыть непрочитанные сообщения" title="Новое сообщение" hidden>
@@ -819,20 +820,21 @@
   <script src="client/board-view.js?v=20261122-egress-1"></script>
   <script src="client/app/lobby-shell.js?v=20261122-egress-1"></script>
   <script src="client/rooms/lobby-room-ui.js?v=20261122-egress-1"></script>
-  <script src="client/chat-notifications.js?v=20261122-egress-1"></script>
+  <script src="client/chat-notifications.js?v=20261122-cabinet-1"></script>
   <script src="client/chat-ui.js?v=20261122-egress-1"></script>
   <script src="client/board-fog.js?v=20261122-sync-1"></script>
   <script src="client/board-marks.js?v=20261122-egress-1"></script>
   <script src="client/map-tools-ui.js?v=20261122-egress-1"></script>
   <script src="client/messages/lobby-room-messages.js?v=20261122-egress-1"></script>
-  <script src="client/messages/session-ui-messages.js?v=20261122-egress-1"></script>
+  <script src="client/messages/session-ui-messages.js?v=20261122-cabinet-1"></script>
   <script src="backend/shared/sheet-sync.js?v=20261122-sync-1"></script>
   <script src="backend/shared/combat-state.js?v=20261122-egress-1"></script>
   <script src="client/dice-table/log-timing.js?v=20261122-dice-controls-1"></script>
-  <script src="client/dice-table/critical-feedback.js?v=20261122-critical-1"></script>
-  <script src="client/dice-table.js?v=20261122-critical-1"></script>
+  <script src="client/personal-preferences.js?v=20261122-cabinet-1"></script>
+  <script src="client/dice-table/critical-feedback.js?v=20261122-cabinet-1"></script>
+  <script src="client/dice-table.js?v=20261122-cabinet-1"></script>
   <script src="client/message-ui.js?v=20261122-dice-controls-1"></script>
-  <script src="client/board-players.js?v=20261122-dice-controls-1"></script>
+  <script src="client/board-players.js?v=20261122-cabinet-1"></script>
   <script src="client/gameplay-ui.js?v=20261122-dice-controls-1"></script>
   <script src="client/board-navigation.js?v=20261122-egress-1"></script>
   <script src="client/network/room-state-core.js?v=20261122-egress-1"></script>
@@ -868,7 +870,7 @@
 <script src="char_sheet/monster-sheet-modal.js?v=20261122-egress-1"></script>
 <script src="char_sheet/sheet-token-access.js?v=20261122-personal-1"></script>
 <script src="char_sheet/sheet-modal-render.js?v=20261122-personal-1"></script>
-<script src="client/personal-settings.js?v=20261122-personal-1"></script>
+<script src="client/personal-settings.js?v=20261122-cabinet-1"></script>
 
 </body>
 </html>

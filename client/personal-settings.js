@@ -3,7 +3,8 @@
 // is loaded on demand. No room state or realtime subscription is needed.
 (function () {
   'use strict';
-  const button = document.getElementById('tavern-personal-settings');
+  const button = document.getElementById('tavern-personal-settings'),roomButton=document.getElementById('room-personal-settings');
+  let activeTab='characters',openedFrom=button,profile=null;
   let overlay, list, status, selectedKey = '', rows = [], session = null, loading = false, epoch = 0;
   const copy = value => JSON.parse(JSON.stringify(value));
   const userId = () => String(typeof myId !== 'undefined' ? myId || '' : '');
@@ -17,7 +18,8 @@
   function mount() {
     if(overlay)return;
     overlay=document.createElement('div'); overlay.className='modal-overlay personal-settings hidden'; overlay.setAttribute('aria-hidden','true');
-    overlay.innerHTML='<section class="personal-settings__panel" role="dialog" aria-modal="true" aria-labelledby="personal-settings-title"><header><div><small>Личный кабинет</small><h2 id="personal-settings-title">Мои настройки</h2></div><button type="button" data-personal-close aria-label="Закрыть мои настройки">✕</button></header><p>Ваши персонажи и сохранения. Лист можно редактировать прямо здесь.</p><div class="personal-settings__sound"><label><input type="checkbox" id="critical-sound-enabled"> Звуки критических бросков D20</label><span>20 — удача · 1 — провал</span></div><div class="personal-settings__list"></div><div class="personal-settings__status" role="status"></div></section>';
+    overlay.innerHTML='<section class="personal-settings__panel" role="dialog" aria-modal="true" aria-labelledby="personal-settings-title"><header><div><small>Личный кабинет</small><h2 id="personal-settings-title">Мои настройки</h2></div><button type="button" data-personal-close aria-label="Закрыть мои настройки">✕</button></header><nav class="personal-settings__tabs" aria-label="Разделы личного кабинета" role="tablist"><button type="button" role="tab" data-personal-tab="characters">Мои персонажи</button><button type="button" role="tab" data-personal-tab="statistics">Статистика</button><button type="button" role="tab" data-personal-tab="settings">Настройки</button></nav><div data-personal-panel="characters" role="tabpanel"><div class="personal-settings__intro"><p>Подготовьте персонажа заранее, загрузите JSON или выберите сохранение.</p><button type="button" class="personal-settings__create">＋ Создать персонажа</button></div><div class="personal-settings__list"></div></div><div data-personal-panel="statistics" role="tabpanel" hidden></div><div data-personal-panel="settings" role="tabpanel" hidden></div><div class="personal-settings__status" role="status"></div></section>';
+
     document.body.append(overlay); list=overlay.querySelector('.personal-settings__list'); status=overlay.querySelector('[role="status"]');
     overlay.querySelector('[data-personal-close]').onclick=close;
     overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
@@ -25,17 +27,22 @@
       if(overlay.classList.contains('hidden')||!document.getElementById('sheet-modal').classList.contains('hidden'))return;
       if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();close();}
       if(e.key==='Tab'){
-        const nodes=[...overlay.querySelectorAll('button:not(:disabled),input,select')],first=nodes[0],last=nodes.at(-1);
+        const nodes=[...overlay.querySelectorAll('button:not(:disabled),input,select')].filter(node=>node.getClientRects().length&&node.tabIndex!==-1),first=nodes[0],last=nodes.at(-1);
         if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
         else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
       }
     },true);
-    overlay.querySelector('input').addEventListener('change',e=>window.DiceCriticalFeedback?.setEnabled(e.target.checked));
+    overlay.querySelector('.personal-settings__create').onclick=()=>void createCharacter();
+    const tabs=[...overlay.querySelectorAll('[data-personal-tab]')];
+    tabs.forEach((tab,index)=>{tab.onclick=()=>switchTab(tab.dataset.personalTab);tab.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const next=tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length];switchTab(next.dataset.personalTab);next.focus();};});
+    window.addEventListener('d20-preferences-saved',()=>{if(activeTab==='settings')status.textContent='Настройки сохранены';});
+    window.addEventListener('d20-preferences-save-error',()=>{if(activeTab==='settings')status.textContent='Сохранено на этом устройстве. Синхронизация недоступна — нажмите «Повторить сохранение».';});
   }
-  function close() { epoch++; overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden','true'); button.focus(); }
-  async function open() {
-    mount(); if(session?.owner!==userId())session=null; overlay.classList.remove('hidden'); overlay.setAttribute('aria-hidden','false'); overlay.querySelector('input').checked=window.DiceCriticalFeedback?.isEnabled()!==false;
-    overlay.querySelector('[data-personal-close]').focus(); await reload();
+  function close() { epoch++; overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden','true'); openedFrom?.focus(); }
+  async function open(from=button) {
+    openedFrom=from;
+    mount(); if(session?.owner!==userId())session=null; overlay.classList.remove('hidden'); overlay.setAttribute('aria-hidden','false');
+    overlay.querySelector('[data-personal-close]').focus();switchTab('characters');await Promise.all([reload(),loadProfile()]);
   }
   async function reload() {
     const token=++epoch; status.textContent='Загружаю сохранения…'; list.replaceChildren();
@@ -43,7 +50,7 @@
     catch(error){if(token===epoch)status.textContent='Не удалось загрузить: '+error.message;}
   }
   function render() {
-    list.replaceChildren(); if(!rows.length)status.textContent='Пока нет сохранённых основ. В комнате откройте лист своей основы и нажмите «Сохранить основу».';
+    list.replaceChildren(); if(!rows.length)status.textContent='Пока нет персонажей. Нажмите «Создать персонажа», затем настройте лист или загрузите JSON.';
     for(const [k,saves] of groups()) {
       const card=document.createElement('button'); card.type='button'; card.className='personal-settings__character';
       const crest=document.createElement('span'); crest.className='personal-settings__crest'; crest.textContent=String(saves[0].name||'?').slice(0,1).toLocaleUpperCase('ru');
@@ -115,7 +122,20 @@
     const create=document.createElement('button');create.type='button';create.textContent='+ Новое сохранение';
     create.onclick=async()=>{create.disabled=true;try{await createSave(current);}catch(error){setStatus(current,error.message);}finally{create.disabled=false;}};
     const note=document.createElement('span');note.dataset.personalSaveStatus='';note.setAttribute('role','status');note.textContent='Изменения сохраняются автоматически';
-    controls.append(label,create,note);actions.append(controls);
+    const save=document.createElement('button');save.type='button';save.textContent='Сохранить персонажа';save.onclick=async()=>{save.disabled=true;try{await drain(current);setStatus(current,'Все изменения сохранены');}catch(error){setStatus(current,error.message);}finally{save.disabled=false;}};
+    controls.append(label,save,create);
+    const room=String(typeof currentRoomId!=='undefined'?currentRoomId||'':'');
+    if(room&&!room.startsWith('__')){
+      const add=document.createElement('button');add.type='button';add.className='personal-settings__add-game';add.textContent='Добавить в игру';
+      const ownBase=(typeof players!=='undefined'?players:[]).some(p=>p.isBase&&String(p.ownerId)===current.owner);
+      const role=String(typeof myRole!=='undefined'?myRole:'');add.disabled=ownBase||!['Player','GM'].includes(role)||current.addedRoom===room;
+      add.title=ownBase?'В этой комнате у вас уже есть основа':!['Player','GM'].includes(role)?'Доступно игрокам и ГМ':'Добавить выбранное сохранение как свою основу';
+      add.onclick=async()=>{add.disabled=true;try{await drain(current);current.addRequest ||= crypto.randomUUID();
+        const result=await window.vpsApi('/rooms/'+encodeURIComponent(room)+'/characters/'+encodeURIComponent(current.id)+'/add',{method:'POST',body:{requestId:current.addRequest}});
+        if(String(currentRoomId||'')===room)handleMessage(result);current.addedRoom=room;add.textContent='Добавлен в игру';setStatus(current,'В игру добавлена копия сохранения. Разместите основу на карте.');
+      }catch(error){setStatus(current,error.message);add.disabled=false;}};controls.append(add);
+    }
+    controls.append(note);actions.append(controls);
     // Rolls and transfers are room actions; editing inventory, equipment,
     // appearance, spells and notes remains available in the personal library.
     const content=document.getElementById('sheet-content');
@@ -131,9 +151,45 @@
     rows.unshift({...result.character,characterKey:current.key,savedAt:state.savedAt});
     await select(result.character.id,current.key);
   }
+  function switchTab(tab){
+    activeTab=tab;status.textContent='';
+    overlay.querySelectorAll('[data-personal-tab]').forEach(button=>{const on=button.dataset.personalTab===tab;button.setAttribute('aria-selected',String(on));button.tabIndex=on?0:-1;});
+    overlay.querySelectorAll('[data-personal-panel]').forEach(panel=>panel.hidden=panel.dataset.personalPanel!==tab);
+    if(tab==='statistics'){renderStatistics();void loadProfile();}if(tab==='settings')renderSettings();
+  }
+  async function loadProfile(){profile=await window.PersonalPreferences.load();if(activeTab==='statistics')renderStatistics();if(activeTab==='settings')renderSettings();}
+  function renderStatistics(){
+    const panel=overlay.querySelector('[data-personal-panel="statistics"]');panel.replaceChildren();
+    const intro=document.createElement('p');intro.textContent=profile?'Учитываются события с '+new Date(profile.since).toLocaleDateString('ru-RU')+'. Игра в комнате продолжается до перерыва в 30 минут.':'Статистика пока недоступна. Попробуйте открыть раздел позже.';panel.append(intro);if(!profile)return;
+    const s=profile.statistics||{},hours=Math.floor((s.roomMs||0)/3600000),minutes=Math.floor((s.roomMs||0)%3600000/60000),grid=document.createElement('div');grid.className='personal-settings__stats';
+    const entries=[['Время в комнатах',hours+' ч '+minutes+' мин'],['Посещения комнат',s.visits],['Любимая раса',s.favoriteRace||'Ещё не определена'],['Любимый класс',s.favoriteClass||'Ещё не определён'],['Всего бросков',s.rolls],['Кубиков D20',s.d20],['Критических 20',s.critical20],['Критических 1',s.critical1],['Рекорд 20 за игру',s.maxGame20],['Рекорд 1 за игру',s.maxGame1],['Урон за один ход',s.maxTurnDamage],['Один бросок урона',s.maxDamage],['Суммарный урон',s.damage],['Нокдауны',s.knockdowns],['Смерти',s.deaths],['Стабилизации',s.stabilizations]];
+    for(const [label,value] of entries){const card=document.createElement('div'),caption=document.createElement('span'),text=document.createElement('strong');caption.textContent=label;text.textContent=String(value??0);card.append(caption,text);grid.append(card);}panel.append(grid);
+    const note=document.createElement('p');note.className='personal-settings__explanation';note.textContent='Любимые раса и класс — по времени игры своей основой. Урон — сумма бросков основы в фазе боя, до сопротивлений; рекорд за ход считается во время собственного хода. Нокдаун — падение с положительного здоровья до 0 или ниже. События до начала сбора не восстанавливаются.';panel.append(note);
+    const refresh=document.createElement('button');refresh.type='button';refresh.textContent='Обновить статистику';refresh.onclick=()=>void loadProfile();panel.append(refresh);
+  }
+  function renderSettings(){
+    const panel=overlay.querySelector('[data-personal-panel="settings"]');panel.replaceChildren();const prefs=window.PersonalPreferences.get();
+    for(const [key,label,hint] of [['criticalSound','Звуки критических бросков','Разные сигналы для натуральных 20 и 1 на D20.'],['chatSound','Звук новых сообщений','Короткое оповещение о непрочитанных сообщениях.'],['criticalEffects','Эффекты критических бросков','Золотое или красное свечение у кубика.'],['reduceDiceMotion','Сокращённая анимация кубиков','Сразу показывать результат на столе бросков.']]){
+      const row=document.createElement('label');row.className='personal-settings__option';const input=document.createElement('input');input.type='checkbox';input.checked=!!prefs[key];input.dataset.preference=key;
+      const text=document.createElement('span'),title=document.createElement('strong'),small=document.createElement('small');title.textContent=label;small.textContent=hint;text.append(title,small);row.append(input,text);panel.append(row);
+      input.onchange=()=>{if(key==='criticalSound')window.DiceCriticalFeedback.setEnabled(input.checked);else window.PersonalPreferences.set({[key]:input.checked});status.textContent='Сохраняю настройки…';};
+    }
+    const row=document.createElement('label');row.className='personal-settings__option';row.textContent='Громкость оповещений';const volume=document.createElement('input');volume.type='range';volume.min='0';volume.max='100';volume.value=prefs.volume;volume.setAttribute('aria-label','Громкость оповещений');const output=document.createElement('output');output.textContent=prefs.volume+'%';row.append(volume,output);panel.append(row);
+    volume.oninput=()=>{output.textContent=volume.value+'%';window.PersonalPreferences.set({volume:Number(volume.value)});status.textContent='Сохраняю настройки…';};
+    const retry=document.createElement('button');retry.type='button';retry.textContent='Повторить сохранение';retry.onclick=()=>{window.PersonalPreferences.set({});status.textContent='Сохраняю настройки…';};panel.append(retry);
+  }
+  async function createCharacter(){
+    if(loading)return;const create=overlay.querySelector('.personal-settings__create');create.disabled=true;
+    try{
+      await drain(session);const name='Новый персонаж';
+      const result=await window.CharactersApi.saveSavedBase({name,state:{schemaVersion:1,savedAt:new Date().toISOString(),characterKey:crypto.randomUUID(),data:{source:'manual',parsed:{name:{value:name}}}}});
+      await reload();const row=rows.find(row=>row.id===result.character.id);await select(result.character.id,key(row||result.character));
+    }catch(error){status.textContent=error.message;}finally{create.disabled=false;}
+  }
   document.getElementById('sheet-content')?.addEventListener('click',event=>{
     if(window.__sheetCtx?.personal && event.target.closest('.lss-dice-btn,[data-weapon-roll-atk],[data-weapon-roll-dmg],[data-cpw-sub-roll],[data-spell-roll-header],[data-death-save-roll],[data-inv-transfer],[data-coins-transfer]')) { event.preventDefault();event.stopImmediatePropagation(); }
   },true);
-  button?.addEventListener('click',()=>void open());
+  button?.addEventListener('click',()=>void open(button));
+  roomButton?.addEventListener('click',()=>void open(roomButton));
   window.PersonalSettings={open,inspect:()=>({groups:groups().size,saves:rows.length,selected:session?.id})};
 })();

@@ -94,6 +94,8 @@ function serverHarness(state = initialState()) {
     }
   };
   const context = vm.createContext({
+    userProfiles:new (require('../../backend/shared/user-profiles').UserProfiles)(),
+    crypto:require('node:crypto'), HEX_COLOR_RE:/^#[0-9a-f]{6}$/i,sanitizeTokenSize:v=>Math.max(1,Math.min(5,Number(v)||1)),getActiveMapId:s=>s.currentMapId,
     console, Date, Map, Set, Math, Buffer, pool, roomStateReadMetrics:stateReadMetrics, fastRoomWrites:new Map(),
     cloneJson: clone,
     sanitizeRoomStateForStorage: clone,
@@ -131,6 +133,7 @@ function serverHarness(state = initialState()) {
     'persistStateForContext', 'persistStatePatchForContext', 'handleStatePatchRelay',
     'handlePlayerPatchRelay', 'handleSheetPatchRelay', 'handleInitiativeLiveRelay', 'applyInitiativeUpdates',
     'canControlPlayer', 'setTokenAccessForContext', 'handleDiceEventRelay',
+    'sanitizeNewPlayerForOwner','sanitizeCreatedPlayerForContext','addSavedCharacterForContext',
     'applyCombatCommand', 'handleCombatCommandRelay'
   ]), context);
   return { context, clients, database: () => database, tick, tokenOwnerWrites, stateReadMetrics, cachedStates, queries };

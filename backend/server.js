@@ -5,6 +5,10 @@ const DamageRolls = require('./shared/damage-rolls');
 const CombatState = require('./shared/combat-state');
 const RoomReadCache = require('./shared/room-read-cache');
 const SheetSync = require('./shared/sheet-sync');
+const { UserProfiles } = require('./shared/user-profiles');
+const userProfiles = new UserProfiles({file:path.join(__dirname,'data','user-profiles.json')});
+const profileTimer=setInterval(()=>{try{userProfiles.tick();userProfiles.flush();}catch(error){console.error('[profiles persist]',error.message);}},15000);profileTimer.unref();
+for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{try{userProfiles.tick();userProfiles.flush();}finally{process.exit(0);}});
 const { CharacterStore, metadata: characterMetadata } = require('./shared/character-store');
 const RoomEventJournal = require('./shared/room-event-journal');
 const WsScheduler = require('./shared/ws-scheduler');
@@ -2625,7 +2629,7 @@ app.post('/api/rooms/:roomId/dice', async (req, res) => {
       bonus,
       rolls,
       total,
-      crit
+      crit, localNonce:sanitizeText(incoming.localNonce,'',160), actorId:sanitizeText(incoming.actorId,'',160)
     };
     if (Array.isArray(incoming.damageParts)) {
       Object.assign(event, DamageRolls.event(incoming.damageParts, sanitizeText(incoming.damageTitle, 'Урон', 1000)));
@@ -2638,6 +2642,7 @@ app.post('/api/rooms/:roomId/dice', async (req, res) => {
       `,
       [ctx.roomId, event.fromId, event.fromName, event.kindText, event.sides, event.count, event.bonus, event.rolls, event.total, event.crit]
     );
+    userProfiles.record('dice',ctx.roomId,ctx.userId,{...event,id:rows[0]?.id},ctx.state,getStatePlayers(ctx.state).filter(p=>canControlPlayer(ctx,p)));
     const logText = `${event.fromName}: ${event.kindText}: ${event.rolls.join(',')}${event.bonus ? (event.bonus > 0 ? `+${event.bonus}` : String(event.bonus)) : ''} = ${event.total}${event.crit === 'crit-success' ? ' (CRIT)' : event.crit === 'crit-fail' ? ' (FAIL)' : ''}`;
     const log = await pool.query(
       'insert into public.room_log(room_id, text) values ($1, $2) returning id, room_id, text, created_at',
@@ -2789,6 +2794,27 @@ app.post('/api/rooms/:roomId/ban', async (req, res) => {
     const status = statusFromError(error, /required|role|member|banned|yourself/i);
     return res.status(status).json({ ok: false, error: error?.message || 'Ban failed' });
   }
+});
+
+app.get('/api/me/profile', (req,res)=>{
+  try { return res.json({ok:true,...userProfiles.get(requireRequestActor(req).userId)}); }
+  catch(error){return res.status(statusFromError(error)).json({ok:false,error:error.message});}
+});
+app.patch('/api/me/profile', (req,res)=>{
+  try { return res.json({ok:true,...userProfiles.settings(requireRequestActor(req).userId,req.body?.settings||{})}); }
+  catch(error){return res.status(statusFromError(error)).json({ok:false,error:error.message});}
+});
+app.post('/api/rooms/:roomId/characters/:characterId/add',async(req,res)=>{
+  try {
+    const userId=requireRequestActor(req).userId;
+    const roomId=normalizeSafeId(req.params.roomId,ROOM_ID_RE),savedId=normalizeSafeId(req.params.characterId,ENTITY_ID_RE);
+    if(!roomId||!savedId)return httpError(res,400,'Invalid room or character');
+    const ctx=await loadRoomContext(roomId,userId);ensurePlayerOrGm(ctx);
+    const saved=await characterStore.get(userId,savedId);
+    const player=await addSavedCharacterForContext(ctx,saved,req.body?.requestId);
+    const payload={type:'playerCreated',roomId,player};broadcastToRoom(roomId,payload);
+    return res.json({ok:true,...payload});
+  }catch(error){return res.status(statusFromError(error)).json({ok:false,error:error.message});}
 });
 
 app.get('/api/characters', async (req, res) => {
@@ -3076,6 +3102,7 @@ function attachClientToRoom(ws, roomId) {
 
   room.add(ws);
   ws.currentRoomId = nextRoomId;
+  userProfiles.record('connect',ws,nextRoomId,ws.userId,ws.roomContext?.state,ws.role);
 }
 
 async function upsertTokenRow({
@@ -3968,13 +3995,16 @@ async function mutateRoomState(ctx, mutate) {
   ensurePlayerOrGm(ctx);
   let stored;
   let updatedAt;
+  let priorState;
   await withTransaction(async (client) => {
     await client.query("select pg_advisory_xact_lock(hashtext('d20_room_state'), hashtext($1))", [ctx.roomId]);
     ctx.state = await readRoomStateForUpdate(ctx, client);
+    priorState=ctx.state;
     stored = sanitizeRoomStateForStorage(await mutate(cloneJson(ctx.state), client));
     const result = await writeRoomState(ctx, stored, client);
     updatedAt = result;
   });
+  userProfiles.record('observe',ctx.roomId,priorState,stored);
   ctx.state = stored;
   rememberRoomStateValue(ctx.roomId, stored, updatedAt, { ...ctx.room, state_version: ctx.writtenStateVersion });
   invalidateRoomContexts(ctx.roomId, true);
@@ -4003,6 +4033,7 @@ async function mutateRoomStateFast(ctx, mutate) {
         roomStateReadMetrics.fullBytes += Buffer.byteLength(JSON.stringify(cached.state || {}));
       }
       ctx.state = cloneJson(cached.state) || {};
+      const priorState=ctx.state;
       const stored = sanitizeRoomStateForStorage(await mutate(cloneJson(ctx.state)));
       const { rows } = await pool.query(`
         update public.room_state set phase = $2, current_actor_id = $3, state = $4, updated_at = now()
@@ -4011,6 +4042,7 @@ async function mutateRoomStateFast(ctx, mutate) {
         stored.turnOrder?.[Math.max(0, Number(stored.currentTurnIndex) || 0)] || null, stored, cached.state_version]);
       if (!rows[0]) { cached = null; continue; }
       roomStateReadMetrics.cacheHits++;
+      userProfiles.record('observe',ctx.roomId,priorState,stored);
       ctx.state = stored;
       rememberRoomStateValue(ctx.roomId, stored, rows[0].updated_at, { ...ctx.room, state_version: rows[0].state_version });
       invalidateRoomContexts(ctx.roomId, true);
@@ -4153,6 +4185,27 @@ function sanitizeCreatedPlayerForContext(ctx, incoming, currentState) {
     sheet,
     sheetUpdatedAt: Math.max(0, Number(incoming.sheetUpdatedAt) || Date.now())
   };
+}
+
+async function addSavedCharacterForContext(ctx,saved,requestId) {
+  ensurePlayerOrGm(ctx);
+  const id=normalizeSafeId(requestId,ENTITY_ID_RE);
+  if(!id||['__proto__','constructor','prototype'].includes(id)||!saved?.state?.data?.parsed)throw Object.assign(new Error('Invalid saved character'),{status:400});
+  let created;
+  await mutateRoomState(ctx,state=>{
+    const existing=(state.players||[]).find(p=>p.isBase&&String(p.ownerId)===ctx.userId);
+    if(existing){
+      if(existing.savedCharacterRequestId===id&&existing.savedCharacterId===saved.id){created=existing;return state;}
+      throw Object.assign(new Error('У вас уже есть основа в этой комнате'),{status:409});
+    }
+    if((state.players||[]).some(p=>String(p.id)===id))throw Object.assign(new Error('Token identifier already exists'),{status:409});
+    const sheet=cloneJson(saved.state.data);sheet.characterKey=saved.characterKey||saved.state.characterKey||('legacy:'+String(saved.name).trim().toLocaleLowerCase('ru'));
+    created=sanitizeCreatedPlayerForContext(ctx,{id,name:saved.name,isBase:true,isAlly:true,isEnemy:false,isPublic:true,color:'#5e9985',size:1,sheet},state);
+    if(!created)throw new Error('Cannot create character');
+    created.savedCharacterRequestId=id;created.savedCharacterId=saved.id;
+    state.players||=[];state.players.push(created);return syncActiveMapCombatStateServer(state);
+  });
+  return cloneJson(created);
 }
 
 function removePlayerFromStateServer(state, playerId) {
@@ -4935,6 +4988,7 @@ async function handleDiceEventRelay(ws, data) {
       localNonce: String(match.localNonce || event.localNonce || '').trim()
     }
   };
+  userProfiles.record('dice',ctx.roomId,ctx.userId,{...payload.event,id:match.id,actorId:event.actorId,damageParts:event.damageParts},ctx.state,getStatePlayers(ctx.state).filter(p=>canControlPlayer(ctx,p)));
   send(ws, payload);
   broadcastToRoom(ctx.roomId, payload, ws);
 }
@@ -5844,6 +5898,7 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    userProfiles.record('disconnect',ws);
     const roomId = ws.currentRoomId;
     if (!roomId) return;
 

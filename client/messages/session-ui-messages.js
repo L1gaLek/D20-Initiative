@@ -31,6 +31,7 @@ function handleRegisteredMessage(msg) {
   sendMessage({ type: 'listRooms' });
 
   applyRoleToUI();
+  void window.PersonalPreferences?.load();
 
   if (window.InfoModal?.init) {
     window.InfoModal.init({

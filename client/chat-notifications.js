@@ -5,7 +5,8 @@
     try {
       const Audio = window.AudioContext || window.webkitAudioContext;
       if (!Audio) return;
-      if (!audio || audio.state === 'closed') audio = new Audio();
+      if(window.PersonalPreferences?.get().chatSound===false||window.PersonalPreferences?.get().volume===0)return;
+    if (!audio || audio.state === 'closed') audio = new Audio();
       if (audio.state === 'suspended') audio.resume().catch(() => {});
     } catch {}
   }
@@ -23,7 +24,7 @@
         oscillator.type = 'sine';
         oscillator.frequency.value = frequency;
         gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.07, start + 0.012);
+        gain.gain.linearRampToValueAtTime(0.07*(window.PersonalPreferences?.get().volume??70)/70, start + 0.012);
         gain.gain.exponentialRampToValueAtTime(0.001, start + 0.13);
         oscillator.connect(gain);
         gain.connect(audio.destination);
