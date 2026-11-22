@@ -150,6 +150,9 @@ function renderWallEdges(state, layerEl) {
 
   const CELL = 50;
   const stWalls = Array.isArray(state?.walls) ? state.walls : [];
+  const signature = JSON.stringify([state?.currentMapId,state?.boardWidth,state?.boardHeight,stWalls]);
+  if (layerEl.__wallSignature === signature) return;
+  layerEl.__wallSignature = signature;
 
   layerEl.innerHTML = '';
   try { window.__wallEdgeDomMap = new Map(); } catch {}
@@ -189,6 +192,7 @@ const legacyEventName = (name) => `${LEGACY_EVENT_PREFIX}_${String(name || '').t
   function applyLocalEdges(mode, edges) {
     const layer = ensureLayer();
     if (!layer) return;
+    layer.__wallSignature = null;
     if (!window.__wallEdgeDomMap) window.__wallEdgeDomMap = new Map();
 
     const list = Array.isArray(edges) ? edges : [];

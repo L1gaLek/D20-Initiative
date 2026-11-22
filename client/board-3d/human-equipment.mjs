@@ -1,8 +1,8 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 
-import { dressMasterPlate } from './plate-model.mjs?v=20261119-cuirass-1';
+import { dressMasterPlate } from './plate-model.mjs?v=20261122-egress-1';
 import { dressArmor } from './human-armor.mjs?v=20261119-cuirass-1';
-import {getArmorAsset} from './armor-assets.mjs?v=20261119-cuirass-1';
+import {getArmorAsset} from './armor-assets.mjs?v=20261122-egress-1';
 export { femaleTorsoProfile } from './human-armor.mjs?v=20261119-cuirass-1';
 
 // Rigid fittings share their parent's animation joint. Merge by material after
@@ -34,7 +34,7 @@ export function batchRigid(group,skeleton){
 export function dressHuman({config,materials:m,definitions,byName,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female,posePlan,editable=false,studio=null,skipArmor=false}){
   const prepared=getArmorAsset(config);
   if(!skipArmor){
-    if(prepared||config.armor==='plate')dressMasterPlate({config,asset:prepared,materials:m,female,surface,attach,byName,definitions,editable,studio});
+    if(prepared)dressMasterPlate({config,asset:prepared,materials:m,female,surface,attach,byName,definitions,editable,studio});
     else dressArmor({config,materials:m,definitions,surface,attach,sphere:makeSphere,curve:makeCurve,texture,female});
   }
   const armored=config.armor&&config.armor!=='none';

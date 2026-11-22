@@ -36,6 +36,9 @@ function initialState() {
 function serverHarness(state = initialState()) {
   let database = clone(state);
   const tokenOwnerWrites = [];
+  const cachedStates = new Map();
+  const stateReadMetrics = {cacheHits:0,fullReads:0,fullBytes:0};
+  const versionOf = value => require('node:crypto').createHash('sha256').update(JSON.stringify(value)).digest('hex');
   let tail = Promise.resolve();
   const clients = [1, 2, 3, 4, 'gm'].map(n => ({
     ctx: { roomId: 'test-room', userId: n === 'gm' ? 'gm' : `user-${n}`, role: n === 'gm' ? 'GM' : 'Player', state: clone(state) },
@@ -58,11 +61,15 @@ function serverHarness(state = initialState()) {
       return { rows: [] };
     }
     if (normalized === 'rollback') return { rows: [] };
+    if (normalized.includes('case when xmin::text')) {
+      const version=versionOf(database),state=values[1]===version?null:clone(database);
+      return {rows:[{state_version:version,state}]};
+    }
     if (normalized.includes('select state from public.room_state')) return { rows: [{ state: clone(database) }] };
     if (normalized.includes('insert into public.room_state')) {
       if (transaction) transaction.pending = clone(values[3]);
       else database = clone(values[3]);
-      return { rows: [{ updated_at: new Date().toISOString() }] };
+      return { rows: [{ updated_at: new Date().toISOString(), state_version: versionOf(values[3]) }] };
     }
     if (normalized.startsWith('update public.room_tokens set owner_id')) {
       transaction.tokenOwner = clone(values);
@@ -78,7 +85,7 @@ function serverHarness(state = initialState()) {
     }
   };
   const context = vm.createContext({
-    console, Date, Map, Set, Math, pool,
+    console, Date, Map, Set, Math, Buffer, pool, roomStateReadMetrics:stateReadMetrics,
     cloneJson: clone,
     sanitizeRoomStateForStorage: clone,
     stripRoomSecretsFromState: clone,
@@ -94,7 +101,9 @@ function serverHarness(state = initialState()) {
     sanitizeText: value => String(value),
     loadWsRoomContext: async ws => ws.ctx,
     fetchRoomStateRow: async () => { await tick(); return { state: clone(database) }; },
-    rememberRoomStateValue: () => {}, invalidateRoomContexts: () => {},
+    getCachedRoomStateRow: roomId => clone(cachedStates.get(roomId)||null),
+    rememberRoomStateValue: (roomId,state,updated_at,extra={}) => cachedStates.set(roomId,{state:clone(state),updated_at,state_version:extra.state_version||null}),
+    invalidateRoomContexts: () => {},
     send: (ws, payload) => ws.events.push({ payload: clone(payload), committed: clone(database) }),
     broadcastToRoom: (roomId, payload, except) => {
       for (const client of clients) if (client !== except) client.events.push({ payload: clone(payload), committed: clone(database) });
@@ -107,14 +116,14 @@ function serverHarness(state = initialState()) {
     'withTransaction', 'getStatePlayers', 'findPlayerById', 'getActiveMapServer',
     'syncActiveMapCombatStateServer', 'normalizeInitiativeModeServer',
     'sanitizeStatePatchFields', 'isCurrentTurnOwner', 'canPatchTurnFields',
-    'applyStatePatchToCurrentState', 'preserveNewerPlayerData', 'mutateRoomState',
+    'applyStatePatchToCurrentState', 'preserveNewerPlayerData', 'readRoomStateForUpdate', 'mutateRoomState',
     'writeRoomState', 'persistPatchedState', 'applyPlayerStateUpdate',
     'persistStateForContext', 'persistStatePatchForContext', 'handleStatePatchRelay',
     'handlePlayerPatchRelay', 'handleInitiativeLiveRelay', 'applyInitiativeUpdates',
     'canControlPlayer', 'setTokenAccessForContext', 'handleDiceEventRelay',
     'applyCombatCommand', 'handleCombatCommandRelay'
   ]), context);
-  return { context, clients, database: () => database, tick, tokenOwnerWrites };
+  return { context, clients, database: () => database, tick, tokenOwnerWrites, stateReadMetrics, cachedStates };
 }
 
 

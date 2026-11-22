@@ -948,31 +948,18 @@ try { handleSessionUiMessage?.(msg); } catch {}
       } catch {}
     }
     if (msg.type === 'tokenRow' && msg.row) {
-      try { applyTokenRowToLocalState(msg.row); } catch {}
+      const update = applyTokenRowToLocalState(msg.row);
+      if (!update?.changed) return;
       try {
         syncVisiblePlayersState(lastState);
-        renderBoard(lastState);
-        updatePlayerList();
-        window.InfoModal?.refresh?.(players);
-      } catch {}
-
-      // Lightweight DOM update (no full state overwrite)
-      try {
-        const pid = String(msg.row.token_id || '');
-        const p = (players || []).find(pp => String(pp?.id) === pid);
-        if (p) {
-          const el = playerElements.get(pid);
-          if (el) {
-            setPlayerPosition(p);
-            updateHpBar(p, el);
-          }
-        }
-      } catch {}
-
-      // v4: keep fog-of-war LOS synced to token movement.
-      try {
         window.FogWar?.onTokenPositionsChanged?.(lastState);
-      } catch {}
+        const affected = lastState?.fog?.enabled ? players : [update.player];
+        affected.forEach(player => setPlayerPosition(player));
+        const el = playerElements.get(String(update.player.id));
+        if (el) updateHpBar(update.player, el);
+        if (update.placementChanged || Object.hasOwn(msg.row,'color') || Object.hasOwn(msg.row,'is_public')) updatePlayerList();
+        window.Board3D?.requestSync?.(lastState);
+      } catch (error) { console.warn('tokenRow view update failed', error); }
     }
 
     // ================== v4: DICE (append-only) ==================

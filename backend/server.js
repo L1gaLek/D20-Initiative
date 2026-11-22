@@ -3,6 +3,8 @@ require('dotenv').config();
 const path = require('path');
 const DamageRolls = require('./shared/damage-rolls');
 const CombatState = require('./shared/combat-state');
+const RoomReadCache = require('./shared/room-read-cache');
+const roomReadCache = new RoomReadCache();
 const crypto = require('crypto');
 const http = require('http');
 const express = require('express');
@@ -79,7 +81,9 @@ if (!APP_AUTH_SECRET) {
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  idleTimeoutMillis: 60_000,
+  connectionTimeoutMillis: 10_000
 });
 
 const s3 = new S3Client({
@@ -359,6 +363,12 @@ function makeStatePayload(roomId, state, updatedAt = null, extra = {}) {
 
 const roomStateCache = new Map();
 const roomStateFetchInFlight = new Map();
+const roomStateReadMetrics = { cacheHits: 0, fullReads: 0, fullBytes: 0 };
+setInterval(() => {
+  if (roomStateReadMetrics.cacheHits || roomStateReadMetrics.fullReads || roomReadCache.loads) {
+    console.log('[egress-cache]', JSON.stringify({ ...roomStateReadMetrics, sharedReadHits: roomReadCache.hits, sharedReadLoads: roomReadCache.loads, sharedCacheBytes: roomReadCache.bytes }));
+  }
+}, 300_000).unref();
 
 function cloneRoomStateRow(row) {
   if (!row || typeof row !== 'object') return null;
@@ -392,10 +402,14 @@ function rememberRoomStateRow(roomId, row) {
     room_id: String(row.room_id || prev.room_id || id)
   };
   if (row.state && typeof row.state === 'object') merged.state = cloneJson(row.state);
+  if (row.state && !Object.prototype.hasOwnProperty.call(row, 'state_version')) merged.state_version = null;
+  roomStateCache.delete(id);
   roomStateCache.set(id, {
+    bytes: Buffer.byteLength(JSON.stringify(merged)),
     row: merged,
     expiresAt: Date.now() + ROOM_STATE_CACHE_TTL_MS
   });
+  while (roomStateCache.size > 64 || [...roomStateCache.values()].reduce((n,entry)=>n+(entry.bytes||0),0) > 64*1024*1024) roomStateCache.delete(roomStateCache.keys().next().value);
   return cloneRoomStateRow(merged);
 }
 
@@ -584,6 +598,7 @@ async function fetchRoomStateRow(roomId, options = {}) {
           s.phase,
           s.current_actor_id,
           s.state,
+          s.xmin::text as state_version,
           s.updated_at
         from public.rooms r
         left join public.room_state s on s.room_id = r.id
@@ -688,7 +703,15 @@ async function loadWsRoomContext(ws, roomIdRaw = '') {
     && ws.roomContext.userId === ws.userId
     && Number(ws.roomContext.cachedAt || 0) + ROOM_CONTEXT_CACHE_TTL_MS > now
   ) {
-    return ws.roomContext;
+    if (!ws.roomContext.stateStale) return ws.roomContext;
+    const latest = getCachedRoomStateRow(roomId);
+    if (latest) {
+      ws.roomContext.state = latest.state;
+      ws.roomContext.room = latest;
+      ws.roomContext.ownerId = getStateRoomMeta(latest.state).ownerId;
+      ws.roomContext.stateStale = false;
+      return ws.roomContext;
+    }
   }
 
   const ctx = await loadRoomContext(roomId, ws.userId);
@@ -739,7 +762,7 @@ function getStateMapBounds(state, mapId, options = {}) {
 }
 
 async function getMapBounds(roomId, mapId, state) {
-  const { rows } = await pool.query(
+  const { rows } = await roomReadCache.load(roomId, ['bounds', mapId], () => pool.query(
     `
       select board_width, board_height
       from public.room_map_meta
@@ -747,7 +770,7 @@ async function getMapBounds(roomId, mapId, state) {
       limit 1
     `,
     [roomId, mapId]
-  );
+  ));
   const row = rows[0] || null;
   const fallback = getStateMapBounds(state, mapId);
   const width = Math.max(5, Math.min(150, Number(row?.board_width || fallback.width || 10) || 10));
@@ -814,8 +837,11 @@ async function ensureTokenAreaFree(client, roomId, mapId, tokenId, x, y, size) {
         and token_id <> $3
         and x is not null
         and y is not null
+        and x < $4::int + $6::int and x + greatest(1,least(5,coalesce(size,1))) > $4
+        and y < $5::int + $6::int and y + greatest(1,least(5,coalesce(size,1))) > $5
+      limit 1
     `,
-    [roomId, mapId, tokenId]
+    [roomId, mapId, tokenId, x, y, size]
   );
 
   const nextBox = { x: Number(x), y: Number(y), size: sanitizeTokenSize(size) };
@@ -954,7 +980,10 @@ async function fetchWhitelistedRoomRows(ctx, tableNameRaw, query = {}) {
   values.push(normalizeReadLimit(query?.limit, config));
   sql += ` limit $${values.length}`;
 
-  const { rows } = await pool.query(sql, values);
+  const shared = ['room_map_meta', 'room_walls', 'room_marks', 'room_fog', 'room_music_state'].includes(tableName);
+  const { rows } = shared
+    ? await roomReadCache.load(ctx.roomId, ['rows', tableName, mapId, values.at(-1)], () => pool.query(sql, values))
+    : await pool.query(sql, values);
   return {
     rows,
     row: config.maybeSingle ? (rows[0] || null) : undefined
@@ -1349,7 +1378,7 @@ async function replaceRoomDetachedData(ctx, detachedRaw, stateRaw) {
     is_public: row.isPublic
   }));
 
-  return withTransaction(async (client) => {
+  const restored = await withTransaction(async (client) => {
     await client.query('delete from public.room_map_meta where room_id = $1', [ctx.roomId]);
     await client.query('delete from public.room_walls where room_id = $1', [ctx.roomId]);
     await client.query('delete from public.room_marks where room_id = $1', [ctx.roomId]);
@@ -1364,6 +1393,8 @@ async function replaceRoomDetachedData(ctx, detachedRaw, stateRaw) {
 
     return { roomMapMeta, roomWalls, roomMarks, roomFog, roomTokens };
   });
+  roomReadCache.invalidate(ctx.roomId);
+  return restored;
 }
 
 async function broadcastUsersSnapshot(roomId) {
@@ -2935,17 +2966,21 @@ function send(ws, payload) {
   ws.send(JSON.stringify(payload));
 }
 
-function invalidateRoomContexts(roomId) {
+function invalidateRoomContexts(roomId, stateOnly = false) {
   const room = rooms.get(String(roomId || ''));
   if (!room) return;
   for (const client of room) {
     try {
-      if (client?.roomContext?.roomId === String(roomId || '')) client.roomContext = null;
+      if (client?.roomContext?.roomId === String(roomId || '')) {
+        if (stateOnly) client.roomContext.stateStale = true;
+        else client.roomContext = null;
+      }
     } catch {}
   }
 }
 
 function broadcastToRoom(roomId, payload, exceptWs = null) {
+  if (['mapMetaRow','mapMetaDelete','wallRow','wallDelete','markRow','markDelete','marksReplace','fogRow','fogDelete','musicRow','musicDelete','roomDeleted'].includes(payload?.type)) roomReadCache.invalidate(String(roomId));
   const room = rooms.get(String(roomId || ''));
   if (!room) return;
   stampRoomEvent(payload, roomId);
@@ -3872,23 +3907,42 @@ function preserveNewerPlayerData(nextState, currentState) {
   return syncActiveMapCombatStateServer(nextState);
 }
 
-// Every read/modify/write of the room JSON must read under the same row lock.
-// Cached snapshots are useful for reads, but cannot be the base of a mutation.
+// PostgreSQL verifies the cache version while holding the row lock. Unchanged
+// rooms return only a tiny version token, not every player's complete sheet.
+async function readRoomStateForUpdate(ctx, client) {
+  const cached = getCachedRoomStateRow(ctx.roomId);
+  const version = cached?.state_version || '';
+  const { rows } = await client.query(`
+    select xmin::text as state_version,
+           case when xmin::text = $2 then null else state end as state
+    from public.room_state where room_id = $1 for update
+  `, [ctx.roomId, version]);
+  const row = rows[0];
+  if (version && row?.state_version === version && row.state === null) {
+    roomStateReadMetrics.cacheHits++;
+    return cloneJson(cached.state) || {};
+  }
+  roomStateReadMetrics.fullReads++;
+  roomStateReadMetrics.fullBytes += Buffer.byteLength(JSON.stringify(row?.state || {}));
+  return cloneJson(row?.state || ctx.state || {}) || {};
+}
+
+// All writers still serialize under the same lock; a stale/external cache never
+// replaces a newer database state. Publish the cache only after COMMIT succeeds.
 async function mutateRoomState(ctx, mutate) {
   ensurePlayerOrGm(ctx);
   let stored;
   let updatedAt;
   await withTransaction(async (client) => {
     await client.query("select pg_advisory_xact_lock(hashtext('d20_room_state'), hashtext($1))", [ctx.roomId]);
-    const { rows } = await client.query('select state from public.room_state where room_id = $1 for update', [ctx.roomId]);
-    ctx.state = cloneJson(rows[0]?.state || ctx.state || {}) || {};
+    ctx.state = await readRoomStateForUpdate(ctx, client);
     stored = sanitizeRoomStateForStorage(await mutate(cloneJson(ctx.state), client));
     const result = await writeRoomState(ctx, stored, client);
     updatedAt = result;
   });
   ctx.state = stored;
-  rememberRoomStateValue(ctx.roomId, stored, updatedAt, ctx.room || {});
-  invalidateRoomContexts(ctx.roomId);
+  rememberRoomStateValue(ctx.roomId, stored, updatedAt, { ...ctx.room, state_version: ctx.writtenStateVersion });
+  invalidateRoomContexts(ctx.roomId, true);
   return stripRoomSecretsFromState(stored);
 }
 
@@ -3907,7 +3961,7 @@ async function writeRoomState(ctx, nextState, db) {
                     current_actor_id = excluded.current_actor_id,
                     state = excluded.state,
                     updated_at = now()
-      returning updated_at
+      returning updated_at, xmin::text as state_version
     `,
     [
       ctx.roomId,
@@ -3916,6 +3970,7 @@ async function writeRoomState(ctx, nextState, db) {
       stored
     ]
   );
+  ctx.writtenStateVersion = rows[0]?.state_version || null;
   return rows[0]?.updated_at || new Date().toISOString();
 }
 
@@ -4183,7 +4238,7 @@ async function handleStatePatchRelay(ws, data) {
     }
     return next;
   });
-  ws.roomContext = null;
+  if (ws.roomContext) ws.roomContext.stateStale = true;
   const payload = {
     type: 'statePatch',
     roomId: ctx.roomId,
@@ -4559,11 +4614,11 @@ async function handleFogRow(ws, data) {
       on conflict (room_id, map_id)
       do update set settings = excluded.settings, manual_stamps = excluded.manual_stamps,
                     explored_packed = excluded.explored_packed, updated_at = now()
-      returning *
+      returning updated_at
     `,
     [row.room_id, row.map_id, fogJsonParam(row.settings, {}), fogJsonParam(row.manual_stamps, []), row.explored_packed]
   );
-  const payload = { type: 'fogRow', roomId: ctx.roomId, row: rows[0] };
+  const payload = { type: 'fogRow', roomId: ctx.roomId, row: {...row,...rows[0]} };
   send(ws, payload);
   broadcastToRoom(ctx.roomId, payload, ws);
 }
@@ -4615,11 +4670,11 @@ async function handleMusicRow(ws, data) {
       values ($1,$2,now())
       on conflict (room_id)
       do update set payload = excluded.payload, updated_at = now()
-      returning *
+      returning updated_at
     `,
     [ctx.roomId, music]
   );
-  const payload = { type: 'musicRow', roomId: ctx.roomId, row: rows[0] };
+  const payload = { type: 'musicRow', roomId: ctx.roomId, row: {room_id:ctx.roomId,payload:music,...rows[0]} };
   send(ws, payload);
   broadcastToRoom(ctx.roomId, payload, ws);
 }
@@ -5240,7 +5295,7 @@ async function handlePlayerPatchRelay(ws, data) {
   send(ws, payload);
   broadcastToRoom(ctx.roomId, payload, ws);
 
-  ws.roomContext = null;
+  if (ws.roomContext) ws.roomContext.stateStale = true;
 }
 
 async function handleInitiativeLiveRelay(ws, data) {
@@ -5307,7 +5362,7 @@ async function handleCombatCommandRelay(ws, data) {
   try {
     const ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
     const payload = await applyCombatCommand(ctx, data);
-    ws.roomContext = null;
+    if (ws.roomContext) ws.roomContext.stateStale = true;
     send(ws, payload);
     broadcastToRoom(ctx.roomId, payload, ws);
   } catch (error) {

@@ -207,6 +207,7 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    if(process.env.D20_EGRESS_ONLY){await require('./helpers/egress-scenarios.cjs')({pages,h});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_MAPS_ONLY){await require('./helpers/map-isolation-scenarios.cjs')({pages,h,mapHarness});assert.deepEqual(errors,[]);return;}
     if (!process.env.D20_3D_ONLY) {
     await gm.locator('#content-row').evaluate(el => { el.style.flexWrap = 'nowrap'; });

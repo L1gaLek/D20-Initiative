@@ -990,6 +990,8 @@ function applyTokenRowToLocalState(row) {
           } catch {}
           return;
         }
+        const before = JSON.stringify([p.x,p.y,p.size,p.color,p.isPublic,p.mapId]);
+        const wasPlaced = p.x != null && p.y != null;
         try {
           setTokenSnapshotCached(String(tokenId), mapId || p?.mapId || lastState?.currentMapId || '', {
             x: (!hasX || x === undefined) ? ((p?.x === null || typeof p?.x === 'undefined') ? null : Number(p.x)) : ((x === null || typeof x === 'undefined') ? null : Number(x)),
@@ -1037,18 +1039,6 @@ function applyTokenRowToLocalState(row) {
           }
         }
 
-        // Apply to DOM immediately (position/color/visibility rules)
-        try { setPlayerPosition?.(p); } catch {}
-        try {
-          const el = (typeof playerElements !== 'undefined') ? playerElements.get(String(p.id)) : null;
-          if (el) updateHpBar?.(p, el);
-        } catch {}
-
-        // Fog of war: token rows arrive via realtime; recompute dynamic visibility and refresh discoverable tokens.
-        try {
-          window.FogWar?.onTokenPositionsChanged?.(lastState);
-          (lastState?.players || []).forEach(pp => { try { setPlayerPosition?.(pp); } catch {} });
-        } catch {}
         try {
           if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
           const prev = window.__tokenRowFreshnessClock.get(tokenId) || {};
@@ -1057,6 +1047,7 @@ function applyTokenRowToLocalState(row) {
             appliedAtMs: Date.now()
           });
         } catch {}
+        return { player:p, changed:before !== JSON.stringify([p.x,p.y,p.size,p.color,p.isPublic,p.mapId]), placementChanged:wasPlaced !== (p.x != null && p.y != null) };
       }
     }
   } catch {}
@@ -3268,7 +3259,11 @@ async function sendMessage(msg) {
           try {
             const existingIds = new Set((next.maps || []).map(m => String(m?.id || '')).filter(Boolean));
             for (const m of (next.maps || [])) {
-              if (m && m.id) await upsertRoomMapMetaRow(currentRoomId, m);
+              if (m && m.id) {
+                const cached = __roomDetachedCache.mapMetaById.get(String(m.id));
+                const normalize = value => JSON.stringify([value?.name,value?.sectionId,Number(value?.boardWidth)||10,Number(value?.boardHeight)||10,value?.boardBgUrl||value?.boardBgDataUrl||null,value?.boardBgStoragePath||null,value?.boardBgStorageBucket||null,value?.gridAlpha??1,value?.wallAlpha??1]);
+                if (!cached || normalize(cached) !== normalize(m)) await upsertRoomMapMetaRow(currentRoomId, m);
+              }
             }
             const cachedIds = Array.from(__roomDetachedCache.mapMetaById.keys());
             for (const mid of cachedIds) {
