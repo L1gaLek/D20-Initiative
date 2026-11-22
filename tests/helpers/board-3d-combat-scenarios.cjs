@@ -81,10 +81,8 @@ module.exports=async function({pages,fixture,applyFixture,mode,screenshotDir}){
   assert.equal(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);
   assert.equal(await gm.locator('#board-settings-viewport').getByText('Рамка просмотра').count(),1);
   assert.equal(await gm.locator('#board-settings-gm').getByText('Размер карты').count(),1);
-  const width=await gm.locator('#board-width').inputValue();
-  await gm.locator('[data-step-target="board-width"][data-step-dir="1"]').click();
-  assert.equal(await gm.locator('#board-width').inputValue(),String(Number(width)+1));
-  await gm.locator('#board-width').fill(width);
+  assert.equal(await gm.locator('.legacy-viewport-controls').isVisible(),false);
+  assert.match(await gm.locator('#board-settings-viewport').textContent(),/автоматически/);
   if(screenshotDir)await panel.screenshot({path:path.join(screenshotDir,'map-editor-desktop.png')});
   await gm.setViewportSize({width:420,height:900});
   assert.equal(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);

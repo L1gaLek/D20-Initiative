@@ -266,15 +266,14 @@ async function main() {
     if(process.env.D20_EGRESS_ONLY){await require('./helpers/egress-scenarios.cjs')({pages,h});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_MAPS_ONLY){await require('./helpers/map-isolation-scenarios.cjs')({pages,h,mapHarness});assert.deepEqual(errors,[]);return;}
     if (!process.env.D20_3D_ONLY) {
-    await gm.locator('#content-row').evaluate(el => { el.style.flexWrap = 'nowrap'; });
+    await gm.setViewportSize({width:1440,height:800});
     const panelBefore = await gm.locator('#initiative-players-box').evaluate(el => el.getBoundingClientRect().height);
-    await gm.locator('#board-col').evaluate(el => { el.style.minHeight = '1900px'; });
+    await gm.setViewportSize({width:1440,height:1200});
     const panelAfter = await gm.locator('#initiative-players-box').evaluate(el => el.getBoundingClientRect().height);
-    assert.ok(panelAfter > panelBefore + 200, `Initiative panel should grow with frame: ${panelBefore} -> ${panelAfter}`);
+    assert.ok(panelAfter > panelBefore + 100, `Initiative panel should grow with viewport: ${panelBefore} -> ${panelAfter}`);
     assert.equal(await gm.locator('#initiative-players-box').evaluate(el => getComputedStyle(el).maxHeight), 'none');
-    await gm.locator('#board-col').evaluate(el => { el.style.minHeight = ''; });
-    await gm.locator('#content-row').evaluate(el => { el.style.flexWrap = ''; });
-    console.log('PASS: initiative panel uses the remaining frame height and grows with the board');
+    await gm.setViewportSize({width:1440,height:1000});
+    console.log('PASS: initiative panel uses the available viewport height');
     await p1.locator('#initiative-players-list button').first().click();
     await p1.getByText(/Инициатива не сохранена/).waitFor();
     assert.equal(await p1.evaluate(() => lastState.players[0].hasRolledInitiative), false);

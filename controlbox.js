@@ -4,8 +4,6 @@
 // client.js после инициализации вызовет window.initControlBox({...})
 
 (function () {
-  const CELL = 50;
-
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
   function readIntLs(key, fallback) {
@@ -63,13 +61,14 @@
     if (viewportWInput) viewportWInput.value = String(viewportCols);
     if (viewportHInput) viewportHInput.value = String(viewportRows);
 
-    // делаем полосу прокрутки (включаем overflow) + задаем размер рамки в пикселях
+    // The room owns the available viewport. Old personal cell preferences must
+    // never resize its frame or push the footer outside the browser window.
     function applyViewportToWrapper() {
       if (!boardWrapper) return;
       boardWrapper.style.overflow = window.__boardViewMode === '3d' ? 'hidden' : 'auto';
-      boardWrapper.style.width = `${viewportCols * CELL}px`;
-      document.getElementById('board-col')?.style.setProperty('--board-viewport-width', `${viewportCols * CELL}px`);
-      boardWrapper.style.height = `${viewportRows * CELL}px`;
+      boardWrapper.style.removeProperty('width');
+      boardWrapper.style.removeProperty('height');
+      document.getElementById('board-col')?.style.removeProperty('--board-viewport-width');
     }
 
     function setViewport(cols, rows) {
@@ -184,6 +183,7 @@
         if (kind === 'exploration') startExplorationBtn?.classList.add('active');
         if (kind === 'initiative') startInitiativeBtn?.classList.add('active');
         if (kind === 'combat') startCombatBtn?.classList.add('active');
+        window.setActiveGmQuickPanel?.('');
       } catch {}
     }
 

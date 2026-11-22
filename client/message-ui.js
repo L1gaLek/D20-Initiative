@@ -1510,6 +1510,9 @@ function renderTurnOrderBox(state) {
   if (!turnOrderBox || !turnOrderList) return;
   const phase = String(state?.phase || "");
   const show = (phase === "initiative" || phase === "combat");
+  document.getElementById('main-container')?.setAttribute('data-room-phase', phase);
+  const column = document.getElementById('combat-side-column');
+  if (column) column.hidden = !show;
   turnOrderBox.style.display = show ? '' : 'none';
   if (!show) return;
 
