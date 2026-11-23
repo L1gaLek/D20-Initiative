@@ -1,5 +1,5 @@
 import * as T from '../../vendor/three/three.module.mjs';
-import {normalizeProject,sampleClip} from './studio-state.mjs';
+import {normalizeProject,sampleClip} from './studio-state.mjs?v=20261124-outfits-1';
 
 export function applyStudioMaterials(figure,palette={}){
   const used=new Set();figure.traverse(o=>{if(!o.isMesh||used.has(o.material))return;const m=o.material,key=m.userData.plateMaterial||m.userData.studioKey;used.add(m);if(palette[key]){m.color.set(palette[key].color);m.roughness=palette[key].roughness;m.metalness=palette[key].metalness;}});

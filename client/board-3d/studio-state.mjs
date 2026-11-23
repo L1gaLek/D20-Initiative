@@ -13,7 +13,7 @@ export function normalizeAppearance(a={}){
   let right=WEAPONS.includes(a.right)?a.right:null,left=WEAPONS.includes(a.left)?a.left:null;
   const twoHanded=right==='great'?'right':left==='great'?'left':null;
   const shield=!twoHanded&&!!a.shield,shieldHand=a.shieldHand==='right'?'right':'left';if(shield){if(shieldHand==='left')left=null;else right=null;}
-  return {model,armor:ARMOR.includes(a.armor)?a.armor:'plate',hair:typeof a.hair==='string'?a.hair.slice(0,24):model==='human-female'?'braid':'parted',hairColor:/^#[a-f0-9]{6}$/i.test(a.hairColor)?a.hairColor:'#493124',right:twoHanded==='left'?null:right,left:twoHanded==='right'?null:left,shield,shieldHand,twoHanded};
+  return {model,outfitStyle:a.outfitStyle==='quaternius'?'quaternius':'d20',outfitHood:!!a.outfitHood,armor:ARMOR.includes(a.armor)?a.armor:'plate',hair:typeof a.hair==='string'?a.hair.slice(0,24):model==='human-female'?'braid':'parted',hairColor:/^#[a-f0-9]{6}$/i.test(a.hairColor)?a.hairColor:'#493124',right:twoHanded==='left'?null:right,left:twoHanded==='right'?null:left,shield,shieldHand,twoHanded};
 }
 export function normalizeProject(input={}){
   if(input.format&&input.format!==FORMAT)throw Error('Это не проект D20 Studio.');

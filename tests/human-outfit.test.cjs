@@ -40,3 +40,18 @@ test('female breastplate uses the fitted source, keeps the native rig and edits 
   for(const t of [0,.1,.2]){figure.userData.walkPoseAt(t,true);figure.updateMatrixWorld(true);assert.ok(armor.getVertexPosition(0,new T.Vector3()).toArray().every(Number.isFinite));}
  }finally{const materials=new Set();figure.traverse(o=>{o.geometry?.dispose();if(o.material)materials.add(o.material);});materials.forEach(m=>m.dispose());figure.userData.dispose();}
 });
+
+test('Quaternius Standard retains the native body and rig across both sexes, outfits, hood and fallback armor',async()=>{
+ const [T,{createHuman,ensureArmorAsset}]=await modules;
+ for(const model of ['human-male','human-female'])for(const armor of ['none','leather'])for(const outfitHood of [false,true]){
+  const config={model,armor,outfitStyle:'quaternius',outfitHood,right:'long',shield:true};await ensureArmorAsset(config);const figure=createHuman(config,{editable:true});
+  try{
+   assert.equal(figure.userData.armorQuality,'quaternius-standard');const body=figure.getObjectByName('anatomical-body');assert.equal(body.skeleton.bones.length,163);assert.ok(!body.skeleton.bones.some(b=>b.name==='pelvis'));
+   let sourceParts=0,hoods=0;
+   figure.traverse(o=>{if(!o.isSkinnedMesh||!o.userData.outfitId)return;sourceParts++;if(o.name.includes('Hood'))hoods++;const a=o.geometry.attributes;assert.equal(o.skeleton,body.skeleton);assert.equal(a.uv.count,a.position.count);assert.ok(a.position.array.every(Number.isFinite));assert.ok(a.normal.array.every(Number.isFinite));for(let i=0;i<a.skinWeight.count;i++){let sum=0;for(let k=0;k<4;k++)sum+=a.skinWeight.array[i*4+k];assert.ok(Math.abs(sum-1)<1e-5);}});
+   assert.ok(sourceParts>=4);assert.equal(hoods,armor==='leather'&&outfitHood?1:0);
+   for(const time of [0,.105,.21]){figure.userData.walkPoseAt(time,true);figure.updateMatrixWorld(true);assert.ok(body.getVertexPosition(5,new T.Vector3()).toArray().every(Number.isFinite));}
+  }finally{const mats=new Set();figure.traverse(o=>{o.geometry?.dispose();if(o.material)mats.add(o.material);});mats.forEach(m=>m.dispose());figure.userData.dispose();}
+ }
+ const fallback=createHuman({model:'human-female',armor:'plate',outfitStyle:'quaternius'});assert.equal(fallback.userData.armorQuality,'forged-volume');fallback.traverse(o=>o.geometry?.dispose());fallback.userData.dispose();
+});

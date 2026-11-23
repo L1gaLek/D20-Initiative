@@ -1284,11 +1284,11 @@ const rollBtn = subEl.querySelector('[data-cpw-sub-roll]');
       const before=getState(),id=String(before.player?.id||'');if(!before.canEdit||!canEditPlayer(before.player))return;
       try{
         if(input.files[0].size>600000)throw Error('Пресет слишком большой (предел 600 КБ).');
-        const module=await import(new URL('client/board-3d/studio-state.mjs?v=20261119-cuirass-1',document.baseURI).href),preset=module.parseProject(await input.files[0].text());
+        const module=await import(new URL('client/board-3d/studio-state.mjs?v=20261124-outfits-1',document.baseURI).href),preset=module.parseProject(await input.files[0].text());
         if(preset.asset)throw Error('Для изменённой в Blender модели используйте пакет модели. Здесь импортируются пресеты параметров.');
         if(preset.race!=='Человек')throw Error('В этой версии поддерживается модель человека.');
         const {player:current,canEdit:editable}=getState();if(String(current?.id||'')!==id||!editable||!canEditPlayer(current))return;
-        const sheet=current.sheet.parsed;sheet.appearance||={};sheet.appearance.model3d||={};sheet.appearance.model3d.studio=preset;sheet.appearance.model3d.hairStyle=preset.appearance.hair;sheet.appearance.model3d.hairColor=preset.appearance.hairColor;sheet.info||={};sheet.info.race={...(sheet.info.race||{}),value:'Человек'};sheet.notes||={};sheet.notes.details||={};sheet.notes.details.gender={...(sheet.notes.details.gender||{}),value:preset.appearance.model==='human-female'?'female':'male'};window.AvatarData?.rememberHair?.(sheet);scheduleSheetSave(current);rerenderActiveTab(current);window.Board3D?.requestSync?.();
+        const sheet=current.sheet.parsed;sheet.appearance||={};sheet.appearance.model3d||={};sheet.appearance.model3d.studio=preset;sheet.appearance.model3d.outfitStyle=preset.appearance.outfitStyle;sheet.appearance.model3d.outfitHood=preset.appearance.outfitHood;sheet.appearance.model3d.hairStyle=preset.appearance.hair;sheet.appearance.model3d.hairColor=preset.appearance.hairColor;sheet.info||={};sheet.info.race={...(sheet.info.race||{}),value:'Человек'};sheet.notes||={};sheet.notes.details||={};sheet.notes.details.gender={...(sheet.notes.details.gender||{}),value:preset.appearance.model==='human-female'?'female':'male'};window.AvatarData?.rememberHair?.(sheet);scheduleSheetSave(current);rerenderActiveTab(current);window.Board3D?.requestSync?.();
       }catch(error){const status=root.querySelector('[data-studio-status]');if(status&&String(getState().player?.id||'')===id)status.textContent=error.message;}
       finally{input.value='';}
     });
@@ -2336,6 +2336,7 @@ function bindSlotEditors(root, player, canEdit) {
                 bonus: b,
                 rolls: [r],
                 total: rollRes.total,
+                throwPower: rollRes.throwPower,
                 crit: (r === 1 ? 'crit-fail' : r === 20 ? 'crit-success' : '')
               }
             });

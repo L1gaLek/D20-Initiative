@@ -78,3 +78,10 @@
 .dice-throw-control .dice-power{max-width:none}
 .dice-throw-control button{touch-action:none;user-select:none;flex:0 0 auto}
 .dice-table-dialog__controls .dice-throw-control{flex-basis:230px;max-width:360px}
+.dice-table__footer{display:flex;align-items:center;gap:8px;flex:none;min-width:0;height:18px;margin-top:7px;overflow:hidden}
+.dice-table__footer .dice-table__caption{flex:1;min-width:0;margin:0;max-height:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:18px}
+.dice-table__footer .dice-table__pending{flex:none;margin:0;min-height:0;white-space:nowrap;line-height:18px;text-align:right}
+.dice-power--floating{position:fixed;z-index:2147483640;width:160px;height:48px;padding:8px;box-sizing:border-box;border:1px solid #b89b61;border-radius:7px;background:#182219f5;box-shadow:0 5px 18px #0009;pointer-events:none;max-width:none}
+button.is-charging{outline:1px solid #f2cc7c;outline-offset:2px;filter:brightness(1.15)}
+#dice-stack .dice-table__footer .dice-table__caption{flex:1;min-width:0}
+#dice-stack .dice-table__footer .dice-table__pending{flex:none}

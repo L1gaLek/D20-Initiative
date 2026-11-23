@@ -2,7 +2,7 @@
 // consumes the confirmed dice event; it never generates or saves game results.
 (function(){
   'use strict';
-  const base=new URL('dice-table/',document.currentScript.src),version='20261124-charge-1';
+  const base=new URL('dice-table/',document.currentScript.src),version='20261124-charge-2';
   let root,stage,caption,summary,pendingLabel,dialog,home,engine,loading,worker,job=0,generation=0;
   let room='',queue=[],busy=false,timer=null,state='idle',accepted=0,completed=0,last=[],failed=false,visible=true;
   const seen=new Map(),fingerprints=new Map(),jobs=new Map();
@@ -18,7 +18,7 @@
     const title=root.querySelector('.dice-others__title');
     const expand=document.createElement('button');expand.type='button';expand.className='dice-table__expand';expand.textContent='⛶';expand.title='Развернуть стол бросков';expand.setAttribute('aria-label','Развернуть стол бросков');expand.addEventListener('click',expandTable);title?.append(expand);
     home=document.createElement('div');home.className='dice-table';
-    home.innerHTML='<div class="dice-table__stage"><div class="dice-table__empty" aria-hidden="true"><span>20</span><small>Общий стол</small></div><div class="dice-table__waiting" role="status"><span aria-hidden="true">⬡</span>Ожидаем результат…</div></div><div class="dice-table__caption">Кубики появятся при следующем броске</div><div class="dice-table__summary" aria-live="polite" aria-atomic="true"></div><div class="dice-table__pending"></div>';
+    home.innerHTML='<div class="dice-table__stage"><div class="dice-table__empty" aria-hidden="true"><span>20</span><small>Общий стол</small></div><div class="dice-table__waiting" role="status"><span aria-hidden="true">⬡</span>Ожидаем результат…</div></div><div class="dice-table__footer"><div class="dice-table__caption">Кубики появятся при следующем броске</div><div class="dice-table__pending" aria-live="polite"></div></div><div class="dice-table__summary" aria-live="polite" aria-atomic="true"></div>';
     root.insertBefore(home,root.querySelector('.dice-others__list'));stage=home.querySelector('.dice-table__stage');caption=home.querySelector('.dice-table__caption');summary=home.querySelector('.dice-table__summary');pendingLabel=home.querySelector('.dice-table__pending');
     new IntersectionObserver(entries=>{visible=!!entries[0]?.isIntersecting;}).observe(stage);
     stage.addEventListener('dice-context-lost',()=>{engine?.dispose();engine=null;loading=null;if(state!=='settled')stage.classList.add('is-awaiting-result');stage.classList.add('dice-table__stage--fallback');fallback(last);});
@@ -72,7 +72,7 @@
   function prune(map,max){while(map.size>max)map.delete(map.keys().next().value);}
   function keys(ev){return [ev?.id?`id:${String(ev.id).slice(0,200)}`:'',ev?.localNonce?`nonce:${String(ev.localNonce).slice(0,200)}`:''].filter(Boolean);}
   function timelineFor(ev,serverNow){
-    const ids=keys(ev),incoming=DicePresentation.read(ev?.presentation,Date.now(),serverNow);
+    const ids=keys(ev),incoming=DicePresentation.read(ev?.presentation,Date.now(),serverNow,ev?.throwPower);
     let timeline=ids.map(id=>timelines.get(id)).find(Boolean);
     if(!timeline)timeline=incoming;
     else if(incoming.authoritative&&!timeline.authoritative)Object.assign(timeline,incoming);

@@ -1501,7 +1501,13 @@
 
     rerollBtn.addEventListener('click', async () => {
       const sheet = syncConfig();
-      applyMonsterHpRoll(sheet, sheet?.monster || null);
+      const config=ensureMonsterHpRollConfig(sheet,sheet?.monster||null);
+      if(config.count>0&&config.sides>=2&&config.sides<=100&&window.DicePanel?.roll){
+        const parts=Array.from({length:Math.ceil(config.count/20)},(_,i)=>({type:'dice',sides:config.sides,count:Math.min(20,config.count-i*20),description:'Кости здоровья'}));if(config.bonus)parts.push({type:'flat',value:config.bonus,description:'Бонус здоровья'});
+        const result=await window.DicePanel.roll({damageParts:parts,kindText:'Здоровье монстра',actorName:player.name});
+        if(!result)return;
+        const total=Math.max(0,Math.trunc(result.total));set(sheet,'monsterHpRoll',{...config,lastTotal:total});set(sheet,'vitality.hp-max.value',total);set(sheet,'vitality.hp-current.value',total);
+      }else applyMonsterHpRoll(sheet,sheet?.monster||null);
       try {
         const tokenEl = playerElements?.get?.(String(player?.id || ''));
         if (tokenEl) updateHpBar?.(player, tokenEl);

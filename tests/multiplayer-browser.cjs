@@ -33,6 +33,9 @@ if(process.env.D20_MAPS_ONLY || syncMode){
  start.phase='exploration';start.maps[0].phase='exploration';
  start.maps.push({id:'map-2',name:'Large map',sectionId:'section-1',boardWidth:90,boardHeight:70,phase:'exploration',playerStates:{},fog:{enabled:false}});
 }
+if(process.env.D20_QUATERNIUS_ONLY){
+ start.players[0].sheet.parsed={info:{race:{value:'Человек'}},notes:{details:{gender:{value:'female'}}},inventory:{armor:require('../equipment_srd5_ru.json').tabs.armor},appearance:{slots:{armor:'armor_leather'},model3d:{hairStyle:'braid'}}};
+}
 const h = serverHarness(start);
 const mapHarness=(process.env.D20_MAPS_ONLY || syncMode)?require('./helpers/map-harness.cjs')(h,start):null;
 const sockets = new Set();
@@ -267,6 +270,8 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    if(process.env.D20_SHEET_DICE_ONLY){await require('./helpers/sheet-dice-charge-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
+    if(process.env.D20_QUATERNIUS_ONLY){await pages[1].evaluate(armor=>window.__quatArmor=armor,require('../equipment_srd5_ru.json').tabs.armor);await require('./helpers/quaternius-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_DIALOGS_ONLY){await require('./helpers/room-dialog-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_APPEARANCE_ONLY){await require('./helpers/appearance-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_WORKSPACE_ONLY){await require('./helpers/room-workspace-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}

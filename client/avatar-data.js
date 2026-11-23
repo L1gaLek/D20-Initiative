@@ -86,7 +86,7 @@
     const ap=sheet.appearance||{},slots=ap.slots||{},inv=sheet.inventory||{};
     const equipped=hands(sheet);
     const hair=ap.model3d||{};
-    return {model:'human-'+gender,hair:hairFor(gender,hair.hairStyle),
+    return {model:'human-'+gender,outfitStyle:hair.outfitStyle==='quaternius'?'quaternius':'d20',outfitHood:!!hair.outfitHood,hair:hairFor(gender,hair.hairStyle),
       hairColor:/^#[\da-f]{6}$/i.test(hair.hairColor)?hair.hairColor:'#493124',
       armor:armorKind(itemIn(inv.armor,slots.armor)),shield:equipped.shield,shieldHand:equipped.shieldHand,twoHanded:equipped.twoHanded,
       right:swordKind(itemIn(inv.weapons,equipped.right)),left:swordKind(itemIn(inv.weapons,equipped.left)),

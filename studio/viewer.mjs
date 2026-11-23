@@ -4,9 +4,9 @@ import {TransformControls} from '../vendor/three/TransformControls.mjs';
 import {GLTFExporter} from '../vendor/three/GLTFExporter.mjs';
 import {GLTFLoader} from '../vendor/three/GLTFLoader.mjs';
 import {clone} from '../vendor/three/SkeletonUtils.mjs';
-import {createHuman,ensureArmorAsset} from '../client/board-3d/human.mjs';
-import {batchRigid} from '../client/board-3d/human-equipment.mjs';
-import {sampleClip} from '../client/board-3d/studio-state.mjs';
+import {createHuman,ensureArmorAsset} from '../client/board-3d/human.mjs?v=20261124-outfits-1';
+import {batchRigid} from '../client/board-3d/human-equipment.mjs?v=20261124-outfits-1';
+import {sampleClip} from '../client/board-3d/studio-state.mjs?v=20261124-outfits-1';
 import {portableGLB} from './glb.mjs';
 
 export function createStudioViewer(host,{changed=()=>{},stats=()=>{}}={}){

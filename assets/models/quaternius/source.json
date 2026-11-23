@@ -1,0 +1,28 @@
+{
+  "source": "https://quaternius.itch.io/modular-character-outfits-fantasy",
+  "edition": "Standard 2.1",
+  "license": "CC0-1.0",
+  "included": [
+    "Male_Ranger",
+    "Female_Ranger",
+    "Male_Peasant",
+    "Female_Peasant"
+  ],
+  "fit": "Native D20 163-joint skeleton; native head/body/grip preserved; source UVs and PBR maps.",
+  "inputs": {
+    "Textures/Ranger/T_Ranger_BaseColor.png": "846ef2170b04ee584ad83bb8a1e86dab57a9a43b1193204505912c274d949925",
+    "Textures/Ranger/T_Ranger_Normal.png": "dd64da2af3180f0c8f0b721cfc5f0d2720c351b97da8285c6cf49e7717c84147",
+    "Textures/Ranger/T_Ranger_ORM.png": "aca03d2fba12508ef07d5968ca22267fb207ea26ae898b6b2def8a296bd44f1c",
+    "Textures/Peasant/T_Peasant_BaseColor.png": "a43635628d95571cd62fd4db0cc3a6ea32778b2bc02f242dda224c89d07f1ade",
+    "Textures/Peasant/T_Peasant_Normal.png": "7598fa7b63e46fd4dac29708bf5a81e05eb9a67280f7b13c61e28a9110eeb679",
+    "Textures/Peasant/T_Peasant_ORM.png": "e1932f5f91104afca89c501416a5fec09069b8552734237fc09045fabc4ca9b4",
+    "Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.gltf": "8f5a6cf6c1cf96e0a0f8e1a861b4245d42b7f88d44e5076da3d48f3fc52f4e76",
+    "Exports/glTF (Godot-Unreal)/Outfits/Male_Peasant.bin": "e46bde795f7b69b351d322d7a5628e07131cfb48ed0afe366293f1b3f530433c",
+    "Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.gltf": "e1033a212332d84d98c19bc4927c621635478d0aa15d13c79da68d3ba9e0196f",
+    "Exports/glTF (Godot-Unreal)/Outfits/Male_Ranger.bin": "5bbb0d42cb324c6c27ce00417e68a876d92978f07d161f83590f0d7c0570eff6",
+    "Exports/glTF (Godot-Unreal)/Outfits/Female_Peasant.gltf": "43ba98058b933cae9acbde0f3ef8c3dda4ba9f69f338606f9d87666d9efffb31",
+    "Exports/glTF (Godot-Unreal)/Outfits/Female_Peasant.bin": "40eccaa2bd545c893142ef7dca0866ea8f20df3a86c67c5615024bc4fe546e83",
+    "Exports/glTF (Godot-Unreal)/Outfits/Female_Ranger.gltf": "9b98b2ae6af3b4a1ec22bf8928b939e0751f08b25b636de82bfa7364fb34d3e1",
+    "Exports/glTF (Godot-Unreal)/Outfits/Female_Ranger.bin": "d015964ba0a26eee9c9d2ea6f07aa660bba88aa536cf8bb6b67944b9e97c46df"
+  }
+}

@@ -3,13 +3,13 @@ import maleModel from '../../assets/models/human/male.mjs?v=20261119-cuirass-1';
 import femaleModel from '../../assets/models/human/female.mjs?v=20261123-cbbe-1';
 import { createHair, headMapping } from './human-hair.mjs?v=20261119-cuirass-1';
 import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261119-cuirass-1';
-import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261123-cbbe-1';
-import {normalizeProject} from './studio-state.mjs';
-import {installStudioRuntime} from './studio-runtime.mjs';
-import {getArmorAsset,ensureArmorAsset,armorAssetRevision} from './armor-assets.mjs?v=20261123-cbbe-1';
-import {applyHumanOutfit} from './human-outfit.mjs';
-import {dressFittedOutfit} from './fitted-outfit.mjs?v=20261123-cbbe-1';
-export {ensureArmorAsset,armorAssetRevision};
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261124-outfits-1';
+import {normalizeProject} from './studio-state.mjs?v=20261124-outfits-1';
+import {installStudioRuntime} from './studio-runtime.mjs?v=20261124-outfits-1';
+import {getArmorAsset,ensureArmorAsset,armorAssetRevision,requiresArmorAsset} from './armor-assets.mjs?v=20261124-outfits-1';
+import {applyHumanOutfit} from './human-outfit.mjs?v=20261124-outfits-1';
+import {dressFittedOutfit} from './fitted-outfit.mjs?v=20261124-outfits-1';
+export {ensureArmorAsset,armorAssetRevision,requiresArmorAsset};
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
 function prepare(model){
@@ -123,7 +123,8 @@ export function createHuman(config,options={}){
   // Keep the continuous body under fitted pieces. Open necklines, shoulders,
   // waist and gaps between articulated armor must reveal skin rather than holes.
   const armored=config.armor&&config.armor!=='none';
-  const skin=surface(materials.skin,p=>!armored||p[1]>.34);skin.name='anatomical-body';
+  const quaternius=getArmorAsset(config)?.style==='quaternius-standard';
+  const skin=surface(materials.skin,(p,b)=>quaternius?(p[1]>1.395||/wrist|finger/.test(b)||['L','R'].some(side=>Math.hypot(...p.map((v,i)=>v-definitions.get('wrist.'+side).head[i]))<.105)):!armored||p[1]>.34);skin.name='anatomical-body';
   const skinPositions=skin.geometry.attributes.position.array,colors=new Float32Array(skinPositions.length);const color=new THREE.Color();
   for(let i=0;i<skinPositions.length/3;i++){
     const [x,y,z]=headFit.inverse(Array.from(skinPositions.slice(i*3,i*3+3)));color.setRGB(1,1,1);
@@ -149,7 +150,7 @@ export function createHuman(config,options={}){
       curve('head',materials.hair,[[x,y,z],[x+sign*.001,y+.0013,z-.0005]].map(p=>headFit.front(headFit.point(p))),.00035,2);
     }
   }
-  if(female||config.armor!=='plate')createHair({config,female,materials,surface,attach,sphere,curve,headFit});
+  if(!(getArmorAsset(config)?.style==='quaternius-standard'&&config.outfitHood)&&(female||config.armor!=='plate'))createHair({config,female,materials,surface,attach,sphere,curve,headFit});
   const posePlan=planHumanPose(config,definitions);
   const studio=config.studio?normalizeProject(config.studio):options.editable?normalizeProject({appearance:config}):null;
   const fitted=getArmorAsset(config)?.format==='d20-fitted-outfit'?getArmorAsset(config):null;

@@ -1,5 +1,5 @@
 import * as T from '../../vendor/three/three.module.mjs';
-import {applyHumanOutfit} from './human-outfit.mjs';
+import {applyHumanOutfit} from './human-outfit.mjs?v=20261124-outfits-1';
 import {sharePlateReflection} from './plate-materials.mjs?v=20261119-cuirass-1';
 
 const decode=(s,Type)=>new Type(Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer);
@@ -9,7 +9,7 @@ export async function prepareFittedOutfit(asset){
   const pending=(async()=>{
     const maps=new Map();
     if(typeof document!=='undefined'){
-      const normals=new Set(asset.materials.map(m=>m.normalMap));
+      const normals=new Set(asset.materials.flatMap(m=>[m.normalMap,m.ormMap]));
       await Promise.all(Object.entries(asset.images).map(async([id,spec])=>{
         const response=await fetch(new URL(spec.file,import.meta.url));if(!response.ok)throw Error('Outfit texture HTTP '+response.status);
         const bitmap=await createImageBitmap(await response.blob(),{imageOrientation:'flipY',premultiplyAlpha:'none'}),texture=new T.Texture(bitmap);
@@ -30,18 +30,18 @@ function geometry(part){
 function materials(asset,skin){
   const result=new Map([['skin',skin]]),maps=assetMaps.get(asset)||new Map();
   for(const spec of asset.materials){
-    const m=new T.MeshStandardMaterial({name:spec.name,color:'#ffffff',metalness:spec.metalness??(spec.name.includes('Armor')||spec.name.includes('Plate')||spec.name.includes('Gauntlets')?.8:.05),roughness:spec.roughness??(spec.name.includes('Armor')||spec.name.includes('Plate')||spec.name.includes('Gauntlets')?.42:.72),map:maps.get(spec.colorMap)||null,normalMap:maps.get(spec.normalMap)||null,alphaTest:spec.alphaTest||0,side:T.DoubleSide});
-    m.normalScale.set(.8,.8);m.userData.plateMaterial=m.metalness>.5?'steel':'leather';m.userData.fittedOutfit=true;
+    const m=new T.MeshStandardMaterial({name:spec.name,color:'#ffffff',metalness:spec.metalness??(spec.name.includes('Armor')||spec.name.includes('Plate')||spec.name.includes('Gauntlets')?.8:.05),roughness:spec.roughness??(spec.name.includes('Armor')||spec.name.includes('Plate')||spec.name.includes('Gauntlets')?.42:.72),map:maps.get(spec.colorMap)||null,normalMap:maps.get(spec.normalMap)||null,roughnessMap:maps.get(spec.ormMap)||null,metalnessMap:maps.get(spec.ormMap)||null,alphaTest:spec.alphaTest||0,side:T.DoubleSide});
+    m.normalScale.set(.8,.8);m.userData.plateMaterial=m.metalness>.5?'steel':'leather';m.userData.fittedOutfit=true;m.userData.studioKey=spec.id;
     if(m.metalness>.5)sharePlateReflection(m);
-    const textures=[...new Set([m.map,m.normalMap].filter(Boolean))];for(const t of textures){if(!references.get(t))t.needsUpdate=true;references.set(t,(references.get(t)||0)+1);}
+    const textures=[...new Set([m.map,m.normalMap,m.roughnessMap,m.metalnessMap].filter(Boolean))];for(const t of textures){if(!references.get(t))t.needsUpdate=true;references.set(t,(references.get(t)||0)+1);}
     m.addEventListener('dispose',()=>{for(const t of textures){const n=references.get(t)-1;references.set(t,n);if(!n)t.dispose();}});result.set(spec.id,m);
   }return result;
 }
 export function dressFittedOutfit(root,asset,studio=null,editable=false){
   let body;root.traverse(o=>{if(o.name==='anatomical-body')body=o;});
   const host=body.parent,source=new T.Group(),mats=materials(asset,body.material),bones=asset.bones.map(name=>({name}));
-  for(const part of asset.pieces){const mesh=new T.SkinnedMesh(geometry(part),mats.get(part.material));mesh.name=part.name;mesh.skeleton={bones};mesh.userData.d20OutfitPart=part.material!=='skin';mesh.userData.outfitId=part.id;source.add(mesh);}
-  applyHumanOutfit(root,source);
+  for(const part of asset.pieces){if(part.optional==='hood'&&!root.userData.avatar.outfitHood)continue;const mesh=new T.SkinnedMesh(geometry(part),mats.get(part.material));mesh.name=part.name;mesh.skeleton={bones};mesh.userData.d20OutfitPart=part.material!=='skin';mesh.userData.outfitId=part.id;source.add(mesh);}
+  applyHumanOutfit(root,source,{preserveBody:!!asset.preserveBody});
   const changes=new Map();
   root.traverse(o=>{const id=o.userData.outfitId;if(!o.isSkinnedMesh||!id||o.name==='anatomical-body')return;
     if(!editable&&!Object.keys(studio?.parts||{}).length)return;

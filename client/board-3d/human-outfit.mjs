@@ -2,7 +2,7 @@ import * as T from '../../vendor/three/three.module.mjs';
 
 // Local GLB garments must be authored in the D20 humanoid's bind space. Keep
 // live game bones (including grip IK and studio poses), transferring only skin.
-export function applyHumanOutfit(root,source){
+export function applyHumanOutfit(root,source,{preserveBody=false}={}){
   let original;
   root.traverse(o=>{if(o.isSkinnedMesh&&o.name==='anatomical-body')original=o;});
   if(!original)throw Error('D20 outfit: anatomical body is missing.');
@@ -29,10 +29,10 @@ export function applyHumanOutfit(root,source){
       }
       for(const value of a.position.array)if(!Number.isFinite(value))throw Error('D20 outfit: invalid geometry.');
     });
-    if(!prepared.some(p=>p.source.name==='anatomical-body')||prepared.length<2)throw Error('D20 outfit: fitted body and garment are required.');
+    if(preserveBody?!prepared.length:(!prepared.some(p=>p.source.name==='anatomical-body')||prepared.length<2))throw Error('D20 outfit: fitted body and garment are required.');
   }catch(error){for(const p of prepared)p.geometry.dispose();throw error;}
   const body=original.parent;
-  original.removeFromParent();original.geometry.dispose();
+  if(!preserveBody){original.removeFromParent();original.geometry.dispose();}
   for(const {geometry,source:o}of prepared){
     const mesh=new T.SkinnedMesh(geometry,o.material);mesh.name=o.name;
     mesh.userData={...o.userData};mesh.frustumCulled=false;

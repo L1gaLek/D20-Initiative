@@ -61,6 +61,8 @@ test('charged throws increase physical impulse, stay deterministic and preserve 
     const n=(plan.frameCount-1)*7;assert.ok(Math.abs(plan.frames[n])<plan.width/2&&Math.abs(plan.frames[n+2])<plan.depth/2);assert.ok(plan.frames[n+1]<1.3);
     assert.equal(model.faceLabels(model.polyhedron(20),plan.upFaces[0],20)[plan.upFaces[0]],'20');
   }
+  assert.ok(b.wallHits>a.wallHits+1,'strong throws rebound from the tray rim');
+  const ordinary=p.create(100000,0),charged=p.create(100000,1);assert.equal(charged.revealAt-charged.startAt,6600);assert.equal(ordinary.revealAt-ordinary.startAt,2600);assert.equal(p.read(charged,100010).revealAt,charged.revealAt);assert.equal(p.progress(charged,charged.revealAt),1);
   assert.equal(normal.dice[0].throwPower,0);assert.equal(strong.dice[0].throwPower,1);
   const vm=require('node:vm'),fs=require('node:fs'),context={};vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../client/dice-table/charge.js'),'utf8'),context);
   assert.equal(context.DiceCharge.amount(50),0);assert.ok(context.DiceCharge.amount(920)>.49);assert.equal(context.DiceCharge.amount(2000),1);

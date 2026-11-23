@@ -1,6 +1,6 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
-import { createHuman,ensureArmorAsset,armorAssetRevision } from './human.mjs?v=20261123-cbbe-1';
+import { createHuman,ensureArmorAsset,armorAssetRevision,requiresArmorAsset } from './human.mjs?v=20261124-outfits-1';
 
 function disposeFigure(figure){
   if(!figure)return;const materials=new Set();figure.traverse(o=>{o.userData.dispose?.();o.geometry?.dispose();if(o.material)materials.add(o.material);});materials.forEach(m=>m.dispose());figure.removeFromParent();
@@ -43,7 +43,7 @@ export function createPortrait(host){
       const changedHeight=tall(next)!==tall(config);
       if(changedHeight){const offset=camera.position.clone().sub(controls.target),distance=offset.length();if(tall(next))regularDistance=distance;controls.target.y=tall(next)?1.10:.85;camera.position.copy(controls.target).addScaledVector(offset.normalize(),tall(next)?distance:regularDistance||distance);controls.maxDistance=5;controls.update();}
       config=next;styleKey=k;disposeFigure(figure);figure=next?createHuman(next):null;if(figure)scene.add(figure);if(changedHeight)fitGreatsword();base.visible=ring.visible=!!figure;invalidate();
-      if(next&&next.armor&&next.armor!=='none'&&!armorAssetRevision(next))ensureArmorAsset(next).then(()=>{if(!disposed&&config===next)api.update(next);}).catch(error=>console.warn('Armor model unavailable:',error.message));
+      if(requiresArmorAsset(next)&&!armorAssetRevision(next))ensureArmorAsset(next).then(()=>{if(!disposed&&config===next)api.update(next);}).catch(error=>console.warn('Armor model unavailable:',error.message));
     },
     walk(value){walking=!!value;last=0;if(!walking)figure?.userData.pose(0,false);invalidate();},
     inspect(){return {ready:!!figure,config,armorQuality:figure?.userData.armorQuality,walking,stance:figure?.userData.stance||null,angle:figure?.userData.walkAngle||0,camera:camera.position.toArray(),render:{geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles}};},

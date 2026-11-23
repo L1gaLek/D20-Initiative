@@ -2,7 +2,7 @@ import * as THREE from '../../vendor/three/three.module.mjs';
 import { OrbitControls } from '../../vendor/three/OrbitControls.mjs';
 import { loadBoardImage } from './background.mjs';
 import { fogMaterial, magicMaterial } from './effects.mjs';
-import { createHuman,ensureArmorAsset,armorAssetRevision } from './human.mjs?v=20261123-cbbe-1';
+import { createHuman,ensureArmorAsset,armorAssetRevision,requiresArmorAsset } from './human.mjs?v=20261124-outfits-1';
 
 const WALL_HEIGHT = 1.35;
 const data = window.Board3DData;
@@ -436,8 +436,8 @@ export function createBoard3D(root, callbacks) {
     for (const [id,group] of pawns) if (!present.has(id)) { disposeTree(group); pawnGroup.remove(group); pawns.delete(id); }
     for (const token of tokens) {
       const {x,y,hud,currentTurn,...style}=token, key=JSON.stringify(style)+'|'+armorAssetRevision(token.avatar);
-      if(token.avatar&&token.avatar.armor!=='none'&&!armorAssetRevision(token.avatar)){
-        const id=token.avatar.model+'-'+token.avatar.armor;
+      if(requiresArmorAsset(token.avatar)&&!armorAssetRevision(token.avatar)){
+        const id=token.avatar.model+'-'+(token.avatar.outfitStyle||'d20')+'-'+token.avatar.armor;
         if(!armorLoads.has(id)){armorLoads.add(id);ensureArmorAsset(token.avatar).then(()=>{if(current&&canvas.isConnected)sync(current);}).catch(error=>{armorLoads.delete(id);console.warn('Armor model unavailable:',error.message);});}
       }
       let group=pawns.get(token.id);

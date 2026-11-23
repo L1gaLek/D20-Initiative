@@ -1,5 +1,5 @@
 import * as T from '../../vendor/three/three.module.mjs';
-import {getArmorAsset} from './armor-assets.mjs?v=20261123-cbbe-1';
+import {getArmorAsset} from './armor-assets.mjs?v=20261124-outfits-1';
 import {createPlateMaterials} from './plate-materials.mjs?v=20261119-cuirass-1';
 
 const decode=(s,Type)=>new Type(Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer),templates=new Map();

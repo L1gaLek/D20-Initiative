@@ -4981,7 +4981,7 @@ async function handleDiceEventRelay(ws, data) {
     __optimisticApplied: !!data.__optimisticApplied,
     event: {
       fromId: String(match.from_id || ctx.userId),
-      presentation: DicePresentation.create(),
+      presentation: DicePresentation.create(Date.now(),event.throwPower),
       throwPower: DicePresentation.throwPower(event.throwPower),
       diceStyle: Appearance.style(event.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
       fromName: String(match.from_name || ctx.name || 'Игрок'),

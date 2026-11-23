@@ -199,7 +199,7 @@
 
   // ================== RENDER: SPELLS ==================
 
-  
+
 function renderSpellCard({ level, name, href, desc, action }) {
     const safeHref = escapeHtml(href || "");
     const safeName = escapeHtml(name || href || "(без названия)");
@@ -440,7 +440,7 @@ function renderSpellCard({ level, name, href, desc, action }) {
   }
 
   // ================== OTHER TABS ==================
-  
+
 function renderCombatTab(vm) {
   const statModByKey = {};
   (vm?.stats || []).forEach(s => { statModByKey[s.k] = safeInt(s.mod, 0); });
@@ -1263,11 +1263,15 @@ function renderShopTab(vm, canEdit) {
                 <div class="avatar-fields">
                   <label>Раса<select data-sheet-path="info.race.value" data-race-select ${canEdit?'':'disabled'}>${races}</select></label>
                   <label>Пол<select data-sheet-path="notes.details.gender.value" data-gender-select ${canEdit?'':'disabled'}><option value="male">Мужской</option><option value="female">Женский</option></select></label>
+
+                  <label>Стиль одежды<select data-sheet-path="appearance.model3d.outfitStyle" ${canEdit?'':'disabled'}><option value="d20">D20</option><option value="quaternius">Quaternius Standard</option></select></label>
+
+                  <label class="avatar-hood"><span>Капюшон следопыта</span><input type="checkbox" data-sheet-path="appearance.model3d.outfitHood" ${canEdit?'':'disabled'}></label>
                   <label>Причёска<select data-sheet-path="appearance.model3d.hairStyle" ${canEdit?'':'disabled'}>${hairstyles}</select></label>
                   <label>Цвет волос<div class="avatar-hair-color"><input type="color" aria-label="Цвет волос" data-sheet-path="appearance.model3d.hairColor" ${canEdit?'':'disabled'}><span>Палитра</span></div></label>
                 </div>
                 <div class="avatar-palette">${palette.map(([color,name])=>`<button type="button" data-hair-color="${color}" style="--hair-color:${color}" title="${name}" aria-label="Цвет волос: ${name}" ${canEdit?'':'disabled'}></button>`).join('')}</div>
-                <p class="avatar-help">Модели человека мужского и женского пола. При перемещении по карте включается ходьба. Внешность сохраняется автоматически.</p>
+                <p class="avatar-help">Модели человека мужского и женского пола. При перемещении по карте включается ходьба. Внешность сохраняется автоматически. Quaternius Standard: походная одежда без доспехов, следопыт — для кожаных и сыромятных доспехов. Остальные типы используют модели D20.</p>
                 <div class="avatar-studio-tools"><button type="button" class="weapon-btn" data-studio-import ${canEdit?'':'disabled'}>Из D20 Studio</button><button type="button" class="weapon-btn" data-studio-reset ${canEdit?'':'disabled'}>Убрать пресет</button><input type="file" data-studio-file accept=".json,application/json" hidden><p class="avatar-help" data-studio-status>${vm?.appearance?.model3d?.studio?`Пресет: ${escapeHtml(vm.appearance.model3d.studio.name||'D20 Studio')}`:'Импорт подгонки, материалов и анимаций из мастерской. Предметы экипировки выбираются из инвентаря.'}</p></div>
               </section>
               <details class="avatar-2d-details"><summary>Изображение для 2D</summary>

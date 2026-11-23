@@ -3,16 +3,17 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
   const DURATION=2600,LEAD=240;
-  function create(now=Date.now()){const startAt=Math.ceil((now+LEAD)/120)*120;return {startAt,revealAt:startAt+DURATION};}
-  function read(value,now=Date.now(),serverNow=0){
+  const throwPower=value=>{const n=Number(value);return Number.isFinite(n)?Math.round(Math.max(0,Math.min(1,n))*100)/100:0;};
+  const duration=power=>DURATION+Math.round(throwPower(power)*4000);
+  function create(now=Date.now(),power=0){power=throwPower(power);const startAt=Math.ceil((now+LEAD)/120)*120;return {startAt,revealAt:startAt+duration(power),power};}
+  function read(value,now=Date.now(),serverNow=0,power=0){
     const startAt=Number(value?.startAt),revealAt=Number(value?.revealAt);
-    if(!Number.isFinite(startAt)||!Number.isFinite(revealAt)||revealAt-startAt!==DURATION)return {...create(now),authoritative:false};
+    if(!Number.isFinite(startAt)||!Number.isFinite(revealAt)||revealAt-startAt!==duration(value?.power))return {...create(now,power),authoritative:false};
     // Ordinary clocks share the absolute deadline. A severely skewed device
     // falls back to the server envelope clock, without changing the duration.
     const offset=Math.abs(startAt-now)>30000&&Number(serverNow)>0?now-Number(serverNow):0;
-    return {startAt:startAt+offset,revealAt:revealAt+offset,authoritative:true};
+    return {startAt:startAt+offset,revealAt:revealAt+offset,power:throwPower(value?.power),authoritative:true};
   }
-  const progress=(timeline,now=Date.now())=>Math.min(1,Math.max(0,(now-timeline.startAt)/DURATION));
-  const throwPower=value=>{const n=Number(value);return Number.isFinite(n)?Math.round(Math.max(0,Math.min(1,n))*100)/100:0;};
-  return {DURATION,LEAD,create,read,progress,throwPower};
+  const progress=(timeline,now=Date.now())=>Math.min(1,Math.max(0,(now-timeline.startAt)/(timeline.revealAt-timeline.startAt)));
+  return {DURATION,LEAD,create,read,progress,throwPower,duration};
 });

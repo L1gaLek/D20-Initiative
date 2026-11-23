@@ -3334,7 +3334,7 @@ window.DicePanel = window.DicePanel || {};
 // Programmatic dice roll used by InfoModal etc.
 // If silent=true, it will only animate/update the local dice panel UI and will NOT send log/diceEvent.
 // Returns: {sides,count,bonus,rolls,sum,total}
-window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false, actorName = null, actorId = null, damageParts = null } = {}) => {
+window.DicePanel.roll = async ({ sides = 20, count = 1, bonus = 0, kindText = null, silent = false, actorName = null, actorId = null, damageParts = null, throwPower = window.DiceCharge?.power() || 0 } = {}) => {
   if (typeof isSpectator === 'function' && isSpectator()) return null;
   if (diceAnimBusy) return;
 
@@ -3404,6 +3404,7 @@ if (critType) {
           ...(damage || {}),
           actorId:actorId || (typeof players!=='undefined'?players:[]).find(p=>String(p.name||'')===String(actorName||'')&&window.canControlToken?.(p,myId,myRole))?.id || null,
           localNonce,
+          throwPower: DicePresentation.throwPower(throwPower),
           fromId: (typeof myId !== 'undefined') ? String(myId) : '',
           fromName: actor || fallbackName,
           kindText: kindText ? String(kindText) : `d${S} × ${C}`,
@@ -3423,6 +3424,6 @@ if (critType) {
     } catch {}
   }
 
-  return { ...(damage || {}), sides: S, count: C, bonus: B, rolls: finals, sum, total };
+  return { ...(damage || {}), sides: S, count: C, bonus: B, rolls: finals, sum, total, throwPower: DicePresentation.throwPower(throwPower) };
   } finally { diceAnimBusy = false; window.DiceTable?.refreshControls?.(); }
 };

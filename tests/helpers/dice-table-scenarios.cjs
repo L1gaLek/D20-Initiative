@@ -40,7 +40,7 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   await other.evaluate(()=>PersonalPreferences.set({reduceDiceMotion:true}));
   await pages[3].emulateMedia({reducedMotion:'reduce'});
   await pages[4].evaluate(()=>{window.__diceRealNow=Date.now;Date.now=()=>window.__diceRealNow()+3600000;});
-  await send({localNonce:'dice-table-d20',sides:20,count:1,rolls:[17],total:17,kindText:'Проверка: d20 [17]'});
+  await send({localNonce:'dice-table-d20',throwPower:1,sides:20,count:1,rolls:[17],total:17,kindText:'Проверка: d20 [17]'});
   await owner.waitForFunction(()=>DiceTable.inspect().animating);
   assert.equal(await owner.locator('.dice-table__stage').evaluate(el=>el.classList.contains('is-awaiting-result')),false,'normal motion never shows the reduced-motion curtain');
   await owner.evaluate(()=>{window.__motionFrames=[];window.__motionCurtains=0;const sample=()=>{const s=DiceTable.inspect();if(s.state==='rolling'){__motionFrames.push(s.frame);if(document.querySelector('.dice-table__stage.is-awaiting-result'))__motionCurtains++;requestAnimationFrame(sample);}};sample();});
