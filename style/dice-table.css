@@ -54,3 +54,9 @@
 @media(max-width:700px){.dice-others.dice-others--inline.dice-others--table{display:block}.dice-table-dialog{padding:10px}.dice-table-dialog__header strong{font-size:17px}}
 
 .dice-table__fallback [data-critical=success]{border-color:#ffe29b;box-shadow:0 0 0 2px #d0a34e,0 0 22px #f3bf4b88;color:#ffe6aa;animation:dice-critical-pulse 1.2s ease-in-out 2}.dice-table__fallback [data-critical=failure]{border-color:#ff7587;box-shadow:0 0 0 2px #b23d56,0 0 22px #e4477088;color:#ffacb8;animation:dice-critical-pulse 1.2s ease-in-out 2}@keyframes dice-critical-pulse{50%{filter:brightness(1.4);transform:scale(1.07)}}@media(prefers-reduced-motion:reduce){.dice-table__fallback [data-critical]{animation:none}}
+
+/* The idle tray, static fallback and actual 3D felt carry the same original print. */
+.dice-table__stage{background:url('../assets/dice-table/initiative-print.svg?v=20261123-tray-1') center/90% 92% no-repeat,radial-gradient(ellipse at 48% 35%,#243e32,#11271e 78%);border-color:#a2874e88;box-shadow:inset 0 0 0 5px #493020,inset 0 0 0 6px #9e7c3c88,inset 0 0 32px #000a,0 3px 10px #0006}
+.dice-table__empty>span,.dice-table__empty>small{display:none}
+.dice-table__waiting{background:#10251fd9;backdrop-filter:blur(1px)}
+.dice-table__stage.has-dice:not(.dice-table__stage--fallback){background:radial-gradient(ellipse at 48% 35%,#243e32,#11271e 78%)}

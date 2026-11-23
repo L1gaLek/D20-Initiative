@@ -8,6 +8,7 @@ module.exports=async({pages,screenshotDir})=>{
       const out=[],list=document.getElementById('player-list'),panel=document.getElementById('player-list-container');
       for(const el of [panel,list])if(el.scrollHeight>el.clientHeight+1)out.push({id:el.id,client:el.clientHeight,scroll:el.scrollHeight});
       for(const card of list.querySelectorAll('.player-list-item')){
+        if(!card.querySelector('.init-choice-box')&&getComputedStyle(card).display!=='flex')out.push({card:card.dataset.playerId,reason:'card must remain vertical'});
         const r=card.getBoundingClientRect(),g=card.closest('.owner-group').getBoundingClientRect();
         if(r.y<g.y-1||r.bottom>g.bottom+1)out.push({card:card.dataset.playerId,reason:'owner bounds',r:r.toJSON(),g:g.toJSON()});
         for(const action of card.querySelectorAll('button,select,input')){if(!action.getClientRects().length)continue;const b=action.getBoundingClientRect();if(b.y<r.y-1||b.bottom>r.bottom+1||b.x<r.x-1||b.right>r.right+1)out.push({card:card.dataset.playerId,action:action.className,reason:'clipped control',r:r.toJSON(),b:b.toJSON()});}

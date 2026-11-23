@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="704" viewBox="0 0 1600 1100">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0.8" y2="1"><stop stop-color="#d1b677"/><stop offset=".5" stop-color="#a98c4e"/><stop offset="1" stop-color="#d9be83"/></linearGradient>
+    <path id="blade" d="M0-206 18-154 13 72 52 83 50 95 13 90 10 162 23 178 0 196-23 178-10 162-13 90-50 95-52 83-13 72-18-154Z"/>
+    <g id="spark"><path d="M0-16 4-4 16 0 4 4 0 16-4 4-16 0-4-4Z"/></g>
+    <g id="corner"><path d="M0 100V0H100M16 74V16H74M0 0 54 54"/><path d="m43 43 11-19 11 19-11 19Z"/></g>
+  </defs>
+  <g fill="none" stroke="url(#gold)" opacity=".42" stroke-width="3" stroke-linejoin="round">
+    <path d="M190 135H610M990 135h420M125 225v560M1475 225v560M190 965h420M990 965h420"/>
+    <use href="#corner" transform="translate(145 155)"/><use href="#corner" transform="translate(1455 155) scale(-1 1)"/>
+    <use href="#corner" transform="translate(145 945) scale(1 -1)"/><use href="#corner" transform="translate(1455 945) scale(-1)"/>
+    <path d="m650 135 28-10 28 10-28 10Zm300 0-28-10-28 10 28 10ZM650 965l28-10 28 10-28 10Zm300 0-28-10-28 10 28 10Z"/>
+  </g>
+  <g transform="translate(800 440)" stroke="url(#gold)" fill="none" stroke-linejoin="round" opacity=".42">
+    <circle r="247" stroke-width="2"/><circle r="229" stroke-width="5"/><circle r="215" stroke-width="1"/>
+    <path d="M0-270v28M0 242v28M-270 0h28M242 0h28M-192-192l20 20M172 172l20 20M192-192l-20 20M-172 172l-20 20" stroke-width="4"/>
+    <path d="m0-175 166 121-63 195h-206L-166-54ZM0-175-103 141 166-54h-332L103 141ZM-103 141l103-316 103 316-269-195 269 195M-103 141 0-12l103 153M-166-54 0-12 166-54" stroke-width="5"/>
+    <path d="m-197-90 9-17 16 8M179-113l13 8-8 18M-134 178l18-1 1 18M116 195v-18h18M-12-211l12 10 12-10" stroke-width="4"/>
+    <g fill="url(#gold)" stroke="none"><use href="#spark" y="-247"/><use href="#spark" y="247"/><use href="#spark" x="-247"/><use href="#spark" x="247"/></g>
+  </g>
+  <g stroke="url(#gold)" fill="none" opacity=".48" stroke-width="4" stroke-linejoin="round">
+    <g transform="translate(332 459) rotate(-22)"><use href="#blade"/><path d="M0-180V68M-9 102l18 12-18 12 18 12-18 12" stroke-width="2"/></g>
+    <g transform="translate(1268 460) rotate(22)"><path d="M-7-121-11 196h22L7-121M-35-145l-22-24 25-66M35-145l22-24-25-66M-35-145l35 30 35-30M-16-125l32 25-32 26 32 26-32 26 32 26"/><circle cy="-186" r="31" stroke-width="3"/><path d="M0-215 13-186 0-157-13-186Z"/><use href="#spark" y="-258" fill="url(#gold)" stroke="none"/></g>
+    <path d="M485 797h76l21-12h49M969 785h49l21 12h76M520 819h105M975 819h105" stroke-width="3"/>
+  </g>
+  <g fill="url(#gold)" font-family="Georgia, 'Times New Roman', serif" text-anchor="middle">
+    <text x="800" y="153" font-size="43" letter-spacing="16" opacity=".46">КНИГА СУДЕБ</text>
+    <text x="800" y="925" font-size="104" font-weight="bold" letter-spacing="3" opacity=".72">К20 Инициатива</text>
+    <text x="800" y="970" font-size="23" letter-spacing="7" opacity=".43">СТОЛ ИСКАТЕЛЕЙ ПРИКЛЮЧЕНИЙ</text>
+  </g>
+</svg>

@@ -2,7 +2,7 @@
 // consumes the confirmed dice event; it never generates or saves game results.
 (function(){
   'use strict';
-  const base=new URL('dice-table/',document.currentScript.src),version='20261123-polish-1';
+  const base=new URL('dice-table/',document.currentScript.src),version='20261123-tray-1';
   let root,stage,caption,summary,pendingLabel,dialog,home,engine,loading,worker,job=0,generation=0;
   let room='',queue=[],busy=false,timer=null,state='idle',accepted=0,completed=0,last=[],failed=false,visible=true;
   const seen=new Map(),fingerprints=new Map(),jobs=new Map();
@@ -20,7 +20,7 @@
     home=document.createElement('div');home.className='dice-table';
     home.innerHTML='<div class="dice-table__stage"><div class="dice-table__empty" aria-hidden="true"><span>20</span><small>Общий стол</small></div><div class="dice-table__waiting" role="status"><span aria-hidden="true">⬡</span>Ожидаем результат…</div></div><div class="dice-table__caption">Кубики появятся при следующем броске</div><div class="dice-table__summary" aria-live="polite" aria-atomic="true"></div><div class="dice-table__pending"></div>';
     root.insertBefore(home,root.querySelector('.dice-others__list'));stage=home.querySelector('.dice-table__stage');caption=home.querySelector('.dice-table__caption');summary=home.querySelector('.dice-table__summary');pendingLabel=home.querySelector('.dice-table__pending');
-    new IntersectionObserver(entries=>{visible=!!entries[0]?.isIntersecting;if(!visible)engine?.finish();}).observe(stage);
+    new IntersectionObserver(entries=>{visible=!!entries[0]?.isIntersecting;}).observe(stage);
     stage.addEventListener('dice-context-lost',()=>{engine?.dispose();engine=null;loading=null;if(state!=='settled')stage.classList.add('is-awaiting-result');stage.classList.add('dice-table__stage--fallback');fallback(last);});
   }
   function expandTable(){
@@ -175,19 +175,18 @@
     // Damage formulas can already contain rolled values; do not put them in
     // the visible caption while the shared throw is still in progress.
     caption.textContent='Бросают: '+items.map(item=>item.name).join(', ');
-    showSummary(items,false);stage.classList.add('has-dice','is-awaiting-result');
+    const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches||window.PersonalPreferences?.get().reduceDiceMotion;
+    showSummary(items,false);stage.classList.add('has-dice');stage.classList.toggle('is-awaiting-result',!!reduced);
     let animationFinished=false;
     try{
       const seed=items.map(item=>item.seed+':'+item.part).join('|');
       const [scene,plan]=await Promise.all([getEngine(),simulate(batch,seed)]);
       if(epoch!==generation)return;state='rolling';
       stage.classList.remove('dice-table__stage--fallback');stage.querySelector('.dice-table__fallback')?.remove();
-      const reduced=!visible||document.hidden||matchMedia('(prefers-reduced-motion: reduce)').matches||window.PersonalPreferences?.get().reduceDiceMotion;
       if(!reduced)stage.classList.remove('is-awaiting-result');
       await scene.play(plan,batch,seed,reduced,items[0].timeline);animationFinished=true;
-    }catch(error){if(epoch!==generation)return;console.warn('Dice renderer unavailable; waiting for the shared result',error);}
+    }catch(error){if(epoch!==generation)return;stage.classList.add('is-awaiting-result');console.warn('Dice renderer unavailable; waiting for the shared result',error);}
     if(epoch!==generation)return;
-    if(items[0].timeline.revealAt>Date.now())stage.classList.add('is-awaiting-result');
     await waitForReveal(items[0].timeline);
     if(epoch!==generation)return;
     if(animationFinished)engine?.finish();else fallback(last);

@@ -190,7 +190,10 @@ wss.on('connection', ws => {
     else if (msg.type === 'state') {
       await h.context.persistStateForContext(ws.ctx, msg.state);
       broadcast({ type: 'state', roomId: 'test-room', state: h.database() });
-    } else if (msg.type === 'diceEvent') await h.context.handleDiceEventRelay(ws, msg);
+    } else if (msg.type === 'diceEvent') {
+      if(process.env.D20_DICE_RELAY_DELAY_MS)await new Promise(resolve=>setTimeout(resolve,Number(process.env.D20_DICE_RELAY_DELAY_MS)));
+      await h.context.handleDiceEventRelay(ws,msg);
+    }
     else if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
     else if (msg.type === 'fogRow' && mapHarness) await h.context.handleFogRow(ws,msg);
     else if (msg.type === 'fogPreview' && mapHarness) await h.context.handleFogPreview(ws,msg);

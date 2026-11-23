@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs');
 module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   const [gm,owner,other]=pages;
-  const picture=async(page,name)=>{if(screenshotDir){fs.mkdirSync(screenshotDir,{recursive:true});await page.locator('#dice-others').screenshot({path:path.join(screenshotDir,name+'.png')});}};
+  const picture=async(page,name)=>{if(screenshotDir){fs.mkdirSync(screenshotDir,{recursive:true});await page.locator(await page.locator('.dice-table-dialog[open]').count()?'.dice-table-dialog[open]':'#dice-others').screenshot({path:path.join(screenshotDir,name+'.png')});}};
   const send=async(event)=>owner.evaluate(event=>sendMessage({type:'diceEvent',event}),{fromId:'user-1',fromName:'Альрик',bonus:0,crit:'',...event});
   const settled=async(page,total)=>page.waitForFunction(total=>DiceTable.inspect().state==='settled'&&DiceTable.inspect().results.some(r=>r.total===total),total);
   for(const page of pages){
@@ -22,6 +22,11 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   await pages[4].evaluate(()=>{window.__diceRealNow=Date.now;Date.now=()=>window.__diceRealNow()+3600000;});
   await send({localNonce:'dice-table-d20',sides:20,count:1,rolls:[17],total:17,kindText:'Проверка: d20 [17]'});
   await owner.waitForFunction(()=>DiceTable.inspect().animating);
+  assert.equal(await owner.locator('.dice-table__stage').evaluate(el=>el.classList.contains('is-awaiting-result')),false,'normal motion never shows the reduced-motion curtain');
+  await owner.evaluate(()=>{window.__motionFrames=[];window.__motionCurtains=0;const sample=()=>{const s=DiceTable.inspect();if(s.state==='rolling'){__motionFrames.push(s.frame);if(document.querySelector('.dice-table__stage.is-awaiting-result'))__motionCurtains++;requestAnimationFrame(sample);}};sample();});
+  await owner.getByRole('button',{name:'Развернуть стол бросков'}).click();
+  const beforeMove=await owner.evaluate(()=>DiceTable.inspect().frame);
+  await owner.waitForFunction(frame=>DiceTable.inspect().animating&&DiceTable.inspect().frame>frame+1,beforeMove);
   await other.waitForFunction(()=>DiceTable.inspect().state==='rolling');
   assert.equal(await other.locator('.dice-table__stage').evaluate(el=>el.classList.contains('is-awaiting-result')),true,'reduced motion holds a neutral placeholder, not the result');
   assert.equal(await other.evaluate(()=>DiceTable.inspect().animating),false);
@@ -42,6 +47,9 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   assert.ok(Math.max(...moments)-Math.min(...moments)<160,'ordinary, reduced and OS reduced modes reveal together: '+moments);
   await other.evaluate(()=>PersonalPreferences.set({reduceDiceMotion:false}));await pages[3].emulateMedia({reducedMotion:'no-preference'});
   await pages[4].evaluate(()=>{Date.now=window.__diceRealNow;delete window.__diceRealNow;});
+  const motion=await owner.evaluate(()=>({frames:__motionFrames,curtains:__motionCurtains}));assert.equal(motion.curtains,0);for(let i=1;i<motion.frames.length;i++)assert.ok(motion.frames[i]>=motion.frames[i-1],'frames never rewind during a server correction or moving to the expanded tray');
+  assert.ok(motion.frames.length>12,'the throw is visibly animated');await owner.keyboard.press('Escape');
+  console.log('PASS smooth motion: monotonic frames, no normal-mode waiting curtain, expanding mid-throw keeps the animation running');
   console.log('PASS shared reveal deadline: normal/personal reduced/OS reduced/one-hour clock skew, results and journal within 160 ms across five clients');
   if(process.env.D20_TIMING_ONLY)return;
   assert.equal(await gm.locator('.dice-table-dialog').isVisible(),true,'first roll keeps an already expanded tray open');
@@ -108,7 +116,9 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   const percentile={localNonce:'twenty-percentile',sides:100,count:20,rolls:Array(20).fill(100),total:2000,kindText:'20d100'};
   await send(percentile);await settled(owner,2000);assert.equal(await owner.evaluate(()=>DiceTable.inspect().dice.length),40);
   await Promise.all(pages.map(page=>settled(page,2000)));
-  assert.ok(await owner.evaluate(()=>DiceTable.inspect().textures)<8,'shared digit atlas bounds textures');
+  // Wood grain and the single shared print add two textures to the old tray.
+  const resources=await owner.evaluate(()=>DiceTable.inspect());
+  assert.ok(resources.textures<10,'shared digit atlas plus two tray textures stay bounded: '+JSON.stringify(resources));
   assert.ok(await owner.evaluate(()=>DiceTable.inspect().geometries)<100,'old throw geometry is released');
   await owner.emulateMedia({reducedMotion:'no-preference'});
   const oldAccepted=await gm.evaluate(()=>DiceTable.inspect().accepted);

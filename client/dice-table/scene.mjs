@@ -1,5 +1,6 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import {polyhedron,faceLabels,seedNumber,random,PALETTE} from './model.mjs?v=20261122-critical-1';
+import {createPlayback} from './playback.mjs?v=20261123-tray-1';
 
 const vec=v=>new THREE.Vector3(...v);
 function polygonGeometry(polygons) {
@@ -73,6 +74,15 @@ function feltTexture(){
   for(let i=0;i<9000;i++){ctx.fillStyle=rand()>.5?'rgba(205,225,205,.045)':'rgba(0,0,0,.07)';ctx.fillRect(rand()*256,rand()*256,1,1);}
   const texture=new THREE.CanvasTexture(canvas);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.repeat.set(4,3);texture.colorSpace=THREE.SRGBColorSpace;return texture;
 }
+function woodTexture(){
+  const canvas=document.createElement('canvas');canvas.width=128;canvas.height=512;
+  const ctx=canvas.getContext('2d'),rand=random(1901);ctx.fillStyle='#3e271c';ctx.fillRect(0,0,128,512);
+  for(let i=0;i<240;i++){const x=rand()*128;ctx.beginPath();ctx.moveTo(x,0);ctx.bezierCurveTo(x+Math.sin(i)*9,160,x-Math.cos(i)*6,350,x,512);ctx.strokeStyle=i%3?'rgba(188,126,66,.11)':'rgba(12,7,3,.35)';ctx.lineWidth=.4+rand()*2;ctx.stroke();}
+  const map=new THREE.CanvasTexture(canvas);map.wrapS=map.wrapT=THREE.RepeatWrapping;map.colorSpace=THREE.SRGBColorSpace;return map;
+}
+function roundedRectangle(w,h,r,path=new THREE.Shape()){
+  const x=-w/2,y=-h/2;path.moveTo(x+r,y);path.lineTo(x+w-r,y);path.quadraticCurveTo(x+w,y,x+w,y+r);path.lineTo(x+w,y+h-r);path.quadraticCurveTo(x+w,y+h,x+w-r,y+h);path.lineTo(x+r,y+h);path.quadraticCurveTo(x,y+h,x,y+h-r);path.lineTo(x,y+r);path.quadraticCurveTo(x,y,x+r,y);return path;
+}
 export function createDiceScene(host) {
   const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
@@ -92,7 +102,8 @@ export function createDiceScene(host) {
     skinCache.delete(skin.id);skinCache.set(skin.id,entry);
     return {...entry,label:entry.labels.get(critical),skin};
   }
-  const floorMaterial=new THREE.MeshStandardMaterial({map:felt,roughness:1}),wood=new THREE.MeshStandardMaterial({color:'#302019',roughness:.7}),trim=new THREE.MeshStandardMaterial({color:'#b38b51',metalness:.7,roughness:.35});
+  const grain=woodTexture(),print=new THREE.TextureLoader().load(new URL('../../assets/dice-table/initiative-print.svg?v=20261123-tray-1',import.meta.url).href,()=>{if(!disposed)render();});print.colorSpace=THREE.SRGBColorSpace;print.anisotropy=4;
+  const floorMaterial=new THREE.MeshStandardMaterial({map:felt,roughness:1}),wood=new THREE.MeshStandardMaterial({map:grain,color:'#b9a58b',roughness:.7}),trim=new THREE.MeshStandardMaterial({color:'#b38b51',metalness:.78,roughness:.34}),ink=new THREE.MeshStandardMaterial({map:print,transparent:true,roughness:1,metalness:.12,depthWrite:false});
   const geometryCache=new Map();let raf=0,resolveAnimation=null,plan=null,groups=[],disposed=false,framesRendered=0,lastFrame=0;
   const removeChildren=(group,geometriesOnly=false)=>{
     for(const child of [...group.children]){group.remove(child);child.traverse(o=>{if(o.geometry&&(!geometriesOnly||o.userData.ownsGeometry))o.geometry.dispose();if(o.userData.ownsMaterial)o.material.dispose();});}
@@ -107,13 +118,13 @@ export function createDiceScene(host) {
   function render(){if(disposed)return;renderer.render(scene,camera);framesRendered++;}
   function buildTray(width,depth){
     removeChildren(tray);
-    const add=(w,h,d,x,y,z,material)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);mesh.receiveShadow=true;tray.add(mesh);return mesh;};
-    add(width+.4,.22,depth+.4,0,-.17,0,wood);
-    const floor=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),floorMaterial);floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;floor.position.y=-.004;tray.add(floor);
-    for(const sign of [-1,1]){
-      add(.14,.22,depth+.3,sign*(width/2+.08),.04,0,wood);add(width+.3,.22,.14,0,.04,sign*(depth/2+.08),wood);
-      add(.026,.018,depth,sign*(width/2-.02),.006,0,trim);add(width,.018,.026,0,.006,sign*(depth/2-.02),trim);
-    }
+    const extrude=(shape,depth,bevel,y,material)=>{const mesh=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelThickness:bevel,bevelSize:bevel,bevelSegments:3,steps:1}),material);mesh.rotation.x=-Math.PI/2;mesh.position.y=y;mesh.receiveShadow=true;tray.add(mesh);return mesh;};
+    extrude(roundedRectangle(width+.6,depth+.6,.2),.14,.04,-.25,wood);
+    const rim=roundedRectangle(width+.46,depth+.46,.18);rim.holes.push(roundedRectangle(width+.04,depth+.04,.09,new THREE.Path()));extrude(rim,.17,.035,-.05,wood);
+    const seam=roundedRectangle(width+.10,depth+.10,.11);seam.holes.push(roundedRectangle(width+.045,depth+.045,.09,new THREE.Path()));extrude(seam,.012,.006,.125,trim);
+    const floor=new THREE.Mesh(new THREE.ShapeGeometry(roundedRectangle(width,depth,.08)),floorMaterial);floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;floor.position.y=-.004;tray.add(floor);
+    const stampWidth=Math.min(width*.88,depth*1600/1100*.88),stamp=new THREE.Mesh(new THREE.PlaneGeometry(stampWidth,stampWidth*1100/1600),ink);stamp.rotation.x=-Math.PI/2;stamp.position.y=.002;stamp.receiveShadow=true;tray.add(stamp);
+    for(const x of [-1,1])for(const z of [-1,1]){const nail=new THREE.Mesh(new THREE.SphereGeometry(.048,10,6),trim);nail.scale.y=.4;nail.position.set(x*(width/2+.12),.15,z*(depth/2+.12));tray.add(nail);}
   }
   function paint(frame){
     if(!plan)return;lastFrame=frame;
@@ -166,18 +177,18 @@ export function createDiceScene(host) {
       group.userData={...die,labels,upFace:plan.upFaces[i]};diceGroup.add(group);groups.push(group);
     });resize();paint(skipMotion?plan.frameCount-1:0);
     if(skipMotion)return;
-    const duration=window.DicePresentation.DURATION,start=performance.now();
+    const start=performance.now(),wallNow=Date.now();
+    const progress=createPlayback(timeline||{startAt:wallNow,revealAt:wallNow+window.DicePresentation.DURATION},wallNow,start);
     return new Promise(resolve=>{
       resolveAnimation=resolve;
-      const frame=now=>{const p=timeline?window.DicePresentation.progress(timeline):Math.min(1,(now-start)/duration);paint(p*(plan.frameCount-1));if(p<1)raf=requestAnimationFrame(frame);else{raf=0;resolveAnimation=null;resolve();}};
+      const frame=now=>{const p=progress(now);paint(p*(plan.frameCount-1));if(p<1)raf=requestAnimationFrame(frame);else{raf=0;resolveAnimation=null;resolve();}};
       raf=requestAnimationFrame(frame);
     });
   }
   const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(host);
-  const onVisibility=()=>{if(document.hidden)finish();};document.addEventListener('visibilitychange',onVisibility);
   const onLoss=event=>{if(disposed)return;event.preventDefault();finish();host.dispatchEvent(new CustomEvent('dice-context-lost'));};renderer.domElement.addEventListener('webglcontextlost',onLoss);
   return {play,finish,resize,celebrate,inspect:()=>({framesRendered,animating:!!raf,celebrating:!!effectRaf,criticalEffects:effects.children.length,frame:lastFrame,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,cachedStyles:skinCache.size,
     dice:groups.map(g=>({sides:g.userData.sides,value:g.userData.value,diceStyle:g.userData.diceStyle||'astral',critical:g.userData.critical,mode:g.userData.mode,upFace:g.userData.upFace,upLabel:g.userData.labels[g.userData.upFace],position:g.position.toArray(),quaternion:g.quaternion.toArray()}))}),
-    dispose(){if(disposed)return;finish();clearEffects();disposed=true;resizeObserver.disconnect();document.removeEventListener('visibilitychange',onVisibility);removeChildren(diceGroup,true);removeChildren(tray);for(const pair of geometryCache.values())pair.forEach(g=>g.dispose());for(const skin of skinCache.values())disposeSkin(skin);skinCache.clear();[floorMaterial,wood,trim].forEach(m=>m.dispose());felt.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
+    dispose(){if(disposed)return;finish();clearEffects();disposed=true;resizeObserver.disconnect();removeChildren(diceGroup,true);removeChildren(tray);for(const pair of geometryCache.values())pair.forEach(g=>g.dispose());for(const skin of skinCache.values())disposeSkin(skin);skinCache.clear();[floorMaterial,wood,trim,ink].forEach(m=>m.dispose());felt.dispose();grain.dispose();print.dispose();renderer.dispose();renderer.forceContextLoss();renderer.domElement.remove();}
   };
 }

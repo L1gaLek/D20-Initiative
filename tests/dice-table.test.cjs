@@ -1,5 +1,15 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const modules=Promise.all([import('../client/dice-table/model.mjs'),import('../client/dice-table/physics.mjs')]);
+test('animation keeps moving forward when the server extends its deadline and uses a monotonic frame clock',async()=>{
+  const {createPlayback}=await import('../client/dice-table/playback.mjs');
+  const timeline={startAt:1000,revealAt:3600},play=createPlayback(timeline,1000,0);
+  assert.equal(play(0),0);assert.equal(play(650),.25);
+  timeline.startAt+=500;timeline.revealAt+=500;
+  assert.equal(play(650),.25,'server correction must not rewind the current frame');
+  const values=[700,850,1200,1800,2300,2800,3100].map(play);
+  for(let i=1;i<values.length;i++)assert.ok(values[i]>=values[i-1]);
+  assert.equal(values.at(-1),1);assert.equal(play(4000),1);
+});
 test('presentation shares one deadline, validates duration and recovers a severely skewed clock',()=>{
   const p=require('../backend/shared/dice-presentation'),timeline=p.create(100000);
   assert.equal(timeline.revealAt-timeline.startAt,p.DURATION);assert.ok(timeline.startAt>=100000+p.LEAD);
