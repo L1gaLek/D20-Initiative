@@ -7,6 +7,7 @@ const RoomReadCache = require('./shared/room-read-cache');
 const SheetSync = require('./shared/sheet-sync');
 const { UserProfiles } = require('./shared/user-profiles');
 const Appearance = require('./shared/appearance');
+const DicePresentation = require('./shared/dice-presentation');
 const userProfiles = new UserProfiles({file:path.join(__dirname,'data','user-profiles.json')});
 const profileTimer=setInterval(()=>{try{userProfiles.tick();userProfiles.flush();}catch(error){console.error('[profiles persist]',error.message);}},15000);profileTimer.unref();
 for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{try{userProfiles.tick();userProfiles.flush();}finally{process.exit(0);}});
@@ -4979,6 +4980,7 @@ async function handleDiceEventRelay(ws, data) {
     __optimisticApplied: !!data.__optimisticApplied,
     event: {
       fromId: String(match.from_id || ctx.userId),
+      presentation: DicePresentation.create(),
       diceStyle: Appearance.style(event.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
       fromName: String(match.from_name || ctx.name || 'Игрок'),
       kindText: String(match.kind_text || ''),

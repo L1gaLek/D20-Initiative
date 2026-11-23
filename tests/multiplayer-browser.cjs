@@ -43,7 +43,7 @@ let dropNextCombatAck = false;
 const requests = [];
 const characterHarness = require('./helpers/character-harness.cjs')();
 const diagnostics = [];
-function stamp(payload) { return { ...payload, __serverEvent: true, __eventSeq: ++seq }; }
+function stamp(payload) { return { ...payload, __serverEvent: true, __eventSeq: ++seq, __serverTs:Date.now() }; }
 function broadcast(payload, except) {
   if(syncMode)return h.context.broadcastToRoom('test-room',payload,except);
   const raw = JSON.stringify(stamp(payload));
@@ -264,11 +264,12 @@ async function main() {
       pages.push(page);
     }
     const [gm, p1, p2, p3, p4] = pages;
+    if(process.env.D20_DIALOGS_ONLY){await require('./helpers/room-dialog-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_APPEARANCE_ONLY){await require('./helpers/appearance-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_WORKSPACE_ONLY){await require('./helpers/room-workspace-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_PANELS_ONLY){await require('./helpers/room-panels-scenarios.cjs')({pages,requests,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_PERSONAL_ONLY){await require('./helpers/personal-settings-scenarios.cjs')({pages,requests,characterHarness,screenshotDir,h,broadcast});assert.deepEqual(errors,[]);return;}
-    if(process.env.D20_DICE_ONLY){await require('./helpers/dice-table-scenarios.cjs')({pages,h,broadcast,requests,base,screenshotDir});assert.deepEqual(errors,[]);return;}
+    if(process.env.D20_DICE_ONLY||process.env.D20_TIMING_ONLY){await require('./helpers/dice-table-scenarios.cjs')({pages,h,broadcast,requests,base,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(syncMode){await require('./helpers/live-sync-scenarios.cjs')({pages,h,mapHarness,syncControls,waitFor});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_EGRESS_ONLY){await require('./helpers/egress-scenarios.cjs')({pages,h});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_MAPS_ONLY){await require('./helpers/map-isolation-scenarios.cjs')({pages,h,mapHarness});assert.deepEqual(errors,[]);return;}

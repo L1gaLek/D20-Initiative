@@ -123,6 +123,7 @@ function serverHarness(state = initialState()) {
   const source = read(process.env.D20_SERVER_SOURCE || 'backend/server.js');
   context.DamageRolls = require('../../backend/shared/damage-rolls');
   context.Appearance = require('../../backend/shared/appearance');
+  context.DicePresentation = require('../../backend/shared/dice-presentation');
   context.CombatState = require('../../backend/shared/combat-state');
   context.SheetSync = require('../../backend/shared/sheet-sync');
   vm.runInContext(functions(source, [

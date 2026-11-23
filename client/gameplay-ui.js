@@ -224,143 +224,59 @@ function snapshotCampaignStateForSave() {
 
 let campaignSavesOverlay = null;
 
-function openCampaignSavesOverlay(list, onPick) {
-  if (campaignSavesOverlay) {
-    try { campaignSavesOverlay.remove(); } catch {}
-    campaignSavesOverlay = null;
+function openCampaignSavesOverlay(list,onPick){
+  campaignSavesOverlay?.close();
+  const dialog=document.createElement('dialog');dialog.className='room-dialog campaign-saves-dialog';
+  dialog.setAttribute('aria-labelledby','campaign-saves-title');
+  dialog.innerHTML='<header><div><small>Архив приключений</small><h2 id="campaign-saves-title">Загрузить кампанию</h2></div><button type="button" data-cmp-close aria-label="Закрыть сохранения">×</button></header><p>Сохранения этого браузера доступны в любой комнате. Выбранная кампания заменит текущую игру.</p><input type="search" data-cmp-search aria-label="Поиск сохранений" placeholder="Найти кампанию…"><div data-cmp-list></div><p data-cmp-status role="status"></p>';
+  const box=dialog.querySelector('[data-cmp-list]'),status=dialog.querySelector('[data-cmp-status]'),search=dialog.querySelector('[data-cmp-search]');
+  let saves=Array.isArray(list)?list:[],busy=false;
+  function render(){
+    box.replaceChildren();const filtered=saves.filter(save=>String(save.name||'Без названия').toLocaleLowerCase('ru').includes(search.value.toLocaleLowerCase('ru')));
+    for(const save of filtered){
+      const row=document.createElement('article');row.className='campaign-save-card';
+      const info=document.createElement('div'),name=document.createElement('strong'),date=document.createElement('small');name.textContent=save.name||'Без названия';date.textContent=save.created_at?new Date(save.created_at).toLocaleString('ru-RU'):'Сохранение кампании';info.append(name,date);
+      const actions=document.createElement('div'),load=document.createElement('button'),remove=document.createElement('button');
+      load.type=remove.type='button';load.textContent='Загрузить';load.className='room-action-primary';remove.textContent='Удалить';remove.className='room-action-danger';load.dataset.pick=remove.dataset.del=save.id;load.disabled=remove.disabled=busy;
+      load.onclick=()=>{dialog.close();void onPick?.(save.id);};
+      remove.onclick=async()=>{
+        if(!await RoomDialogs.confirm({title:'Удалить сохранение?',message:'«'+(save.name||'Без названия')+'» будет удалено из архива. Текущая игра останется в комнате.',confirmLabel:'Удалить сохранение'}))return;
+        busy=true;render();status.textContent='Удаляю сохранение…';
+        try{await deleteCampaignSave(save.id);saves=saves.filter(row=>row.id!==save.id);status.textContent='Сохранение удалено';}
+        catch(error){status.textContent='Не удалось удалить: '+error.message;}
+        finally{busy=false;render();}
+      };
+      actions.append(load,remove);row.append(info,actions);box.append(row);
+    }
+    if(!filtered.length){const empty=document.createElement('div');empty.className='room-dialog-empty';empty.textContent=saves.length?'По этому названию ничего не найдено':'Сохранений пока нет. Сохраните кампанию, чтобы продолжить её позже.';box.append(empty);}
   }
-
-  const ov = document.createElement('div');
-  ov.className = 'modal-overlay';
-  ov.innerHTML = `
-    <div class="modal" style="max-width: 760px;">
-      <div class="modal-header">
-        <div>
-          <div class="modal-title">Загрузить кампанию</div>
-          <div class="modal-subtitle">Сохранения доступны в любой комнате (привязка к этому браузеру ГМа)</div>
-        </div>
-        <button class="modal-close" data-cmp-close>✕</button>
-      </div>
-      <div class="modal-body">
-        <div style="display:flex; flex-direction:column; gap:10px;" data-cmp-list></div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(ov);
-  campaignSavesOverlay = ov;
-
-  const close = () => {
-    try { ov.remove(); } catch {}
-    if (campaignSavesOverlay === ov) campaignSavesOverlay = null;
-  };
-
-  ov.addEventListener('click', (e) => {
-    const t = e.target;
-    if (!(t instanceof Element)) return;
-    if (t.classList.contains('modal-overlay')) return close();
-    if (t.closest('[data-cmp-close]')) return close();
-  });
-
-  const box = ov.querySelector('[data-cmp-list]');
-  if (!box) return;
-
-  if (!list || list.length === 0) {
-    box.innerHTML = `<div class="sheet-note">Сохранений нет.</div>`;
-    return;
-  }
-
-  list.forEach((it) => {
-    const row = document.createElement('div');
-    row.className = 'saved-bases-row';
-    const created = it.created_at ? new Date(it.created_at).toLocaleString() : '';
-    const saveId = escapeGameplayHtml(it.id);
-    row.innerHTML = `
-      <div class="saved-bases-row-main" style="flex:1;">
-        <div class="saved-bases-row-name">${escapeGameplayHtml(it.name || 'Без названия')}</div>
-        <div class="saved-bases-row-meta">${escapeGameplayHtml(created)}</div>
-      </div>
-      <div style="display:flex; gap:8px;">
-        <button type="button" data-pick="${saveId}">Загрузить</button>
-        <button type="button" data-del="${saveId}">Удалить</button>
-      </div>
-    `;
-
-    row.addEventListener('click', async (e) => {
-      const tt = e.target;
-      if (!(tt instanceof Element)) return;
-
-      const pick = tt.closest('[data-pick]');
-      if (pick) {
-        const id = pick.getAttribute('data-pick');
-        close();
-        onPick?.(id);
-        return;
-      }
-
-      const del = tt.closest('[data-del]');
-      if (del) {
-        const id = del.getAttribute('data-del');
-        if (!confirm('Удалить это сохранение?')) return;
-        try {
-          await deleteCampaignSave(id);
-          const fresh = await listCampaignSavesByOwner(getCampaignOwnerKey());
-          close();
-          openCampaignSavesOverlay(fresh, onPick);
-        } catch (err) {
-          console.error(err);
-          alert('Не удалось удалить сохранение');
-        }
-      }
-    });
-
-    box.appendChild(row);
-  });
+  search.oninput=render;dialog.querySelector('[data-cmp-close]').onclick=()=>dialog.close();
+  dialog.addEventListener('close',()=>{dialog.remove();if(campaignSavesOverlay===dialog)campaignSavesOverlay=null;},{once:true});
+  document.body.append(dialog);campaignSavesOverlay=dialog;render();dialog.showModal();search.focus();
 }
 
-saveCampaignBtn?.addEventListener('click', async () => {
-  try {
-    if (!isGM()) return;
-    if (!currentRoomId) return;
-
-    const name = prompt('Название сохранения:', `Сохранение ${new Date().toLocaleString()}`);
-    if (name === null) return;
-    const clean = String(name).trim();
-    if (!clean) return;
-
-    const snap = snapshotCampaignStateForSave();
-    const ownerKey = getCampaignOwnerKey();
-    await createCampaignSave(ownerKey, clean, snap, currentRoomId);
-    alert('Кампания сохранена. Теперь её можно загрузить в любой комнате.');
-  } catch (err) {
-    console.error(err);
-    alert('Не удалось сохранить кампанию');
-  }
+saveCampaignBtn?.addEventListener('click',async()=>{
+  if(!isGM()||!currentRoomId)return;
+  const roomId=currentRoomId;
+  const name=await RoomDialogs.prompt({title:'Сохранить кампанию',message:'Сохранятся карты, позиции персонажей и состояние игры.',label:'Название сохранения',value:'Кампания '+new Date().toLocaleString('ru-RU'),confirmLabel:'Сохранить'});
+  if(!name||currentRoomId!==roomId)return;
+  saveCampaignBtn.disabled=true;
+  try{await createCampaignSave(getCampaignOwnerKey(),name,snapshotCampaignStateForSave(),roomId);await RoomDialogs.notice('Кампания сохранена. Её можно загрузить в этой или другой комнате.','Сохранение готово');}
+  catch(error){await RoomDialogs.notice('Не удалось сохранить кампанию: '+error.message,'Ошибка сохранения');}
+  finally{saveCampaignBtn.disabled=false;}
 });
 
-loadCampaignBtn?.addEventListener('click', async () => {
-  try {
-    if (!isGM()) return;
-    if (!currentRoomId) return;
-
-    const ownerKey = getCampaignOwnerKey();
-    const list = await listCampaignSavesByOwner(ownerKey);
-
-    openCampaignSavesOverlay(list, async (saveId) => {
-      try {
-        const st = await getCampaignSaveState(saveId);
-        if (!st) return alert('Сохранение пустое/не найдено');
-        // Загружаем в ТЕКУЩУЮ комнату (state + detached room tables).
-        await applyCampaignSaveToRoom(currentRoomId, st);
-      } catch (e) {
-        console.error(e);
-        alert('Не удалось загрузить кампанию');
-      }
+loadCampaignBtn?.addEventListener('click',async()=>{
+  if(!isGM()||!currentRoomId)return;
+  const roomId=currentRoomId;loadCampaignBtn.disabled=true;
+  try{
+    const list=await listCampaignSavesByOwner(getCampaignOwnerKey());if(currentRoomId!==roomId)return;
+    openCampaignSavesOverlay(list,async saveId=>{
+      try{const state=await getCampaignSaveState(saveId);if(!state)throw new Error('Сохранение не найдено');if(currentRoomId===roomId)await applyCampaignSaveToRoom(roomId,state);}
+      catch(error){await RoomDialogs.notice('Не удалось загрузить кампанию: '+error.message,'Ошибка загрузки');}
     });
-  } catch (err) {
-    console.error(err);
-    alert('Не удалось получить список сохранений');
-  }
+  }catch(error){await RoomDialogs.notice('Не удалось получить список: '+error.message,'Сохранения недоступны');}
+  finally{loadCampaignBtn.disabled=false;}
 });
 
 // ===== SRD Monsters (GM) =====

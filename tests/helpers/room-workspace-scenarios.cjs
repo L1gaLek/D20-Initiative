@@ -93,7 +93,7 @@ module.exports=async({pages,screenshotDir})=>{
   await gm.evaluate(()=>{delete players.find(p=>p.id==='player-1').pendingInitiativeChoice;updatePlayerList();});
   await gm.setViewportSize({width:1600,height:1080});
   const base=gm.locator('[data-player-type="is-base"]'),ally=gm.locator('[data-player-type="is-ally"]'),enemy=gm.locator('[data-player-type="is-enemy"]');
-  const b=await base.boundingBox(),a=await ally.boundingBox(),e=await enemy.boundingBox();assert.ok(Math.abs(b.width-a.width-e.width-4)<1&&Math.abs(a.y-e.y)<1&&a.y>b.y);
+  const b=await base.boundingBox(),a=await ally.boundingBox(),e=await enemy.boundingBox();assert.ok(Math.abs(b.width-a.width)<1&&Math.abs(a.width-e.width)<1&&Math.abs(a.y-e.y)<1&&Math.abs(a.y-b.y)<1);
   assert.equal(await enemy.getAttribute('aria-pressed'),'true');
   await ally.click();assert.equal(await ally.getAttribute('aria-pressed'),'true');assert.equal(await enemy.getAttribute('aria-pressed'),'false');
   await enemy.click();assert.equal(await ally.getAttribute('aria-pressed'),'false');assert.equal(await enemy.getAttribute('aria-pressed'),'true');

@@ -1,5 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const modules=Promise.all([import('../client/dice-table/model.mjs'),import('../client/dice-table/physics.mjs')]);
+test('presentation shares one deadline, validates duration and recovers a severely skewed clock',()=>{
+  const p=require('../backend/shared/dice-presentation'),timeline=p.create(100000);
+  assert.equal(timeline.revealAt-timeline.startAt,p.DURATION);assert.ok(timeline.startAt>=100000+p.LEAD);
+  const a=p.read(timeline,100010),b=p.read(timeline,100075);assert.equal(a.revealAt,b.revealAt);
+  assert.equal(p.progress(a,a.startAt-1),0);assert.equal(p.progress(a,a.revealAt),1);
+  const skew=p.read(timeline,3700000,100000);assert.equal(skew.revealAt-3700000,timeline.revealAt-100000);
+  assert.equal(p.read({startAt:1,revealAt:2},100000).authoritative,false);
+});
 test('standard dice have closed outward-facing convex hulls and the correct number of numbered faces',async()=>{
   const [m]=await modules;
   for(const sides of [2,4,6,8,10,12,20]){

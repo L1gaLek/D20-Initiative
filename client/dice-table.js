@@ -2,14 +2,15 @@
 // consumes the confirmed dice event; it never generates or saves game results.
 (function(){
   'use strict';
-  const base=new URL('dice-table/',document.currentScript.src),version='20261123-gallery-2';
+  const base=new URL('dice-table/',document.currentScript.src),version='20261123-polish-1';
   let root,stage,caption,summary,pendingLabel,dialog,home,engine,loading,worker,job=0,generation=0;
   let room='',queue=[],busy=false,timer=null,state='idle',accepted=0,completed=0,last=[],failed=false,visible=true;
   const seen=new Map(),fingerprints=new Map(),jobs=new Map();
+  const timelines=new Map(),revealWaiters=new Set();
   const logTiming=new DiceLogTiming.Coordinator();
   let rollForm,rollSides,rollCount,rollSubmit;
   const api=window.DiceTable={show,remember,reset,deferLog,refreshControls,inspect:()=>({state,room,accepted,completed,queued:queue.length,
-    results:last.map(item=>({name:item.name,total:item.total,rolls:item.rolls})),...(engine?.inspect()||{})})};
+    results:last.map(item=>({name:item.name,total:item.total,rolls:item.rolls})),revealAt:last[0]?.timeline?.revealAt,settledAt:last[0]?.settledAt,...(engine?.inspect()||{})})};
   function mount(){
     if(root)return;
     root=document.getElementById('dice-others');if(!root)return;
@@ -17,10 +18,10 @@
     const title=root.querySelector('.dice-others__title');
     const expand=document.createElement('button');expand.type='button';expand.className='dice-table__expand';expand.textContent='⛶';expand.title='Развернуть стол бросков';expand.setAttribute('aria-label','Развернуть стол бросков');expand.addEventListener('click',expandTable);title?.append(expand);
     home=document.createElement('div');home.className='dice-table';
-    home.innerHTML='<div class="dice-table__stage"><div class="dice-table__empty" aria-hidden="true"><span>20</span><small>Общий стол</small></div></div><div class="dice-table__caption">Кубики появятся при следующем броске</div><div class="dice-table__summary" aria-live="polite" aria-atomic="true"></div><div class="dice-table__pending"></div>';
+    home.innerHTML='<div class="dice-table__stage"><div class="dice-table__empty" aria-hidden="true"><span>20</span><small>Общий стол</small></div><div class="dice-table__waiting" role="status"><span aria-hidden="true">⬡</span>Ожидаем результат…</div></div><div class="dice-table__caption">Кубики появятся при следующем броске</div><div class="dice-table__summary" aria-live="polite" aria-atomic="true"></div><div class="dice-table__pending"></div>';
     root.insertBefore(home,root.querySelector('.dice-others__list'));stage=home.querySelector('.dice-table__stage');caption=home.querySelector('.dice-table__caption');summary=home.querySelector('.dice-table__summary');pendingLabel=home.querySelector('.dice-table__pending');
     new IntersectionObserver(entries=>{visible=!!entries[0]?.isIntersecting;if(!visible)engine?.finish();}).observe(stage);
-    stage.addEventListener('dice-context-lost',()=>{engine?.dispose();engine=null;loading=null;stage.classList.add('dice-table__stage--fallback');fallback(last);});
+    stage.addEventListener('dice-context-lost',()=>{engine?.dispose();engine=null;loading=null;if(state!=='settled')stage.classList.add('is-awaiting-result');stage.classList.add('dice-table__stage--fallback');fallback(last);});
   }
   function expandTable(){
     const scope=currentRoom();if(scope!==room)reset(scope);
@@ -69,6 +70,20 @@
   function currentRoom(){return String(typeof currentRoomId!=='undefined'?currentRoomId:'');}
   function prune(map,max){while(map.size>max)map.delete(map.keys().next().value);}
   function keys(ev){return [ev?.id?`id:${String(ev.id).slice(0,200)}`:'',ev?.localNonce?`nonce:${String(ev.localNonce).slice(0,200)}`:''].filter(Boolean);}
+  function timelineFor(ev,serverNow){
+    const ids=keys(ev),incoming=DicePresentation.read(ev?.presentation,Date.now(),serverNow);
+    let timeline=ids.map(id=>timelines.get(id)).find(Boolean);
+    if(!timeline)timeline=incoming;
+    else if(incoming.authoritative&&!timeline.authoritative)Object.assign(timeline,incoming);
+    for(const id of ids)timelines.set(id,timeline);prune(timelines,512);return timeline;
+  }
+  function waitForReveal(timeline){
+    return new Promise(resolve=>{
+      let timeout;const done=()=>{clearTimeout(timeout);revealWaiters.delete(done);resolve();};
+      const check=()=>{const remaining=timeline.revealAt-Date.now();if(remaining>0)timeout=setTimeout(check,remaining);else done();};
+      revealWaiters.add(done);check();
+    });
+  }
   function remember(ev){const scope=currentRoom();if(scope!==room)reset(scope);for(const key of keys(ev))seen.set(room+'|'+key,Date.now());prune(seen,512);}
   function duplicate(ev){
     const ids=keys(ev);if(ids.some(key=>seen.has(room+'|'+key)))return true;
@@ -83,17 +98,19 @@
     if(dialog?.open)dialog.close();
     generation++;room=String(nextRoom);queue=[];clearTimeout(timer);timer=null;busy=false;state='idle';last=[];failed=false;
     seen.clear();fingerprints.clear();engine?.dispose();engine=null;loading=null;worker?.terminate();worker=null;
+    timelines.clear();for(const cancel of [...revealWaiters])cancel();
     logTiming.reset();
     for(const pending of jobs.values()){clearTimeout(pending.timer);pending.reject(new Error('Dice room changed'));}jobs.clear();
-    stage?.classList.remove('has-dice','dice-table__stage--fallback');stage?.querySelector('.dice-table__fallback')?.remove();
+    stage?.classList.remove('has-dice','dice-table__stage--fallback','is-awaiting-result');stage?.querySelector('.dice-table__fallback')?.remove();
     if(summary)summary.replaceChildren();if(caption)caption.textContent='Кубики появятся при следующем броске';if(pendingLabel)pendingLabel.textContent='';
   }
-  async function show(ev,{historical=false}={}){
+  async function show(ev,{historical=false,serverNow=0}={}){
     mount();if(!stage)return false;
     const scope=currentRoom();if(scope!==room)reset(scope);
     if(!scope||scope.startsWith('__'))return false;
     const line=window.buildDiceLogText?.(ev)||'';
     if(historical){logTiming.settle(logTiming.begin(ev,line));remember(ev);return false;}
+    const timeline=timelineFor(ev,serverNow);
     if(duplicate(ev))return false;
     const logTicket=logTiming.begin(ev,line);
     const epoch=generation;
@@ -101,17 +118,18 @@
     try{model=await import(new URL('model.mjs?v='+version,base));}
     catch{
       if(epoch!==generation)return false;
+      stage.classList.add('has-dice','is-awaiting-result');await waitForReveal(timeline);if(epoch!==generation)return false;
       const rolls=Array.isArray(ev.rolls)?ev.rolls.map(Number):[];
       last=[{name:String(ev.fromName||'Игрок'),total:Number(ev.total),rolls,dice:rolls.slice(0,40).map(value=>({sides:Number(ev.sides),value,mode:'normal'}))}];
-      fallback(last);window.DiceCriticalFeedback?.play(last.flatMap(item=>item.dice));state='settled';caption.textContent=String(ev.kindText||'Бросок');showSummary(last,true);logTiming.settle(logTicket);return false;
+      fallback(last);stage.classList.remove('is-awaiting-result');window.DiceCriticalFeedback?.play(last.flatMap(item=>item.dice));state='settled';caption.textContent=String(ev.kindText||'Бросок');showSummary(last,true);logTiming.settle(logTicket);return false;
     }
     const {normalizeEvent,seedNumber,PALETTE}=model;
     if(epoch!==generation||scope!==currentRoom())return false;
-    const item=normalizeEvent(ev);if(!item){logTiming.settle(logTicket);return false;}item.logTicket=logTicket;accepted++;
+    const item=normalizeEvent(ev);if(!item){logTiming.settle(logTicket);return false;}item.logTicket=logTicket;item.timeline=timeline;accepted++;
     item.color=PALETTE[seedNumber(item.fromId||item.name)%PALETTE.length];
     item.diceStyle=D20Appearance.style(ev.diceStyle).id;item.color=D20Appearance.style(item.diceStyle).base;
     item.dice.forEach(die=>{die.ownerKey=item.fromId||item.name;die.eventKey=item.seed;die.diceStyle=item.diceStyle;});
-    if(queue.length>=12)logTiming.settle(queue.shift().logTicket);queue.push({...item,part:0});updatePending();
+    if(queue.length>=12){const skipped=queue.shift();void waitForReveal(skipped.timeline).then(()=>{if(epoch===generation)logTiming.settle(skipped.logTicket);});}queue.push({...item,part:0});updatePending();
     if(!busy&&!timer)timer=setTimeout(()=>{timer=null;void run();},120);
     return true;
   }
@@ -151,27 +169,37 @@
   async function run(){
     if(busy||!queue.length)return;busy=true;const epoch=generation,items=[queue.shift()];
     const batch=items[0].dice.splice(0,40);items[0].part++;
-    if(!items[0].dice.length)while(queue.length&&items.length<4&&batch.length+queue[0].dice.length<=40){const next=queue.shift();items.push(next);batch.push(...next.dice);}
+    if(!items[0].dice.length)while(queue.length&&items.length<4&&queue[0].timeline.revealAt===items[0].timeline.revealAt&&batch.length+queue[0].dice.length<=40){const next=queue.shift();items.push(next);batch.push(...next.dice);}
     const continuation=items[0].dice.length?items[0]:null;
     if(continuation)queue.unshift(continuation);last=items.map(item=>({...item,dice:batch.filter(d=>d.eventKey===item.seed)}));state='preparing';updatePending();
-    caption.textContent=items.length>1?'Бросают: '+items.map(item=>item.name).join(', '):items[0].name+' · '+(items[0].part>1?'часть '+items[0].part:items[0].kind);
-    showSummary(items,false);stage.classList.add('has-dice');
+    // Damage formulas can already contain rolled values; do not put them in
+    // the visible caption while the shared throw is still in progress.
+    caption.textContent='Бросают: '+items.map(item=>item.name).join(', ');
+    showSummary(items,false);stage.classList.add('has-dice','is-awaiting-result');
     let animationFinished=false;
     try{
       const seed=items.map(item=>item.seed+':'+item.part).join('|');
       const [scene,plan]=await Promise.all([getEngine(),simulate(batch,seed)]);
       if(epoch!==generation)return;state='rolling';
       stage.classList.remove('dice-table__stage--fallback');stage.querySelector('.dice-table__fallback')?.remove();
-      await scene.play(plan,batch,seed,!visible||document.hidden||(matchMedia('(prefers-reduced-motion: reduce)').matches||window.PersonalPreferences?.get().reduceDiceMotion));animationFinished=true;
-    }catch(error){if(epoch!==generation)return;fallback(last);}
+      const reduced=!visible||document.hidden||matchMedia('(prefers-reduced-motion: reduce)').matches||window.PersonalPreferences?.get().reduceDiceMotion;
+      if(!reduced)stage.classList.remove('is-awaiting-result');
+      await scene.play(plan,batch,seed,reduced,items[0].timeline);animationFinished=true;
+    }catch(error){if(epoch!==generation)return;console.warn('Dice renderer unavailable; waiting for the shared result',error);}
     if(epoch!==generation)return;
+    if(items[0].timeline.revealAt>Date.now())stage.classList.add('is-awaiting-result');
+    await waitForReveal(items[0].timeline);
+    if(epoch!==generation)return;
+    if(animationFinished)engine?.finish();else fallback(last);
+    stage.classList.remove('is-awaiting-result');
     if(animationFinished&&window.PersonalPreferences?.get().criticalEffects!==false)engine?.celebrate(!visible||document.hidden||matchMedia('(prefers-reduced-motion: reduce)').matches);
     window.DiceCriticalFeedback?.play(batch);
-    state='settled';completed+=items.length;showSummary(items,!continuation);
+    state='settled';for(const item of last)item.settledAt=Date.now();completed+=items.length;showSummary(items,!continuation);
+    caption.textContent=items.map(item=>item.name).join(', ')+' · бросок завершён';
     for(const item of items)if(item!==continuation)logTiming.settle(item.logTicket);
     if(items.some(item=>item.omitted))caption.textContent+=' · остальные кубики — в журнале';
     busy=false;updatePending();
-    if(queue.length)timer=setTimeout(()=>{timer=null;void run();},document.hidden?0:650);
+    if(queue.length)timer=setTimeout(()=>{timer=null;void run();},0);
   }
   mount();
 })();

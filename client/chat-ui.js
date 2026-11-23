@@ -1406,7 +1406,7 @@ function renderRoomChatTabs() {
     const active = String(tab.key) === String(roomChatState.activeChatKey || 'global');
     const unread = getRoomUnreadCountForChat(tab.key);
     return `
-      <button class="tavern-chat-tab ${active ? 'is-active' : ''}" type="button" data-room-chat-key="${escapeHtmlLite(tab.key)}">
+      <button class="tavern-chat-tab ${active ? 'is-active' : ''}" type="button" aria-pressed="${active}" data-room-chat-key="${escapeHtmlLite(tab.key)}">
         <span>${escapeHtmlLite(tab.label)}</span>
         ${unread > 0 ? `<span class="tavern-chat-tab__unread">${unread > 99 ? '99+' : unread}</span>` : ''}
         ${tab.closable ? '<span class="tavern-chat-tab__close" aria-hidden="true">✕</span>' : ''}
@@ -1458,10 +1458,12 @@ function closeRoomChatUsersPopover() {
   if (!roomChatUsersPopover) return;
   roomChatUsersPopover.classList.add('hidden');
   roomChatUsersPopover.setAttribute('aria-hidden', 'true');
+  roomChatUsersBtn?.setAttribute('aria-expanded','false');
 }
 function toggleRoomChatUsersPopover() {
   if (!roomChatUsersPopover) return;
   const willOpen = roomChatUsersPopover.classList.contains('hidden');
+  roomChatUsersBtn?.setAttribute('aria-expanded',String(willOpen));
   roomChatUsersPopover.classList.toggle('hidden', !willOpen);
   roomChatUsersPopover.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
   if (willOpen) renderRoomChatUsersList();
@@ -1505,6 +1507,7 @@ function closeRoomChatTab(chatKey) {
 }
 function renderRoomChat() {
   if (!roomChatList) return;
+  const oldScroll=roomChatList.scrollTop,atBottom=roomChatList.scrollHeight-roomChatList.clientHeight-oldScroll<48;
   const messages = getActiveRoomChatMessages();
   if (!messages.length) {
     const emptyText = String(roomChatState.activeChatKey || 'global') === 'global'
@@ -1537,7 +1540,7 @@ function renderRoomChat() {
       </div>
     `;
   }).join('');
-  roomChatList.scrollTop = roomChatList.scrollHeight;
+  roomChatList.scrollTop = atBottom||messages.at(-1)?.mine?roomChatList.scrollHeight:oldScroll;
 }
 function hydrateRoomChatFromRows(rows) {
   resetRoomChatState(currentRoomId || roomChatState.roomId || '');
@@ -1607,6 +1610,7 @@ async function sendRoomChatMessage() {
 
   pushRoomChatMessage(message, { revealTab: true });
   try { if (roomChatInput) roomChatInput.value = ''; } catch {}
+  refreshRoomChatComposer();
   clearRoomChatQuoteDraft();
 
   const wsRow = {
@@ -1633,6 +1637,7 @@ function openRoomChat() {
   renderRoomChatSubtitle();
   renderRoomChatUsersList();
   renderRoomChat();
+  refreshRoomChatComposer();
   setTimeout(() => roomChatInput?.focus(), 0);
 }
 async function returnToTavernFromRoom(options = null) {
@@ -1880,10 +1885,16 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 if (roomReturnTavernBtn) roomReturnTavernBtn.addEventListener('click', () => { returnToTavernFromRoom(); });
-if (roomChatClose) roomChatClose.addEventListener('click', () => hideModalEl(roomChatModal));
+function refreshRoomChatComposer(){
+  const length=String(roomChatInput?.value||'').length;
+  const counter=document.getElementById('room-chat-counter');if(counter)counter.textContent=length+' / 500';
+  if(roomChatSend)roomChatSend.disabled=!String(roomChatInput?.value||'').trim();
+}
+function closeRoomChatWindow(){hideModalEl(roomChatModal);closeRoomChatUsersPopover();roomChatOpenBtn?.focus();}
+if (roomChatClose) roomChatClose.addEventListener('click',closeRoomChatWindow);
 if (roomChatModal) {
   roomChatModal.addEventListener('click', (e) => {
-    if (e.target === roomChatModal) hideModalEl(roomChatModal);
+    if (e.target === roomChatModal) closeRoomChatWindow();
   });
 }
 if (roomChatSend) roomChatSend.addEventListener('click', () => { sendRoomChatMessage(); });
@@ -1936,6 +1947,7 @@ if (roomChatQuote) {
   });
 }
 if (roomChatInput) {
+  roomChatInput.addEventListener('input',refreshRoomChatComposer);
   roomChatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -1943,6 +1955,15 @@ if (roomChatInput) {
     }
   });
 }
+document.addEventListener('keydown',e=>{
+  if(!roomChatModal||roomChatModal.classList.contains('hidden')||document.querySelector('dialog[open]'))return;
+  if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();closeRoomChatWindow();return;}
+  if(e.key==='Tab'){
+    const nodes=[...roomChatModal.querySelectorAll('button:not(:disabled),input,textarea')].filter(node=>node.getClientRects().length),first=nodes[0],last=nodes.at(-1);
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
+  }
+},true);
 document.addEventListener('click', (e) => {
   if (!roomChatUsersPopover || roomChatUsersPopover.classList.contains('hidden')) return;
   const target = e.target;

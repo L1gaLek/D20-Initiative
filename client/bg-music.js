@@ -852,7 +852,7 @@
     if (modal) return;
 
     modal = document.createElement("div");
-    modal.className = "modal-overlay";
+    modal.className = "modal-overlay room-music-library";
     modal.innerHTML = `
       <div class="modal" style="max-width:640px;">
         <div class="modal-header">

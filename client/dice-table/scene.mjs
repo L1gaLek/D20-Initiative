@@ -150,7 +150,7 @@ export function createDiceScene(host) {
     };effectRaf=requestAnimationFrame(animate);
   }
   function finish(){cancelAnimationFrame(effectRaf);effectRaf=0;cancelAnimationFrame(raf);raf=0;if(plan)paint(plan.frameCount-1);const done=resolveAnimation;resolveAnimation=null;done?.();}
-  async function play(result,dice,seed,skipMotion=false){
+  async function play(result,dice,seed,skipMotion=false,timeline=null){
     finish();clearEffects();removeChildren(diceGroup,true);groups=[];plan=result;buildTray(plan.width,plan.depth);
     const wanted=new Set(dice.map(d=>window.D20Appearance.style(d.diceStyle).id));
     const missing=[...wanted].filter(id=>!skinCache.has(id)).length;
@@ -166,10 +166,10 @@ export function createDiceScene(host) {
       group.userData={...die,labels,upFace:plan.upFaces[i]};diceGroup.add(group);groups.push(group);
     });resize();paint(skipMotion?plan.frameCount-1:0);
     if(skipMotion)return;
-    const duration=Math.min(2800,Math.max(1800,plan.seconds*1000)),start=performance.now();
+    const duration=window.DicePresentation.DURATION,start=performance.now();
     return new Promise(resolve=>{
       resolveAnimation=resolve;
-      const frame=now=>{const p=Math.min(1,(now-start)/duration);paint(p*(plan.frameCount-1));if(p<1)raf=requestAnimationFrame(frame);else{raf=0;resolveAnimation=null;resolve();}};
+      const frame=now=>{const p=timeline?window.DicePresentation.progress(timeline):Math.min(1,(now-start)/duration);paint(p*(plan.frameCount-1));if(p<1)raf=requestAnimationFrame(frame);else{raf=0;resolveAnimation=null;resolve();}};
       raf=requestAnimationFrame(frame);
     });
   }

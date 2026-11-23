@@ -3140,50 +3140,8 @@ async function applyDiceEventToMain(ev) {
   }
 }
 
-function pushOtherDiceEvent(ev) {
-  ensureOthersDiceUI();
-
-  // не показываем свои же броски
-  if (ev.fromId && typeof myId !== "undefined" && ev.fromId === myId) return;
-
-  const item = document.createElement("div");
-  item.className = "dice-others__item";
-  item.dataset.crit = ev.crit || "";
-
-  const rollsText = (ev.rolls && ev.rolls.length)
-    ? ev.rolls.join(" + ")
-    : "-";
-
-  const head = `${ev.fromName || "Игрок"}: ${ev.kindText || `d${ev.sides} × ${ev.count}`}`;
-
-  // Для одиночного броска с бонусом показываем компактно: "12+4=16"
-  let tail = `${rollsText} = ${ev.total}`;
-  const bonusNum = Number(ev.bonus) || 0;
-  if (bonusNum !== 0) tail = `${rollsText}${bonusNum >= 0 ? '+' : ''}${bonusNum} = ${ev.total}`;
-  if (Number(ev.count) === 1 && bonusNum !== 0 && Array.isArray(ev.rolls) && ev.rolls.length === 1) {
-    const r = Number(ev.rolls[0]) || 0;
-    const sign = bonusNum >= 0 ? "+" : "-";
-    tail = `${r}${sign}${Math.abs(bonusNum)}=${ev.total}`;
-  }
-
-  item.innerHTML = `
-    <div class="dice-others__head">${escapeHtmlLocal(head)}</div>
-    <div class="dice-others__body">${escapeHtmlLocal(tail)}</div>
-  `;
-
-  // крит подсветка (если прилетело)
-  if (ev.crit === "crit-fail") item.classList.add("crit-fail");
-  if (ev.crit === "crit-success") item.classList.add("crit-success");
-
-  const list = othersDiceWrap.querySelector('.dice-others__list') || othersDiceWrap;
-  list.appendChild(item);
-  while (list.children.length > 10) list.firstElementChild.remove();
-  list.scrollTop = list.scrollHeight;
-
-  // через 5с — плавное исчезновение
-  setTimeout(() => item.classList.add("fade"), 4200);
-  setTimeout(() => item.remove(), 5200);
-}
+// The shared tray and action journal replace the transient duplicate feed.
+function pushOtherDiceEvent() {}
 
 // маленький экранировщик
 function escapeHtmlLocal(s) {

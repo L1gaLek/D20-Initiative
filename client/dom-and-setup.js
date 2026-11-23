@@ -589,7 +589,7 @@ function applyRoleToUI() {
 
   // "Управление игроками" используется всеми, кроме зрителей
   const pm = document.getElementById('player-management');
-  if (pm) pm.style.display = spectator ? 'none' : '';
+  if (pm) { pm.style.display = spectator ? 'none' : '';pm.dataset.creatorRole=gm?'gm':'player'; }
 
   // Зритель не видит механику бросков кубиков.
   const diceStackEl = document.getElementById('dice-stack');
@@ -650,7 +650,7 @@ function refreshGmQuickToolbarTop() {
   const rightPanel = document.getElementById('right-panel');
   if (rightPanel) {
     rightPanel.style.setProperty('--gm-quick-toolbar-top', `${Math.round(toolbarRect.top)}px`);
-    const rightOffset = Math.max(8, Math.round(window.innerWidth - toolbarRect.left + 10));
+    const rightOffset = window.innerWidth<=760?6:Math.max(8,Math.round(window.innerWidth-toolbarRect.left+10));
     rightPanel.style.left = 'auto';
     rightPanel.style.right = `${rightOffset}px`;
   }

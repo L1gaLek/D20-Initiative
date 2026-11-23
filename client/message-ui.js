@@ -664,7 +664,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
     }
 
     if (msg.type === "diceEvent" && msg.event) {
-      void window.DiceTable?.show?.(msg.event, { historical: !!msg.__serverTs && Date.now() - Number(msg.__serverTs) > 15000 });
+      void window.DiceTable?.show?.(msg.event, { historical: !!msg.__diceHistorical, serverNow: msg.__diceServerNow || msg.__serverTs });
       try { window.Board3D?.playDiceAction?.(msg.event); } catch {}
       const fromId = String(msg?.event?.fromId || '');
       if (fromId && String(fromId) !== String(myId || '')) {

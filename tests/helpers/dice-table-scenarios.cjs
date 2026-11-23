@@ -9,12 +9,23 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
     await page.locator('#dice-others').scrollIntoViewIfNeeded();
     await page.evaluate(()=>{
       window.__diceLogReveal=[];const original=renderLog;const seen=new Set();
-      renderLog=lines=>{for(const line of lines||[])if(!seen.has(line)){seen.add(line);window.__diceLogReveal.push({line,state:DiceTable.inspect().state,animating:DiceTable.inspect().animating});}original(lines);};
+      renderLog=lines=>{for(const line of lines||[])if(!seen.has(line)){seen.add(line);window.__diceLogReveal.push({at:performance.timeOrigin+performance.now(),line,state:DiceTable.inspect().state,animating:DiceTable.inspect().animating});}original(lines);};
     });
   }
+  // Cold shader/worker setup may legitimately finish after the reveal deadline
+  // on a busy machine. Warm once before measuring the visible animation path.
+  await send({localNonce:'dice-table-warmup',sides:6,count:1,rolls:[2],total:2,kindText:'Подготовка стола'});
+  await Promise.all(pages.map(page=>settled(page,2)));
   await gm.getByRole('button',{name:'Развернуть стол бросков'}).click();
-  await send({localNonce:'dice-table-d20',sides:20,count:1,rolls:[17],total:17,kindText:'Проверка: d20'});
+  await other.evaluate(()=>PersonalPreferences.set({reduceDiceMotion:true}));
+  await pages[3].emulateMedia({reducedMotion:'reduce'});
+  await pages[4].evaluate(()=>{window.__diceRealNow=Date.now;Date.now=()=>window.__diceRealNow()+3600000;});
+  await send({localNonce:'dice-table-d20',sides:20,count:1,rolls:[17],total:17,kindText:'Проверка: d20 [17]'});
   await owner.waitForFunction(()=>DiceTable.inspect().animating);
+  await other.waitForFunction(()=>DiceTable.inspect().state==='rolling');
+  assert.equal(await other.locator('.dice-table__stage').evaluate(el=>el.classList.contains('is-awaiting-result')),true,'reduced motion holds a neutral placeholder, not the result');
+  assert.equal(await other.evaluate(()=>DiceTable.inspect().animating),false);
+  assert.equal((await owner.locator('.dice-table__caption').textContent()).includes('17'),false,'caption never leaks embedded rolled values');
   const inFlight=await owner.evaluate(()=>DiceTable.inspect());assert.equal(inFlight.dice[0].sides,20);assert.ok(inFlight.frame<130);
   assert.equal(await owner.evaluate(()=>lastState.log.some(line=>line.includes('Проверка: d20'))),false,'journal must not reveal the result during its animation');
   broadcast({type:'logRow',roomId:'test-room',row:{text:'Обычное событие во время броска',localNonce:'ordinary-during-roll'}});
@@ -25,7 +36,14 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
     await page.waitForFunction(()=>lastState.log.some(line=>line.includes('Проверка: d20')));
     const reveal=await page.evaluate(()=>__diceLogReveal.find(row=>row.line.includes('Проверка: d20')));
     assert.equal(reveal.state,'settled');assert.equal(reveal.animating,false);
+    assert.equal(await page.locator('.dice-others__item').count(),0,'no transient result feed');
   }
+  const moments=await Promise.all(pages.map(page=>page.evaluate(()=>__diceLogReveal.find(row=>row.line.includes('Проверка: d20')).at)));
+  assert.ok(Math.max(...moments)-Math.min(...moments)<160,'ordinary, reduced and OS reduced modes reveal together: '+moments);
+  await other.evaluate(()=>PersonalPreferences.set({reduceDiceMotion:false}));await pages[3].emulateMedia({reducedMotion:'no-preference'});
+  await pages[4].evaluate(()=>{Date.now=window.__diceRealNow;delete window.__diceRealNow;});
+  console.log('PASS shared reveal deadline: normal/personal reduced/OS reduced/one-hour clock skew, results and journal within 160 ms across five clients');
+  if(process.env.D20_TIMING_ONLY)return;
   assert.equal(await gm.locator('.dice-table-dialog').isVisible(),true,'first roll keeps an already expanded tray open');
   await gm.keyboard.press('Escape');await gm.locator('#dice-others .dice-table__canvas').waitFor({state:'attached'});
   const views=await Promise.all(pages.map(page=>page.evaluate(()=>DiceTable.inspect().dice)));

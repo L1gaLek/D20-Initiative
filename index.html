@@ -18,11 +18,12 @@
 <link rel="stylesheet" href="style/token-navigation.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/players.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/gameplay.css?v=20261122-egress-1">
-<link rel="stylesheet" href="style/dice-table.css?v=20261122-critical-1">
+<link rel="stylesheet" href="style/dice-table.css?v=20261123-polish-1">
 <link rel="stylesheet" href="style/cursors.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/personal-settings.css?v=20261123-roster-1">
 <link rel="stylesheet" href="style/room-panels.css?v=20261122-table-layout-1">
-<link rel="stylesheet" href="style/room-workspace.css?v=20261123-roster-1">
+<link rel="stylesheet" href="style/room-workspace.css?v=20261123-polish-1">
+<link rel="stylesheet" href="style/room-dialogs.css?v=20261123-polish-1">
 </head>
 <body class="lobby-active">
 
@@ -339,28 +340,31 @@
 
 <!-- ===== Room chat modal ===== -->
 <div id="roomChatModal" class="modal-overlay hidden">
-  <div class="modal tavern-modal tavern-chat-modal room-chat-modal">
+  <div class="modal tavern-modal tavern-chat-modal room-chat-modal" role="dialog" aria-modal="true" aria-labelledby="room-chat-title">
     <div class="modal-header tavern-chat-header">
       <div>
-        <div class="modal-title">Сообщение</div>
+        <div class="modal-title" id="room-chat-title"><span aria-hidden="true">✉</span> Сообщение</div>
         <div class="modal-subtitle" id="room-chat-subtitle">Разговоры внутри комнаты</div>
       </div>
       <div class="tavern-chat-header__actions">
-        <button id="room-chat-users-btn" type="button" class="tavern-chat-users-btn" title="Пользователи">Люди</button>
-        <button id="roomChatClose" class="modal-close">✕</button>
+        <button id="room-chat-users-btn" type="button" class="tavern-chat-users-btn" aria-expanded="false" aria-controls="room-chat-users-popover">Собеседники</button>
+        <button id="roomChatClose" class="modal-close" aria-label="Закрыть сообщения">✕</button>
       </div>
     </div>
     <div class="modal-body tavern-chat-body">
-      <div id="room-chat-tabs" class="tavern-chat-tabs"></div>
+      <nav id="room-chat-tabs" class="tavern-chat-tabs" aria-label="Переписки"></nav>
       <div id="room-chat-users-popover" class="tavern-chat-users-popover hidden" aria-hidden="true">
         <div class="tavern-chat-users-popover__title">Кому написать лично</div>
         <div id="room-chat-users-list" class="tavern-chat-users-list"></div>
       </div>
-      <div id="room-chat-list" class="tavern-chat-list"></div>
-      <div id="room-chat-quote" class="tavern-chat-quote hidden" aria-hidden="true"></div>
-      <div class="tavern-chat-form">
-        <input id="room-chat-input" type="text" maxlength="500" placeholder="Напишите сообщение в комнату">
-        <button id="room-chat-send" type="button">Отправить</button>
+      <div class="room-chat-stream">
+        <div id="room-chat-list" class="tavern-chat-list" role="log" aria-label="История сообщений" aria-live="polite"></div>
+        <div id="room-chat-quote" class="tavern-chat-quote hidden" aria-hidden="true"></div>
+        <div class="tavern-chat-form">
+          <textarea id="room-chat-input" rows="2" maxlength="500" aria-label="Текст сообщения" placeholder="Напишите сообщение в комнату"></textarea>
+          <button id="room-chat-send" type="button">Отправить <span aria-hidden="true">↗</span></button>
+        </div>
+        <div class="room-chat-composer-hint"><span>Enter — отправить · Shift + Enter — новая строка</span><span id="room-chat-counter">0 / 500</span></div>
       </div>
     </div>
   </div>
@@ -514,10 +518,10 @@
         <div id="right-panel">
           <div id="gm-panel-phase" class="gm-flyout-panel">
             <div id="world-phases" class="side-box gm-side-box">
-              <h3>Фазы мира</h3>
-              <button id="start-exploration">Фаза исследования</button>
-              <button id="start-initiative">Фаза инициативы</button>
-              <button id="start-combat">Фаза бой</button>
+              <header class="room-flyout-heading"><span aria-hidden="true">◈</span><div><h3>Фазы мира</h3><p>Темп вашего приключения</p></div><button type="button" class="room-flyout-close" aria-label="Закрыть фазы мира" onclick="setActiveGmQuickPanel('')">×</button></header>
+              <button id="start-exploration" aria-label="Фаза исследования" class="room-phase-choice"><span class="room-phase-icon" aria-hidden="true">⌖</span><span><strong>Исследование</strong><small>Свободное перемещение и история</small></span></button>
+              <button id="start-initiative" aria-label="Фаза инициативы" class="room-phase-choice"><span class="room-phase-icon" aria-hidden="true">⬡</span><span><strong>Инициатива</strong><small>Броски и подготовка очереди хода</small></span></button>
+              <button id="start-combat" aria-label="Фаза боя" class="room-phase-choice"><span class="room-phase-icon" aria-hidden="true">⚔</span><span><strong>Бой</strong><small>Ходы, действия и перемещение</small></span></button>
             </div>
           </div>
 
@@ -644,16 +648,16 @@
 
           <div id="gm-panel-music" class="gm-flyout-panel">
             <div id="bg-music-box" class="side-box gm-side-box">
-              <h3>Фоновая музыка</h3>
-              <button id="bg-music-open" type="button">Список</button>
-              <div id="bg-music-now" style="margin-top:8px; font-size:12px; opacity:.9;">Трек: —</div>
-              <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap;">
-                <button id="bg-music-toggle" type="button" disabled>▶/⏸</button>
-                <button id="bg-music-stop" type="button" disabled>⏹</button>
+              <header class="room-flyout-heading"><span aria-hidden="true">♫</span><div><h3>Фоновая музыка</h3><p>Атмосфера за общим столом</p></div><button type="button" class="room-flyout-close" aria-label="Закрыть музыку" onclick="setActiveGmQuickPanel('')">×</button></header>
+              <button id="bg-music-open" class="room-action-primary" type="button">♫ Библиотека музыки</button>
+              <div id="bg-music-now" class="room-music-now">Трек: —</div>
+              <div class="room-music-playback">
+                <button id="bg-music-toggle" type="button" aria-label="Воспроизвести или приостановить музыку" disabled>▶/⏸</button>
+                <button id="bg-music-stop" type="button" aria-label="Остановить музыку" disabled>⏹</button>
               </div>
-              <div style="margin-top:8px;">
-                <label style="display:flex; align-items:center; gap:8px;">
-                  <span style="min-width:64px; font-size:12px; opacity:.9;">Громк.</span>
+              <div class="room-music-volume">
+                <label>
+                  <span>Громкость</span>
                   <input id="bg-music-volume" type="range" min="0" max="100" value="40" />
                 </label>
               </div>
@@ -661,8 +665,8 @@
           </div>
 
           <div id="gm-panel-save" class="gm-flyout-panel">
-            <div class="side-box gm-side-box">
-              <h3>Сохранение</h3>
+            <div class="side-box gm-side-box room-save-shell">
+              <header class="room-flyout-heading"><span aria-hidden="true">▣</span><div><h3>Сохранение</h3><p>Карты и продолжение кампании</p></div><button type="button" class="room-flyout-close" aria-label="Закрыть сохранение" onclick="setActiveGmQuickPanel('')">×</button></header>
               <div class="campaign-maps-controls">
               <div class="campaign-maps-title">Карты кампании</div>
               <div class="campaign-maps-row">
@@ -675,9 +679,9 @@
               <select id="campaign-maps-select" title="Выбор карты" style="display:none"></select>
               <button id="create-campaign-map" type="button" style="display:none">Создать карту</button>
               </div>
-              <button id="save-campaign" type="button">Сохранить кампанию</button>
+              <button id="save-campaign" class="room-action-primary" type="button">Сохранить кампанию</button>
               <button id="load-campaign" type="button">Загрузить кампанию</button>
-              <button id="reset-game">Сбросить игру полностью</button>
+              <div class="room-save-divider"></div><button id="reset-game" class="room-action-danger">Сбросить игру полностью</button>
             </div>
           </div>
 
@@ -761,9 +765,9 @@
       <div id="player-list-container">
         <h3 class="room-panel-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="7" r="3"/><path d="M3 20v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v3"/></svg><span>Пользователи и персонажи</span></h3>
         <div class="player-list-tabs" role="tablist" aria-label="Фильтр списка персонажей">
-          <button id="player-tab-mine" class="player-tab active" type="button" role="tab" aria-selected="true">Мои игроки</button>
+          <button title="Мои персонажи" id="player-tab-mine" class="player-tab active" type="button" role="tab" aria-selected="true">Мои</button>
           <button id="player-tab-all" class="player-tab" type="button" role="tab" aria-selected="false">Все</button>
-          <button id="player-tab-others" class="player-tab" type="button" role="tab" aria-selected="false">Остальные</button>
+          <button title="Персонажи других игроков" id="player-tab-others" class="player-tab" type="button" role="tab" aria-selected="false">Другие</button>
         </div>
         <label class="roster-search"><span>Поиск</span><input id="player-search" type="search" placeholder="Персонаж или владелец" aria-label="Поиск персонажа или владельца" autocomplete="off"></label>
         <div id="player-list-count" class="roster-count" role="status"></div>
@@ -804,7 +808,7 @@
   <script src="monsters-library.js"></script>
 
  <!-- Client scripts (split from former client.js) -->
-  <script src="client/dom-and-setup.js?v=20261123-roster-1"></script>
+  <script src="client/dom-and-setup.js?v=20261123-polish-1"></script>
   <script src="client/token-permissions.js?v=20261122-egress-1"></script>
   <script src="client/token-health.js?v=20261122-egress-1"></script>
   <script src="client/avatar-data.js?v=20261122-egress-1"></script>
@@ -815,7 +819,7 @@
   <script src="client/app/lobby-shell.js?v=20261122-egress-1"></script>
   <script src="client/rooms/lobby-room-ui.js?v=20261122-egress-1"></script>
   <script src="client/chat-notifications.js?v=20261122-cabinet-1"></script>
-  <script src="client/chat-ui.js?v=20261122-egress-1"></script>
+  <script src="client/chat-ui.js?v=20261123-polish-1"></script>
   <script src="client/board-fog.js?v=20261122-sync-1"></script>
   <script src="client/board-marks.js?v=20261122-egress-1"></script>
   <script src="client/map-tools-ui.js?v=20261122-egress-1"></script>
@@ -824,14 +828,16 @@
   <script src="backend/shared/sheet-sync.js?v=20261122-sync-1"></script>
   <script src="backend/shared/combat-state.js?v=20261122-egress-1"></script>
   <script src="client/dice-table/log-timing.js?v=20261122-dice-controls-1"></script>
+  <script src="backend/shared/dice-presentation.js?v=20261123-polish-1"></script>
   <script src="backend/shared/appearance.js?v=20261123-gallery-2"></script>
   <script src="client/dice-table/appearance.js?v=20261123-gallery-2"></script>
   <script src="client/personal-preferences.js?v=20261123-appearance-1"></script>
   <script src="client/dice-table/critical-feedback.js?v=20261122-cabinet-1"></script>
-  <script src="client/dice-table.js?v=20261123-gallery-2"></script>
-  <script src="client/message-ui.js?v=20261123-roster-1"></script>
-  <script src="client/board-players.js?v=20261123-roster-1"></script>
-  <script src="client/gameplay-ui.js?v=20261122-table-layout-1"></script>
+  <script src="client/dice-table.js?v=20261123-polish-1"></script>
+  <script src="client/message-ui.js?v=20261123-polish-1"></script>
+  <script src="client/board-players.js?v=20261123-polish-1"></script>
+  <script src="client/room-dialogs.js?v=20261123-polish-1"></script>
+  <script src="client/gameplay-ui.js?v=20261123-polish-1"></script>
   <script src="client/board-navigation.js?v=20261122-egress-1"></script>
   <script src="client/network/room-state-core.js?v=20261122-egress-1"></script>
   <script src="client/network/room-state-maps.js?v=20261122-egress-1"></script>
@@ -845,9 +851,9 @@
   <script src="client/network/realtime-channel-helpers.js?v=20261122-egress-1"></script>
   <script src="client/network/room-detached-sync.js?v=20261122-egress-1"></script>
   <script src="client/network/live-room-sync.js?v=20261122-sync-1"></script>
-  <script src="client/core-helpers-network.js?v=20261123-appearance-1"></script>
+  <script src="client/core-helpers-network.js?v=20261123-polish-1"></script>
   <script src="client/initiative-sync.js?v=20261122-sync-1"></script>
-  <script src="client/bg-music.js?v=20261122-egress-1"></script>
+  <script src="client/bg-music.js?v=20261123-polish-1"></script>
   <script src="client/rooms-controlbox.js?v=20261123-workspace-1"></script>
   <!-- Character sheet (split from info-sheet-player.js) -->
   <script src="char_sheet/sheet-utils.js?v=20261122-egress-1"></script>
@@ -866,7 +872,7 @@
 <script src="char_sheet/monster-sheet-modal.js?v=20261122-egress-1"></script>
 <script src="char_sheet/sheet-token-access.js?v=20261122-personal-1"></script>
 <script src="char_sheet/sheet-modal-render.js?v=20261122-personal-1"></script>
-<script src="client/personal-settings.js?v=20261123-roster-1"></script>
+<script src="client/personal-settings.js?v=20261123-polish-1"></script>
 
 </body>
 </html>

@@ -500,6 +500,11 @@ function connectRoomWs(roomId) {
 
 function dispatchRoomWsEvent(msg, replay = false, sock = wsClient) {
       if (!msg || typeof msg !== 'object') return;
+      if(!replay&&Number(msg.__serverTs)>0)dispatchRoomWsEvent.clockOffset=Date.now()-Number(msg.__serverTs);
+      if(msg.type==='diceEvent'){
+        msg.__diceServerNow=Date.now()-(dispatchRoomWsEvent.clockOffset||0);
+        msg.__diceHistorical=!!replay&&Number(msg.__serverTs)>0&&msg.__diceServerNow-Number(msg.__serverTs)>15000;
+      }
       if (msg.__streamSeq) rememberRoomCursor({ roomId: msg.roomId, epoch: msg.__streamEpoch, seq: msg.__streamSeq });
       const nonce = String(msg.__wsNonce || '').trim();
       if (nonce && wsWasSeen(nonce)) return;
@@ -529,7 +534,7 @@ function dispatchRoomWsEvent(msg, replay = false, sock = wsClient) {
       if (from === WS_CLIENT_ID && msg.type === 'playerPatch' && msg.patch?.sheet) {
         window.InfoModal?.acknowledgeSheetSave?.(msg.playerId || msg.id, msg.patch.sheetUpdatedAt);
       }
-      if (from && from === WS_CLIENT_ID && msg.__optimisticApplied && !(msg.type === 'playerPatch' && msg.patch?.sheet)) return;
+      if (from && from === WS_CLIENT_ID && msg.__optimisticApplied && msg.type !== 'diceEvent' && !(msg.type === 'playerPatch' && msg.patch?.sheet)) return;
 
       if (msg.type === 'ping') {
         markWsAlive();
@@ -4647,6 +4652,7 @@ function updatePhaseUI(state) {
     startCombatBtn.disabled = true;
   }
 
+  for(const [button,value] of [[startExplorationBtn,'exploration'],[startInitiativeBtn,'initiative'],[startCombatBtn,'combat']])button?.setAttribute('aria-pressed',String(phase===value));
   updateCurrentPlayer(state);
 }
 
