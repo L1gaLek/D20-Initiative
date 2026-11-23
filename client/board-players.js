@@ -1913,6 +1913,7 @@ addPlayerBtn.addEventListener('click', () => {
 
   playerNameInput.value = '';
   if (isBaseCheckbox && !isBaseCheckbox.disabled) isBaseCheckbox.checked = false;
+  refreshPlayerTypeCheckboxUi();
 });
 
 // ================== COMBAT MOVE BUDGET ==================

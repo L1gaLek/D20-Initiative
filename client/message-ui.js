@@ -475,6 +475,7 @@ function syncVisiblePlayersState(state) {
     const baseExistsForMe = players.some(p => p.isBase && p.ownerId === myId);
     isBaseCheckbox.disabled = baseExistsForMe;
     if (baseExistsForMe) isBaseCheckbox.checked = false;
+    refreshPlayerTypeCheckboxUi();
   }
 
   if (selectedPlayer && !existingIds.has(String(selectedPlayer.id || ''))) {

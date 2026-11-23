@@ -20,9 +20,9 @@
 <link rel="stylesheet" href="style/gameplay.css?v=20261122-egress-1">
 <link rel="stylesheet" href="style/dice-table.css?v=20261122-critical-1">
 <link rel="stylesheet" href="style/cursors.css?v=20261122-egress-1">
-<link rel="stylesheet" href="style/personal-settings.css?v=20261123-gallery-2">
+<link rel="stylesheet" href="style/personal-settings.css?v=20261123-roster-1">
 <link rel="stylesheet" href="style/room-panels.css?v=20261122-table-layout-1">
-<link rel="stylesheet" href="style/room-workspace.css?v=20261123-gallery-2">
+<link rel="stylesheet" href="style/room-workspace.css?v=20261123-roster-1">
 </head>
 <body class="lobby-active">
 
@@ -732,18 +732,18 @@
 
           <div class="pm-row pm-row--bottom">
             <div class="pm-types">
-              <label class="type-item">
-                <input type="checkbox" id="is-base">
-                Основа
-              </label>
-              <label class="type-item">
-                <input type="checkbox" id="is-ally">
-                Союзник
-              </label>
-              <label class="type-item">
-                <input type="checkbox" id="is-enemy">
-                Враг
-              </label>
+              <div class="type-item type-item--base">
+                <input type="checkbox" id="is-base" hidden tabindex="-1" aria-hidden="true">
+                <button type="button" class="pm-type-button pm-type-button--base" data-player-type="is-base" aria-pressed="false"><span aria-hidden="true">♛</span> Основа</button>
+              </div>
+              <div class="type-item type-item--ally">
+                <input type="checkbox" id="is-ally" hidden tabindex="-1" aria-hidden="true">
+                <button type="button" class="pm-type-button pm-type-button--ally" data-player-type="is-ally" aria-pressed="false"><span aria-hidden="true">◆</span> Союзник</button>
+              </div>
+              <div class="type-item type-item--enemy">
+                <input type="checkbox" id="is-enemy" hidden tabindex="-1" aria-hidden="true">
+                <button type="button" class="pm-type-button pm-type-button--enemy" data-player-type="is-enemy" aria-pressed="false"><span aria-hidden="true">⚔</span> Враг</button>
+              </div>
             </div>
             <button id="add-player">Добавить</button>
           </div>
@@ -804,7 +804,7 @@
   <script src="monsters-library.js"></script>
 
  <!-- Client scripts (split from former client.js) -->
-  <script src="client/dom-and-setup.js?v=20261123-workspace-1"></script>
+  <script src="client/dom-and-setup.js?v=20261123-roster-1"></script>
   <script src="client/token-permissions.js?v=20261122-egress-1"></script>
   <script src="client/token-health.js?v=20261122-egress-1"></script>
   <script src="client/avatar-data.js?v=20261122-egress-1"></script>
@@ -829,8 +829,8 @@
   <script src="client/personal-preferences.js?v=20261123-appearance-1"></script>
   <script src="client/dice-table/critical-feedback.js?v=20261122-cabinet-1"></script>
   <script src="client/dice-table.js?v=20261123-gallery-2"></script>
-  <script src="client/message-ui.js?v=20261123-viewport-2"></script>
-  <script src="client/board-players.js?v=20261122-cabinet-1"></script>
+  <script src="client/message-ui.js?v=20261123-roster-1"></script>
+  <script src="client/board-players.js?v=20261123-roster-1"></script>
   <script src="client/gameplay-ui.js?v=20261122-table-layout-1"></script>
   <script src="client/board-navigation.js?v=20261122-egress-1"></script>
   <script src="client/network/room-state-core.js?v=20261122-egress-1"></script>
@@ -866,7 +866,7 @@
 <script src="char_sheet/monster-sheet-modal.js?v=20261122-egress-1"></script>
 <script src="char_sheet/sheet-token-access.js?v=20261122-personal-1"></script>
 <script src="char_sheet/sheet-modal-render.js?v=20261122-personal-1"></script>
-<script src="client/personal-settings.js?v=20261123-gallery-2"></script>
+<script src="client/personal-settings.js?v=20261123-roster-1"></script>
 
 </body>
 </html>

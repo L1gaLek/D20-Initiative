@@ -3,6 +3,18 @@ module.exports=async({pages,screenshotDir})=>{
   const [gm,owner]=pages;
   const picture=async(page,name)=>{if(screenshotDir){fs.mkdirSync(screenshotDir,{recursive:true});await page.screenshot({path:path.join(screenshotDir,name+'.png'),fullPage:false});}};
   const phase=async(page,value)=>page.evaluate(value=>{lastState.phase=value;renderTurnOrderBox(lastState);renderInitiativePlayersBox(lastState);updatePhaseUI(lastState);},value);
+  const contained=async(page,label)=>{
+    const failures=await page.evaluate(()=>{
+      const out=[],list=document.getElementById('player-list'),panel=document.getElementById('player-list-container');
+      for(const el of [panel,list])if(el.scrollHeight>el.clientHeight+1)out.push({id:el.id,client:el.clientHeight,scroll:el.scrollHeight});
+      for(const card of list.querySelectorAll('.player-list-item')){
+        const r=card.getBoundingClientRect(),g=card.closest('.owner-group').getBoundingClientRect();
+        if(r.y<g.y-1||r.bottom>g.bottom+1)out.push({card:card.dataset.playerId,reason:'owner bounds',r:r.toJSON(),g:g.toJSON()});
+        for(const action of card.querySelectorAll('button,select,input')){if(!action.getClientRects().length)continue;const b=action.getBoundingClientRect();if(b.y<r.y-1||b.bottom>r.bottom+1||b.x<r.x-1||b.right>r.right+1)out.push({card:card.dataset.playerId,action:action.className,reason:'clipped control',r:r.toJSON(),b:b.toJSON()});}
+      }
+      return out;
+    });if(failures.length){await picture(page,'roster-bounds-failure');console.log('ROSTER BOUNDS',await page.evaluate(()=>['action-bottom-row','player-list-container','player-list'].map(id=>{const el=document.getElementById(id);return {id,box:el.getBoundingClientRect().toJSON(),children:[...el.children].slice(0,4).map(el=>({name:el.className,box:el.getBoundingClientRect().toJSON()}))};})));}assert.deepEqual(failures,[],label);
+  };
   // The viewport is shared geometry, not a per-user cell-size preference.
   const peerLayouts=new Map();
   // CSS viewport equivalents of desktop browser zoom (50/75/125/150/200%),
@@ -18,6 +30,7 @@ module.exports=async({pages,screenshotDir})=>{
         await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
         const layout=await page.evaluate(()=>{const r=id=>{const b=document.getElementById(id).getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,right:b.right,bottom:b.bottom};};return {main:r('main-container'),upper:r('content-row'),map:r('game-container'),wrapper:r('board-wrapper'),footer:r('action-bottom-row'),header:r('status-bar'),left:r('action-log-container'),right:r('combat-side-column'),order:r('turn-order-box'),initiative:r('initiative-players-box'),journal:r('action-log'),dice:r('dice-others'),sideHidden:document.getElementById('combat-side-column').hidden,scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight};});
         const label=JSON.stringify({width,height,value,layout});
+        await contained(page,`${width}x${height} ${value}`);
         const management=await page.locator('#player-management').boundingBox();
         if(managementWidth===null)managementWidth=management.width;else assert.ok(Math.abs(managementWidth-management.width)<1,'management width stays fixed across all phases: '+label);
         const sizeRow=await page.evaluate(()=>{const a=document.querySelector('.pm-size-label').getBoundingClientRect(),b=document.getElementById('player-size').getBoundingClientRect();return {gap:b.x-a.right,width:b.width,dy:Math.abs((a.y+a.height/2)-(b.y+b.height/2))};});
@@ -73,6 +86,28 @@ module.exports=async({pages,screenshotDir})=>{
   await gm.locator('#player-search').fill('');await gm.locator('#player-tab-mine').click();await gm.waitForFunction(()=>!document.querySelector('.roster-empty'));
   await gm.locator('#player-tab-all').click();await picture(gm,'workspace-desktop');
   if(screenshotDir)await gm.locator('#action-bottom-row').screenshot({path:path.join(screenshotDir,'workspace-roster.png')});
+  for(const [width,height] of [[1920,1080],[1366,768],[1024,768],[390,844],[911,512],[800,360]]){await gm.setViewportSize({width,height});await gm.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));await contained(gm,`many cards ${width}x${height}`);}
+  await gm.setViewportSize({width:1600,height:1080});
+  await gm.evaluate(()=>{const p=players.find(p=>p.id==='player-1');p.pendingInitiativeChoice=true;p.inCombat=true;p.hasRolledInitiative=false;updatePlayerList();});
+  for(const [width,height] of [[1366,768],[911,512],[320,568]]){await gm.setViewportSize({width,height});await contained(gm,'late initiative choice '+width+'x'+height);}
+  await gm.evaluate(()=>{delete players.find(p=>p.id==='player-1').pendingInitiativeChoice;updatePlayerList();});
+  await gm.setViewportSize({width:1600,height:1080});
+  const base=gm.locator('[data-player-type="is-base"]'),ally=gm.locator('[data-player-type="is-ally"]'),enemy=gm.locator('[data-player-type="is-enemy"]');
+  const b=await base.boundingBox(),a=await ally.boundingBox(),e=await enemy.boundingBox();assert.ok(Math.abs(b.width-a.width-e.width-4)<1&&Math.abs(a.y-e.y)<1&&a.y>b.y);
+  assert.equal(await enemy.getAttribute('aria-pressed'),'true');
+  await ally.click();assert.equal(await ally.getAttribute('aria-pressed'),'true');assert.equal(await enemy.getAttribute('aria-pressed'),'false');
+  await enemy.click();assert.equal(await ally.getAttribute('aria-pressed'),'false');assert.equal(await enemy.getAttribute('aria-pressed'),'true');
+  await gm.evaluate(()=>{window.__createdTypes=[];window.__originalSend=sendMessage;sendMessage=m=>{if(m.type==='addPlayer')window.__createdTypes.push(m.player);else return window.__originalSend(m);};});
+  await base.focus();await gm.keyboard.press('Space');assert.equal(await base.getAttribute('aria-pressed'),'true');await ally.click();
+  await gm.locator('#player-name').fill('Типы тест');await gm.locator('#add-player').click();
+  assert.deepEqual(await gm.evaluate(()=>window.__createdTypes.map(p=>[p.isBase,p.isAlly,p.isEnemy])),[[true,true,false]]);
+  assert.equal(await base.getAttribute('aria-pressed'),'false');
+  await enemy.click();await gm.locator('#player-name').fill('Враг тест');await gm.locator('#add-player').click();
+  assert.deepEqual(await gm.evaluate(()=>window.__createdTypes.at(-1)).then(p=>[p.isBase,p.isAlly,p.isEnemy]),[false,false,true]);
+  await gm.evaluate(()=>{sendMessage=window.__originalSend;delete window.__originalSend;delete window.__createdTypes;});
+  assert.equal(await owner.locator('[data-player-type="is-base"]').isDisabled(),true,'existing base cannot be duplicated');
+  assert.equal(await owner.locator('[data-player-type="is-ally"]').isVisible(),false);assert.equal(await owner.locator('[data-player-type="is-enemy"]').isVisible(),false);
+  console.log('PASS roster: badges and all controls stay inside owner cards without vertical scrolling; type buttons switch directly, support keyboard, submit correct flags and retain permissions/one-base rule');
   await owner.locator('#player-tab-mine').click();await owner.locator('#player-list [data-player-id="player-1"] .sheet-btn').click();
   await owner.locator('#sheet-modal').waitFor({state:'visible'});assert.equal(await owner.locator('.sheet-tab').count(),9);await owner.locator('#sheet-close').click();
   // Resizing keeps all three panes and the lower row within the room.

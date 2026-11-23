@@ -95,7 +95,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 #combat-side-column>#initiative-players-box{box-sizing:border-box;width:100%;min-width:0;min-height:0;flex:1 1 0;max-height:none;border:0;border-top:1px solid var(--table-divider);}
 /* The lower row is always on screen, regardless of roster length or role. */
 #content-row>#action-bottom-row{
-  box-sizing:border-box;display:grid;grid-template-columns:220px minmax(0,1fr);grid-column:2;grid-row:2;
+  box-sizing:border-box;display:grid;grid-template-columns:244px minmax(0,1fr);grid-column:2;grid-row:2;
   gap:0;height:100%;width:100%;min-width:0;min-height:0;
   align-items:stretch;overflow:hidden;border-top:1px solid var(--table-divider);
 }
@@ -130,7 +130,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 .legacy-viewport-controls[hidden]{display:none;}
 @media(max-width:1280px){
   #main-container{--room-left:300px;--room-side:250px;}
-  #content-row>#action-bottom-row{grid-template-columns:190px minmax(0,1fr);}
+  #content-row>#action-bottom-row{grid-template-columns:212px minmax(0,1fr);}
   #main-container .gm-quick-toolbar{right:5px;}
 }
 @media(max-width:1000px){
@@ -163,7 +163,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   #content-row>#action-log-container{grid-column:1/-1;grid-row:2;grid-template-columns:minmax(0,4fr) minmax(0,6fr);grid-template-rows:minmax(0,1fr);}
   #content-row>#action-log-container{border-right:0;border-top:1px solid var(--table-divider);}
   #action-log-container>#action-log{border-bottom:0;border-right:1px solid var(--table-divider);}
-  #content-row>#action-bottom-row{grid-column:1/-1;grid-row:3;grid-template-columns:145px minmax(0,1fr);}
+  #content-row>#action-bottom-row{grid-column:1/-1;grid-row:3;grid-template-columns:160px minmax(0,1fr);}
   #action-bottom-row #player-list-container{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto minmax(0,1fr);padding:8px;gap:4px;}
   #player-list-container>.player-list-tabs{grid-column:1;min-width:0;}
   #player-list-container>.roster-search{grid-column:1;grid-row:3;}
@@ -206,7 +206,7 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
   #status-bar button{font-size:10px;min-height:27px;padding:5px 7px;}
   #status-bar .room-chat-notification{width:30px;height:30px;}
   #main-container #right-panel{top:116px;max-height:calc(100dvh - 126px);}
-  #content-row>#action-bottom-row{grid-template-columns:145px minmax(0,1fr);}
+  #content-row>#action-bottom-row{grid-template-columns:160px minmax(0,1fr);}
   #player-management{padding:7px;}
   #player-management h3{font-size:11px;margin-bottom:6px;}
   #player-management .pm-row--size{flex-wrap:wrap;gap:4px;}
@@ -221,3 +221,76 @@ body:not(.lobby-active){margin:0;overflow:hidden;}
 #player-management .pm-row--size{display:grid;grid-template-columns:30px minmax(0,1fr);gap:5px}#player-management .pm-size{min-width:0;justify-content:flex-end;gap:4px}#player-management #player-size{width:80px;min-width:0}#player-management .pm-size-label{font-size:10px}
 
 @media(max-width:760px){#player-management .pm-row--size{grid-template-columns:minmax(0,1fr)}#player-management .pm-size{justify-content:flex-end}#player-management #player-color{justify-self:start}}
+/* Roster cards share a bounded row, including actors with several badges. */
+#player-list-container{scrollbar-gutter:auto}
+#player-list-container>#player-list{overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto;align-items:stretch;container:roster-height / size}
+#player-list>.owner-group{box-sizing:border-box;height:100%;max-height:100%;min-height:0;padding:5px;overflow:hidden}
+#player-list .owner-header{box-sizing:border-box;flex:0 0 22px;height:22px;min-height:0;max-height:22px;flex-wrap:nowrap;margin:0 0 4px;padding:0 0 4px;overflow:hidden}
+#player-list .owner-name{flex:1;min-width:0;white-space:nowrap;text-overflow:ellipsis}
+#player-list .role-badge,#player-list .owner-header-actions{flex-shrink:0}
+#player-list .owner-players{height:0;min-height:0;max-height:100%;grid-template-rows:minmax(0,1fr);grid-auto-columns:max-content;align-items:stretch}
+#player-list .player-list-item{box-sizing:border-box;height:100%;max-height:100%;min-height:0;width:220px;max-width:none;margin:0!important;padding:6px;display:flex;flex-direction:column;flex-wrap:nowrap;gap:4px;overflow:hidden}
+#player-list .player-name-wrap{flex:0 1 22px;min-height:18px;flex-wrap:nowrap;gap:3px;overflow:hidden}
+#player-list .player-name-text{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+#player-list .player-initiative-badge{min-width:18px;height:18px;padding:0 2px;font-size:9px}
+#player-list .base-badge,#player-list .ally-badge,#player-list .enemy-badge{flex:none;font-size:7px;padding:2px 3px}
+#player-list .player-actions{flex:1;min-height:0;justify-content:flex-end;gap:3px}
+#player-list .player-actions-top{flex:none}
+#player-list .player-actions .sheet-btn{height:24px;padding:4px;font-size:10px}
+#player-list .player-actions-row--controls{flex:none;gap:3px;min-width:0;justify-content:flex-start}
+#player-list .player-actions-spacer{display:none}
+#player-list .size-select{box-sizing:border-box;width:48px;min-width:48px;height:23px;font-size:10px;padding:2px 4px}
+#player-list .player-color-input{width:14px;min-width:14px;height:22px}
+#player-list .player-actions-row--controls button{height:23px;padding:3px 4px;font-size:9px;white-space:nowrap}
+#player-list .eye-btn{width:22px;min-width:22px;height:20px;min-height:20px;padding:2px;font-size:10px}
+@media(min-width:761px) and (max-height:650px){
+  #main-container>#content-row{grid-template-rows:minmax(0,7fr) minmax(190px,3fr)}
+}
+@container roster-height (max-height:125px){
+  #player-list .player-list-item{width:330px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.45fr);gap:6px;padding:4px}
+  #player-list .player-name-wrap{align-self:center;flex-wrap:wrap;align-content:center;max-height:100%;min-height:0}
+  #player-list .player-name-text{flex-basis:70%;font-size:10px}
+  #player-list .player-actions{justify-content:center}
+  #player-list .player-actions .sheet-btn{height:22px;padding:3px}
+  #player-list .player-actions-row--controls button{height:21px;padding:2px 3px;font-size:9px}
+  #player-list .size-select{width:44px;min-width:44px;height:21px}
+  #player-list .player-color-input{height:20px}
+}
+#player-list .player-list-item:has(.init-choice-box){width:520px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,3fr);padding:4px;gap:6px}
+#player-list .player-list-item:has(.init-choice-box) .player-name-wrap{align-self:center;flex-wrap:wrap}
+#player-list .player-list-item:has(.init-choice-box) .player-actions{display:grid;grid-template-columns:120px minmax(0,1fr);grid-template-rows:22px 23px;align-content:center}
+#player-list .init-choice-box{display:flex;gap:3px;min-width:0;margin:0;padding:0;border:0;align-items:stretch}
+#player-list .player-actions .init-choice-btn{flex:1;min-width:0;min-height:0;padding:2px;font-size:9px;white-space:nowrap}
+#player-list .player-list-item:has(.init-choice-box) .player-actions-row--controls{grid-column:1/-1}
+@media(max-width:760px){
+  #main-container>#content-row,#main-container:is([data-room-phase=initiative],[data-room-phase=combat])>#content-row{grid-template-rows:minmax(0,1fr) minmax(0,.85fr) minmax(214px,.9fr)}
+  #player-list-container>.room-panel-heading{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  #player-list-container .player-tab{white-space:nowrap;min-width:0;font-size:9px}
+  #player-list-container>.roster-search input{height:25px;font-size:10px}
+}
+
+/* Separate selection, allegiance and creation without adding another dialog. */
+#player-management .pm-types{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px;width:100%}
+#player-management .type-item{min-width:0;display:block}
+#player-management .type-item--base{grid-column:1/-1}
+#player-management .pm-type-button{--type-color:198,163,89;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:5px;width:100%;min-width:0;height:27px;padding:3px 6px;border:1px solid rgba(var(--type-color),.48);border-radius:6px;background:rgba(var(--type-color),.06);color:rgb(var(--type-color));font:600 11px Georgia,serif;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s}
+#player-management .pm-type-button--base{background:linear-gradient(120deg,#8d6b362b,#d7b56612);border-color:#b49a60;color:#e9cf92}
+#player-management .pm-type-button--ally{--type-color:111,189,140}
+#player-management .pm-type-button--enemy{--type-color:220,133,117}
+#player-management .pm-type-button[aria-pressed=true]{border-color:rgb(var(--type-color));background:rgba(var(--type-color),.25);color:#fff1d4;box-shadow:inset 0 0 0 1px rgba(var(--type-color),.35),0 0 7px rgba(var(--type-color),.12)}
+#player-management .pm-type-button[aria-pressed=true]::after{content:'✓';font-family:Arial,sans-serif;font-size:11px}
+#player-management .pm-type-button--base[aria-pressed=true]{background:linear-gradient(120deg,#856226,#51421f);border-color:#f0cf7a;color:#fff0b5;box-shadow:inset 0 0 0 1px #f0cf7a66,0 0 9px #e7bd4533}
+#player-management .pm-type-button:focus-visible{outline:2px solid #f1db9e;outline-offset:2px}
+#player-management .pm-type-button:disabled{opacity:.45;cursor:default;filter:none;box-shadow:none}
+@media(min-height:601px) and (max-height:900px){
+  #action-bottom-row #player-management{padding:7px}
+  #player-management h3{margin-bottom:4px;font-size:12px}
+  #player-management #player-controls{gap:4px}
+  #player-management #player-name{height:26px;padding:4px 7px}
+  #player-management .pm-row--size{padding-bottom:3px}
+  #player-management .pm-row--bottom{gap:4px}
+  #player-management .pm-type-button{height:23px}
+  #player-management #add-player{min-height:25px;padding:3px 8px}
+  #player-management .pm-monsters{margin-top:4px;padding:3px 8px}
+}
+@media(min-width:761px) and (max-width:1500px){#action-bottom-row #player-list-container{grid-template-columns:minmax(125px,.9fr) minmax(0,1fr);grid-template-rows:auto minmax(28px,auto) minmax(0,1fr);gap:5px 6px}#player-list-container>.player-list-tabs{grid-row:2;grid-column:1}#player-list-container>.roster-search{grid-row:2;grid-column:2}#player-list-container>#player-list{grid-row:3}#player-list-container>.room-panel-heading{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}

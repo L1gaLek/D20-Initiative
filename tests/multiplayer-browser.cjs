@@ -89,7 +89,7 @@ const server = http.createServer(async (req, res) => {
       const userId = String(req.headers.authorization || '').replace('Bearer ', '');
       const ctx = h.clients.find(c => c.ctx.userId === userId)?.ctx;
       const data = ['POST','PATCH'].includes(req.method) ? await body(req) : {};
-      requests.push({ path: url.pathname, userId, data });
+      requests.push({ path: url.pathname, method:req.method, userId, data });
       if(url.pathname==='/api/me/profile')return json(res,{ok:true,...(req.method==='PATCH'?h.context.userProfiles.settings(userId,data.settings||{}):h.context.userProfiles.get(userId))});
       if(/\/characters\/[^/]+\/add$/.test(url.pathname)){
         const saved=await characterHarness.store.get(userId,url.pathname.split('/').at(-2));
@@ -103,6 +103,10 @@ const server = http.createServer(async (req, res) => {
       }
       if (url.pathname.startsWith('/api/characters/')) {
         const id=url.pathname.split('/').at(-1);
+        if(req.method==='DELETE'){
+          await characterHarness.pool.query('delete from public.characters where id=$1 and user_id=$2',[id,userId]);
+          characterHarness.store.forget(userId,id);return json(res,{ok:true});
+        }
         if(req.method==='PATCH')return json(res,{ok:true,...await characterHarness.store.patch(userId,id,data)});
         return json(res,{ok:true,character:await characterHarness.store.get(userId,id)});
       }

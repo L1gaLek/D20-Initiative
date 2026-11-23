@@ -145,19 +145,18 @@ const isAllyCheckbox = document.getElementById('is-ally');
 const isEnemyCheckbox = document.getElementById('is-enemy');
 
 function refreshPlayerTypeCheckboxUi() {
-  const allyChecked = !!isAllyCheckbox?.checked;
-  const enemyChecked = !!isEnemyCheckbox?.checked;
-
-  if (isAllyCheckbox instanceof HTMLInputElement) {
-    isAllyCheckbox.disabled = enemyChecked;
-    if (!enemyChecked) isAllyCheckbox.removeAttribute('aria-disabled');
-    else isAllyCheckbox.setAttribute('aria-disabled', 'true');
-  }
-
-  if (isEnemyCheckbox instanceof HTMLInputElement) {
-    isEnemyCheckbox.disabled = allyChecked;
-    if (!allyChecked) isEnemyCheckbox.removeAttribute('aria-disabled');
-    else isEnemyCheckbox.setAttribute('aria-disabled', 'true');
+  // Affiliation switches directly; selecting one clears the other. Keep the
+  // original input values for creation and the one-base-per-owner restriction.
+  const gm = String(typeof myRole === 'undefined' ? '' : myRole) === 'GM';
+  if (gm && isEnemyCheckbox && !isAllyCheckbox?.checked && !isEnemyCheckbox.checked) isEnemyCheckbox.checked = true;
+  for (const input of [isBaseCheckbox, isAllyCheckbox, isEnemyCheckbox]) {
+    if (!(input instanceof HTMLInputElement)) continue;
+    if (input !== isBaseCheckbox) input.disabled = !gm;
+    const button = document.querySelector('[data-player-type="' + input.id + '"]');
+    if (!button) continue;
+    button.setAttribute('aria-pressed', String(input.checked));
+    button.disabled = input.disabled;
+    button.title = input === isBaseCheckbox && input.disabled ? 'У вас уже есть основа в этой комнате' : '';
   }
 }
 
@@ -177,10 +176,16 @@ function wirePlayerTypeCheckboxes() {
     if (src.checked && isEnemyCheckbox instanceof HTMLInputElement) isEnemyCheckbox.checked = false;
   });
   bindToggle(isBaseCheckbox, () => {});
+  document.querySelectorAll('[data-player-type]').forEach(button => {
+    button.addEventListener('click', () => {
+      const input = document.getElementById(button.dataset.playerType);
+      if (!(input instanceof HTMLInputElement) || input.disabled) return;
+      input.checked = !input.checked;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
   refreshPlayerTypeCheckboxUi();
 }
-
-wirePlayerTypeCheckboxes();
 
 const dice = document.getElementById('dice');
 const diceCountInput = document.getElementById('dice-count');
@@ -383,6 +388,7 @@ let roomChannel;    // broadcast/presence channel (optional)
 let roomDbChannel;  // postgres_changes channel
 let myId;
 let myRole;
+wirePlayerTypeCheckboxes();
 
 // Broadcast dice event without touching room_state.
 // IMPORTANT: do NOT call sendMessage({type:'diceEvent'}) from inside state mutations,
@@ -592,10 +598,10 @@ function applyRoleToUI() {
   if (diceViz) diceViz.style.display = showDice ? 'block' : 'none';
   window.DiceTable?.refreshControls?.();
 
-  // Галочка "Союзник" видна только для ГМ
+  // Создание союзников и врагов доступно только ГМ.
   try {
     if (typeof isAllyCheckbox !== 'undefined' && isAllyCheckbox) {
-      const label = isAllyCheckbox.closest('label');
+      const label = isAllyCheckbox.closest('.type-item');
       if (label) label.style.display = gm ? '' : 'none';
       else isAllyCheckbox.style.display = gm ? '' : 'none';
 
@@ -605,15 +611,14 @@ function applyRoleToUI() {
 
   try {
     if (typeof isEnemyCheckbox !== 'undefined' && isEnemyCheckbox) {
-      const label = isEnemyCheckbox.closest('label');
+      const label = isEnemyCheckbox.closest('.type-item');
       if (label) label.style.display = gm ? '' : 'none';
       else isEnemyCheckbox.style.display = gm ? '' : 'none';
 
       if (!gm) isEnemyCheckbox.checked = false;
     }
   } catch {}
-
-
+  refreshPlayerTypeCheckboxUi();
   // Disable GM-only buttons defensively
   const gmOnlyIds = [
     'clear-board','reset-game',

@@ -87,6 +87,32 @@ module.exports=async function({pages,requests,characterHarness:charHarness,scree
   const added=h.database().players.filter(p=>p.isBase&&p.ownerId==='user-1');assert.equal(added.length,1);assert.equal(added[0].sheet.parsed.info.race.value,'Эльф');assert.equal(added[0].x,null);
   await owner.locator('#sheet-close').click();await owner.locator('[data-personal-close]').click();
   console.log('PASS cabinet: three tabs, private server settings, statistics, creation, JSON import, saved draft and authenticated one-base room import visible to peers');
+  // Deleting a library character requires consent, removes its versions only,
+  // and leaves the separate room token and other owners' saves untouched.
+  const roomBefore=JSON.stringify(h.database().players),foreignBefore=JSON.stringify(charHarness.list('user-2'));
+  charHarness.add('user-1','Подготовленный герой',JSON.parse(JSON.stringify(charHarness.records.get(fresh).state)));
+  await owner.locator('#room-personal-settings').click();
+  const remove=owner.locator('.personal-character-row').filter({hasText:'Подготовленный герой'}).locator('.personal-character-delete');
+  await remove.click();await owner.locator('.personal-delete-dialog[open]').waitFor();
+  assert.equal(await owner.locator('.personal-delete-dialog button').first().evaluate(el=>el===document.activeElement),true);
+  await picture(owner,'.personal-delete-dialog','delete-confirmation');
+  await owner.keyboard.press('Escape');await owner.locator('.personal-delete-dialog').waitFor({state:'detached'});
+  assert.equal(await owner.locator('.personal-settings').isVisible(),true);
+  assert.equal(requests.filter(r=>r.method==='DELETE').length,0);
+  await remove.click();await owner.getByRole('button',{name:'Отмена',exact:true}).click();
+  assert.equal(requests.filter(r=>r.method==='DELETE').length,0);
+  charHarness.failNextDelete();await remove.click();await owner.locator('.personal-delete-confirm').click();
+  await owner.waitForFunction(()=>document.querySelector('.personal-settings__status').textContent.includes('Не удалось завершить удаление'));
+  assert.equal(await remove.count(),1,'failed deletion remains available to retry');
+  const familyIds=charHarness.list('user-1').filter(row=>row.name==='Подготовленный герой').map(row=>row.id);
+  assert.ok(familyIds.length>=2,'several versions belong to this character');
+  await remove.click();await owner.locator('.personal-delete-confirm').click();
+  await owner.waitForFunction(()=>document.querySelector('.personal-settings__status').textContent==='Персонаж и его сохранения удалены');
+  assert.equal(await remove.count(),0);for(const id of familyIds)assert.equal(charHarness.records.has(id),false);
+  assert.equal(JSON.stringify(charHarness.list('user-2')),foreignBefore);assert.equal(JSON.stringify(h.database().players),roomBefore);
+  assert.ok(charHarness.list('user-1').some(row=>row.name==='Альрик'));
+  await owner.locator('[data-personal-close]').click();
+  console.log('PASS deletion: cancel/Escape make no request, failure can retry, confirmed deletion removes all character versions and preserves room tokens/other characters/other users');
   await other.evaluate(()=>{currentRoomId=null;document.getElementById('tavern-container').style.display='';window.openTavern();});await other.locator('#tavern-personal-settings').click();
   await other.waitForFunction(()=>PersonalSettings.inspect().saves===1);
   assert.equal(await other.locator('.personal-settings__character').innerText().then(t=>t.includes('Чужой')),true);

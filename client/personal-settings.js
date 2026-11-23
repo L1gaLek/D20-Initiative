@@ -24,6 +24,7 @@
     overlay.querySelector('[data-personal-close]').onclick=close;
     overlay.addEventListener('click',e=>{if(e.target===overlay)close();});
     document.addEventListener('keydown',e=>{
+      if(document.querySelector('.personal-delete-dialog[open]'))return;
       if(overlay.classList.contains('hidden')||!document.getElementById('sheet-modal').classList.contains('hidden'))return;
       if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();close();}
       if(e.key==='Tab'){
@@ -47,8 +48,8 @@
   }
   async function reload() {
     const token=++epoch; status.textContent='Загружаю сохранения…'; list.replaceChildren();
-    try { const response=await window.CharactersApi.listSavedBases(); if(token!==epoch)return; rows=Array.isArray(response.list)?response.list:[]; status.textContent='';render(); }
-    catch(error){if(token===epoch)status.textContent='Не удалось загрузить: '+error.message;}
+    try { const response=await window.CharactersApi.listSavedBases(); if(token!==epoch)return false; rows=Array.isArray(response.list)?response.list:[]; status.textContent='';render();return true; }
+    catch(error){if(token===epoch)status.textContent='Не удалось загрузить: '+error.message;return false;}
   }
   function render() {
     list.replaceChildren(); if(!rows.length)status.textContent='Пока нет персонажей. Нажмите «Создать персонажа», затем настройте лист или загрузите JSON.';
@@ -58,8 +59,50 @@
       const title=document.createElement('strong'); title.textContent=saves[0].name || 'Персонаж';
       const details=document.createElement('small'); details.textContent=`Сохранений: ${saves.length} · ${date(saves[0])}`;
       const text=document.createElement('span'); text.append(title,details); card.append(crest,text); card.disabled=loading;
-      card.onclick=()=>void select(saves[0].id,k); list.append(card);
+      card.onclick=()=>void select(saves[0].id,k);
+      const row=document.createElement('div');row.className='personal-character-row';
+      const remove=document.createElement('button');remove.type='button';remove.className='personal-character-delete';remove.textContent='Удалить';remove.setAttribute('aria-label','Удалить персонажа '+(saves[0].name||'Персонаж'));remove.disabled=loading;remove.onclick=()=>void deleteCharacter(k);
+      row.append(card,remove);list.append(row);
     }
+  }
+  function confirmCharacterDelete(name,count){
+    return new Promise(resolve=>{
+      const dialog=document.createElement('dialog');dialog.className='personal-delete-dialog';
+      dialog.setAttribute('role','alertdialog');dialog.setAttribute('aria-labelledby','personal-delete-title');dialog.setAttribute('aria-describedby','personal-delete-description');
+      const heading=document.createElement('h3');heading.id='personal-delete-title';heading.textContent='Удалить персонажа?';
+      const message=document.createElement('p');message.id='personal-delete-description';
+      message.textContent='«'+name+'»: будут удалены сохранения из «Мои персонажи» ('+count+'). Это действие нельзя отменить. Уже добавленный в комнату токен останется в игре.';
+      const actions=document.createElement('div'),cancel=document.createElement('button'),confirm=document.createElement('button');
+      cancel.type=confirm.type='button';cancel.textContent='Отмена';confirm.textContent='Удалить персонажа';confirm.className='personal-delete-confirm';
+      cancel.onclick=()=>dialog.close('cancel');confirm.onclick=()=>dialog.close('delete');
+      actions.append(cancel,confirm);dialog.append(heading,message,actions);document.body.append(dialog);
+      dialog.addEventListener('close',()=>{const accepted=dialog.returnValue==='delete';dialog.remove();resolve(accepted);},{once:true});
+      dialog.showModal();cancel.focus();
+    });
+  }
+  async function deleteCharacter(k){
+    if(loading)return;
+    const owner=userId(),saves=rows.filter(row=>key(row)===k);if(!saves.length)return;
+    if(!await confirmCharacterDelete(saves[0].name||'Персонаж',saves.length)||owner!==userId())return;
+    loading=true;render();
+    const create=overlay.querySelector('.personal-settings__create');create.disabled=true;status.textContent='Удаляю персонажа…';
+    let error=null,deleted=0;
+    try{
+      if(session?.key===k)await drain(session);
+      for(const saved of saves){
+        if(owner!==userId())throw new Error('Аккаунт изменился');
+        await window.CharactersApi.deleteSavedBase(saved.id);
+        rows=rows.filter(row=>row.id!==saved.id);deleted++;
+      }
+      if(session?.key===k){session=null;selectedKey='';}
+    }catch(e){error=e;}finally{loading=false;create.disabled=false;}
+    if(owner!==userId())return;
+    const refreshed=await reload();
+    if(owner!==userId())return;
+    if(!refreshed)render();
+    status.textContent=error?'Удалено сохранений: '+deleted+' из '+saves.length+'. Не удалось завершить удаление: '+error.message:'Персонаж и его сохранения удалены';
+    if(!refreshed)status.textContent+='. Не удалось обновить список с сервера. Откройте его повторно для проверки.';
+    create.focus();
   }
   async function drain(current) {
     if(!current)return;
