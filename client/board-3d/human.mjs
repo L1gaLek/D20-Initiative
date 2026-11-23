@@ -1,14 +1,14 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
 import maleModel from '../../assets/models/human/male.mjs?v=20261119-cuirass-1';
-import femaleModel from '../../assets/models/human/female.mjs?v=20261119-cuirass-1';
+import femaleModel from '../../assets/models/human/female.mjs?v=20261123-cbbe-1';
 import { createHair, headMapping } from './human-hair.mjs?v=20261119-cuirass-1';
 import { planHumanPose, applyHumanPose } from './human-pose.mjs?v=20261119-cuirass-1';
-import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261122-egress-1';
+import { dressHuman, batchRigid, femaleTorsoProfile } from './human-equipment.mjs?v=20261123-cbbe-1';
 import {normalizeProject} from './studio-state.mjs';
 import {installStudioRuntime} from './studio-runtime.mjs';
-import {getArmorAsset,ensureArmorAsset,armorAssetRevision} from './armor-assets.mjs?v=20261122-egress-1';
+import {getArmorAsset,ensureArmorAsset,armorAssetRevision} from './armor-assets.mjs?v=20261123-cbbe-1';
 import {applyHumanOutfit} from './human-outfit.mjs';
-import {dressFittedOutfit} from './fitted-outfit.mjs?v=20261119-cuirass-1';
+import {dressFittedOutfit} from './fitted-outfit.mjs?v=20261123-cbbe-1';
 export {ensureArmorAsset,armorAssetRevision};
 
 function decode(value,Type){const bytes=Uint8Array.from(atob(value),c=>c.charCodeAt(0));return new Type(bytes.buffer);}
@@ -33,6 +33,7 @@ for(let i=0;i<indices.length;i+=3){
 }
 for(const v of sourcePoints){
   const p=v.p;v.fitted=p;
+  if(model.bodySource)continue;
   if(p[1]<1.13||p[1]>1.395||Math.abs(p[0])>.19)continue;
   const [rx,front,back]=femaleTorsoProfile(p[1]),center=(front+back)/2,depth=(front-back)/2,angle=Math.atan2(p[0]/rx,(p[2]-center)/depth);
   const blend=THREE.MathUtils.smoothstep(p[1],1.13,1.15)*(1-THREE.MathUtils.smoothstep(p[1],1.37,1.395));

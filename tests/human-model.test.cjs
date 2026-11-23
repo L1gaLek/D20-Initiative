@@ -344,3 +344,30 @@ test('walking deforms the anatomical legs and equipped hand, then restores the i
     figure.userData.pose(0,false);figure.updateMatrixWorld(true);assert.equal(figure.userData.walkAngle,0);assert.ok(beforeHand.distanceTo(hand.getWorldPosition(new Vector3()))<1e-6);
   }finally{dispose(figure);}
 });
+
+test('CBBE female body keeps seamless native rig and grip geometry, including inside the imported cuirass',async()=>{
+  const [{default:body},{default:base},T,{createHuman}]=await Promise.all([import('../assets/models/human/female.mjs'),import('../assets/models/human/female-base.mjs'),three,human]);
+  const decode=(s,Type)=>new Type(Uint8Array.from(atob(s),c=>c.charCodeAt(0)).buffer);
+  assert.match(body.bodySource,/CBBE/);assert.deepEqual(body.bones,base.bones);
+  for(const key of ['indices','skinIndices','skinWeights'])assert.equal(body[key],base[key],'native topology and authored skin weights remain intact');
+  const p=decode(body.positions,Float32Array),old=decode(base.positions,Float32Array),j=decode(body.skinIndices,Uint8Array),w=decode(body.skinWeights,Uint8Array);
+  let changed=0,protectedVertices=0;
+  for(let i=0;i<p.length/3;i++){
+    const d=Math.hypot(...Array.from(p.slice(i*3,i*3+3),(v,k)=>v-old[i*3+k]));if(d>.001)changed++;
+    let k=0;for(let n=1;n<4;n++)if(w[i*4+n]>w[i*4+k])k=n;
+    if(w[i*4+k]>230&&/^(head|neck|finger|wrist|foot|toe|eye)/.test(body.bones[j[i*4+k]].name)){
+      assert.ok(d<1e-7,'face, fingers and feet preserve their original attachment points');protectedVertices++;
+    }
+  }
+  assert.ok(changed>2500,'the supplied body changes actual torso and limb geometry');assert.ok(protectedVertices>1000);
+  const expected=new Set(Array.from({length:p.length/3},(_,i)=>Array.from(p.slice(i*3,i*3+3),v=>v.toFixed(5)).join(',')));
+  for(const armor of ['none','breastplate']){
+    const figure=createHuman({...config,model:'human-female',armor});
+    try{
+      const mesh=figure.getObjectByName('anatomical-body'),a=mesh.geometry.attributes.position;let matching=0;
+      for(let i=0;i<a.count;i++)if(expected.has([a.getX(i),a.getY(i),a.getZ(i)].map(v=>v.toFixed(5)).join(',')))matching++;
+      assert.ok(matching>a.count*.98,armor+' uses the updated body instead of a saved copy of the previous anatomy');
+      for(const time of [0,.105,.21]){figure.userData.walkPoseAt(time,true);figure.updateMatrixWorld(true);for(let i=0;i<a.count;i+=101)assert.ok(mesh.getVertexPosition(i,new T.Vector3()).toArray().every(Number.isFinite));}
+    }finally{dispose(figure);}
+  }
+});

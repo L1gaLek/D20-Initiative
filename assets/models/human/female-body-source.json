@@ -1,0 +1,17 @@
+{
+  "source": "CBBE_fizicka_2-4 / 1-Бри / femalebody_1.nif",
+  "sourceSha256": "189b9232e8655da7c0f22d18f9117084c0a32d942fe246f647a625c067c5ba1a",
+  "nativeSha256": "330e90e15e35281925d8c2e5d7318ce38fd522d1389834fdc23fe9ae3ba2a290",
+  "blender": "4.5.16 LTS",
+  "vertices": 13380,
+  "triangles": 26756,
+  "bones": 163,
+  "changedVertices": 3855,
+  "maximumDisplacement": 0.05354523892250517,
+  "method": "Bone-space CBBE surface transfer, seamless native retopology, 18 displacement smoothing passes. No source skeleton, physics, animations or executable plugins.",
+  "referenceSha256": {
+    "femalebody_1.nif": "189b9232e8655da7c0f22d18f9117084c0a32d942fe246f647a625c067c5ba1a",
+    "femalehands_1.nif": "aa699f96c499231b05c2977d6a8c0716f002aa780c87f2ac8a4be73c10ff8547",
+    "femalefeet_1.nif": "f6e478550d0c50f18f57500cf0daddeffe7d8f155a01fc4ae10ec30f8053df0a"
+  }
+}

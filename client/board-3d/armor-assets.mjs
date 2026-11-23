@@ -8,15 +8,15 @@ export async function ensureArmorAsset(config){
   const id=key(config);if(assets.has(id))return Promise.resolve(assets.get(id));
   if(config.armor==='plate'){
     const sex=config.model==='human-female'?'female':'male';
-    if(!pending.has(id))pending.set(id,import(new URL('../../assets/models/plate/'+sex+'.mjs?v=20261119-cuirass-1',import.meta.url).href).then(module=>{assets.set(id,module.default);return module.default;}).catch(error=>{pending.delete(id);throw error;}));
+    if(!pending.has(id))pending.set(id,import(new URL('../../assets/models/plate/'+sex+'.mjs?v=20261123-cbbe-1',import.meta.url).href).then(module=>{assets.set(id,module.default);return module.default;}).catch(error=>{pending.delete(id);throw error;}));
     return pending.get(id);
   }
   if(id==='female-breastplate'){
-    if(!pending.has(id))pending.set(id,Promise.all([import(new URL('../../assets/models/outfits/female-breastplate.mjs?v=20261119-cuirass-1',import.meta.url).href),import('./fitted-outfit.mjs?v=20261119-cuirass-1')]).then(async([module,loader])=>{await loader.prepareFittedOutfit(module.default);assets.set(id,module.default);return module.default;}).catch(error=>{pending.delete(id);throw error;}));
+    if(!pending.has(id))pending.set(id,Promise.all([import(new URL('../../assets/models/outfits/female-breastplate.mjs?v=20261123-cbbe-1',import.meta.url).href),import('./fitted-outfit.mjs?v=20261123-cbbe-1')]).then(async([module,loader])=>{await loader.prepareFittedOutfit(module.default);assets.set(id,module.default);return module.default;}).catch(error=>{pending.delete(id);throw error;}));
     return pending.get(id);
   }
   if(!kinds.includes(config.armor))return Promise.resolve(null);
-  if(!pending.has(id))pending.set(id,import(new URL('../../assets/models/armor/'+id+'.mjs?v=20261119-cuirass-1',import.meta.url).href).then(module=>{assets.set(id,module.default);return module.default;}).catch(error=>{pending.delete(id);throw error;}));
+  if(!pending.has(id))pending.set(id,import(new URL('../../assets/models/armor/'+id+'.mjs?v=20261123-cbbe-1',import.meta.url).href).then(module=>{assets.set(id,module.default);return module.default;}).catch(error=>{pending.delete(id);throw error;}));
   return pending.get(id);
 }
 // Node geometry checks and exporters do not have an asynchronous UI lifecycle.

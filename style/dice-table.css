@@ -60,3 +60,21 @@
 .dice-table__empty>span,.dice-table__empty>small{display:none}
 .dice-table__waiting{background:#10251fd9;backdrop-filter:blur(1px)}
 .dice-table__stage.has-dice:not(.dice-table__stage--fallback){background:radial-gradient(ellipse at 48% 35%,#243e32,#11271e 78%)}
+
+/* Visual impulse: a tap keeps the ordinary throw; holding fills the gauge. */
+.dice-power{--throw-charge:0%;flex:1 0 76px;max-width:145px;min-width:76px;height:34px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:5px;color:#cabb9a;user-select:none}
+.dice-power__head{display:flex;justify-content:space-between;align-items:center;gap:8px;font:600 10px/1.2 Georgia,serif}
+.dice-power__head small{font:10px/1.2 system-ui,sans-serif;color:#a99c82;font-variant-numeric:tabular-nums}
+.dice-power__track{position:relative;display:block;height:9px;overflow:hidden;box-sizing:border-box;border:1px solid #a98a4e8c;border-radius:4px;background:#141913;box-shadow:inset 0 1px 3px #000b}
+.dice-power__track::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(25% - 1px),#e2c68144 calc(25% - 1px),#e2c68144 25%);pointer-events:none}
+.dice-power__track i{display:block;height:100%;width:var(--throw-charge);background:linear-gradient(90deg,#818e50,#ceb46c 60%,#f2ca69);box-shadow:0 0 8px #e3bd6280}
+.dice-power.is-charging .dice-power__head,.dice-power.is-full .dice-power__head small{color:#ffe0a1}
+.dice-power.is-charging .dice-power__track{border-color:#e6c789;box-shadow:0 0 6px #d4ad4c44,inset 0 1px 2px #0008}
+.dice-inline-roll,.dice-table-dialog__roll{touch-action:none;user-select:none}
+.dice-inline-roll.is-charging,.dice-table-dialog__roll.is-charging{filter:brightness(1.15);box-shadow:0 0 0 1px #e5c27566,inset 0 2px 5px #27180680}
+.dice-table-dialog__controls .dice-power{height:38px;max-width:220px;min-width:100px}
+@media(max-height:720px){#dice-inline-controls .dice-power{height:28px;gap:3px}}
+.dice-throw-control{display:flex;align-items:end;gap:8px;flex:1 0 164px;min-width:0}
+.dice-throw-control .dice-power{max-width:none}
+.dice-throw-control button{touch-action:none;user-select:none;flex:0 0 auto}
+.dice-table-dialog__controls .dice-throw-control{flex-basis:230px;max-width:360px}

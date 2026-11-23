@@ -16,6 +16,26 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   // on a busy machine. Warm once before measuring the visible animation path.
   await send({localNonce:'dice-table-warmup',sides:6,count:1,rolls:[2],total:2,kindText:'Подготовка стола'});
   await Promise.all(pages.map(page=>settled(page,2)));
+  // Pointer release sends exactly one shared impulse, including to reduced-motion viewers.
+  const counters=await Promise.all(pages.map(p=>p.evaluate(()=>DiceTable.inspect().completed)));
+  const requestCount=requests.filter(r=>r.path.endsWith('/dice')).length;
+  const roll=owner.locator('#roll'),box=await roll.boundingBox();
+  await owner.mouse.move(box.x+box.width/2,box.y+box.height/2);await owner.mouse.down();await owner.waitForTimeout(900);
+  const charge=Number(await owner.locator('#dice-inline-controls .dice-power').getAttribute('aria-valuenow'));
+  assert.ok(charge>=35&&charge<=80,'holding fills the impulse meter');assert.equal(requests.filter(r=>r.path.endsWith('/dice')).length,requestCount,'holding never rolls early');
+  if(screenshotDir)await picture(owner,'dice-charging');
+  await owner.mouse.up();
+  await Promise.all(pages.map((page,i)=>page.waitForFunction(n=>DiceTable.inspect().completed>n,counters[i])));
+  const powers=await Promise.all(pages.map(p=>p.evaluate(()=>DiceTable.inspect().throwPowers[0])));
+  assert.ok(powers[0]>.35&&powers[0]<.85);assert.ok(powers.every(p=>p===powers[0]),'all clients receive the same charged impulse');
+  assert.equal(requests.filter(r=>r.path.endsWith('/dice')).length,requestCount+1,'pointer release and click cannot send duplicate throws');
+  // Esc cancels a held pointer, while a regular click still gives the original throw.
+  await owner.mouse.move(box.x+box.width/2,box.y+box.height/2);await owner.mouse.down();await owner.waitForTimeout(180);await owner.keyboard.press('Escape');await owner.mouse.up();
+  assert.equal(requests.filter(r=>r.path.endsWith('/dice')).length,requestCount+1);
+  const beforeTap=await Promise.all(pages.map(p=>p.evaluate(()=>DiceTable.inspect().completed)));
+  await roll.click();await Promise.all(pages.map((page,i)=>page.waitForFunction(n=>DiceTable.inspect().completed>n,beforeTap[i])));
+  assert.equal(await owner.evaluate(()=>DiceTable.inspect().throwPowers[0]),0,'a tap retains the ordinary impulse');
+  console.log('PASS charged throw: hold/release, exact shared power, no duplicate submission, Esc cancellation and normal tap');
   await gm.getByRole('button',{name:'Развернуть стол бросков'}).click();
   await other.evaluate(()=>PersonalPreferences.set({reduceDiceMotion:true}));
   await pages[3].emulateMedia({reducedMotion:'reduce'});

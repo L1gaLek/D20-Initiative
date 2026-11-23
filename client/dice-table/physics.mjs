@@ -1,5 +1,5 @@
 import * as CANNON from '../../vendor/cannon-es/cannon-es.mjs';
-import {polyhedron,random,seedNumber} from './model.mjs?v=20261122-dice-1';
+import {polyhedron,random,seedNumber} from './model.mjs?v=20261124-charge-1';
 
 export function simulateThrow(dice, seed) {
   const rand=random(seedNumber(seed)),count=dice.length;
@@ -17,8 +17,9 @@ export function simulateThrow(dice, seed) {
     const shape=new CANNON.ConvexPolyhedron({vertices:poly.vertices.map(v=>new CANNON.Vec3(...v.map(n=>n*radius))),faces:poly.faces.map(f=>f.indices)});
     const body=new CANNON.Body({mass:1,shape,linearDamping:.24,angularDamping:.2,sleepSpeedLimit:.04,sleepTimeLimit:.4});
     const x=((i%columns)-(columns-1)/2)*spacing+(rand()-.5)*.15,z=(Math.floor(i/columns)-(rows-1)/2)*spacing;
-    body.position.set(x,2.4+rand()*.9,z);body.velocity.set((rand()-.5)*2,-1-rand(),(rand()-.5)*2);
-    body.angularVelocity.set((rand()-.5)*22,(rand()-.5)*22,(rand()-.5)*22);
+    const rawPower=Number(die.throwPower),power=Number.isFinite(rawPower)?Math.max(0,Math.min(1,rawPower)):0;
+    body.position.set(x,2.4+rand()*.9+power*.65,z);body.velocity.set((rand()-.5)*(2+power*8),-1-rand()-power*2,(rand()-.5)*(2+power*8));
+    const spin=22+power*30;body.angularVelocity.set((rand()-.5)*spin,(rand()-.5)*spin,(rand()-.5)*spin);
     body.quaternion.setFromEuler(rand()*Math.PI*2,rand()*Math.PI*2,rand()*Math.PI*2);world.addBody(body);return body;
   });
   const frames=[];

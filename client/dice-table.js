@@ -2,7 +2,7 @@
 // consumes the confirmed dice event; it never generates or saves game results.
 (function(){
   'use strict';
-  const base=new URL('dice-table/',document.currentScript.src),version='20261123-tray-1';
+  const base=new URL('dice-table/',document.currentScript.src),version='20261124-charge-1';
   let root,stage,caption,summary,pendingLabel,dialog,home,engine,loading,worker,job=0,generation=0;
   let room='',queue=[],busy=false,timer=null,state='idle',accepted=0,completed=0,last=[],failed=false,visible=true;
   const seen=new Map(),fingerprints=new Map(),jobs=new Map();
@@ -10,7 +10,7 @@
   const logTiming=new DiceLogTiming.Coordinator();
   let rollForm,rollSides,rollCount,rollSubmit;
   const api=window.DiceTable={show,remember,reset,deferLog,refreshControls,inspect:()=>({state,room,accepted,completed,queued:queue.length,
-    results:last.map(item=>({name:item.name,total:item.total,rolls:item.rolls})),revealAt:last[0]?.timeline?.revealAt,settledAt:last[0]?.settledAt,...(engine?.inspect()||{})})};
+    results:last.map(item=>({name:item.name,total:item.total,rolls:item.rolls})),throwPowers:last.map(item=>item.dice[0]?.throwPower||0),revealAt:last[0]?.timeline?.revealAt,settledAt:last[0]?.settledAt,...(engine?.inspect()||{})})};
   function mount(){
     if(root)return;
     root=document.getElementById('dice-others');if(!root)return;
@@ -29,7 +29,7 @@
       const header=document.createElement('div');header.className='dice-table-dialog__header';const title=document.createElement('strong');title.textContent='Общий стол бросков';
       const close=document.createElement('button');close.type='button';close.textContent='Закрыть';close.addEventListener('click',()=>dialog.close());header.append(title,close);dialog.append(header);document.body.append(dialog);
       createRollControls();
-      dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});dialog.addEventListener('close',()=>{root.insertBefore(home,root.querySelector('.dice-others__list'));engine?.resize();});
+      dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});dialog.addEventListener('close',()=>{window.DiceCharge?.cancel(rollForm);root.insertBefore(home,root.querySelector('.dice-others__list'));engine?.resize();});
     }
     refreshControls(true);dialog.append(home);dialog.showModal();engine?.resize();
   }
@@ -42,9 +42,10 @@
     const source=document.getElementById('dice');
     for(const option of source.options)rollSides.append(new Option(option.textContent,option.value));
     rollForm.addEventListener('click',event=>{const button=event.target.closest('[data-dice-step]');if(!button)return;rollCount.value=String(Math.min(20,Math.max(1,(Number(rollCount.value)||1)+Number(button.dataset.diceStep))));});
+    window.DiceCharge?.bind(rollForm);
     rollForm.addEventListener('submit',async event=>{
       event.preventDefault();refreshControls();if(rollSubmit.disabled)return;
-      await window.rollStandardDice?.({sides:Number(rollSides.value),count:Number(rollCount.value)});refreshControls();
+      await window.rollStandardDice?.({sides:Number(rollSides.value),count:Number(rollCount.value),throwPower:window.DiceCharge?.take(rollForm)||0});refreshControls();
     });
     dialog.append(rollForm);
   }
@@ -96,6 +97,7 @@
   }
   function reset(nextRoom=''){
     if(dialog?.open)dialog.close();
+    window.DiceCharge?.cancel(document.getElementById('dice-inline-controls'));window.DiceCharge?.cancel(rollForm);
     generation++;room=String(nextRoom);queue=[];clearTimeout(timer);timer=null;busy=false;state='idle';last=[];failed=false;
     seen.clear();fingerprints.clear();engine?.dispose();engine=null;loading=null;worker?.terminate();worker=null;
     timelines.clear();for(const cancel of [...revealWaiters])cancel();

@@ -50,3 +50,18 @@ test('physics is repeatable, records actual falling and rotation, and settles in
     assert.equal(m.faceLabels(m.polyhedron(die.sides),a.upFaces[i],die.value)[a.upFaces[i]],String(die.value));
   });
 });
+
+test('charged throws increase physical impulse, stay deterministic and preserve requested values',async()=>{
+  const [model,physics]=await modules,p=require('../backend/shared/dice-presentation');
+  for(const [input,expected]of [[undefined,0],[NaN,0],[Infinity,0],[-2,0],[.456,.46],[2,1]])assert.equal(p.throwPower(input),expected);
+  const normal=model.normalizeEvent({sides:20,rolls:[20],total:20}),strong=model.normalizeEvent({sides:20,rolls:[20],total:20,throwPower:1});
+  const a=physics.simulateThrow(normal.dice,'charge-test'),b=physics.simulateThrow(strong.dice,'charge-test'),again=physics.simulateThrow(strong.dice,'charge-test');
+  assert.ok(b.frames[1]>a.frames[1]+.6,'strong throws begin with more flight height');assert.notDeepEqual(a.frames,b.frames);assert.deepEqual(b.frames,again.frames);
+  for(const plan of [a,b]){
+    const n=(plan.frameCount-1)*7;assert.ok(Math.abs(plan.frames[n])<plan.width/2&&Math.abs(plan.frames[n+2])<plan.depth/2);assert.ok(plan.frames[n+1]<1.3);
+    assert.equal(model.faceLabels(model.polyhedron(20),plan.upFaces[0],20)[plan.upFaces[0]],'20');
+  }
+  assert.equal(normal.dice[0].throwPower,0);assert.equal(strong.dice[0].throwPower,1);
+  const vm=require('node:vm'),fs=require('node:fs'),context={};vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../client/dice-table/charge.js'),'utf8'),context);
+  assert.equal(context.DiceCharge.amount(50),0);assert.ok(context.DiceCharge.amount(920)>.49);assert.equal(context.DiceCharge.amount(2000),1);
+});

@@ -2624,6 +2624,7 @@ app.post('/api/rooms/:roomId/dice', async (req, res) => {
       : '';
     const event = {
       fromId: ctx.userId,
+      throwPower: DicePresentation.throwPower(incoming.throwPower),
       diceStyle: Appearance.style(incoming.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
       fromName: ctx.name || sanitizeText(incoming.fromName, 'Player', 120),
       kindText: sanitizeText(incoming.kindText, `d${sides}`, 200),
@@ -4981,6 +4982,7 @@ async function handleDiceEventRelay(ws, data) {
     event: {
       fromId: String(match.from_id || ctx.userId),
       presentation: DicePresentation.create(),
+      throwPower: DicePresentation.throwPower(event.throwPower),
       diceStyle: Appearance.style(event.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
       fromName: String(match.from_name || ctx.name || 'Игрок'),
       kindText: String(match.kind_text || ''),

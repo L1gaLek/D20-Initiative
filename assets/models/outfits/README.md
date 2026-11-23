@@ -22,3 +22,12 @@ walking and studio actions. In Studio each imported piece also has an editable
 transform proxy; edits change its bind-space vertices while retaining skinning.
 The project owner received a full editable Blender source and animated GLB in
 the local `D20 Cuirass` output package.
+
+The female body and garments were refitted to the supplied CBBE surface on
+2026-11-24. The embedded anatomical mesh uses the same updated shape as an
+unarmored female avatar; equipping this outfit cannot restore the old body.
+The garment's topology, UVs, textures, native weights and editable part IDs stay
+intact. `scripts/refit-outfit-body.py` transfers the body displacement to nearby
+garment vertices. The native baseline is `assets/models/human/female-base.mjs`;
+the pre-transfer outfit can be recovered from commit
+`36b94d9857fa7ed00d12c26d1132c2bf2be22030` for a repeatable rebuild.

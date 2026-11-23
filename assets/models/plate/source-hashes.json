@@ -6,5 +6,5 @@
   "scripts/build-armor-library.mjs": "e7902182d0533a4a3a7641b38d5e60bb8fad68f9560f2d89564020dc36183497",
   "scripts/finish-armor.py": "a542bdd7e5412a635c999e177b4297ed924086be67fa275c7368c44b300fcde3",
   "assets/models/human/male.mjs": "453ec444ce573c86d8d3cee254b4b38560cac8b1aab8b3179e41e18574a4d373",
-  "assets/models/human/female.mjs": "330e90e15e35281925d8c2e5d7318ce38fd522d1389834fdc23fe9ae3ba2a290"
+  "assets/models/human/female.mjs": "7ec66a8596176dedaddfceb1d306421f635346a5c02d99a64a31ba4ce880f32e"
 }

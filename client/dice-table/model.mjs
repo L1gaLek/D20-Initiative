@@ -85,7 +85,8 @@ export function normalizeEvent(event) {
     {sides:10,value:Math.floor((die.value%100)/10)||10,mode:'tens',rollIndex:index},
     {sides:10,value:die.value%10||10,mode:'ones',rollIndex:index}
   ]:[{...die,mode:'normal',rollIndex:index}]);
-  physical.forEach(die=>{die.critical=criticalKind(die);});
+  const rawPower=Number(event.throwPower),power=Number.isFinite(rawPower)?Math.round(Math.max(0,Math.min(1,rawPower))*100)/100:0;
+  physical.forEach(die=>{die.critical=criticalKind(die);die.throwPower=power;});
   const nonce=String(event.localNonce||event.id||''),name=String(event.fromName||'Игрок').slice(0,120);
   const seed=[event.fromId,nonce,event.sides,rolls.join(','),event.total].join('|');
   return {dice:physical.slice(0,200),omitted:Math.max(0,physical.length-200),rolls,name,

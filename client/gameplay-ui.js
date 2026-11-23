@@ -8,7 +8,7 @@ function escapeGameplayHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-async function rollStandardDice({sides:chosenSides,count:chosenCount} = {}) {
+async function rollStandardDice({sides:chosenSides,count:chosenCount,throwPower=0} = {}) {
   if (typeof isSpectator === 'function' && isSpectator()) return;
   if (!currentRoomId) return;
   if (diceAnimBusy) return;
@@ -69,6 +69,7 @@ if (critType) {
 
 const event = {
   localNonce,
+  throwPower: DicePresentation.throwPower(throwPower),
   fromId: (typeof myId !== 'undefined') ? String(myId) : '',
   fromName: (typeof myNameSpan !== 'undefined' && myNameSpan?.textContent) ? String(myNameSpan.textContent) : '',
   kindText: `d${sides} × ${count}`,
@@ -97,7 +98,7 @@ try { window.rememberLocalDiceAnimation?.(event); } catch {}
 }
 window.rollStandardDice = rollStandardDice;
 const inlineDiceForm=document.getElementById('dice-inline-controls');
-if(inlineDiceForm)inlineDiceForm.addEventListener('submit',event=>{event.preventDefault();void rollStandardDice();});
+if(inlineDiceForm){window.DiceCharge?.bind(inlineDiceForm);inlineDiceForm.addEventListener('submit',event=>{event.preventDefault();void rollStandardDice({throwPower:window.DiceCharge?.take(inlineDiceForm)||0});});}
 else rollBtn?.addEventListener('click', () => { void rollStandardDice(); });
 
 // ================== END TURN ==================

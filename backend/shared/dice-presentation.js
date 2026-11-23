@@ -13,5 +13,6 @@
     return {startAt:startAt+offset,revealAt:revealAt+offset,authoritative:true};
   }
   const progress=(timeline,now=Date.now())=>Math.min(1,Math.max(0,(now-timeline.startAt)/DURATION));
-  return {DURATION,LEAD,create,read,progress};
+  const throwPower=value=>{const n=Number(value);return Number.isFinite(n)?Math.round(Math.max(0,Math.min(1,n))*100)/100:0;};
+  return {DURATION,LEAD,create,read,progress,throwPower};
 });
