@@ -1,0 +1,60 @@
+/* A single contained character card, shared by the 2D and 3D token handlers. */
+.token-mini {
+  box-sizing:border-box; width:min(340px,calc(100vw - 24px));
+  max-height:calc(100dvh - 24px); overflow:auto; overscroll-behavior:contain;
+  padding:14px; border:1px solid #8e7445; border-radius:16px;
+  color:#eee4cb; background:radial-gradient(ellipse at 0 0,#303c32 0,transparent 65%),#181e1a;
+  box-shadow:0 20px 65px #0009,inset 0 0 0 3px #d3b47709;
+  font:12px/1.4 Arial,sans-serif; scrollbar-width:thin; scrollbar-color:#8e7445 #181e1a;
+}
+.token-mini *, .token-mini *::before, .token-mini *::after { box-sizing:border-box; }
+.token-mini .token-mini-heading { display:flex; align-items:center; gap:10px; margin-bottom:13px; }
+.token-mini .token-mini-portrait {
+  display:grid; place-items:center; flex:none; width:40px; height:44px;
+  color:#f4dfaa; font:bold 25px Georgia,serif; border:1px solid var(--mini-accent);
+  border-radius:12px 12px 15px 15px; background:#111a16; box-shadow:inset 0 0 18px #d3b47710;
+}
+.token-mini .token-mini-heading__text { min-width:0; flex:1; }
+.token-mini .token-mini-eyebrow { display:block; color:#b7ad91; font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+.token-mini .title { color:#f2dfb7; font: bold 18px/1.2 Georgia,serif; margin:2px 0 0; overflow-wrap:anywhere; }
+.token-mini .token-mini-close { flex:none; width:28px; height:28px; padding:0; border:1px solid #b8a57533; border-radius:8px; background:#ffffff05; color:#c6b994; font:22px/1 Arial,sans-serif; }
+.token-mini .token-mini-close:hover { background:#c6a56822; color:#fff0d2; }
+.token-mini .section { padding:10px; margin-bottom:9px; background:#0b100c55; border:1px solid #b8a57526; border-radius:10px; }
+.token-mini .section-title { margin-bottom:7px; color:#beae85; font-size:10px; letter-spacing:.07em; text-transform:uppercase; }
+.token-mini .token-mini-health-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.token-mini .token-mini-health-title .section-title { margin:0; }
+.token-mini .token-mini-temp { color:#80d5d4; font-size:10px; }
+.token-mini .token-mini-health-track { height:5px; overflow:hidden; background:#0c120f; border-radius:8px; margin-bottom:9px; }
+.token-mini .token-mini-health-track span { display:block; height:100%; background:linear-gradient(90deg,#56815c,#91bb7f); border-radius:inherit; transition:width .18s ease; }
+.token-mini .hp-fields { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.token-mini .hp-field { min-width:0; }
+.token-mini .hp-field span { display:block; margin-bottom:3px; font-size:10px; color:#a9b09d; opacity:1; }
+.token-mini input[type=number] { min-width:0; height:31px; padding:4px 7px; border-radius:6px; border:1px solid #a7956b40; background:#101812; color:#f1e7cf; font-size:13px; text-align:center; }
+.token-mini input:focus { outline:2px solid #b9a16a88; outline-offset:1px; }
+.token-mini .hp-delta { display:grid; grid-template-columns:1fr 58px 1fr; gap:6px; margin:9px 0 0; }
+.token-mini .hp-delta-btn { width:auto; min-width:0; height:31px; padding:4px; border-radius:6px; font:600 11px Arial,sans-serif; }
+.token-mini .hp-delta-minus { color:#efb9a8; border:1px solid #b376604d; background:#693e332e; }
+.token-mini .hp-delta-plus { color:#b4d5a7; border:1px solid #7caa624d; background:#45653738; }
+.token-mini .triple { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-bottom:9px; }
+.token-mini .mini-box { display:flex; flex-direction:column; align-items:center; gap:2px; padding:7px 3px; border:1px solid #b8a57526; border-radius:8px; background:#c5b77a06; }
+.token-mini .mini-box .k, .token-mini .stat-box .k { color:#a8b09e; font-size:10px; }
+.token-mini .mini-box .v { color:#ede1bf; font:bold 19px Georgia,serif; }
+.token-mini .stats-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:5px; }
+.token-mini .stat-box { display:flex; flex-direction:column; align-items:center; gap:2px; padding:5px 0; border:0; border-radius:5px; background:#ffffff04; }
+.token-mini .stat-box .v { color:#eee5cf; font-size:14px; font-weight:700; }
+.token-mini .token-mini-mod { color:#c0ac70; font-size:10px; }
+.token-mini .token-mini-main > .btn { width:100%; min-height:33px; border:1px solid #a18a4c66; border-radius:7px; background:linear-gradient(#60533055,#423b2455); color:#ead7a6; font-size:12px; }
+.token-mini .token-mini-side-buttons { position:static; display:flex; flex-direction:row; width:100%; margin-top:10px; border:0; border-radius:0; gap:6px; background:none; box-shadow:none; overflow:visible; }
+.token-mini .token-mini-side-button { flex:1; flex-direction:row-reverse; gap:6px; min-height:33px; padding:6px; border:1px solid #b8a57530; border-radius:7px; color:#c4b99b; background:#ffffff03; transform:none; }
+.token-mini .token-mini-side-button + .token-mini-side-button { border:1px solid #b8a57530; }
+.token-mini .token-mini-side-button__label { writing-mode:horizontal-tb; transform:none; font-size:11px; font-weight:600; }
+.token-mini .token-mini-side-button__icon { font-size:14px; }
+.token-mini .token-mini-side-button.is-active { transform:none; background:#b7a06822; border-color:#c2aa6980; color:#f0d99b; }
+.token-mini .token-mini-side-panel { position:static; width:100%; height:auto; max-height:min(250px,36dvh); margin-top:10px; border:1px solid #b8a57530; border-radius:9px; background:#0e1511; box-shadow:none; }
+.token-mini .token-mini-side-header { flex:none; padding:8px 10px; color:#d2c091; font:600 11px Arial,sans-serif; border-bottom:1px solid #b8a57526; }
+.token-mini .token-mini-side-scroll { min-height:0; padding:9px; overflow:auto; scrollbar-width:thin; }
+.token-mini .token-mini-side-item, .token-mini .token-mini-subitem, .token-mini .token-mini-spell-row { border-color:#b8a57522; background:#ffffff03; border-radius:7px; }
+.token-mini .token-mini-side-item__name, .token-mini .token-mini-weapon-box__value { color:#e8dab7; }
+.token-mini button:focus-visible { outline:2px solid #d8c084; outline-offset:2px; }
+.token-mini button:disabled, .token-mini input:disabled { opacity:.5; }
+@media (max-width:360px) { .token-mini { padding:10px; } .token-mini .section { padding:8px; } }

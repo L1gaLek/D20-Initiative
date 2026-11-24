@@ -46,7 +46,7 @@ let dropNextCombatAck = false;
 const requests = [];
 const characterHarness = require('./helpers/character-harness.cjs')();
 const diagnostics = [];
-function stamp(payload) { return { ...payload, __serverEvent: true, __eventSeq: ++seq, __serverTs:Date.now() }; }
+function stamp(payload) { return { ...payload, __serverEvent: true, __eventEpoch:'test-server', __eventSeq: ++seq, __serverTs:Date.now() }; }
 function broadcast(payload, except) {
   if(syncMode)return h.context.broadcastToRoom('test-room',payload,except);
   const raw = JSON.stringify(stamp(payload));
@@ -133,6 +133,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (url.pathname.endsWith('/combat')) {
         const ctx = h.clients.find(c => c.ctx.userId === userId).ctx;
+        if(req.method==='GET')return json(res,{type:'combatSync',roomId:'test-room',mapId:h.database().currentMapId,...require('../backend/shared/combat-state').snapshot(h.database())});
         const result = await h.context.applyCombatCommand(ctx, data);
         broadcast(result);
         return json(res, result);
@@ -186,7 +187,7 @@ wss.on('connection', ws => {
     else if (msg.type === 'sheetPatch') await h.context.handleSheetPatchRelay(ws, msg);
     else if (msg.type === 'combatCommand') {
       if (rejectFirstRoll && ws.ctx.userId === 'user-1' && msg.action === 'roll') {
-        rejectFirstRoll = false; ws.send(JSON.stringify({type:'combatCommandError',requestId:msg.requestId,message:'Test rejection'}));
+        rejectFirstRoll = false; ws.send(JSON.stringify({type:'combatCommandError',roomId:'test-room',requestId:msg.requestId,message:'Test rejection'}));
       } else await h.context.handleCombatCommandRelay(ws,msg);
     }
     else if (msg.type === 'initiativeReset' || msg.type === 'initiativeApplied') await h.context.handleInitiativeLiveRelay(ws, msg);
@@ -271,6 +272,7 @@ async function main() {
     }
     const [gm, p1, p2, p3, p4] = pages;
     if(process.env.D20_SHEET_DICE_ONLY){await require('./helpers/sheet-dice-charge-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
+    if(process.env.D20_PAINTED_ONLY){await require('./helpers/painted-mini-scenarios.cjs')({pages,screenshotDir,h,broadcast});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_QUATERNIUS_ONLY){await pages[1].evaluate(armor=>window.__quatArmor=armor,require('../equipment_srd5_ru.json').tabs.armor);await require('./helpers/quaternius-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_DIALOGS_ONLY){await require('./helpers/room-dialog-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}
     if(process.env.D20_APPEARANCE_ONLY){await require('./helpers/appearance-scenarios.cjs')({pages,screenshotDir});assert.deepEqual(errors,[]);return;}

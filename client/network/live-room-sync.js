@@ -23,6 +23,7 @@ function refreshLiveToken(playerId) {
     el.title = String(player.name || '');
   }
   window.Board3D?.requestSync?.();
+  window.refreshOpenTokenMini?.();
 }
 function clearSheetPreview(playerId, requestId) {
   const old = liveSheetPreviews.get(String(playerId));
@@ -148,6 +149,11 @@ function rememberRoomCursor(cursor) {
   wsRoomCursors.set(roomId, { epoch: cursor.epoch, seq: Number(cursor.seq) });
 }
 function applyRoomResume(msg) {
+  // The server's in-memory event counter restarts with a new stream epoch.
+  // Keeping the previous high-water mark would discard every new live event.
+  const roomKey = String(msg.roomId || '');
+  const previousCursor = wsRoomCursors.get(roomKey);
+  if (msg.cursor?.epoch && previousCursor?.epoch !== msg.cursor.epoch) window.__lastWsRoomEventSeq?.delete?.(roomKey);
   handleCombatPreview(msg);
   for (const id of liveSheetPreviews.keys()) { clearSheetPreview(id); refreshLiveToken(id); }
   for (const [mapId, entry] of fogLiveOverlays) {

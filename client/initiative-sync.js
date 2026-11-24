@@ -26,13 +26,16 @@ function handleCombatPreview(msg) {
   return true;
 }
 function handleCombatSync(msg) {
-  const pending = combatRequests.get(msg.requestId);
-  if (msg.type === 'combatCommandError') { pending?.reject(new Error(msg.message)); return; }
   if (String(msg.roomId) !== String(currentRoomId)) return;
+  const pending = combatRequests.get(msg.requestId);
   const st = lastState;
-  if (st && (!msg.mapId || String(msg.mapId) === String(st.currentMapId))
-      && Number(msg.fields?.combatRevision || 0) >= Number(st.combatRevision || 0)
-      && Number(msg.fields?.phaseEpoch || 0) >= Number(st.phaseEpoch || 0)) {
+  const revision = Number(msg.fields?.combatRevision) || 0;
+  const currentRevision = Number(st?.combatRevision) || 0;
+  // Server revisions survive reconnects and do not depend on a browser clock.
+  // Legacy timestamp checks must not reject a newer committed turn.
+  const fresh = revision > currentRevision || (revision === currentRevision
+    && Number(msg.fields?.phaseEpoch || 0) >= Number(st?.phaseEpoch || 0));
+  if (st && msg.fields && (!msg.mapId || String(msg.mapId) === String(st.currentMapId)) && fresh) {
     const turnChanged = st.phase !== msg.fields.phase || st.turnEpoch !== msg.fields.turnEpoch;
     Object.assign(st, msg.fields);
     for (const update of msg.players || []) {
@@ -45,9 +48,28 @@ function handleCombatSync(msg) {
     refreshInitiativeRealtimeUi(st);
     if (turnChanged) { try { syncSelectedPlayerUi?.(); renderCombatMoveOverlay?.(); window.Board3D?.requestSync?.(); } catch {} }
   }
-  pending?.resolve(msg);
+  if (msg.type === 'combatCommandError') {
+    pending?.reject(Object.assign(new Error(msg.message), { combatSnapshot: !!msg.fields }));
+  } else pending?.resolve(msg);
 }
 window.handleCombatSync = handleCombatSync;
+const combatRecoveryReads = new Map();
+function refreshCombatState() {
+  const roomId = String(currentRoomId || ''), mapId = String(lastState?.currentMapId || '');
+  if (!roomId || !mapId) return Promise.resolve();
+  const key = JSON.stringify([roomId, mapId]);
+  if (combatRecoveryReads.has(key)) return combatRecoveryReads.get(key);
+  const read = window.vpsApi(`/rooms/${encodeURIComponent(roomId)}/combat`, { retries: 1, timeoutMs: 8000 })
+    .then(result => { if (String(currentRoomId) === roomId) handleCombatSync(result); })
+    .finally(() => combatRecoveryReads.delete(key));
+  combatRecoveryReads.set(key, read);
+  return read;
+}
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && lastState?.phase === 'combat') {
+    void refreshCombatState().catch(error => console.warn('Combat recovery:', error));
+  }
+});
 async function requestCombatCommand(action, extra = {}) {
   const roomId = String(currentRoomId || '');
   if (!roomId || !lastState) throw new Error('Комната не открыта');
@@ -71,6 +93,12 @@ async function requestCombatCommand(action, extra = {}) {
     });
     if (String(currentRoomId) === roomId) handleCombatSync(result);
     return result;
+  } catch (error) {
+    if (error.payload?.combat) { handleCombatSync(error.payload.combat); error.combatSnapshot = true; }
+    if (!error.combatSnapshot && /Ход уже|Фаза инициативы уже|Карта уже/.test(error.message || '')) {
+      try { await refreshCombatState(); } catch (recoveryError) { console.warn('Combat recovery:', recoveryError); }
+    }
+    throw error;
   } finally { clearTimeout(timer); combatRequests.delete(requestId); }
 }
 async function sendCombatAction(action) {

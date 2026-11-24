@@ -1,4 +1,4 @@
-import {createStudioViewer} from './viewer.mjs?v=20261124-outfits-1';
+import {createStudioViewer} from './viewer.mjs?v=20261124-painted-turns-1';
 import {defaultProject,normalizeProject,parseProject,emptyTransform,sampleClip,ARMOR} from '../client/board-3d/studio-state.mjs?v=20261124-outfits-1';
 
 const $=id=>document.getElementById(id),desktop=window.D20Desktop;

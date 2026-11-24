@@ -25,6 +25,18 @@ module.exports = async function({pages,h,broadcast,clone,screenshotDir,dropNextC
   await gm.locator('#previous-turn').click();
   await gm.waitForFunction(()=>lastState.turnHistory.length===0);
   console.log('PASS: lost WS acknowledgment falls back to HTTP without repeating a turn');
+  const turnBefore=clone(h.database());
+  await gm.evaluate(()=>{lastState.turnEpoch-=1;});
+  await gm.locator('#next-turn').click();
+  await gm.waitForFunction(epoch=>lastState.turnEpoch===epoch,turnBefore.turnEpoch);
+  assert.equal(h.database().turnHistory.length,0,'a stale click repairs the browser without advancing');
+  await gm.evaluate(()=>{lastState.phaseEpoch+=60000;});
+  await p1.evaluate(()=>{window.__lastWsRoomEventSeq.set(currentRoomId,{seq:999999,epoch:'previous-server'});});
+  await gm.locator('#next-turn').click();
+  for(const page of pages)await page.waitForFunction(()=>lastState.turnHistory.length===1);
+  await gm.locator('#previous-turn').click();
+  for(const page of pages)await page.waitForFunction(()=>lastState.turnHistory.length===0);
+  console.log('PASS: stale turn rejection self-recovers; skewed browser clocks and old server counters cannot freeze turn updates');
   console.log('PASS: GM edits initiative including zero; every browser advances and rewinds through round boundaries to first turn');
   await gm.evaluate(() => sendMessage({type:'startInitiative'}));
   for(const page of pages) await page.waitForFunction(() => lastState.phase==='initiative' && !lastState.players[0].hasRolledInitiative);

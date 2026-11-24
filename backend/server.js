@@ -2513,13 +2513,27 @@ app.post('/api/rooms/:roomId/detached/replace', async (req, res) => {
 });
 
 app.post('/api/rooms/:roomId/combat', async (req, res) => {
+  let ctx;
   try {
-    const ctx = await loadRoomContext(req.params.roomId, requireRequestActor(req).userId);
+    ctx = await loadRoomContext(req.params.roomId, requireRequestActor(req).userId);
     const payload = await applyCombatCommand(ctx, req.body || {});
     broadcastToRoom(ctx.roomId, payload);
     return res.json({ ok: true, ...payload });
   } catch (error) {
-    return res.status(400).json({ ok: false, error: error?.message || 'Combat command failed' });
+    return res.status(400).json({ ok: false, error: error?.message || 'Combat command failed',
+      combat: ctx && ['GM', 'Player'].includes(ctx.role) ? { type: 'combatSync', roomId: ctx.roomId,
+        mapId: ctx.state.currentMapId, ...CombatState.snapshot(ctx.state) } : undefined });
+  }
+});
+
+// Small recovery read: no sheets, token positions, fog, log or room write.
+app.get('/api/rooms/:roomId/combat', async (req, res) => {
+  try {
+    const ctx = await loadRoomContext(req.params.roomId, requireRequestActor(req).userId);
+    return res.json({ ok: true, type: 'combatSync', roomId: ctx.roomId,
+      mapId: ctx.state.currentMapId, ...CombatState.snapshot(ctx.state) });
+  } catch (error) {
+    return res.status(statusFromError(error, /required|invalid|not found/i)).json({ ok: false, error: error.message });
   }
 });
 
@@ -2964,7 +2978,9 @@ function getRoom(roomId) {
 function nextRoomEventSeq(roomId) {
   const id = String(roomId || '').trim();
   if (!id) return 0;
-  const next = (Number(roomEventSeq.get(id)) || 0) + 1;
+  // Also keep older open clients (which know only the numeric counter) working
+  // through a process restart. New clients additionally use the stream epoch.
+  const next = Math.max(Date.now(), (Number(roomEventSeq.get(id)) || 0) + 1);
   roomEventSeq.set(id, next);
   return next;
 }
@@ -2980,6 +2996,7 @@ function stampRoomEvent(payload, fallbackRoomId = '') {
     payload.__eventSeq = nextRoomEventSeq(roomId);
   }
   payload.__serverEvent = true;
+  payload.__eventEpoch = roomJournal.cursor(roomId).epoch;
   payload.__serverTs = Date.now();
   return payload;
 }
@@ -5600,8 +5617,9 @@ async function handleCombatCommandRelay(ws, data) {
     broadcastToRoom(ctx.roomId, payload, ws);
   } catch (error) {
     if (ctx) broadcastToRoom(ctx.roomId, { type: 'combatPreview', roomId: ctx.roomId, requestId: data.requestId, pending: false }, ws);
-    send(ws, { type: 'combatCommandError', roomId: ws.currentRoomId,
-      requestId: data.requestId, message: error.message });
+    send(ws, { type: 'combatCommandError', roomId: ctx?.roomId || ws.currentRoomId,
+      requestId: data.requestId, message: error.message,
+      ...(ctx && ['GM', 'Player'].includes(ctx.role) ? { mapId: ctx.state.currentMapId, ...CombatState.snapshot(ctx.state) } : {}) });
   }
 }
 

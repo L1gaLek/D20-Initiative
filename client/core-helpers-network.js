@@ -42,9 +42,16 @@ function shouldAcceptWsServerEvent(msg) {
     const roomId = String(msg.roomId || wsRoomId || '').trim();
     if (!roomId) return true;
     if (!(window.__lastWsRoomEventSeq instanceof Map)) window.__lastWsRoomEventSeq = new Map();
-    const last = Math.trunc(Number(window.__lastWsRoomEventSeq.get(roomId)) || 0);
-    if (seq <= last) return false;
-    window.__lastWsRoomEventSeq.set(roomId, seq);
+    const previous = window.__lastWsRoomEventSeq.get(roomId);
+    const epoch = String(msg.__eventEpoch || msg.__streamEpoch || '');
+    const sameEpoch = !epoch || !previous?.epoch || epoch === previous.epoch;
+    const last = sameEpoch ? Math.trunc(Number(previous?.seq ?? previous) || 0) : 0;
+    // Combat has its own persisted revision. A delayed command acknowledgment
+    // must reach its promise even if an unrelated room event arrived first.
+    const combat = ['combatSync', 'combatCommandError'].includes(msg.type)
+      || (msg.type === 'initiativeApplied' && msg.fields);
+    if (seq <= last && !combat) return false;
+    window.__lastWsRoomEventSeq.set(roomId, { seq: Math.max(last, seq), epoch: epoch || previous?.epoch || '' });
     return true;
   } catch {
     return true;

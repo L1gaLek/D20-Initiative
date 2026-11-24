@@ -1045,6 +1045,18 @@ function refreshOpenTokenMini() {
     closeTokenMini();
     return;
   }
+  const player = players.find(p => String(p.id) === String(tokenMiniPlayerId));
+  if (player) {
+    const q = getQuickSheetStats(typeof getLivePlayerView === 'function' ? getLivePlayerView(player) : player);
+    for (const [selector,value] of [['.hp-cur',q.hpCur],['.hp-max',q.hpMax]]) {
+      const input = tokenMiniEl.querySelector(selector);
+      if (input && document.activeElement !== input) input.value = formatVal(value,0);
+    }
+    const fill = tokenMiniEl.querySelector('.token-mini-health-track span');
+    if (fill) fill.style.width = `${Math.max(0,Math.min(100,(Number(q.hpCur)||0)/Math.max(1,Number(q.hpMax)||0)*100))}%`;
+    const temp = tokenMiniEl.querySelector('.token-mini-temp');
+    if (temp) { temp.hidden = !(Number(q.hpTemp)>0); temp.textContent = `+${Math.max(0,Number(q.hpTemp)||0)} врем.`; }
+  }
   positionTokenMini(tokenEl);
 }
 
@@ -1078,26 +1090,35 @@ function openTokenMini(playerId) {
 
   const card = document.createElement('div');
   card.className = 'token-mini';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-labelledby', 'token-mini-title');
+  card.style.setProperty('--mini-accent', /^#[0-9a-f]{6}$/i.test(p.color || '') ? p.color : '#c3a269');
   card.dataset.sidePanel = '';
   card.innerHTML = `
     <div class="token-mini-main">
-      <div class="title">${escapeHtmlLocal(String(p.name || 'Персонаж'))}</div>
+      <header class="token-mini-heading">
+        <span class="token-mini-portrait" aria-hidden="true">${escapeHtmlLocal(String(p.name || '?').trim().slice(0,1))}</span>
+        <div class="token-mini-heading__text"><span class="token-mini-eyebrow">${p.isBase ? 'Основа' : p.isEnemy ? 'Враг' : 'Союзник'}</span>
+          <div class="title" id="token-mini-title">${escapeHtmlLocal(String(p.name || 'Персонаж'))}</div></div>
+        <button type="button" class="token-mini-close" aria-label="Закрыть краткую карточку">×</button>
+      </header>
       <div class="section">
-        <div class="section-title">Здоровье</div>
+        <div class="token-mini-health-title"><div class="section-title">Здоровье</div><span class="token-mini-temp" ${Number(q.hpTemp)>0?'':'hidden'}>+${Math.max(0,Number(q.hpTemp)||0)} врем.</span></div>
+        <div class="token-mini-health-track" aria-hidden="true"><span style="width:${Math.max(0,Math.min(100,curHp/Math.max(1,maxHp)*100))}%"></span></div>
         <div class="hp-fields">
           <label class="hp-field">
-            <span>Тек.</span>
+            <span>Текущее</span>
             <input type="number" class="hp-cur" min="0" max="999" value="${formatVal(curHp, 0)}" />
           </label>
           <label class="hp-field">
-            <span>Макс.</span>
+            <span>Максимум</span>
             <input type="number" class="hp-max" min="0" max="999" value="${formatVal(maxHp, 0)}" />
           </label>
         </div>
         <div class="hp-delta">
-          <button type="button" class="hp-delta-btn hp-delta-minus">−</button>
-          <input type="number" class="hp-delta-val" min="0" max="999" value="0" />
-          <button type="button" class="hp-delta-btn hp-delta-plus">+</button>
+          <button type="button" class="hp-delta-btn hp-delta-minus" title="Нанести урон">− Урон</button>
+          <input type="number" class="hp-delta-val" aria-label="Количество урона или лечения" min="0" max="999" value="0" />
+          <button type="button" class="hp-delta-btn hp-delta-plus" title="Восстановить здоровье">+ Лечение</button>
         </div>
       </div>
 
@@ -1109,14 +1130,8 @@ function openTokenMini(playerId) {
 
       <div class="section">
         <div class="section-title">Характеристики</div>
-        <div class="stats-grid">
-          <div class="stat-box"><span class="k">СИЛ</span><span class="v">${formatVal(q.stats.str)}</span></div>
-          <div class="stat-box"><span class="k">ИНТ</span><span class="v">${formatVal(q.stats.int)}</span></div>
-          <div class="stat-box"><span class="k">ЛОВ</span><span class="v">${formatVal(q.stats.dex)}</span></div>
-          <div class="stat-box"><span class="k">МУД</span><span class="v">${formatVal(q.stats.wis)}</span></div>
-          <div class="stat-box"><span class="k">ТЕЛ</span><span class="v">${formatVal(q.stats.con)}</span></div>
-          <div class="stat-box"><span class="k">ХАР</span><span class="v">${formatVal(q.stats.cha)}</span></div>
-        </div>
+        <div class="stats-grid">${[['str','СИЛ'],['dex','ЛОВ'],['con','ТЕЛ'],['int','ИНТ'],['wis','МУД'],['cha','ХАР']].map(([key,label])=>`
+          <div class="stat-box"><span class="k">${label}</span><span class="v">${formatVal(q.stats[key])}</span><span class="token-mini-mod">${formatSignedValue(tokenMiniStatMod(sheetForMini,key))}</span></div>`).join('')}</div>
       </div>
 
       <button class="btn" type="button">Лист персонажа</button>
@@ -1125,7 +1140,7 @@ function openTokenMini(playerId) {
     ${canUseQuickPanels ? `
       <div class="token-mini-side-buttons" aria-label="Быстрые разделы">
         <button type="button" class="token-mini-side-button token-mini-side-button--combat" data-mini-side-button="combat">
-          <span class="token-mini-side-button__label">Оружие и способности</span>
+          <span class="token-mini-side-button__label">Бой</span>
           <span class="token-mini-side-button__icon" aria-hidden="true">⚔</span>
         </button>
         <button type="button" class="token-mini-side-button token-mini-side-button--spells" data-mini-side-button="spells">
@@ -1149,6 +1164,8 @@ function openTokenMini(playerId) {
   // prevent board clicks
   card.addEventListener('mousedown', (e) => e.stopPropagation());
   card.addEventListener('click', (e) => e.stopPropagation());
+  card.addEventListener('keydown', (e) => { e.stopPropagation(); if(e.key === 'Escape') closeTokenMini(); });
+  card.querySelector('.token-mini-close').addEventListener('click', closeTokenMini);
 
   const hpCurInput = card.querySelector('.hp-cur');
   const hpMaxInput = card.querySelector('.hp-max');
@@ -1252,6 +1269,8 @@ function openTokenMini(playerId) {
     } catch {}
     // сразу обновим полоску
     updateHpBar(p, tokenEl);
+    const fill = card.querySelector('.token-mini-health-track span');
+    if(fill) fill.style.width = `${Math.max(0,Math.min(100,cur/Math.max(1,max)*100))}%`;
   };
 
   // Instant feedback while typing; network update is debounced in upsertSheetNumber.

@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { serverHarness, clone } = require('./helpers/room-harness.cjs');
 const CombatState = require('../backend/shared/combat-state');
+const vm = require('node:vm');
+const { read, functions } = require('./helpers/room-harness.cjs');
 let sequence = 0;
 function command(h, client, action, extra = {}) {
   const state = h.database();
@@ -110,4 +112,70 @@ test('switching to a legacy map starts with its own empty history and returning 
   assert.deepEqual(h.database().turnHistory,battle.turnHistory);
   assert.deepEqual(h.database().turnOrder,battle.turnOrder);
   assert.equal(h.database().currentTurnIndex,battle.currentTurnIndex);
+});
+
+function combatClient(state) {
+  const c = vm.createContext({ console, CombatState, lastState:clone(state), currentRoomId:'test-room',
+    setTimeout, clearTimeout, syncVisiblePlayersState:()=>{}, rememberRoomStateShadow:()=>{},
+    refreshInitiativeRealtimeUi:()=>{}, syncSelectedPlayerUi:()=>{}, renderCombatMoveOverlay:()=>{} });
+  vm.runInContext('window=globalThis', c);
+  vm.runInContext(read('client/initiative-sync.js'), c);
+  return c;
+}
+
+test('committed turn revisions override a skewed browser clock and ignore delayed older turns', async () => {
+  const h=serverHarness(); await ready(h);
+  const before=clone(h.database()), c=combatClient(before);
+  c.lastState.phaseEpoch+=60000;
+  const newer=await command(h,4,'endTurn');
+  c.handleCombatSync(newer);
+  assert.equal(c.lastState.currentTurnIndex,1);
+  assert.equal(c.lastState.phaseEpoch,newer.fields.phaseEpoch);
+  c.handleCombatSync({type:'combatSync',roomId:'test-room',mapId:'map-1',...CombatState.snapshot(before)});
+  assert.equal(c.lastState.currentTurnIndex,1);
+  c.handleCombatSync({...newer,mapId:'map-2',fields:{...newer.fields,currentTurnIndex:3,combatRevision:100}});
+  assert.equal(c.lastState.currentTurnIndex,1,'other maps cannot move this turn');
+  c.lastState.phase='exploration';c.lastState.phaseEpoch+=1;
+  c.handleCombatSync(newer);
+  assert.equal(c.lastState.phase,'exploration','a duplicate acknowledgment cannot reopen a battle after a newer phase change');
+});
+
+test('a rejected stale turn command repairs its author without advancing or repeating the turn', async () => {
+  const h=serverHarness(); await ready(h);
+  const before=clone(h.database()),c=combatClient(before);
+  const newer=await command(h,4,'endTurn');
+  c.rejected=null;
+  vm.runInContext("combatRequests.set('stale-turn', {reject:error=>rejected=error,resolve:()=>{throw Error('Unexpected success')}})",c);
+  await h.context.handleCombatCommandRelay(h.clients[4],{roomId:'test-room',action:'endTurn',requestId:'stale-turn',
+    mapId:'map-1',epoch:before.initiativeEpoch,turnEpoch:before.turnEpoch});
+  const error=h.clients[4].events.at(-1).payload;
+  assert.equal(error.type,'combatCommandError');
+  assert.equal(error.fields.combatRevision,newer.fields.combatRevision);
+  c.handleCombatSync(error);
+  assert.match(c.rejected.message,/Ход уже/);
+  assert.equal(c.lastState.turnEpoch,newer.fields.turnEpoch);
+  assert.equal(c.lastState.currentTurnIndex,1);
+  assert.equal(h.database().turnHistory.length,1,'recovery never applies the action a second time');
+});
+
+test('WS deduplication accepts a restarted server and delayed combat acknowledgments', () => {
+  const c=vm.createContext({window:{},wsRoomId:'test-room'});
+  vm.runInContext(functions(read('client/core-helpers-network.js'),['shouldAcceptWsServerEvent']),c);
+  const event=(seq,epoch,type='tokenRow')=>({__serverEvent:true,roomId:'test-room',__eventSeq:seq,__eventEpoch:epoch,type});
+  assert.equal(c.shouldAcceptWsServerEvent(event(900,'old-server')),true);
+  assert.equal(c.shouldAcceptWsServerEvent(event(1,'new-server')),true);
+  assert.equal(c.shouldAcceptWsServerEvent(event(1,'new-server')),false);
+  assert.equal(c.shouldAcceptWsServerEvent(event(12,'new-server')),true);
+  assert.equal(c.shouldAcceptWsServerEvent(event(10,'new-server','combatSync')),true);
+  assert.equal(c.shouldAcceptWsServerEvent(event(9,'new-server','combatCommandError')),true);
+  assert.equal(c.shouldAcceptWsServerEvent(event(11,'new-server')),false);
+});
+
+test('server event numbers remain monotonic for legacy open clients across process restarts', () => {
+  let now=1000;
+  const c=vm.createContext({roomEventSeq:new Map(),Date:{now:()=>now}});
+  vm.runInContext(functions(read('backend/server.js'),['nextRoomEventSeq']),c);
+  assert.equal(c.nextRoomEventSeq('test-room'),1000);
+  now=900;assert.equal(c.nextRoomEventSeq('test-room'),1001);
+  now=2000;c.roomEventSeq.clear();assert.equal(c.nextRoomEventSeq('test-room'),2000);
 });

@@ -1,4 +1,5 @@
 import * as THREE from '../../vendor/three/three.module.mjs';
+import {createPaintedSkinMaterial,paintedSkinColor} from './human-skin.mjs?v=20261124-painted-1';
 import maleModel from '../../assets/models/human/male.mjs?v=20261119-cuirass-1';
 import femaleModel from '../../assets/models/human/female.mjs?v=20261123-cbbe-1';
 import { createHair, headMapping } from './human-hair.mjs?v=20261119-cuirass-1';
@@ -66,7 +67,7 @@ export function createHuman(config,options={}){
   });
   root.updateMatrixWorld(true);const skeleton=new THREE.Skeleton(bones);skeleton.calculateInverses();
   const mat=(color,metalness=0,roughness=.7)=>new THREE.MeshStandardMaterial({color,metalness,roughness});
-  const materials={skin:mat('#b7917c'),hair:mat(config.hairColor||'#493124'),linen:mat('#a89f8c'),cloth:mat('#333b43'),leather:mat('#61402b'),dark:mat('#282321'),steel:mat('#8e9da6',.78,.3),edge:mat('#c1cbd0',.85,.23),trim:mat('#a68b51',.72,.35)};
+  const materials={skin:createPaintedSkinMaterial(),hair:mat(config.hairColor||'#493124'),linen:mat('#a89f8c'),cloth:mat('#333b43'),leather:mat('#61402b'),dark:mat('#282321'),steel:mat('#8e9da6',.78,.3),edge:mat('#c1cbd0',.85,.23),trim:mat('#a68b51',.72,.35)};
   for(const [key,m]of Object.entries(materials))m.userData.studioKey=key;
   // Fine surface variation is evaluated locally: no remote skin/armor textures.
   const texture=(material,type)=>{
@@ -79,7 +80,7 @@ export function createHuman(config,options={}){
       `);
     };
   };
-  texture(materials.skin,'skin');texture(materials.leather,'leather');texture(materials.linen,'linen');
+  texture(materials.leather,'leather');texture(materials.linen,'linen');
   materials.hair.customProgramCacheKey=()=>`human-hair-${config.hair}`;
   materials.hair.onBeforeCompile=shader=>{
     shader.vertexShader='varying vec3 hairPoint;\n'+shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nhairPoint=position;');
@@ -127,9 +128,7 @@ export function createHuman(config,options={}){
   const skin=surface(materials.skin,(p,b)=>quaternius?(p[1]>1.395||/wrist|finger/.test(b)||['L','R'].some(side=>Math.hypot(...p.map((v,i)=>v-definitions.get('wrist.'+side).head[i]))<.105)):!armored||p[1]>.34);skin.name='anatomical-body';
   const skinPositions=skin.geometry.attributes.position.array,colors=new Float32Array(skinPositions.length);const color=new THREE.Color();
   for(let i=0;i<skinPositions.length/3;i++){
-    const [x,y,z]=headFit.inverse(Array.from(skinPositions.slice(i*3,i*3+3)));color.setRGB(1,1,1);
-    if(z>.13&&Math.abs(x)<.026&&y>1.51&&y<1.534){const lip=Math.max(0,1-Math.abs(y-1.522)/.012)*Math.max(0,1-Math.abs(x)/.026);color.setRGB(1-.08*lip,1-.27*lip,1-.22*lip);}
-    if(y>1.48&&y<1.58&&z>.075){const blush=Math.exp(-(((Math.abs(x)-.044)/.02)**2)-((y-1.55)/.026)**2)*.08;color.g-=blush;color.b-=blush*.5;}
+    const [x,y,z]=headFit.inverse(Array.from(skinPositions.slice(i*3,i*3+3)));paintedSkinColor(x,y,z,color);
     color.toArray(colors,i*3);
   }
   skin.geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));materials.skin.vertexColors=true;
