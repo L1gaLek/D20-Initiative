@@ -4,6 +4,7 @@ module.exports=function installMapHarness(h,state){
  const tokens=new Map(),fog=new Map(),meta=new Map(state.maps.map(m=>[m.id,{board_width:m.boardWidth||10,board_height:m.boardHeight||10}]));
  for(const p of state.players)if(p.x!=null&&p.y!=null)tokens.set('map-1::'+p.id,{room_id:'test-room',map_id:'map-1',token_id:p.id,owner_id:p.ownerId,x:p.x,y:p.y,size:p.size||1,is_public:true});
  h.context.roomReadCache=new (require('../../backend/shared/room-read-cache'))();
+ h.context.movementWrites=new (require('../../backend/shared/movement-writes'))();
  const original=h.context.pool;
  const query=async(sql,v=[],fallback=original)=>{
   const q=sql.toLowerCase();
@@ -17,7 +18,7 @@ module.exports=function installMapHarness(h,state){
   return fallback.query(sql,v);
  };
  h.context.pool={query,connect:async()=>{const client=await original.connect();return {query:(sql,v)=>query(sql,v,client),release:()=>client.release()};}};
- Object.assign(h.context,{ROOM_ID_RE:/./,HEX_COLOR_RE:/^#[a-f0-9]{6}$/i,clampNumber:(v,min,max,def)=>Number.isFinite(Number(v))?Math.max(min,Math.min(max,Number(v))):def,boolFrom:(v,d)=>typeof v==='boolean'?v:d});
- vm.runInContext(functions(read('backend/server.js'),['getActiveMapId','findMapById','getStateMapBounds','getMapBounds','ensureCanControlPlayer','ensureCanMoveInCombat','sanitizeTokenSize','validateBoardPosition','overlaps','ensureTokenAreaFree','upsertTokenRowUsing','getTokenRow','resolveTokenPublicForWrite','broadcastTokenMoveRollback','handleMoveToken','cleanFogRow','fogJsonParam','handleFogRow','handleFogPreview']),h.context);
+ Object.assign(h.context,{tokenMoveRevision:Date.now(),ROOM_ID_RE:/./,HEX_COLOR_RE:/^#[a-f0-9]{6}$/i,clampNumber:(v,min,max,def)=>Number.isFinite(Number(v))?Math.max(min,Math.min(max,Number(v))):def,boolFrom:(v,d)=>typeof v==='boolean'?v:d});
+ vm.runInContext(functions(read('backend/server.js'),['getActiveMapId','findMapById','getStateMapBounds','getMapBounds','ensureCanControlPlayer','ensureCanMoveInCombat','sanitizeTokenSize','validateBoardPosition','overlaps','ensureTokenAreaFree','upsertTokenRowUsing','getTokenRow','resolveTokenPublicForWrite','broadcastTokenMoveRollback','nextTokenMoveRevision','prepareMoveToken','handleMoveToken','cleanFogRow','fogJsonParam','handleFogRow','handleFogPreview']),h.context);
  return {tokens,fog,meta};
 };

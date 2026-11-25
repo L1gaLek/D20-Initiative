@@ -68,4 +68,22 @@ module.exports=async({pages,h,mapHarness,syncControls,waitFor})=>{
   await p2.waitForFunction(()=>__roomDetachedCache.fogByMap.get('map-2')?.explored?.includes('80,60'));
   assert.equal(await p2.evaluate(()=>__roomDetachedCache.fogByMap.get('map-1').explored.includes('80,60')),false);
   console.log('PASS sync: fog exploration deltas arrive before the batched save and stay isolated between maps');
+
+  let releaseMovement;
+  syncControls.holdMovement=new Promise(resolve=>{releaseMovement=resolve;});
+  const writes=syncControls.movementWrites;
+  const started=Date.now();
+  await p1.evaluate(async()=>{
+    await sendMessage({type:'movePlayer',id:'player-1',x:35,y:25});
+    await sendMessage({type:'movePlayer',id:'player-1',x:36,y:25});
+  });
+  for(const page of [gm,p2,p3,p4])await page.waitForFunction(()=>lastState.players[0].x===36);
+  const previewMs=Date.now()-started;
+  assert.notEqual(mapHarness.tokens.get('map-1::player-1').x,36,'live delivery precedes persistence');
+  assert.equal(syncControls.movementWrites,writes+1,'the second save remains ordered behind the held first save');
+  releaseMovement();syncControls.holdMovement=null;
+  await waitFor(()=>mapHarness.tokens.get('map-1::player-1').x===36,'movement committed');
+  for(const page of pages)await page.waitForFunction(()=>lastState.players[0].x===36);
+  await gm.waitForFunction(()=>Board3D.inspect().tokens.some(t=>t.id==='player-1'&&t.x===36));
+  console.log('PASS sync: two movements reach all four peers before the first save; ordered commits retain the final 2D/3D position ('+previewMs+' ms in local fixture)');
 };

@@ -16,9 +16,22 @@ class RoomReadCache {
     if (entry) this.bytes -= entry.bytes;
     this.entries.delete(key);
   }
-  invalidate(roomId) {
-    for (const [key, entry] of this.entries) if (entry.roomId === roomId) this.delete(key);
-    for (const [key, entry] of this.pending) if (entry.roomId === roomId) this.pending.delete(key);
+  invalidate(roomId, matches = () => true) {
+    for (const [key, entry] of this.entries) if (entry.roomId === roomId && matches(entry.parts)) this.delete(key);
+    for (const [key, entry] of this.pending) if (entry.roomId === roomId && matches(entry.parts)) this.pending.delete(key);
+  }
+  invalidateEvent(roomId, event) {
+    if (event?.type === 'roomDeleted') return this.invalidate(roomId);
+    const tables = { mapMetaRow:'room_map_meta', mapMetaDelete:'room_map_meta', wallRow:'room_walls', wallDelete:'room_walls',
+      markRow:'room_marks', markDelete:'room_marks', marksReplace:'room_marks', fogRow:'room_fog', fogDelete:'room_fog',
+      musicRow:'room_music_state', musicDelete:'room_music_state' };
+    const table = tables[event?.type];
+    if (!table) return;
+    const mapId = String(event.mapId || event.row?.map_id || '');
+    this.invalidate(roomId, parts => {
+      if (parts[0] === 'bounds') return table === 'room_map_meta' && (!mapId || parts[1] === mapId);
+      return parts[0] === 'rows' && parts[1] === table && (!mapId || !parts[2] || parts[2] === mapId);
+    });
   }
   async load(roomId, parts, loader, retries = 1) {
     const key = JSON.stringify([roomId, ...parts]);
@@ -26,7 +39,7 @@ class RoomReadCache {
     if (cached && cached.expires > this.now()) { this.hits++; return cached.value; }
     this.delete(key);
     if (this.pending.has(key)) { this.hits++; return this.pending.get(key).promise; }
-    const entry = { roomId };
+    const entry = { roomId, parts };
     this.loads++;
     entry.promise = Promise.resolve().then(loader).then(value => {
       if (this.pending.get(key) !== entry) {
@@ -37,7 +50,7 @@ class RoomReadCache {
       const bytes = Buffer.byteLength(JSON.stringify(value ?? null));
       if (bytes <= this.maxBytes) {
         while (this.entries.size && (this.entries.size >= this.maxEntries || this.bytes + bytes > this.maxBytes)) this.delete(this.entries.keys().next().value);
-        this.entries.set(key, { roomId, value, bytes, expires: this.now() + this.ttlMs });
+        this.entries.set(key, { roomId, parts, value, bytes, expires: this.now() + this.ttlMs });
         this.bytes += bytes;
       }
       return value;

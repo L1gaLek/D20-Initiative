@@ -63,6 +63,7 @@ function serverHarness(state = initialState()) {
       return { rows: [] };
     }
     if (normalized === 'rollback') return { rows: [] };
+    if (normalized.includes('insert into public.room_dice_events')) return { rows:[{ dice_row:{id:queries.length}, log_row:{id:queries.length + 1, text:values[10]} }] };
     if (normalized.includes('case when xmin::text')) {
       const version=versionOf(database),state=values[1]===version?null:clone(database);
       return {rows:[{state_version:version,state}]};
@@ -124,6 +125,7 @@ function serverHarness(state = initialState()) {
   context.DamageRolls = require('../../backend/shared/damage-rolls');
   context.Appearance = require('../../backend/shared/appearance');
   context.DicePresentation = require('../../backend/shared/dice-presentation');
+  context.diceReceipts = new (require('../../backend/shared/dice-receipts'))();
   context.CombatState = require('../../backend/shared/combat-state');
   context.SheetSync = require('../../backend/shared/sheet-sync');
   vm.runInContext(functions(source, [
@@ -134,7 +136,7 @@ function serverHarness(state = initialState()) {
     'writeRoomState', 'persistPatchedState', 'applyPlayerStateUpdate',
     'persistStateForContext', 'persistStatePatchForContext', 'handleStatePatchRelay',
     'handlePlayerPatchRelay', 'handleSheetPatchRelay', 'handleInitiativeLiveRelay', 'applyInitiativeUpdates',
-    'canControlPlayer', 'setTokenAccessForContext', 'handleDiceEventRelay',
+    'canControlPlayer', 'setTokenAccessForContext', 'getDiceReceipt', 'publishDiceReceipt', 'diceReceiptLogText', 'persistDiceReceipt', 'handleDiceEventRelay',
     'sanitizeNewPlayerForOwner','sanitizeCreatedPlayerForContext','addSavedCharacterForContext',
     'applyCombatCommand', 'handleCombatCommandRelay'
   ]), context);

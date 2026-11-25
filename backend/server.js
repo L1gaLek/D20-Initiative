@@ -8,16 +8,21 @@ const SheetSync = require('./shared/sheet-sync');
 const { UserProfiles } = require('./shared/user-profiles');
 const Appearance = require('./shared/appearance');
 const DicePresentation = require('./shared/dice-presentation');
+const DiceReceipts = require('./shared/dice-receipts');
+const diceReceipts = new DiceReceipts();
 const userProfiles = new UserProfiles({file:path.join(__dirname,'data','user-profiles.json')});
 const profileTimer=setInterval(()=>{try{userProfiles.tick();userProfiles.flush();}catch(error){console.error('[profiles persist]',error.message);}},15000);profileTimer.unref();
 for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{try{userProfiles.tick();userProfiles.flush();}finally{process.exit(0);}});
 const { CharacterStore, metadata: characterMetadata } = require('./shared/character-store');
 const RoomEventJournal = require('./shared/room-event-journal');
 const WsScheduler = require('./shared/ws-scheduler');
+const MovementWrites = require('./shared/movement-writes');
+const movementWrites = new MovementWrites();
 const { AsyncLocalStorage } = require('async_hooks');
 const inboundMeta = new AsyncLocalStorage();
 const roomJournal = new RoomEventJournal();
 const roomReadCache = new RoomReadCache();
+let tokenMoveRevision = Date.now();
 const crypto = require('crypto');
 const http = require('http');
 const express = require('express');
@@ -2612,61 +2617,9 @@ app.post('/api/rooms/:roomId/dice', async (req, res) => {
     const userId = requireRequestActor(req).userId;
     if (!roomId) return httpError(res, 400, 'roomId required');
     const ctx = await loadRoomContext(roomId, userId);
-    const incoming = req.body?.event && typeof req.body.event === 'object' ? req.body.event : {};
-    const sidesRaw = Math.trunc(Number(incoming.sides) || 20);
-    const sides = Math.max(2, Math.min(100, sidesRaw));
-    const count = Math.max(1, Math.min(20, Math.trunc(Number(incoming.count) || 1)));
-    const bonus = Math.max(-1000, Math.min(1000, Math.trunc(Number(incoming.bonus) || 0)));
-    const incomingRolls = Array.isArray(incoming.rolls)
-      ? incoming.rolls.map((value) => Math.trunc(Number(value))).filter((value) => Number.isFinite(value))
-      : [];
-    const canUseIncomingRolls = (
-      incomingRolls.length === count
-      && incomingRolls.every((value) => value >= 1 && value <= sides)
-    );
-    const rolls = canUseIncomingRolls
-      ? incomingRolls
-      : Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
-    const fallbackTotal = rolls.reduce((sum, value) => sum + value, 0) + bonus;
-    const incomingTotal = Math.trunc(Number(incoming.total));
-    const total = Number.isFinite(incomingTotal)
-      ? Math.max(-10000, Math.min(10000, incomingTotal))
-      : fallbackTotal;
-    const incomingCrit = String(incoming.crit || '').trim();
-    const crit = (incomingCrit === 'crit-success' || incomingCrit === 'crit-fail')
-      ? incomingCrit
-      : '';
-    const event = {
-      fromId: ctx.userId,
-      throwPower: DicePresentation.throwPower(incoming.throwPower),
-      diceStyle: Appearance.style(incoming.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
-      fromName: ctx.name || sanitizeText(incoming.fromName, 'Player', 120),
-      kindText: sanitizeText(incoming.kindText, `d${sides}`, 200),
-      sides,
-      count,
-      bonus,
-      rolls,
-      total,
-      crit, localNonce:sanitizeText(incoming.localNonce,'',160), actorId:sanitizeText(incoming.actorId,'',160)
-    };
-    if (Array.isArray(incoming.damageParts)) {
-      Object.assign(event, DamageRolls.event(incoming.damageParts, sanitizeText(incoming.damageTitle, 'Урон', 1000)));
-    }
-    const { rows } = await pool.query(
-      `
-        insert into public.room_dice_events(room_id, from_id, from_name, kind_text, sides, count, bonus, rolls, total, crit)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-        returning id, room_id, created_at, from_id, from_name, kind_text, sides, count, bonus, rolls, total, crit
-      `,
-      [ctx.roomId, event.fromId, event.fromName, event.kindText, event.sides, event.count, event.bonus, event.rolls, event.total, event.crit]
-    );
-    userProfiles.record('dice',ctx.roomId,ctx.userId,{...event,id:rows[0]?.id},ctx.state,getStatePlayers(ctx.state).filter(p=>canControlPlayer(ctx,p)));
-    const logText = `${event.fromName}: ${event.kindText}: ${event.rolls.join(',')}${event.bonus ? (event.bonus > 0 ? `+${event.bonus}` : String(event.bonus)) : ''} = ${event.total}${event.crit === 'crit-success' ? ' (CRIT)' : event.crit === 'crit-fail' ? ' (FAIL)' : ''}`;
-    const log = await pool.query(
-      'insert into public.room_log(room_id, text) values ($1, $2) returning id, room_id, text, created_at',
-      [ctx.roomId, logText]
-    ).catch(() => ({ rows: [] }));
-    return res.json({ ok: true, event, row: rows[0] || null, logRow: log.rows?.[0] || null });
+    const receipt = getDiceReceipt(ctx, req.body?.event && typeof req.body.event === 'object' ? req.body.event : {});
+    publishDiceReceipt(ctx, receipt);
+    return res.json(await persistDiceReceipt(ctx, receipt));
   } catch (error) {
     console.error('[rooms dice] failed:', error);
     const status = statusFromError(error, /required|member|banned|not found/i);
@@ -3009,6 +2962,7 @@ function send(ws, payload) {
       if (meta.wsNonce && !payload.__replyToWsNonce) payload.__replyToWsNonce = meta.wsNonce;
       if (meta.clientSentAt && !payload.__clientSentAt) payload.__clientSentAt = meta.clientSentAt;
       if (meta.serverReceivedAt && !payload.__serverReceivedAt) payload.__serverReceivedAt = meta.serverReceivedAt;
+      if (meta.serverStartedAt && !payload.__serverStartedAt) payload.__serverStartedAt = meta.serverStartedAt;
       if (meta.inboundType && !payload.__inReplyToType) payload.__inReplyToType = meta.inboundType;
     }
   } catch {}
@@ -3030,7 +2984,7 @@ function invalidateRoomContexts(roomId, stateOnly = false) {
 }
 
 function broadcastToRoom(roomId, payload, exceptWs = null) {
-  if (['mapMetaRow','mapMetaDelete','wallRow','wallDelete','markRow','markDelete','marksReplace','fogRow','fogDelete','musicRow','musicDelete','roomDeleted'].includes(payload?.type)) roomReadCache.invalidate(String(roomId));
+  roomReadCache.invalidateEvent?.(String(roomId), payload);
   const room = rooms.get(String(roomId || ''));
   stampRoomEvent(payload, roomId);
   const transient = payload?.livePreview || ['sheetPreview', 'sheetPatchError', 'combatPreview', 'fogPreview', 'fogPreviewCancel', 'users', 'usersSnapshot'].includes(payload?.type);
@@ -3070,7 +3024,7 @@ async function resumeRoomClient(ws, ctx, cursor) {
   throw new Error('Room changed too quickly to resume; reconnect');
 }
 
-function broadcastTokenMoveRollback(roomId, mapId, tokenId, prevRow, exceptWs = null) {
+function broadcastTokenMoveRollback(roomId, mapId, tokenId, prevRow, exceptWs = null, moveRevision = 0) {
   const rid = String(roomId || '').trim();
   const mid = String(mapId || prevRow?.map_id || '').trim();
   const tid = String(tokenId || prevRow?.token_id || '').trim();
@@ -3082,6 +3036,7 @@ function broadcastTokenMoveRollback(roomId, mapId, tokenId, prevRow, exceptWs = 
       room_id: String(prevRow.room_id || rid),
       map_id: String(prevRow.map_id || mid),
       token_id: String(prevRow.token_id || tid),
+      move_revision: moveRevision, rollback: true,
       updated_at: new Date().toISOString()
     };
     const payload = { type: 'tokenRow', roomId: rid, mapId: row.map_id, row, rollback: true };
@@ -3098,6 +3053,7 @@ function broadcastTokenMoveRollback(roomId, mapId, tokenId, prevRow, exceptWs = 
       room_id: rid,
       map_id: mid,
       token_id: tid,
+      move_revision: moveRevision, rollback: true,
       updated_at: new Date().toISOString()
     },
     rollback: true
@@ -3159,9 +3115,10 @@ async function upsertTokenRowUsing(db, {
   y = null,
   size = 1,
   color = null,
-  isPublic = true
+  isPublic = true,
+  logText = null
 }) {
-  const sql = `
+  let sql = `
     insert into public.room_tokens (
       room_id, map_id, token_id, owner_id, x, y, size, color, is_public, updated_at
     )
@@ -3199,6 +3156,12 @@ async function upsertTokenRowUsing(db, {
     color,
     !!isPublic
   ];
+  if (logText) {
+    sql = `with moved as (${sql}), logged as (
+      insert into public.room_log(room_id, text) select room_id, $10 from moved
+    ) select * from moved`;
+    values.push(logText);
+  }
 
   const { rows } = await db.query(sql, values);
   return rows[0] || null;
@@ -3320,11 +3283,39 @@ async function handleTavernLogRowRelay(ws, data) {
   broadcastToRoom(TAVERN_ROOM_LOG_ID, payload, ws);
 }
 
-async function handleMoveToken(ws, data) {
+function nextTokenMoveRevision() {
+  tokenMoveRevision = Math.max(Date.now(), tokenMoveRevision + 1);
+  return tokenMoveRevision;
+}
+
+async function prepareMoveToken(ws, data) {
+  const ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
+  const tokenId = normalizeSafeId(data.tokenId, ENTITY_ID_RE);
+  const player = findPlayerById(ctx.state, tokenId);
+  if (!player) throw new Error('Token not found in room state');
+  ensureCanControlPlayer(ctx, player);
+  const mapId = normalizeSafeId(data.mapId || player.mapId || getActiveMapId(ctx.state), ENTITY_ID_RE);
+  if (!mapId) throw new Error('mapId is required');
+  const size = sanitizeTokenSize(player.size || data.size || 1);
+  const { x, y } = validateBoardPosition(data.x, data.y, size, await getMapBounds(ctx.roomId, mapId, ctx.state));
+  const currentId = String(ctx.state.turnOrder?.[Math.max(0, Number(ctx.state.currentTurnIndex) || 0)] || '');
+  if (ctx.role !== 'GM' && ctx.state.phase === 'combat' && String(player.id) !== currentId) {
+    ensureCanMoveInCombat(ctx, ctx.state, player, await getTokenRow(ctx.roomId, mapId, tokenId));
+  }
+  const revision = nextTokenMoveRevision();
+  broadcastToRoom(ctx.roomId, { type:'moveToken', roomId:ctx.roomId, mapId, tokenId,
+    tokenName:String(player.name || tokenId), x, y, size,
+    isPublic:resolveTokenPublicForWrite(player, null, true, { preferPlayer:true }),
+    moveRevision:revision, updated_at:new Date().toISOString(), livePreview:true }, ws);
+  return { mapId, revision, write:movementWrites.reserve(ctx.roomId, mapId) };
+}
+
+async function handleMoveToken(ws, data, prepared = null) {
   const roomId = normalizeSafeId(data.roomId || ws.currentRoomId, ROOM_ID_RE);
   const tokenId = normalizeSafeId(data.tokenId, ENTITY_ID_RE);
-  let previewBroadcasted = false;
-  let previewMapId = '';
+  let previewBroadcasted = !!prepared;
+  let previewMapId = prepared?.mapId || '';
+  const moveRevision = prepared?.revision || nextTokenMoveRevision();
   let prev = null;
   let prevLoaded = false;
 
@@ -3334,13 +3325,14 @@ async function handleMoveToken(ws, data) {
   }
 
   try {
+    if (prepared?.write) await prepared.write.wait;
     const ctx = await loadWsRoomContext(ws, roomId);
     const state = ctx.state || {};
     const player = findPlayerById(state, tokenId);
     if (!player) throw new Error('Token not found in room state');
     ensureCanControlPlayer(ctx, player);
 
-    const mapId = normalizeSafeId(data.mapId || player.mapId || getActiveMapId(state), ENTITY_ID_RE);
+    const mapId = normalizeSafeId(data.mapId || prepared?.mapId || player.mapId || getActiveMapId(state), ENTITY_ID_RE);
     if (!mapId) throw new Error('mapId is required');
     previewMapId = mapId;
 
@@ -3367,8 +3359,7 @@ async function handleMoveToken(ws, data) {
 
     // Live movement preview: make other clients move immediately over WS.
     // The DB write below remains authoritative and will confirm or roll back this preview.
-    previewBroadcasted = true;
-    broadcastToRoom(roomId, {
+    if (!previewBroadcasted) broadcastToRoom(roomId, {
       type: 'moveToken',
       roomId,
       mapId,
@@ -3379,8 +3370,10 @@ async function handleMoveToken(ws, data) {
       size: previewSize,
       isPublic: previewIsPublic,
       updated_at: new Date().toISOString(),
-      livePreview: true
+      livePreview: true,
+      moveRevision
     }, ws);
+    previewBroadcasted = true;
 
     if (!prevLoaded) {
       prev = await getTokenRow(roomId, mapId, tokenId);
@@ -3405,13 +3398,9 @@ async function handleMoveToken(ws, data) {
         y,
         size,
         color,
-        isPublic
+        isPublic,
+        logText: `${String(player.name || data.tokenName || tokenId).trim() || tokenId} переместил токен`
       });
-      const tokenName = String(player.name || data.tokenName || tokenId).trim() || tokenId;
-      await client.query(
-        'insert into public.room_log(room_id, text) values ($1, $2)',
-        [roomId, `${tokenName} переместил токен`]
-      ).catch(() => {});
       return updated;
     });
 
@@ -3422,11 +3411,15 @@ async function handleMoveToken(ws, data) {
       row
     };
 
+    if (payload.row) payload.row.move_revision = moveRevision;
     send(ws, payload);
     broadcastToRoom(roomId, payload, ws);
   } catch (err) {
     if (previewBroadcasted) {
-      try { broadcastTokenMoveRollback(roomId, previewMapId, tokenId, prev, ws); } catch (rollbackErr) {
+      try {
+        if (!prevLoaded) prev = await getTokenRow(roomId, previewMapId, tokenId);
+        broadcastTokenMoveRollback(roomId, previewMapId, tokenId, prev, ws, moveRevision);
+      } catch (rollbackErr) {
         console.error('[moveToken rollback] failed:', rollbackErr);
       }
     }
@@ -3434,6 +3427,8 @@ async function handleMoveToken(ws, data) {
       type: 'error',
       message: err?.message || 'moveToken failed'
     });
+  } finally {
+    prepared?.write?.release();
   }
 }
 
@@ -4774,7 +4769,7 @@ async function handleFogRow(ws, data) {
     const cancel = { type: 'fogPreviewCancel', roomId: ctx.roomId, mapId: row.map_id, previewId: data.previewId };
     send(ws, cancel); broadcastToRoom(ctx.roomId, cancel, ws);
     // A failed save must restore the author's optimistic state as well.
-    roomReadCache.invalidate(ctx.roomId);
+    roomReadCache.invalidateEvent(ctx.roomId, { type:'fogRow', mapId:row.map_id });
     const previous = await fetchWhitelistedRoomRows(ctx, 'room_fog', { mapId: row.map_id });
     const rollback = previous.rows[0] ? { type: 'fogRow', roomId: ctx.roomId, row: previous.rows[0], rollback: true }
       : { type: 'fogDelete', roomId: ctx.roomId, row: { map_id: row.map_id }, rollback: true };
@@ -4935,86 +4930,98 @@ async function handleLogRow(ws, data) {
   broadcastToRoom(ctx.roomId, payload, ws);
 }
 
+function getDiceReceipt(ctx, incoming) {
+  ensurePlayerOrGm(ctx);
+  const sidesRaw = Math.trunc(Number(incoming.sides) || 20);
+  const sides = Math.max(2, Math.min(100, sidesRaw));
+  const count = Math.max(1, Math.min(20, Math.trunc(Number(incoming.count) || 1)));
+  const bonus = Math.max(-1000, Math.min(1000, Math.trunc(Number(incoming.bonus) || 0)));
+  const incomingRolls = Array.isArray(incoming.rolls)
+    ? incoming.rolls.map((value) => Math.trunc(Number(value))).filter((value) => Number.isFinite(value))
+    : [];
+  const canUseIncomingRolls = (
+    incomingRolls.length === count
+    && incomingRolls.every((value) => value >= 1 && value <= sides)
+  );
+  const rolls = canUseIncomingRolls
+    ? incomingRolls
+    : Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
+  const fallbackTotal = rolls.reduce((sum, value) => sum + value, 0) + bonus;
+  const incomingTotal = Math.trunc(Number(incoming.total));
+  const total = Number.isFinite(incomingTotal)
+    ? Math.max(-10000, Math.min(10000, incomingTotal))
+    : fallbackTotal;
+  const incomingCrit = String(incoming.crit || '').trim();
+  const crit = (incomingCrit === 'crit-success' || incomingCrit === 'crit-fail')
+    ? incomingCrit
+    : '';
+  const event = {
+    fromId: ctx.userId,
+    throwPower: DicePresentation.throwPower(incoming.throwPower),
+    diceStyle: Appearance.style(incoming.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
+    fromName: sanitizeText(incoming.fromName, ctx.name || 'Player', 120),
+    kindText: sanitizeText(incoming.kindText, `d${sides}`, 200),
+    sides,
+    count,
+    bonus,
+    rolls,
+    total,
+    crit, localNonce:sanitizeText(incoming.localNonce || incoming.id || crypto.randomUUID(),'',160), actorId:sanitizeText(incoming.actorId,'',160)
+  };
+  if (Array.isArray(incoming.damageParts)) {
+    Object.assign(event, DamageRolls.event(incoming.damageParts, sanitizeText(incoming.damageTitle, 'Урон', 1000)));
+  }
+  return diceReceipts.get(ctx.roomId, ctx.userId, event.localNonce, () => ({ ...event,
+    presentation:DicePresentation.create(Date.now(), event.throwPower) }));
+}
+
+function publishDiceReceipt(ctx, receipt, ws = null, meta = {}) {
+  const payload = { type:'diceEvent', roomId:ctx.roomId, event:receipt.event,
+    __fromWsClient:meta.__fromWsClient, __optimisticApplied:!!meta.__optimisticApplied };
+  if (ws) send(ws, payload);
+  if (receipt.published) return;
+  receipt.published = true;
+  broadcastToRoom(ctx.roomId, payload, ws);
+  broadcastToRoom(ctx.roomId, { type:'logRow', roomId:ctx.roomId, row:{ text:diceReceiptLogText(receipt.event),
+    created_at:new Date().toISOString(), localNonce:'dice-log:'+receipt.event.localNonce } }, ws);
+  userProfiles.record('dice',ctx.roomId,ctx.userId,receipt.event,ctx.state,getStatePlayers(ctx.state).filter(p=>canControlPlayer(ctx,p)));
+}
+
+function diceReceiptLogText(event) {
+  return event.fromName+': '+event.kindText+': '+event.rolls.join(',')+
+    (event.bonus ? (event.bonus > 0 ? '+'+event.bonus : String(event.bonus)) : '')+' = '+event.total+
+    (event.crit === 'crit-success' ? ' (КРИТ)' : event.crit === 'crit-fail' ? ' (ПРОВАЛ)' : '');
+}
+
+function persistDiceReceipt(ctx, receipt) {
+  return diceReceipts.persist(receipt, async () => {
+    const event = receipt.event;
+    const text = diceReceiptLogText(event);
+    const { rows } = await pool.query(`with rolled as (
+      insert into public.room_dice_events(room_id, from_id, from_name, kind_text, sides, count, bonus, rolls, total, crit)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      returning id, room_id, created_at, from_id, from_name, kind_text, sides, count, bonus, rolls, total, crit
+    ), logged as (
+      insert into public.room_log(room_id, text) select room_id, $11 from rolled
+      returning id, room_id, text, created_at
+    ) select row_to_json(rolled) as dice_row, (select row_to_json(logged) from logged) as log_row from rolled`,
+    [ctx.roomId,event.fromId,event.fromName,event.kindText,event.sides,event.count,event.bonus,event.rolls,event.total,event.crit,text]);
+    return { ok:true, event, row:rows[0]?.dice_row || null, logRow:rows[0]?.log_row || null };
+  });
+}
+
 async function handleDiceEventRelay(ws, data) {
   const ctx = await loadWsRoomContext(ws, data.roomId || ws.currentRoomId);
-  const event = data.event && typeof data.event === 'object' ? cloneJson(data.event) : null;
-  if (!event) throw new Error('dice event required');
-  const localNonce = String(event.localNonce || '').trim();
-  let rows = [];
-  if (!localNonce) {
-    const result = await pool.query(
-      `
-        select id, room_id, created_at, from_id, from_name, kind_text, sides, count, bonus, rolls, total, crit
-        from public.room_dice_events
-        where room_id = $1
-          and created_at > now() - interval '20 seconds'
-        order by created_at desc
-        limit 25
-      `,
-      [ctx.roomId]
-    );
-    rows = result.rows || [];
-  }
-  const kind = String(event.kindText || '').trim();
-  const total = event.total === null || typeof event.total === 'undefined' ? null : Number(event.total);
-  let match = rows.find((row) => {
-    if (kind && String(row.kind_text || '') !== kind) return false;
-    if (total !== null && Number(row.total) !== total) return false;
-    return true;
+  const incoming = data.event && typeof data.event === 'object' ? data.event : null;
+  if (!incoming) throw new Error('dice event required');
+  const receipt = getDiceReceipt(ctx, incoming);
+  publishDiceReceipt(ctx, receipt, ws, data);
+  void persistDiceReceipt(ctx, receipt).then(() => {
+    send(ws, { type:'diceSaved', roomId:ctx.roomId, localNonce:receipt.event.localNonce, event:receipt.event });
+  }).catch(error => {
+    console.error('[dice persistence] failed:', error.message);
+    send(ws, { type:'diceSaveError', roomId:ctx.roomId, localNonce:receipt.event.localNonce, message:'Не удалось сохранить бросок' });
   });
-  const incomingRolls = Array.isArray(event.rolls)
-    ? event.rolls.map((value) => Math.trunc(Number(value))).filter((value) => Number.isFinite(value))
-    : [];
-  const safeSides = Math.max(2, Math.min(100, Math.trunc(Number(event.sides) || 20)));
-  const safeCount = Math.max(1, Math.min(20, Math.trunc(Number(event.count) || incomingRolls.length || 1)));
-  const safeBonus = Math.max(-1000, Math.min(1000, Math.trunc(Number(event.bonus) || 0)));
-  const safeRolls = incomingRolls.length ? incomingRolls.slice(0, safeCount) : [];
-  const safeTotal = Number.isFinite(Number(event.total))
-    ? Math.max(-10000, Math.min(10000, Math.trunc(Number(event.total))))
-    : safeRolls.reduce((sum, value) => sum + value, 0) + safeBonus;
-  const safeCrit = String(event.crit || '').trim();
-  if (!match) {
-    match = {
-      from_id: String(event.fromId || ctx.userId),
-      from_name: sanitizeText(event.fromName || ctx.name, 'Player', 120),
-      kind_text: sanitizeText(event.kindText, `d${safeSides}`, 200),
-      sides: safeSides,
-      count: safeCount,
-      bonus: safeBonus,
-      rolls: safeRolls,
-      total: safeTotal,
-      crit: (safeCrit === 'crit-success' || safeCrit === 'crit-fail') ? safeCrit : ''
-    };
-  }
-  if (Array.isArray(event.damageParts)) {
-    const damage = DamageRolls.event(event.damageParts, sanitizeText(event.damageTitle, 'Урон', 1000));
-    Object.assign(match, { kind_text: damage.kindText, sides: damage.sides, count: damage.count,
-      bonus: damage.bonus, rolls: damage.rolls, total: damage.total, crit: '' });
-  }
-  const payload = {
-    type: 'diceEvent',
-    roomId: ctx.roomId,
-    __fromWsClient: data.__fromWsClient,
-    __optimisticApplied: !!data.__optimisticApplied,
-    event: {
-      fromId: String(match.from_id || ctx.userId),
-      presentation: DicePresentation.create(Date.now(),event.throwPower),
-      throwPower: DicePresentation.throwPower(event.throwPower),
-      diceStyle: Appearance.style(event.diceStyle || userProfiles.get(ctx.userId).settings.diceStyle).id,
-      fromName: String(match.from_name || ctx.name || 'Игрок'),
-      kindText: String(match.kind_text || ''),
-      sides: match.sides,
-      count: match.count,
-      bonus: match.bonus,
-      rolls: Array.isArray(match.rolls) ? match.rolls : [],
-      total: match.total,
-      crit: String(match.crit || ''),
-      localNonce: String(match.localNonce || event.localNonce || '').trim()
-    }
-  };
-  userProfiles.record('dice',ctx.roomId,ctx.userId,{...payload.event,id:match.id,actorId:event.actorId,damageParts:event.damageParts},ctx.state,getStatePlayers(ctx.state).filter(p=>canControlPlayer(ctx,p)));
-  send(ws, payload);
-  broadcastToRoom(ctx.roomId, payload, ws);
 }
 
 async function handleRoomUpdatedRelay(ws, data) {
@@ -5719,7 +5726,7 @@ async function handleTokensInitRelay(ws, data) {
   broadcastToRoom(ctx.roomId, payload, ws);
 }
 
-async function handleMessage(ws, data) {
+async function handleMessage(ws, data, preparedMove = null) {
   const type = String(data?.type || '').trim();
 
   try {
@@ -5753,7 +5760,7 @@ async function handleMessage(ws, data) {
         break;
 
       case 'moveToken':
-        await handleMoveToken(ws, data);
+        await handleMoveToken(ws, data, preparedMove);
         break;
 
       case 'updateTokenColor':
@@ -5913,10 +5920,13 @@ wss.on('connection', (ws) => {
   ws.userName = '';
   ws.role = '';
   ws.roomContext = null;
-  const scheduler = new WsScheduler((data, receivedAt) => inboundMeta.run({
+  const withMessageMeta = (data, receivedAt, run) => inboundMeta.run({
     wsNonce: String(data?.__wsNonce || '').trim(), clientSentAt: Math.max(0, Number(data?.__clientSentAt) || 0),
-    serverReceivedAt: receivedAt, inboundType: String(data?.type || '')
-  }, () => handleMessage(ws, data)), error => send(ws, { type: 'error', message: error?.message || 'Server error' }));
+    serverReceivedAt: receivedAt, serverStartedAt:Date.now(), inboundType: String(data?.type || '')
+  }, run);
+  const scheduler = new WsScheduler((data, receivedAt, prepared) => withMessageMeta(data, receivedAt, () => handleMessage(ws, data, prepared)),
+    error => send(ws, { type: 'error', message: error?.message || 'Server error' }),
+    (data, receivedAt) => withMessageMeta(data, receivedAt, () => prepareMoveToken(ws, data)));
   ws.on('message', (rawMessage) => {
     try { scheduler.push(JSON.parse(rawMessage.toString()), Date.now()); }
     catch { send(ws, { type: 'error', message: 'Invalid JSON' }); }

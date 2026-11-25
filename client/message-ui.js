@@ -930,6 +930,8 @@ try { handleSessionUiMessage?.(msg); } catch {}
       } catch {}
     }
     if (msg.type === 'tokenRowDeleted' && msg.row) {
+      if (typeof acceptTokenMovementRow === 'function' && !acceptTokenMovementRow(msg.row)) return;
+      if (msg.row.rollback) window.__tokenMoveOptimisticGuard?.delete?.(String(msg.row.token_id));
       try { applyTokenDeleteToLocalState(msg.row); } catch {}
 
       // Delayed deletes/rollbacks from another map must not hide this map's token.
@@ -961,7 +963,7 @@ try { handleSessionUiMessage?.(msg); } catch {}
         affected.forEach(player => setPlayerPosition(player));
         const el = playerElements.get(String(update.player.id));
         if (el) updateHpBar(update.player, el);
-        if (update.placementChanged || Object.hasOwn(msg.row,'color') || Object.hasOwn(msg.row,'is_public')) updatePlayerList();
+        if (update.placementChanged || update.appearanceChanged) updatePlayerList();
         window.Board3D?.requestSync?.(lastState);
       } catch (error) { console.warn('tokenRow view update failed', error); }
     }

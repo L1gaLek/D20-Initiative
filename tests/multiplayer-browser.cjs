@@ -55,7 +55,7 @@ function broadcast(payload, except) {
 h.context.send = (ws,payload) => { if(dropNextCombatAck && payload.type==='combatSync' && ws.ctx.userId==='gm') { dropNextCombatAck=false; return; } ws.send(JSON.stringify(stamp(payload))); };
 h.context.broadcastToRoom = (roomId, payload, except) => broadcast(payload, except);
 const members = h.clients.map(c => ({ id: c.ctx.userId, user_id: c.ctx.userId, name: c.ctx.userId, role: c.ctx.role }));
-const syncControls = { rowReads:0, holdWrite:null };
+const syncControls = { rowReads:0, holdWrite:null, holdMovement:null, movementWrites:0 };
 if(syncMode){
   const vm=require('node:vm'),{functions,read}=require('./helpers/room-harness.cjs');
   Object.assign(h.context,{WebSocket:{OPEN:1},rooms:new Map([['test-room',sockets]]),roomEventSeq:new Map(),
@@ -77,6 +77,11 @@ if(syncMode){
     if(sql.includes('update public.room_state set phase') && syncControls.holdWrite)await syncControls.holdWrite;
     return query(sql,v);
   };
+  const connect=h.context.pool.connect;
+  h.context.pool.connect=async()=>{const db=await connect();return {release:()=>db.release(),query:async(sql,v)=>{
+    if(sql.includes('insert into public.room_tokens')){syncControls.movementWrites++;if(syncControls.holdMovement)await syncControls.holdMovement;}
+    return db.query(sql,v);
+  }};};
   vm.runInContext(functions(read('backend/server.js'),['getRoom','nextRoomEventSeq','stampRoomEvent','send','invalidateRoomContexts','broadcastToRoom','resumeRoomClient','handleJoinRoom','handleMessage']),h.context);
 }
 async function body(req) {
@@ -171,13 +176,14 @@ wss.on('connection', ws => {
   sockets.add(ws);
   ws.on('close', () => {h.context.userProfiles.disconnect(ws);sockets.delete(ws);});
   if(syncMode){
-    const scheduler=new (require('../backend/shared/ws-scheduler'))((data,receivedAt)=>h.context.inboundMeta.run({wsNonce:data.__wsNonce,serverReceivedAt:receivedAt,inboundType:data.type},()=>h.context.handleMessage(ws,data)),error=>ws.send(JSON.stringify({type:'error',message:error.message})));
-    ws.on('message',raw=>scheduler.push(JSON.parse(raw),Date.now()));
+    const scheduler=new (require('../backend/shared/ws-scheduler'))((data,receivedAt,prepared)=>h.context.inboundMeta.run({wsNonce:data.__wsNonce,serverReceivedAt:receivedAt,inboundType:data.type},()=>h.context.handleMessage(ws,data,prepared)),error=>ws.send(JSON.stringify({type:'error',message:error.message})),data=>h.context.prepareMoveToken(ws,data));
+    ws.on('message',raw=>{const data=JSON.parse(raw);if(data.type==='diceEvent')requests.push({method:'WS',path:'/api/rooms/test-room/dice',data:{event:data.event}});scheduler.push(data,Date.now());});
     return;
   }
   let tail = Promise.resolve();
   ws.on('message', raw => { tail = tail.then(async () => {
     const msg = JSON.parse(raw);
+    if(msg.type==='diceEvent')requests.push({method:'WS',path:'/api/rooms/test-room/dice',data:{event:msg.event}});
     if (msg.type === 'joinRoom') {
       ws.ctx = h.clients.find(c => c.ctx.userId === msg.userId).ctx;
       h.context.userProfiles.connect(ws,'test-room',ws.ctx.userId,h.database(),ws.ctx.role);

@@ -92,6 +92,23 @@ function recordRealtimeDebugEvent(kind, data = {}) {
   } catch {}
 }
 
+function realtimeLatencySummary() {
+  const result = {};
+  for (const entry of getRealtimeDebugBuffer()) {
+    if (entry.kind !== 'ws:recv') continue;
+    const group = result[entry.inReplyToType || entry.type] ||= { count:0, samples:[] };
+    group.count++;
+    if (entry.rttMs !== null && Number.isFinite(entry.rttMs)) group.samples.push(entry.rttMs);
+  }
+  for (const group of Object.values(result)) {
+    group.samples.sort((a,b)=>a-b);const values=group.samples;
+    group.p50Ms=values.length?values[Math.ceil(values.length*.5)-1]:null;
+    group.p95Ms=values.length?values[Math.ceil(values.length*.95)-1]:null;
+    group.measured=values.length;delete group.samples;
+  }
+  return result;
+}
+
 try {
   window.recordRealtimeDebugEvent = recordRealtimeDebugEvent;
   window.RealtimeDebug = {
@@ -99,6 +116,7 @@ try {
     disable() { try { localStorage.removeItem('d20_realtime_debug'); } catch {}; window.__REALTIME_DEBUG = false; return 'Realtime debug disabled'; },
     clear() { const buffer = getRealtimeDebugBuffer(); buffer.splice(0, buffer.length); return 'Realtime debug cleared'; },
     events() { return [...getRealtimeDebugBuffer()]; },
+    summary() { return realtimeLatencySummary(); },
     table() { console.table([...getRealtimeDebugBuffer()]); }
   };
 } catch {}
@@ -523,6 +541,8 @@ function dispatchRoomWsEvent(msg, replay = false, sock = wsClient) {
       if (msg.type === 'roomCursor') { rememberRoomCursor(msg); return; }
       if (msg.type === 'roomResume') { applyRoomResume(msg); return; }
 
+      const ownReply = !!msg.__replyToWsNonce && getRealtimeDebugBuffer().some(event =>
+        (event.kind === 'ws:send' || event.kind === 'ws:queue') && event.nonce === msg.__replyToWsNonce);
       recordRealtimeDebugEvent('ws:recv', {
         replay: !!replay,
         type: String(msg.type || ''),
@@ -530,12 +550,13 @@ function dispatchRoomWsEvent(msg, replay = false, sock = wsClient) {
         seq: Math.max(0, Number(msg.__eventSeq) || 0),
         replyTo: String(msg.__replyToWsNonce || ''),
         inReplyToType: String(msg.__inReplyToType || ''),
-        rttMs: msg.__clientSentAt ? Math.max(0, Date.now() - Number(msg.__clientSentAt)) : null,
-        serverQueueMs: (msg.__serverTs && msg.__serverReceivedAt) ? Math.max(0, Number(msg.__serverTs) - Number(msg.__serverReceivedAt)) : null,
+        rttMs: ownReply && msg.__clientSentAt ? Math.max(0, Date.now() - Number(msg.__clientSentAt)) : null,
+        serverQueueMs: (msg.__serverStartedAt && msg.__serverReceivedAt) ? Math.max(0, Number(msg.__serverStartedAt) - Number(msg.__serverReceivedAt)) : null,
+        serverWorkMs: (msg.__serverTs && msg.__serverStartedAt) ? Math.max(0, Number(msg.__serverTs) - Number(msg.__serverStartedAt)) : null,
         afterServerMs: msg.__serverTs ? Math.max(0, Date.now() - Number(msg.__serverTs)) : null
       });
 
-      if (handleSheetRealtime(msg) || handleCombatPreview(msg) || handleFogRealtime(msg)) return;
+      if (handleDiceSaveReply(msg) || handleSheetRealtime(msg) || handleCombatPreview(msg) || handleFogRealtime(msg)) return;
 
       const from = String(msg.__fromWsClient || '').trim();
       if (from === WS_CLIENT_ID && msg.type === 'playerPatch' && msg.patch?.sheet) {
@@ -813,6 +834,7 @@ function handleDetachedWsMessage(msg) {
           y: (msg.y === null || typeof msg.y === 'undefined') ? null : Number(msg.y),
           size: Number(msg.size) || null,
           is_public: (typeof msg.isPublic === 'undefined') ? undefined : !!msg.isPublic,
+          move_revision: Number(msg.moveRevision) || 0,
           updated_at: resolveTokenEventUpdatedAtIso(msg)
         };
         handleMessage({ type: 'tokenRow', row });
@@ -906,6 +928,7 @@ async function subscribeRoomDb(roomId) {
 function applyTokenRowToLocalState(row) {
   try {
     if (!row) return;
+    if (typeof acceptTokenMovementRow === 'function' && !acceptTokenMovementRow(row)) return;
     const tokenId = String(row.token_id || '').trim();
     if (!tokenId) return;
     const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
@@ -918,20 +941,22 @@ function applyTokenRowToLocalState(row) {
     const size = !hasSize ? undefined : ((row.size === null || typeof row.size === 'undefined') ? null : Number(row.size));
     const color = hasColor ? ((typeof row.color === 'string') ? row.color : null) : undefined;
     const mapId = String(row.map_id || '').trim();
+    const freshnessKey = JSON.stringify([String(currentRoomId), mapId, tokenId]);
     const hasPublic = (typeof row.is_public !== 'undefined');
     const isPublic = hasPublic ? !!row.is_public : null;
     let effectiveIsPublic = isPublic;
     const rowUpdatedAtMs = Number(new Date(String(row?.updated_at || '')).getTime()) || 0;
     try {
       if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
-      const prev = window.__tokenRowFreshnessClock.get(tokenId);
+      const prev = window.__tokenRowFreshnessClock.get(freshnessKey);
       const prevUpdatedAtMs = Number(prev?.updatedAtMs) || 0;
       // Out-of-order delivery safety: never let an older row rollback a newer token snapshot.
-      if (rowUpdatedAtMs && prevUpdatedAtMs && (rowUpdatedAtMs + 50 < prevUpdatedAtMs)) return;
+      if (!row.move_revision && rowUpdatedAtMs && prevUpdatedAtMs && (rowUpdatedAtMs + 50 < prevUpdatedAtMs)) return;
     } catch {}
     const tokenMoveGuard = (typeof window !== 'undefined' && window.__tokenMoveOptimisticGuard instanceof Map)
       ? window.__tokenMoveOptimisticGuard
       : null;
+    if (row.rollback) tokenMoveGuard?.delete(tokenId);
     const guard = tokenMoveGuard ? tokenMoveGuard.get(tokenId) : null;
     if (guard) {
       const gx = Number(guard.x);
@@ -966,7 +991,7 @@ function applyTokenRowToLocalState(row) {
         if (guardAgeMs >= 0 && guardAgeMs < 4500) {
           // Opportunistic self-heal: if we see conflicting coordinates, re-assert the target
           // position once in a while so DB converges to the moved cell and clients stop snapping back.
-          if (Number.isFinite(gx) && Number.isFinite(gy) && currentRoomId) {
+          if (!row.move_revision && Number.isFinite(gx) && Number.isFinite(gy) && currentRoomId) {
             const retryTs = Number(guard.retryAtMs) || 0;
             if (!retryTs || (Date.now() - retryTs) > 350) {
               guard.retryAtMs = Date.now();
@@ -1005,8 +1030,8 @@ function applyTokenRowToLocalState(row) {
         if (rowMapId && activeMapId && rowMapId !== activeMapId) {
           try {
             if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
-            const prev = window.__tokenRowFreshnessClock.get(tokenId) || {};
-            window.__tokenRowFreshnessClock.set(tokenId, {
+            const prev = window.__tokenRowFreshnessClock.get(freshnessKey) || {};
+            window.__tokenRowFreshnessClock.set(freshnessKey, {
               updatedAtMs: rowUpdatedAtMs || Number(prev?.updatedAtMs) || 0,
               appliedAtMs: Date.now()
             });
@@ -1064,13 +1089,15 @@ function applyTokenRowToLocalState(row) {
 
         try {
           if (!(window.__tokenRowFreshnessClock instanceof Map)) window.__tokenRowFreshnessClock = new Map();
-          const prev = window.__tokenRowFreshnessClock.get(tokenId) || {};
-          window.__tokenRowFreshnessClock.set(tokenId, {
+          const prev = window.__tokenRowFreshnessClock.get(freshnessKey) || {};
+          window.__tokenRowFreshnessClock.set(freshnessKey, {
             updatedAtMs: rowUpdatedAtMs || Number(prev?.updatedAtMs) || 0,
             appliedAtMs: Date.now()
           });
         } catch {}
-        return { player:p, changed:before !== JSON.stringify([p.x,p.y,p.size,p.color,p.isPublic,p.mapId]), placementChanged:wasPlaced !== (p.x != null && p.y != null) };
+        const previousVisual = JSON.parse(before);
+        return { player:p, changed:before !== JSON.stringify([p.x,p.y,p.size,p.color,p.isPublic,p.mapId]),
+          placementChanged:wasPlaced !== (p.x != null && p.y != null), appearanceChanged:previousVisual[3] !== p.color || previousVisual[4] !== p.isPublic };
       }
     }
   } catch {}
@@ -2178,14 +2205,16 @@ async function insertDiceEvent(roomId, ev) {
       } : null
     };
     if (typeof window !== 'undefined' && typeof window.RoomRowsApi?.insertDiceEvent === 'function') {
-      window.RoomRowsApi.insertDiceEvent(roomId, { event: ev }, { retries: 0 })
+      const persist = () => window.RoomRowsApi.insertDiceEvent(roomId, { event: ev }, { retries: 1 })
         .then((payload) => {
           if (payload?.event && typeof payload.event === 'object') {
             Object.assign(ev, payload.event);
             if (localNonce) ev.localNonce = localNonce;
           }
         })
-        .catch((e) => { try { console.debug?.('dice deferred insert failed', e); } catch {} });
+        .catch((e) => { try { console.debug?.('dice deferred insert failed', e); showAppToast('Не удалось сохранить бросок. Проверьте соединение.', {tone:'error'}); } catch {} });
+      if (typeof wsClient !== 'undefined' && wsClient?.readyState === WebSocket.OPEN && wsClient.__joined === true) queueDiceSaveFallback(roomId, ev, persist);
+      else void persist();
       return optimistic;
     }
     throw new Error('VPS dice API is unavailable');
@@ -2214,9 +2243,6 @@ async function broadcastDiceEventOnly(event) {
 
     if (!USE_SUPABASE_REALTIME) {
       try { sendWsEnvelope({ type: 'diceEvent', roomId: currentRoomId, event: ev }, { optimisticApplied: true }); } catch {}
-      if (logRow) {
-        try { sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: true }); } catch {}
-      }
     }
   } catch (e) {
     console.warn('broadcastDiceEventOnly failed', e);
@@ -2675,9 +2701,6 @@ async function sendMessage(msg) {
         if (msg.event) handleMessage({ type: 'diceEvent', event: msg.event });
         if (logRow) {
           try { handleMessage({ type: 'logRow', row: logRow }); } catch {}
-          if (!USE_SUPABASE_REALTIME) {
-            try { sendWsEnvelope({ type: 'logRow', roomId: currentRoomId, row: logRow }, { optimisticApplied: true }); } catch {}
-          }
         }
         break;
       }

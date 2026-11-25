@@ -64,6 +64,37 @@ function handleSheetRealtime(msg) {
 }
 
 const wsRoomCursors = new Map();
+const pendingDiceSaves = new Map();
+function queueDiceSaveFallback(roomId, event, fallback) {
+  const nonce = String(event.localNonce || '');
+  if (!nonce || pendingDiceSaves.size >= 128) { void fallback(); return; }
+  if (pendingDiceSaves.has(nonce)) return;
+  const entry = { roomId:String(roomId), event, fallback, timer:null };
+  entry.timer = setTimeout(() => {
+    pendingDiceSaves.delete(nonce);
+    void fallback();
+  }, 2200);
+  pendingDiceSaves.set(nonce, entry);
+}
+function handleDiceSaveReply(msg) {
+  if (!['diceSaved','diceSaveError'].includes(msg.type)) return false;
+  const nonce = String(msg.localNonce || ''), entry = pendingDiceSaves.get(nonce);
+  if (!entry || String(msg.roomId) !== entry.roomId) return true;
+  clearTimeout(entry.timer); pendingDiceSaves.delete(nonce);
+  if (msg.type === 'diceSaveError') void entry.fallback();
+  else if (msg.event) Object.assign(entry.event, msg.event);
+  return true;
+}
+const tokenMovementRevisions = new Map();
+function acceptTokenMovementRow(row) {
+  const revision = Number(row?.move_revision) || 0;
+  if (!revision) return true;
+  const key = JSON.stringify([String(currentRoomId), String(row.map_id || ''), String(row.token_id || '')]);
+  if (revision < (tokenMovementRevisions.get(key) || 0)) return false;
+  tokenMovementRevisions.set(key, revision);
+  while (tokenMovementRevisions.size > 4096) tokenMovementRevisions.delete(tokenMovementRevisions.keys().next().value);
+  return true;
+}
 const fogPreviewRows = new Map();
 const fogLiveOverlays = new Map();
 const committedFogPreviews = new Set();
@@ -162,6 +193,9 @@ function applyRoomResume(msg) {
   fogLiveOverlays.clear(); fogPreviewRows.clear(); committedFogPreviews.clear();
   const snapshot = msg.snapshot;
   if (snapshot) {
+    tokenMovementRevisions.clear();
+    window.__tokenRowFreshnessClock?.clear?.();
+    window.__tokenMoveOptimisticGuard?.clear?.();
     window.__tokenPositionSnapshotCache?.clear?.();
     window.__tokenVisibilitySnapshotCache?.clear?.();
     _tokenSnapshotCacheEnsure().clear();

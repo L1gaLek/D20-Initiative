@@ -189,6 +189,7 @@ module.exports=async({pages,broadcast,requests,base,screenshotDir})=>{
   await fallback.evaluate(()=>DiceTable.show({fromId:'p',fromName:'Без WebGL',id:'fallback',sides:6,count:2,rolls:[3,6],total:9}));
   await settled(fallback,9);assert.deepEqual(await fallback.locator('.dice-table__fallback span').allTextContents(),['3','6']);await context.close();
   assert.ok(requests.filter(r=>r.path.endsWith('/dice')).length>=10);
+  assert.equal(requests.filter(r=>r.path.endsWith('/dice')&&r.method==='POST').length,0,'acknowledged WS throws never issue an extra HTTP persistence request');
   await owner.evaluate(async()=>{const old=currentRoomId;currentRoomId='next-room';DiceTable.reset('next-room');await DiceTable.show({fromId:'other',fromName:'Новая комната',localNonce:'after-room-change',sides:6,count:1,rolls:[4],total:4});});
   await settled(owner,4);assert.equal(await owner.evaluate(()=>DiceTable.inspect().room),'next-room');
   console.log('PASS dice: enlarged tray and mobile layout fit, reduced-motion/static fallback preserves results when WebGL is unavailable');
